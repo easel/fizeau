@@ -1,0 +1,344 @@
+# Beads for the universal harness interface refactor.
+#
+# Governing specs:
+#   - docs/helix/02-design/adr/ADR-014-universal-harness-interface.md
+#   - docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md
+#   - docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+#
+# Sequencing note: beads in the 5x, 6x, 7x groups (per-harness migrations)
+# can run in parallel with each other once 04 lands, but each group's
+# sub-sequence (a → b → c → d → e → f) is strictly ordered. 08, 09 can
+# start after 04 lands. 10, 11, 12 are tail-end and depend on prior
+# migrations completing.
+
+beads:
+  # ----- Phase 0: Baseline and contract scaffolding -----
+
+  - id: BEAD-HARNESS-IF-00
+    title: "Pre-refactor baseline: pin CONTRACT-003 JSON fixtures and runtime baseline; grep cmd/ and root for hidden per-harness imports"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "testdata/contract-003/pre-refactor/ contains JSON fixtures for HarnessInfo, ProviderInfo, QuotaState, AccountStatus across all five harnesses and one subscription-backed provider"
+      - "grep -rEn 'internal/harnesses/(claude|codex|gemini|opencode|pi)' --include='*.go' . (excluding the harness packages, node_modules, .claude/worktrees, benchmark-results, .ddx) is captured verbatim in the PR description; any file not in the plan's Service-side consumers or Tests inventory tables is added"
+      - "testdata/perf-baselines/2026-05-14-pre-refactor.txt records go test -count=1 ./... -timeout 30m wall time"
+      - "go test ./... -count=1 passes with fixtures committed"
+    depends_on: []
+
+  - id: BEAD-HARNESS-IF-01
+    title: "Add Harness sub-interfaces and universal types (CONTRACT-004 Step 1)"
+    spec_ref: docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md
+    acceptance_criteria:
+      - "internal/harnesses/types.go declares QuotaHarness, AccountHarness, ModelDiscoveryHarness interfaces with the CONTRACT-004 signatures including SupportedLimitIDs() and SupportedAliases()"
+      - "internal/harnesses/types.go declares QuotaStatus, AccountSnapshot, QuotaStateValue, RoutingPreference types and ErrAliasNotResolvable sentinel"
+      - "Unit tests cover RoutingPreference enum identity, QuotaStateValue string mapping, sentinel error identity"
+      - "No harness implements the new interfaces yet; service code is unchanged; go test ./... passes"
+    depends_on:
+      - BEAD-HARNESS-IF-00
+
+  - id: BEAD-HARNESS-IF-02
+    title: "Conformance suite and synthetic harness implementations"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "internal/harnesses/harnesstest package exports RunHarnessConformance, RunQuotaHarnessConformance, RunAccountHarnessConformance, RunModelDiscoveryHarnessConformance"
+      - "Synthetic constructors NewSyntheticQuotaHarness, NewSyntheticAccountHarness, NewSyntheticModelDiscoveryHarness accept Supported* values as parameters"
+      - "Conformance suite asserts emitted Windows[].LimitID is a subset of SupportedLimitIDs(); asserts ResolveModelAlias covers SupportedAliases() positive path and rejects out-of-set with ErrAliasNotResolvable"
+      - "Suite asserts contract shape of single-flight (no error, consistent post-state on concurrent RefreshQuota), not exact probe count"
+      - "Smoke test runs synthetic harnesses against the conformance suite and passes"
+    depends_on:
+      - BEAD-HARNESS-IF-01
+
+  - id: BEAD-HARNESS-IF-03
+    title: "CONTRACT-003 projection helpers (projectQuotaStatus, projectAccountSnapshot)"
+    spec_ref: docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md
+    acceptance_criteria:
+      - "service_projection.go (or equivalent) exports projectQuotaStatus(harnesses.QuotaStatus) *QuotaState and projectAccountSnapshot(harnesses.AccountSnapshot) *AccountStatus"
+      - "Helpers drive every QuotaStateValue, every RoutingPreference, populated and empty Account/Detail, present and absent Reason in unit tests"
+      - "Tests assert public JSON shape matches BEAD-HARNESS-IF-00 fixtures structurally"
+      - "No service code calls the helpers yet — they exist for Phase 5+"
+    depends_on:
+      - BEAD-HARNESS-IF-02
+
+  - id: BEAD-HARNESS-IF-04
+    title: "Async refresh scheduler and harnessByName helper"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "Service struct gains a harnessByName(name string) harnesses.Harness method consulting the registered-harnesses field"
+      - "service_refresh_scheduler.go owns a debounced ticker per registered QuotaHarness firing at QuotaFreshness()/2 and per AccountHarness whose AccountFreshness() differs from quota"
+      - "Scheduler discovers harnesses by iterating service.harnessByName over the registry and type-asserting to QuotaHarness / AccountHarness independently"
+      - "Scheduler skips a tick when last-known QuotaStatus.CapturedAt is within QuotaFreshness() of now (cache-freshness dedup is the scheduler's job, not RefreshQuota's)"
+      - "Fake-clock tests prove debounce cadence, single-flight respect via cache lock, and clean ctx cancel"
+      - "Per-harness Refresh*Async helpers remain in place for now (deleted in each harness's e-step)"
+    depends_on:
+      - BEAD-HARNESS-IF-02
+
+  # ----- Phase 5: Claude migration sub-sequence (strictly ordered) -----
+
+  - id: BEAD-HARNESS-IF-05A
+    title: "claude.Runner: add CONTRACT-004 interface methods (additive; old surface still present)"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "claude.Runner implements QuotaStatus, RefreshQuota, QuotaFreshness, SupportedLimitIDs, AccountStatus, RefreshAccount, AccountFreshness, DefaultModelSnapshot, ResolveModelAlias, SupportedAliases"
+      - "RefreshQuota probes unconditionally and uses the existing cache lock for single-flight (queued callers consume in-flight result)"
+      - "Routing-preference mapping helper translates today's PreferClaude+freshness into RoutingPreference"
+      - "package claude doc comment (doc.go or runner.go top) mirrors SupportedLimitIDs() and SupportedAliases() return values"
+      - "harnesstest.Run*Conformance suites pass against &claude.Runner{}"
+      - "Old per-harness cache I/O functions still exported and unchanged; both surfaces coexist"
+    depends_on:
+      - BEAD-HARNESS-IF-04
+
+  - id: BEAD-HARNESS-IF-05B
+    title: "Migrate service.go claude consumers to QuotaHarness/AccountHarness interface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service.go drops the claudeharness import"
+      - "Every claude-related call in service.go fetches the runner via harnessByName, type-asserts to the sub-interface, and projects through service_projection helpers"
+      - "go test ./... passes; BEAD-HARNESS-IF-00 fixtures pass structural diff for claude rows"
+    depends_on:
+      - BEAD-HARNESS-IF-05A
+      - BEAD-HARNESS-IF-03
+
+  - id: BEAD-HARNESS-IF-05C
+    title: "Migrate service_providers.go claude consumers"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_providers.go drops claudeharness imports for claude paths"
+      - "ClaudeQuotaSnapshot{} construction at service_providers.go:620 moves inside claude.Runner.RefreshQuota"
+      - "Health-check callbacks become qh.RefreshQuota(ctx) calls"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-05B
+
+  - id: BEAD-HARNESS-IF-05D
+    title: "Migrate service_models.go and service_subscription_quota.go claude consumers"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_models.go uses ModelDiscoveryHarness for claude alias resolution"
+      - "service_subscription_quota.go consumes QuotaStatus.RoutingPreference; claudeQuotaMaxUsedPercent derives over QuotaStatus.Windows uniformly across claude and codex"
+      - "Type assertion on *claudeharness.ClaudeQuotaSnapshot at service_subscription_quota.go:79 is removed"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-05C
+
+  - id: BEAD-HARNESS-IF-05E
+    title: "Delete and unexport claude public surface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "ClaudeQuotaRoutingDecision struct, DecideClaudeQuotaRouting, ReadClaudeQuotaRoutingDecision deleted"
+      - "ClaudeQuotaSnapshot lowercased to claudeQuotaSnapshot (package-private)"
+      - "ReadClaudeQuota, ReadClaudeQuotaFrom, WriteClaudeQuota, ClaudeQuotaCachePath, IsClaudeQuotaFresh, ClaudeQuotaSnapshotAge, DefaultClaudeQuotaStaleAfter unexported"
+      - "ReadClaudeQuotaViaPTY, RefreshClaudeQuotaViaPTY, ReadClaudeQuotaFromCassette, DefaultClaudeModelDiscovery, ResolveClaudeFamilyAlias, ReadClaudeReasoningFromHelp, IsClaudeQuotaExhaustedMessage, MarkClaudeQuotaExhaustedFromMessage unexported"
+      - "RefreshClaudeQuotaAsync deleted; the Step 4 scheduler now drives claude refresh cadence"
+      - "Pre-merge check: reverting only this bead (without reverting 05A–05D) leaves the tree compiling and tests green"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-05D
+
+  - id: BEAD-HARNESS-IF-05F
+    title: "Migrate claude-related tests to interface mocks and fixture cache files"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_status_test.go, service_subscription_quota_test.go, service_routing_errors_test.go, service_providers_test.go, service_routing_test.go, harness_golden_integration_test.go no longer reference claudeharness exports beyond the dispatcher constructor"
+      - "internal/harnesses/claude/*_test.go files run as package claude (white-box) where they need unexported helpers"
+      - "go test ./... passes; runtime budget maintained"
+    depends_on:
+      - BEAD-HARNESS-IF-05E
+
+  # ----- Phase 6: Codex migration sub-sequence -----
+
+  - id: BEAD-HARNESS-IF-06A
+    title: "codex.Runner: add CONTRACT-004 interface methods"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "codex.Runner implements all four interfaces' methods including SupportedLimitIDs, SupportedAliases, AccountFreshness"
+      - "Session-token-count quota source folds into RefreshQuota as internal fallback"
+      - "CodexAuthPath/ReadCodexAccount become the AccountStatus/RefreshAccount implementation"
+      - "package codex doc comment mirrors Supported* return values (e.g. aliases gpt, gpt-5)"
+      - "harnesstest conformance suites pass against &codex.Runner{}"
+    depends_on:
+      - BEAD-HARNESS-IF-04
+
+  - id: BEAD-HARNESS-IF-06B
+    title: "Migrate service.go codex consumers to the interface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service.go drops codexharness import for codex consumers"
+      - "go test ./... passes; structural-diff fixtures pass for codex rows"
+    depends_on:
+      - BEAD-HARNESS-IF-06A
+      - BEAD-HARNESS-IF-03
+
+  - id: BEAD-HARNESS-IF-06C
+    title: "Migrate service_providers.go codex consumers"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_providers.go drops codexharness imports for codex paths"
+      - "Health-check callbacks for PTY and session-token-count probes migrate to QuotaHarness.RefreshQuota"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-06B
+
+  - id: BEAD-HARNESS-IF-06D
+    title: "Migrate service_models.go and service_subscription_quota.go codex consumers"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_models.go uses ModelDiscoveryHarness for codex alias resolution"
+      - "service_subscription_quota.go consumes QuotaStatus.RoutingPreference for codex"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-06C
+
+  - id: BEAD-HARNESS-IF-06E
+    title: "Delete and unexport codex public surface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "CodexQuotaRoutingDecision, DecideCodexQuotaRouting, ReadCodexQuotaRoutingDecision deleted"
+      - "CodexQuotaSnapshot lowercased; cache I/O functions unexported"
+      - "ReadCodexQuotaFromSessionTokenCounts, CodexQuotaSnapshotFromTokenCountRateLimits, CodexSessionsRoot unexported"
+      - "ReadCodexAccount, ReadCodexAccountFrom, CodexAuthPath unexported"
+      - "DefaultCodexModelDiscovery, ResolveCodexModelAlias unexported"
+      - "Per-harness Refresh*Async helpers for codex deleted; Step 4 scheduler drives the cadence"
+      - "Pre-merge revert-safety check passes"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-06D
+
+  - id: BEAD-HARNESS-IF-06F
+    title: "Migrate codex-related tests to interface mocks"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_route_attempts_test.go, service_status_test.go, service_providers_test.go, harness_golden_integration_test.go no longer reference codexharness exports beyond the dispatcher constructor"
+      - "Codex package tests run as package codex (white-box) where needed"
+      - "go test ./... passes; runtime budget maintained"
+    depends_on:
+      - BEAD-HARNESS-IF-06E
+
+  # ----- Phase 7: Gemini migration sub-sequence -----
+
+  - id: BEAD-HARNESS-IF-07A
+    title: "gemini.Runner: add CONTRACT-004 interface methods (separate quota and account cadences)"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "gemini.Runner implements all four interfaces' methods"
+      - "AuthSnapshot is the source of AccountSnapshot; AccountFreshness() returns 7 days; QuotaFreshness() returns 15 minutes"
+      - "Tier facts (Flash / Flash Lite / Pro) live in QuotaStatus.Windows with distinguishing LimitID; no tier names in Detail"
+      - "package gemini doc comment mirrors Supported* return values including per-tier LimitIDs"
+      - "harnesstest conformance suites pass against &gemini.Runner{}"
+    depends_on:
+      - BEAD-HARNESS-IF-04
+
+  - id: BEAD-HARNESS-IF-07B
+    title: "Migrate service.go gemini consumers"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service.go drops geminiharness import; ReadAuthEvidence call replaced with AccountHarness.AccountStatus"
+      - "go test ./... passes; structural-diff fixtures pass for gemini rows"
+    depends_on:
+      - BEAD-HARNESS-IF-07A
+      - BEAD-HARNESS-IF-03
+
+  - id: BEAD-HARNESS-IF-07C
+    title: "Migrate service_providers.go gemini consumers (if any) and service_models.go"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "Gemini call sites in service_models.go use ModelDiscoveryHarness; service_subscription_quota.go uses QuotaStatus.RoutingPreference"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-07B
+
+  - id: BEAD-HARNESS-IF-07D
+    title: "Delete and unexport gemini public surface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "GeminiQuotaSnapshot lowercased; GeminiQuotaRoutingDecision deleted; cache I/O unexported"
+      - "AuthSnapshot, ReadAuthEvidence, ReadAuthEvidenceFromDir, GeminiAuthFreshnessWindow unexported"
+      - "DefaultGeminiModelDiscovery, ResolveGeminiModelAlias unexported"
+      - "Per-harness Refresh*Async helpers for gemini deleted"
+      - "Pre-merge revert-safety check passes"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-07C
+
+  - id: BEAD-HARNESS-IF-07E
+    title: "Migrate gemini-related tests"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "service_route_attempts_test.go, service_status_test.go no longer reference geminiharness exports beyond the dispatcher"
+      - "go test ./... passes; runtime budget maintained"
+    depends_on:
+      - BEAD-HARNESS-IF-07D
+
+  # ----- Phase 8: OpenCode and Pi (model discovery only) -----
+
+  - id: BEAD-HARNESS-IF-08
+    title: "Migrate opencode and pi to ModelDiscoveryHarness"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "opencode.Runner and pi.Runner implement DefaultModelSnapshot, ResolveModelAlias, SupportedAliases (empty SupportedAliases is acceptable)"
+      - "DefaultOpenCodeModelDiscovery, DefaultPiModelDiscovery and related helpers unexported"
+      - "OpenCodeModelEvidence and OpenCodeModelCost fate decided (unexport unless external consumer surfaces)"
+      - "package opencode and package pi doc comments mirror SupportedAliases()"
+      - "service_models.go drops opencodeharness and piharness imports"
+      - "harnesstest conformance suite passes against both Runners"
+      - "go test ./... passes; structural-diff fixtures pass"
+    depends_on:
+      - BEAD-HARNESS-IF-04
+
+  # ----- Phase 9: Runtime signals -----
+
+  - id: BEAD-HARNESS-IF-09
+    title: "Migrate internal/runtimesignals/collect.go to QuotaHarness interface"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "internal/runtimesignals/ drops claudecache, codexcache, geminicache imports"
+      - "collect.go consumes harnesses.QuotaHarness via interface assertion through harnessByName"
+      - "collect_test.go uses synthetic QuotaHarness fixtures from harnesstest"
+      - "go test ./... passes"
+    depends_on:
+      - BEAD-HARNESS-IF-05F
+      - BEAD-HARNESS-IF-06F
+      - BEAD-HARNESS-IF-07E
+
+  # ----- Phase 10: Lint rule -----
+
+  - id: BEAD-HARNESS-IF-10
+    title: "Lint rule: forbid external imports of per-harness packages outside execute_dispatch.go"
+    spec_ref: docs/helix/02-design/adr/ADR-014-universal-harness-interface.md
+    acceptance_criteria:
+      - "internal/lint/ (or the project lint pass) rejects any .go file outside internal/harnesses/ that imports internal/harnesses/{claude,codex,gemini,opencode,pi} except internal/serviceimpl/execute_dispatch.go"
+      - "Rule wired into lefthook.yml and CI"
+      - "Error message cites CONTRACT-004 invariant #1"
+      - "An intentional violation in a feature branch reproduces the failure with a clear message"
+    depends_on:
+      - BEAD-HARNESS-IF-05F
+      - BEAD-HARNESS-IF-06F
+      - BEAD-HARNESS-IF-07E
+      - BEAD-HARNESS-IF-08
+      - BEAD-HARNESS-IF-09
+
+  # ----- Phase 11: Post-refactor verification -----
+
+  - id: BEAD-HARNESS-IF-11
+    title: "Post-refactor structural diff and runtime regression check"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "internal/test/structuraldiff/diff.go test helper exists; not under testdata/"
+      - "Re-run BEAD-HARNESS-IF-00 fixtures with structural diff: field sets identical (modulo documented additive deltas); semantic equality with documented time-field rules"
+      - "Pre-existing test suite runtime within 10% of the BEAD-HARNESS-IF-00 baseline (excluding new harnesstest and scheduler tests)"
+      - "No individual pre-existing test slower by more than 10%"
+      - "New conformance + scheduler test runtime budgeted separately and reported in the PR"
+    depends_on:
+      - BEAD-HARNESS-IF-10
+
+  # ----- Phase 12: Documentation pass -----
+
+  - id: BEAD-HARNESS-IF-12
+    title: "Documentation pass: PRD, CONTRACT-003 cross-ref, AGENTS.md, package-doc/method mirror verification"
+    spec_ref: docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md
+    acceptance_criteria:
+      - "PRD line 204 cites CONTRACT-004 instead of CONTRACT-003 for the harness interface"
+      - "CONTRACT-003 cross-references CONTRACT-004 as the source for HarnessInfo.Quota and HarnessInfo.Account population"
+      - "primary-harness-capability-baseline.md references resolve (no deleted symbols cited)"
+      - "AGENTS.md (or equivalent) describes the harness implementation pattern: implement Harness plus optional sub-interfaces, snapshot types package-private, no cross-harness imports, SupportedAliases/SupportedLimitIDs as the stable contract surface"
+      - "A Go test using go/doc parses each internal/harnesses/<name>/ package comment and asserts the documented Supported* sets equal the method return values on a default Runner{} instance; drift fails CI"
+    depends_on:
+      - BEAD-HARNESS-IF-11
