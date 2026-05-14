@@ -33,6 +33,7 @@ website/resources/
 .ddx/run-state.json
 .ddx/executions/
 .ddx/.execute-bead-wt-agent-*/
+.ddx/workers/
 .helix/
 
 # Node / npm
