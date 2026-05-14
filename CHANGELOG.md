@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.14.0] — 2026-05-14
+
 ### Added
 
 - `RouteRequest.ExcludedRoutes` (`[]ExcludedRoute`): callers can now supply a
