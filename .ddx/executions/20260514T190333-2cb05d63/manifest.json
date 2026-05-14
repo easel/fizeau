@@ -1,0 +1,105 @@
+{
+  "attempt_id": "20260514T190333-2cb05d63",
+  "bead_id": "fizeau-8134d6db",
+  "base_rev": "968997a560c7380ded2e8c36a02a09ad97cb2c23",
+  "created_at": "2026-05-14T19:03:38.599081943Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-8134d6db",
+    "title": "routing: honor caller exclusions and fast-fail on transport timeouts",
+    "description": "PROBLEM\nFizeau wastes 2m45s per call retrying a dead local endpoint (4 attempts with 1s/2s/4s/8s backoff + per-attempt 30s dial timeout), then surfaces a provider_connectivity error to the caller. Even when the caller (DDx) records the failed (provider, model) and asks for re-routing on the next attempt, Fizeau re-routes to the same dead endpoint because the caller has no way to express \"exclude this (provider, model)\" in the request, and routing decisions are made in isolation from caller-side health signals. Observed reproduction: with bragi:1234/qwen3.5-27b unreachable, a DDx drain of 12 beads attempted each bead, every bead routed to bragi/qwen3.5-27b, every bead spent ~2m45s in Fizeau retries, every bead failed identically. Net drain time ~33 minutes, zero beads completed.\n\nROOT CAUSE\nTwo contributing behaviors in internal/provider/* and internal/serviceimpl/*:\n1. Connect-time errors (dial tcp ECONNREFUSED / ETIMEDOUT to a local IP) are treated the same as in-flight provider errors and run through the full retry curve (4 attempts × ~30s = 2m45s). A local-network dial that misses the SYN window will not succeed on subsequent attempts; the retry burns wall-clock for no value.\n2. The route decision in internal/routehealth and the public RouteRequest type carry no caller-supplied exclusion list. Routes recorded as failed by the caller cannot be expressed to Fizeau. The internal routehealth Store tracks process-local feedback only — fine for within-call retries, but stateless across calls.\n\nPROPOSED FIX\n- Add ExcludedRoutes []ExcludedRoute to the public RouteRequest, where ExcludedRoute names (Provider, Model, optional Endpoint). The router must skip any candidate matching the list. Document in service.go and the routing API doc.\n- For connect-time errors (errors.As to *net.OpError with Op==\"dial\" AND ECONNREFUSED/ETIMEDOUT/EHOSTUNREACH), bypass the retry curve: 1 attempt, fail fast within ~5s. Reserve the retry curve for in-flight 5xx / partial-response errors that may transient retry usefully.\n- When the request lists multiple viable endpoints for the same model (current or future endpoint-first config), on connect-failure to one endpoint, immediately try the next endpoint in the same call rather than surfacing failure. The order matches the existing route-decision strategy.\n- Expose a routing-quality event recording \"route excluded by caller hint\" so observability can distinguish caller-driven re-routes from internal health signals.\n\nNON-SCOPE\n- Do not redesign provider config syntax. ExcludedRoutes is additive; endpoint-list support can land separately.\n- Do not change the existing routehealth in-process Store contract; only extend RouteRequest.\n- Do not alter retry behavior for non-transport-class provider errors (5xx, rate limit, content-policy) in this bead.\n\nDEPS\nNone at Fizeau; DDx-side bead to actually populate ExcludedRoutes from execute-loop-failed-routes is filed separately under ddx (ddx-8a7a6843 covers the DDx escalation-signaling side).",
+    "acceptance": "1. TestRouteRequest_ExcludedRoutesSkipsCandidate asserts a candidate matching an entry in RouteRequest.ExcludedRoutes is filtered out of the route decision.\n2. TestRouteRequest_ExcludedRoutesAllowsOtherCandidates asserts non-matching candidates remain selectable.\n3. TestProviderDialError_FailsFastBelow5Seconds asserts that a dial-tcp-refused / dial-tcp-timeout error returns from the provider call in under 5 seconds (no 4-attempt retry curve).\n4. TestProviderInflightError_StillRetries asserts in-flight 5xx errors keep the existing retry behavior (regression guard).\n5. go test ./... -count=1 passes.\n6. CHANGELOG.md and docs reference the new RouteRequest.ExcludedRoutes field and the connect-time fast-fail policy.",
+    "labels": [
+      "area:routing",
+      "area:routehealth",
+      "kind:bug",
+      "spec:endpoint-first-routing"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-14T19:03:33Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "342478",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-8134d6db\",\"inferred_power_class\":\"standard\",\"rejected_route_pins\":null,\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-14T18:29:42.674614064Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=heuristic powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: checkpoint refused to absorb implementation changes outside DDx bookkeeping: .ddx/beads-harness-interface-refactor.yaml, .ddx/workers/agent-loop-1778783378153871373/status.json, docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md, docs/helix/02-design/adr/ADR-014-universal-harness-interface.md, docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md, docs/helix/02-design/plan-2026-05-14-claude-tui-fork.md, docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md, scripts/benchmark/profiles/vidar-ds4.yaml, scripts/benchmark/terminalbench-2-1-sweep.yaml; commit those files in the bead's [ddx-\u003cid\u003e] substantive commit before rerunning",
+          "created_at": "2026-05-14T18:31:04.359603466Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-8134d6db\",\"inferred_power_class\":\"standard\",\"rejected_route_pins\":null,\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-14T18:31:09.07938088Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=heuristic powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: checkpoint refused to absorb implementation changes outside DDx bookkeeping: .ddx/beads-harness-interface-refactor.yaml, .ddx/workers/agent-loop-1778783378153871373/status.json, .ddx/workers/agent-loop-1778783468654137183/status.json, docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md, docs/helix/02-design/adr/ADR-014-universal-harness-interface.md, docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md, docs/helix/02-design/plan-2026-05-14-claude-tui-fork.md, docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md, scripts/benchmark/profiles/vidar-ds4.yaml, scripts/benchmark/terminalbench-2-1-sweep.yaml; commit those files in the bead's [ddx-\u003cid\u003e] substantive commit before rerunning",
+          "created_at": "2026-05-14T18:33:35.735733684Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-8134d6db\",\"inferred_power_class\":\"standard\",\"rejected_route_pins\":null,\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-14T18:33:43.904869878Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=heuristic powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: checkpoint refused to absorb implementation changes outside DDx bookkeeping: .ddx/beads-harness-interface-refactor.yaml, .ddx/workers/agent-loop-1778783378153871373/status.json, .ddx/workers/agent-loop-1778783468654137183/status.json, .ddx/workers/agent-loop-1778783623542744717/status.json, docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md, docs/helix/02-design/adr/ADR-014-universal-harness-interface.md, docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md, docs/helix/02-design/plan-2026-05-14-claude-tui-fork.md, docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md, scripts/benchmark/profiles/vidar-ds4.yaml, scripts/benchmark/terminalbench-2-1-sweep.yaml; commit those files in the bead's [ddx-\u003cid\u003e] substantive commit before rerunning",
+          "created_at": "2026-05-14T18:36:30.363985258Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-8134d6db\",\"inferred_power_class\":\"standard\",\"rejected_route_pins\":null,\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-14T18:54:36.613893381Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=heuristic powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: checkpoint refused to absorb implementation changes outside DDx bookkeeping: .ddx/beads-harness-interface-refactor.yaml, .ddx/workers/agent-loop-1778783378153871373/status.json, .ddx/workers/agent-loop-1778783468654137183/status.json, .ddx/workers/agent-loop-1778783623542744717/status.json, .ddx/workers/agent-loop-1778784876109079657/status.json, docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md, docs/helix/02-design/adr/ADR-014-universal-harness-interface.md, docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md, docs/helix/02-design/plan-2026-05-14-claude-tui-fork.md, docs/helix/02-design/plan-2026-05-14-harness-interface-refactor.md, scripts/benchmark/profiles/vidar-ds4.yaml, scripts/benchmark/terminalbench-2-1-sweep.yaml; commit those files in the bead's [ddx-\u003cid\u003e] substantive commit before rerunning",
+          "created_at": "2026-05-14T18:57:23.376591157Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-14T19:03:33.97325423Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260514T190333-2cb05d63",
+    "prompt": ".ddx/executions/20260514T190333-2cb05d63/prompt.md",
+    "manifest": ".ddx/executions/20260514T190333-2cb05d63/manifest.json",
+    "result": ".ddx/executions/20260514T190333-2cb05d63/result.json",
+    "checks": ".ddx/executions/20260514T190333-2cb05d63/checks.json",
+    "usage": ".ddx/executions/20260514T190333-2cb05d63/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-8134d6db-20260514T190333-2cb05d63"
+  },
+  "prompt_sha": "c42f1ec98607bfb998aff6b17542234d0578183fb46e5ffa97665ee8c3fd302b"
+}
