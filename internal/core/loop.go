@@ -636,6 +636,19 @@ func Run(ctx context.Context, req Request) (Result, error) {
 					// Compactor ran but produced no shorter history — fall through to error.
 				}
 
+				// Connect-time failures (dial refused, ETIMEDOUT, host unreachable)
+				// are dispatchability failures: the endpoint is down and retrying on
+				// the same provider will not help within the backoff window. Fail fast
+				// so caller-side routing can avoid this provider on the next attempt.
+				if IsDialError(err) {
+					result.Status = StatusError
+					result.Error = fmt.Errorf("agent: provider error: %w", err)
+					result.Duration = time.Since(start)
+					snapshotMessages()
+					emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
+					return result, result.Error
+				}
+
 				if !IsTransientError(err) {
 					result.Status = StatusError
 					result.Error = fmt.Errorf("agent: provider error: %w", err)

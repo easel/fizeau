@@ -93,6 +93,7 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		CorrelationID:         req.CorrelationID,
 		AllowLocal:            req.AllowLocal,
 		Require:               append([]string(nil), req.Require...),
+		ExcludedRoutes:        publicToRoutingExcludedRoutes(req.ExcludedRoutes),
 	}
 	if policyEntry, _, ok := policyForName(cat, requestedPolicy); ok {
 		rReq.AllowLocal = rReq.AllowLocal || policyEntry.AllowLocal
@@ -1229,6 +1230,21 @@ func (s *service) ProviderQuotaState() *ProviderQuotaStateStore {
 		return nil
 	}
 	return s.providerQuota
+}
+
+func publicToRoutingExcludedRoutes(in []ExcludedRoute) []routing.ExcludedRoute {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]routing.ExcludedRoute, len(in))
+	for i, r := range in {
+		out[i] = routing.ExcludedRoute{
+			Provider: r.Provider,
+			Model:    r.Model,
+			Endpoint: r.Endpoint,
+		}
+	}
+	return out
 }
 
 func serviceRoutingCatalog() *modelcatalog.Catalog {

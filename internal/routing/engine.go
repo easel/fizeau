@@ -34,6 +34,19 @@ type Request struct {
 	RequiresTools bool
 	MinPower      int
 	MaxPower      int
+
+	// ExcludedRoutes lists caller-supplied (Provider, Model, Endpoint)
+	// combinations to skip during candidate selection. The engine marks
+	// matching candidates ineligible with FilterReasonCallerExcluded.
+	ExcludedRoutes []ExcludedRoute
+}
+
+// ExcludedRoute is a caller-supplied exclusion hint for the routing engine.
+// Provider is required; Model and Endpoint are optional (empty matches any).
+type ExcludedRoute struct {
+	Provider string
+	Model    string // optional; empty matches any model on the provider
+	Endpoint string // optional; empty matches any endpoint
 }
 
 const (
@@ -269,6 +282,10 @@ const (
 	// FilterReasonMeteredOptInRequired: pay-per-token candidate was removed
 	// from unpinned automatic routing because metered spend was not enabled.
 	FilterReasonMeteredOptInRequired FilterReason = "metered_opt_in_required"
+	// FilterReasonCallerExcluded: candidate was excluded by an ExcludedRoutes
+	// entry in the caller's RouteRequest. Distinguishes caller-driven re-routes
+	// from internal health signals in routing-quality observability.
+	FilterReasonCallerExcluded FilterReason = "caller_excluded"
 )
 
 // NoViableCandidateError reports that routing evaluated candidates but every
@@ -1136,6 +1153,29 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 			eligible = false
 			reason = fmt.Sprintf("provider override requires %s", req.Provider)
 			filterReason = FilterReasonPinMismatch
+		}
+
+		// Caller-supplied exclusion list: skip candidates matching a caller
+		// health hint. Records FilterReasonCallerExcluded so routing-quality
+		// observability can distinguish caller-driven re-routes from internal
+		// health signals.
+		if eligible && len(req.ExcludedRoutes) > 0 {
+			providerID := candidateProviderIdentity(h, p)
+			for _, ex := range req.ExcludedRoutes {
+				if ex.Provider != providerID {
+					continue
+				}
+				if ex.Model != "" && ex.Model != model {
+					continue
+				}
+				if ex.Endpoint != "" && ex.Endpoint != p.EndpointName {
+					continue
+				}
+				eligible = false
+				reason = fmt.Sprintf("excluded by caller hint (provider=%s)", ex.Provider)
+				filterReason = FilterReasonCallerExcluded
+				break
+			}
 		}
 
 		inCooldown := false

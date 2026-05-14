@@ -387,6 +387,30 @@ type RouteRequest struct {
 	// "bead_123:attempt_4"). Observational only — it does NOT enter the
 	// routing precedence chain. Mirrors ServiceExecuteRequest.CorrelationID.
 	CorrelationID string
+
+	// ExcludedRoutes lists (Provider, Model, Endpoint) combinations the caller
+	// has determined are currently unavailable. The router skips any candidate
+	// matching an entry. Provider is required; Model and Endpoint are optional
+	// (empty matches any value for that field).
+	//
+	// Use this to communicate caller-side health signals across calls without
+	// redesigning provider config. The routing engine records excluded
+	// candidates with FilterReasonCallerExcluded for observability.
+	ExcludedRoutes []ExcludedRoute
+}
+
+// ExcludedRoute identifies a (Provider, Model, optional Endpoint) combination
+// that the caller has determined is currently unavailable or unsuitable. Used
+// with RouteRequest.ExcludedRoutes to express caller-side health signals.
+type ExcludedRoute struct {
+	// Provider is the provider identity to exclude (required).
+	Provider string
+	// Model restricts the exclusion to a specific model. Empty matches any model
+	// on the provider.
+	Model string
+	// Endpoint restricts the exclusion to a specific named endpoint. Empty
+	// matches any endpoint.
+	Endpoint string
 }
 
 // Valid CachePolicy values.

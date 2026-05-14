@@ -5,6 +5,25 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Added
+
+- `RouteRequest.ExcludedRoutes` (`[]ExcludedRoute`): callers can now supply a
+  list of `(Provider, Model, Endpoint)` combinations to exclude from routing.
+  The router skips any candidate matching an entry and records it with the new
+  `FilterReasonCallerExcluded` (`"caller_excluded"`) filter reason, so
+  routing-quality observability can distinguish caller-driven re-routes from
+  internal health signals. `Model` and `Endpoint` are optional — an empty value
+  matches any. Propagated from the public `ResolveRoute` surface through to the
+  internal routing engine.
+
+### Fixed
+
+- **Connect-time fast-fail**: dial-level TCP failures (ECONNREFUSED, ETIMEDOUT,
+  EHOSTUNREACH — detected as `*net.OpError{Op: "dial"}`) no longer run through
+  the 4-attempt exponential retry curve. A dead local endpoint now fails in
+  under 5 s instead of burning ~2 m 45 s of wall-clock per call. In-flight
+  5xx / rate-limit errors retain the existing retry behavior.
+
 ### Breaking — v0.11 Routing Surface
 
 - Routing intent is now policy-based. Public callers use `--policy`,

@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"net"
 	"regexp"
 )
 
@@ -38,6 +39,22 @@ var transientPattern = regexp.MustCompile(
 var fatalPattern = regexp.MustCompile(
 	`(?i)\b(?:401|403)\b|unauthorized|forbidden|invalid.?api.?key|authentication`,
 )
+
+// IsDialError reports whether err represents a TCP-level connection failure
+// at dial time. These errors originate from a *net.OpError with Op=="dial"
+// (ECONNREFUSED, ETIMEDOUT, EHOSTUNREACH, and related connect-phase failures).
+//
+// Dial errors are not retried: the endpoint is currently unreachable and
+// repeated attempts on the same provider within the backoff window will not
+// recover a dead host. Contrast with in-flight 5xx errors, which may succeed
+// on retry.
+func IsDialError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "dial"
+}
 
 // IsTransientError reports whether err is a transient provider error
 // that is safe to retry (network issues, rate limits, server overload).

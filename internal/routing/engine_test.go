@@ -1741,3 +1741,59 @@ func TestLocalAliasResolvesToFiz(t *testing.T) {
 func (d *Decision) Eligible() bool {
 	return d != nil && d.Harness != ""
 }
+
+// TestRouteRequest_ExcludedRoutesSkipsCandidate asserts that a candidate
+// matching an entry in RouteRequest.ExcludedRoutes is filtered out of the
+// route decision with FilterReasonCallerExcluded.
+func TestRouteRequest_ExcludedRoutesSkipsCandidate(t *testing.T) {
+	in := newTestRoutingEngine()
+	req := Request{
+		Policy:         "cheap",
+		ExcludedRoutes: []ExcludedRoute{{Provider: "vidar-omlx"}},
+	}
+	dec, err := Resolve(req, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if dec.Provider == "vidar-omlx" {
+		t.Errorf("want vidar-omlx excluded from selection, got %q", dec.Provider)
+	}
+	// vidar-omlx candidate must appear in the list with FilterReasonCallerExcluded.
+	var found bool
+	for _, c := range dec.Candidates {
+		if c.Provider == "vidar-omlx" && c.FilterReason == FilterReasonCallerExcluded {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("want vidar-omlx candidate with FilterReasonCallerExcluded in candidates list")
+	}
+}
+
+// TestRouteRequest_ExcludedRoutesAllowsOtherCandidates asserts that an
+// ExcludedRoutes entry with a specific model does not block a different model
+// on the same provider.
+func TestRouteRequest_ExcludedRoutesAllowsOtherCandidates(t *testing.T) {
+	in := newTestRoutingEngine()
+	// Exclude vidar-omlx only for "Qwen3.6-35B-A3B-4bit"; the other model
+	// "MiniMax-M2.5-MLX-4bit" on the same provider must remain selectable.
+	req := Request{
+		Policy:   "cheap",
+		Provider: "vidar-omlx",
+		Model:    "MiniMax-M2.5-MLX-4bit",
+		ExcludedRoutes: []ExcludedRoute{
+			{Provider: "vidar-omlx", Model: "Qwen3.6-35B-A3B-4bit"},
+		},
+	}
+	dec, err := Resolve(req, in)
+	if err != nil {
+		t.Fatalf("Resolve with non-matching exclusion: %v", err)
+	}
+	if dec.Provider != "vidar-omlx" {
+		t.Errorf("want vidar-omlx selected for non-excluded model, got %q", dec.Provider)
+	}
+	if dec.Model != "MiniMax-M2.5-MLX-4bit" {
+		t.Errorf("want model MiniMax-M2.5-MLX-4bit, got %q", dec.Model)
+	}
+}
