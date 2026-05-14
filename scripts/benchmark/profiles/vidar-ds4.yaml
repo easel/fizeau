@@ -39,13 +39,13 @@ metadata:
   # memory, backends). The hardware_label here is a stable lane-side
   # identifier; the snapshot string below carries the hw label for
   # per-cell denormalized lookup.
-  endpoint: http://vidar.local:1236/v1
+  endpoint: http://192.168.2.106:1236/v1
   server: vidar
 
 provider:
   type: ds4
   model: deepseek-v4-flash
-  base_url: http://vidar.local:1236/v1
+  base_url: http://192.168.2.106:1236/v1
   api_key_env: DS4_API_KEY               # server ignores it; clients just need to send *something*
 pricing:
   input_usd_per_mtok: 0.0
