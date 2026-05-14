@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "All three ACs satisfied: v0.10.0 tag pushed with successful release workflow, release notes cover new Role/CorrelationID fields, reserved-key extensions, and Power return field; DDx bead ddx-8f1ac866 reopened with notification pointing at the new tag.",
+  "findings": [
+    { "severity": "info", "summary": "DDx tracker update is committed locally but not pushed; user controls publication, which is acceptable per the evidence note.", "location": ".ddx/executions/20260502T191816-621eaec2/release_evidence.md" }
+  ]
+}
+```

@@ -1,0 +1,274 @@
+{
+  "attempt_id": "20260507T025343-f177171d",
+  "bead_id": "fizeau-e4d06062",
+  "base_rev": "c73df8dc19dee488bab38c95a9f74c657beee6f8",
+  "created_at": "2026-05-07T02:53:48.228533406Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e4d06062",
+    "title": "Retarget tests and fixtures from agent to fiz harness identity",
+    "description": "Update focused tests, cassettes, and fixture assertions that still encode agent as the native harness identity so they assert fiz instead. Keep historical comments only where they describe external agents or unavoidable archival text. This slice owns evidence updates, not code-path redesign.",
+    "acceptance": "1. Remaining focused tests assert fiz as the native harness identity where appropriate. 2. Fixture/cassette assertions that hard-code agent as the native harness are renamed to fiz. 3. The targeted regression tests that prove the new identity still pass after the implementation slice lands.",
+    "parent": "fizeau-61668fd3",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:53:43Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:40:15.623099297Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:44:02.009226399Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T004015-52c7063e\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2535591,\"output_tokens\":8584,\"total_tokens\":2544175,\"cost_usd\":0,\"duration_ms\":220262,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:44:02.115446346Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2544175 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T004015-52c7063e\",\"bead_id\":\"fizeau-e4d06062\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:44:11.794173557Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:44:12.020152523Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The slice updated two tests, but active benchmark fixtures still encode the native harness as `agent` rather than `fiz`, so AC 2 is not complete and the identity retarget is only partial.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=92133\noutput_bytes=996\nelapsed_ms=105160",
+          "created_at": "2026-05-07T00:47:11.566488794Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:47:11.673511991Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe slice updated two tests, but active benchmark fixtures still encode the native harness as `agent` rather than `fiz`, so AC 2 is not complete and the identity retarget is only partial.\nresult_rev=18fa883f3c9bbd1bb1534e7840beffe3e4e0cab8\nbase_rev=da8c9695a0a4dd219ffb9ba8462c04a1149d56f9",
+          "created_at": "2026-05-07T00:47:11.847705336Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:51:39.822105298Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:55:22.116276839Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T005140-9cbfefb1\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3680171,\"output_tokens\":13385,\"total_tokens\":3693556,\"cost_usd\":0,\"duration_ms\":217708,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:55:22.228082323Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=3693556 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T005140-9cbfefb1\",\"bead_id\":\"fizeau-e4d06062\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:55:24.183523167Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:55:24.39447177Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nCore assertions were retargeted and the affected root-package regressions pass, but several touched tests still describe the native `fiz` harness as `agent` in failure messages/diagnostics, so the evidence update is incomplete.\nartifact: .ddx/executions/20260507T005140-9cbfefb1/reviewer-stream.log\nharness=codex\nmodel=gpt-5.4\ninput_bytes=96270\noutput_bytes=1333\nelapsed_ms=48401",
+          "created_at": "2026-05-07T00:57:08.296280389Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:57:08.410963454Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: REQUEST_CHANGES\nCore assertions were retargeted and the affected root-package regressions pass, but several touched tests still describe the native `fiz` harness as `agent` in failure messages/diagnostics, so the evidence update is incomplete.\nresult_rev=0484fe839d450b0286f61372c9e77cc7c672cc36\nbase_rev=7a12dc63d944d4304d73d26b41fd1eabcba83c14",
+          "created_at": "2026-05-07T00:57:08.665107144Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:19:42.344423893Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:21:52.503954219Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T021942-7a13dca0\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1990345,\"output_tokens\":12807,\"total_tokens\":2003152,\"cost_usd\":0,\"duration_ms\":125590,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:21:52.614614294Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2003152 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T021942-7a13dca0\",\"bead_id\":\"fizeau-e4d06062\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:21:54.302049685Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:21:54.504019275Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=dab338e0d3048e8cc516ed915b4fe8790c87bc38\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=99505\noutput_bytes=311\nelapsed_ms=36392",
+          "created_at": "2026-05-07T02:22:57.700113467Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe focused comparison tests now assert `fiz` as the native harness identity, the benchmark fixture arms were retargeted from `agent` to `fiz`, and the targeted `internal/comparison` regression tests passed locally.\nresult_rev=dab338e0d3048e8cc516ed915b4fe8790c87bc38\nbase_rev=5d9834f4dd027e90b9809bdb7c38bbbc8732d8e3",
+          "created_at": "2026-05-07T02:22:57.812877206Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:29:33.853250991Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-e4d06062\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:29:34.442351004Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"pre-execute-bead checkpoint: staging changes: exit status 128\",\"rationale\":\"The attempt did not reach validation; it failed at the pre-execute-bead checkpoint while staging changes (exit status 128), which indicates a local repository/worktree problem rather than a bead-level code/test failure.\",\"recommended_action\":\"retry_after_fixing_repo_state\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Ensure the worktree is in a stageable state before invoking execute-bead; if there are unexpected dirty files or index issues, resolve them manually and rerun the checkpoint.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:29:44.843665722Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: retry_after_fixing_repo_state"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: staging changes: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:29:44.953609762Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:53:42.921782301Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:53:43.120541338Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T025343-f177171d",
+    "prompt": ".ddx/executions/20260507T025343-f177171d/prompt.md",
+    "manifest": ".ddx/executions/20260507T025343-f177171d/manifest.json",
+    "result": ".ddx/executions/20260507T025343-f177171d/result.json",
+    "checks": ".ddx/executions/20260507T025343-f177171d/checks.json",
+    "usage": ".ddx/executions/20260507T025343-f177171d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e4d06062-20260507T025343-f177171d"
+  },
+  "prompt_sha": "151ebe8b8bae68d212c54c57130b327478353a32cbd46e25b78f78f59b2bcabf"
+}

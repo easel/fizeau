@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The bead is not reviewable as implemented: the only committed change is a memo that cites a non-existent final artifact directory, and the committed canary matrices do not show the required six official lanes or the claimed invalid-run classification summary.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The memo’s claimed final evidence set does not exist in the repository. It records command success, exact output paths, counts, and log observations for `benchmark-results/matrix-medium-model-canary-20260507T035122Z/...`, but that directory is absent, so AC1 and AC4 are not verifiable from the implementation.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:15"
+    },
+    {
+      "severity": "block",
+      "summary": "The committed canary artifacts contradict the memo’s six-lane claim. For example, this matrix lists only one profile (`claude-sonnet-4-6`) and no invalid classification aggregate, so AC2 and AC3 are not satisfied by the available output artifacts.",
+      "location": "benchmark-results/matrix-medium-model-canary-20260506T191037Z/matrix.json:4"
+    }
+  ]
+}
+```

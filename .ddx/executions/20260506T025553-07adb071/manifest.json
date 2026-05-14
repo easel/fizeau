@@ -1,0 +1,126 @@
+{
+  "attempt_id": "20260506T025553-07adb071",
+  "bead_id": "fizeau-ffc8a964",
+  "base_rev": "f84dfa56caa97485f9ab6e9c1bfdfdb9ea770b7e",
+  "created_at": "2026-05-06T02:55:53.973390346Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ffc8a964",
+    "title": "Route new sticky keys by endpoint load",
+    "description": "Wire normalized endpoint utilization and in-process route leases into routing decisions for equivalent local endpoints. In-scope files: service_routing.go, internal/routing engine inputs/scoring, routehealth/service utilization aggregation, and routing tests. Requirements: existing sticky key wins when valid; new sticky keys choose least-loaded equivalent local/free endpoint serving the resolved model; load combines Fizeau in-flight lease counts with fresh provider utilization; saturated endpoints are avoided for new keys; stale utilization falls back to lease counts; utilization only affects ranking among equivalent eligible local endpoints and must not override hard pins, power bounds, model quality, or capability gates. Out of scope: provider probe implementation, route-status rendering, session artifact rendering, and shared multi-machine lease backend.",
+    "acceptance": "1. go test ./internal/routing ./... -run 'Utilization|Sticky|RouteStatus|Routing' passes. 2. New sticky keys distribute across equivalent endpoints by normalized load. 3. Existing sticky keys stay pinned even if another endpoint later becomes less loaded. 4. A saturated endpoint is avoided for new sticky keys but does not move existing keys unless hard-saturation policy requires it. 5. Stale or missing provider utilization falls back to Fizeau lease counts. 6. Hard provider/model/harness pins and MinPower/MaxPower behavior are unchanged.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:routing",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:55:53Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T02:31:20.611497576Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T022202-59b886c5\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":9288627,\"output_tokens\":54884,\"total_tokens\":9343511,\"cost_usd\":0,\"duration_ms\":557442,\"exit_code\":0}",
+          "created_at": "2026-05-06T02:31:20.7153615Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=9343511 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T02:31:22.73355959Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=b2d00d7877c8db143bdfd0e33b53772f0376031b\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T22:36:32-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=44461\noutput_bytes=0\nelapsed_ms=8327",
+          "created_at": "2026-05-06T02:31:32.696169363Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=b2d00d7877c8db143bdfd0e33b53772f0376031b\nbase_rev=34643157c6ceca6123d2f92a472c90a7e8787726",
+          "created_at": "2026-05-06T02:31:32.782202224Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T02:51:33.303390191Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T024931-66b0dc87\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1766607,\"output_tokens\":10372,\"total_tokens\":1776979,\"cost_usd\":0,\"duration_ms\":120069,\"exit_code\":0}",
+          "created_at": "2026-05-06T02:51:33.410285801Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1776979 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T02:51:35.122439229Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=24d941043455725ce7d0f67b4b86698ae70d4821\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T22:56:44-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=18060\noutput_bytes=0\nelapsed_ms=8264",
+          "created_at": "2026-05-06T02:51:44.807215313Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=24d941043455725ce7d0f67b4b86698ae70d4821\nbase_rev=2a64018538c2ff338adda63a2a8738d4beb0cea8",
+          "created_at": "2026-05-06T02:51:44.991732317Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T02:55:53.252829027Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T025553-07adb071",
+    "prompt": ".ddx/executions/20260506T025553-07adb071/prompt.md",
+    "manifest": ".ddx/executions/20260506T025553-07adb071/manifest.json",
+    "result": ".ddx/executions/20260506T025553-07adb071/result.json",
+    "checks": ".ddx/executions/20260506T025553-07adb071/checks.json",
+    "usage": ".ddx/executions/20260506T025553-07adb071/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ffc8a964-20260506T025553-07adb071"
+  },
+  "prompt_sha": "c97c4ca5a737213d2efe9cd7e93cd248d07cecce3e04422893c3ea2bccb53b38"
+}

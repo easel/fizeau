@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223853-66ae6f01",
+  "bead_id": "fizeau-23e7e699",
+  "base_rev": "7fc751a39d64caba8a888d7f1affc527e6f20316",
+  "created_at": "2026-05-06T22:38:55.157605854Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-23e7e699",
+    "title": "Define profile power-policy model",
+    "description": "Add the catalog/service data model for named profiles as power-policy shorthand. Profiles must expand to effective MinPower/MaxPower and optional ranking preferences, not concrete candidate lists. Preserve compatibility metadata for older catalog references without making it the primary routing behavior.",
+    "acceptance": "1. Profile definitions can express at least cheap, standard, and smart as effective power policies.\n2. ResolveProfile/ListProfiles expose effective MinPower/MaxPower and compatibility target metadata where present.\n3. Tests prove a profile does not resolve to a closed model set and that code-medium/code-high are not treated as target routing profiles.\n4. go test ./internal/modelcatalog ./internal/config ./... -run \"Profile|PowerPolicy|Catalog\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:catalog",
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:38:53Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:38:53.705329151Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:38:53.887915691Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223853-66ae6f01",
+    "prompt": ".ddx/executions/20260506T223853-66ae6f01/prompt.md",
+    "manifest": ".ddx/executions/20260506T223853-66ae6f01/manifest.json",
+    "result": ".ddx/executions/20260506T223853-66ae6f01/result.json",
+    "checks": ".ddx/executions/20260506T223853-66ae6f01/checks.json",
+    "usage": ".ddx/executions/20260506T223853-66ae6f01/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-23e7e699-20260506T223853-66ae6f01"
+  },
+  "prompt_sha": "b476a826bb7d7a681e326419c30bdf252685c64ba539c3baa66af76d4b16e097"
+}

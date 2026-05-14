@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260508T215412-a14bb77c",
+  "bead_id": "fizeau-040f1f83",
+  "base_rev": "dc984db8b82f7d23012a5f0cee0e0c4449dbda27",
+  "created_at": "2026-05-08T21:54:14.776294641Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-040f1f83",
+    "title": "modelcatalog: redesign manifest schema v5 + drop targets/aliases/surface_policy + billing.go",
+    "description": "PROBLEM\n  internal/modelcatalog/manifest.go carries the legacy v4 schema with overlapping concepts: profiles AND targets AND aliases AND surface_policy AND ModelEntry.Tier back-pointers AND compatibility_target redirection. The v0.11 surface redesign collapses this to a single first-class concept (policy) and drops everything else.\n\nROOT CAUSE\n  Manifest accumulated migration debt from prior renames. compatibility_target/target duality is half-done rename cruft (validator at manifest.go:460 says they must match when both set). surface_policy was an attempt to centralize per-(target × harness) defaults that ages poorly once reasoning_default moves to per-model. ModelEntry.Tier is a back-pointer to a target that no longer exists in v0.11.\n\nDESIGN INTENT (v0.11)\n  - Top-level keys: models, policies, providers (catalog-side type+include_by_default declarations), sampling_profiles (UNCHANGED, ADR-007).\n  - REMOVED: targets:, aliases:, compatibility_target on policies, surface_policy blocks, ModelEntry.Tier field.\n  - Each policy: { min_power: int, max_power: int, allow_local: bool, require: []string }.\n  - Hard cut on schema version (v4 → v5). External manifests pinned to v4 fail at load with helpful error pointing at ADR-009 (Phase 8).\n  - No aliases. The four canonical policy names (default, cheap, smart, air-gapped) are the only valid values. code-economy/code-smart/standard/local/offline/fast/code-fast/code-high/code-medium are removed with no replacement.\n  - Validator requires catalog to define a \"default\" policy (fallback for empty req.Policy).\n  - New BillingForProviderSystem and BillingForHarness functions in internal/modelcatalog/billing.go: hardcoded mapping by provider/harness type (lmstudio/llama-server/omlx/vllm/rapid-mlx/ollama/lucebox → fixed; openai/openrouter/anthropic/google → per_token; claude/codex/gemini harnesses → subscription; native fiz harness derives from underlying provider).\n\nCURRENT STATE WITH FILE:LINE\n  - internal/modelcatalog/manifest.go:36-76 ModelEntry (with Tier field at line 40)\n  - internal/modelcatalog/manifest.go:107-118 manifest struct (Targets, Profiles fields)\n  - internal/modelcatalog/manifest.go:120-126 profileEntry\n  - internal/modelcatalog/manifest.go:128-218 surfaceValue/targetEntry/surfacePolicyEntry types (~91 lines to delete)\n  - internal/modelcatalog/manifest.go:245-487 loadManifest + validateManifest\n  - internal/modelcatalog/manifest.go:489-545 upgradeManifest (delete entirely)\n  - internal/modelcatalog/manifest.go:577 profileCompatibilityTarget\n  - internal/modelcatalog/catalog.go:36,53-69 Catalog struct, Profile/ResolvedTarget types\n  - internal/modelcatalog/catalog.go:122-182 Profiles/Profile/Aliases methods\n\nPROPOSED FIX\n  1. Drop ModelEntry.Tier field. Add ModelEntry.ReasoningDefault (reasoning.Reasoning type) for per-model intrinsic reasoning posture.\n  2. manifest struct: drop Targets, drop Profiles. Add Policies map[string]policyEntry, Providers map[string]providerEntry. No top-level aliases field.\n  3. policyEntry: { MinPower int, MaxPower int, AllowLocal bool, Require []string }. providerEntry: { Type string, IncludeByDefault bool, Billing string (optional, required if Type unknown) }.\n  4. Delete surfaceValue, targetEntry, surfacePolicyEntry types (~91 lines).\n  5. Rewrite validateManifest: max_schema_version = 5; every policy has min\u003c=max valid power range; every provider has type; \"default\" policy must exist; require[] entries must be in known invariant set ({\"no_remote\"}); user-config providers with Type not in known catalog set must declare Billing explicitly.\n  6. Delete upgradeManifest; v4→v5 is a hard cut. Loader emits \"manifest schema v5 required (got v%d); see ADR-009 for v0.11 schema redesign\" on version mismatch.\n  7. Catalog struct: rename profileEntries → policyEntries. Replace Profile struct with Policy{Name string, MinPower, MaxPower int, AllowLocal bool, Require []string}. Drop ResolvedTarget, SurfacePolicy, MissingSurfaceError, DeprecatedTargetError, UnknownTargetError, Surface enum, ResolveOptions, Resolve, Current, AllConcreteModels, CandidatesFor, AllModelsInTier, TierModel, concreteModelsForSurface, primaryConcreteModel, targetCandidateIDs, deprecatedRoutingGuidance.\n  8. Catalog: add Policy(name) (Policy, bool), Policies() []Policy. Drop Aliases() entirely (no aliases concept).\n  9. New file internal/modelcatalog/billing.go: BillingModel enum (fixed/per_token/subscription) + BillingForProviderSystem(string) BillingModel + BillingForHarness(string) BillingModel.\n  10. Inline-YAML test fixtures in internal/modelcatalog/manifest_test.go and catalog_test.go: rewrite from legacy v4 schema to v5 in lockstep with the production code change.\n\nNON-SCOPE\n  - Catalog YAML rewrite (internal/modelcatalog/catalog/models.yaml) — Phase 3.\n  - Public service surface — Phase 4.\n  - Provider config (user-side) — Phase 5.\n  - Specs — Phase 8.\n\nPARENT + DEPS\n  Depends on Phase 1 (uses new error types).",
+    "acceptance": "1. internal/modelcatalog/manifest.go validateManifest enforces: max_version=5, every policy has 0\u003c=min_power\u003c=max_power\u003c=10, \"default\" policy exists, every require[] entry in {\"no_remote\"}, user-config providers with unknown Type require explicit Billing field.\n2. internal/modelcatalog/manifest_test.go::TestRejectsLegacySchemaV4 passes (manifest with version:4 returns error mentioning ADR-009).\n3. internal/modelcatalog/manifest_test.go::TestRejectsCatalogWithoutDefaultPolicy passes.\n4. internal/modelcatalog/manifest_test.go::TestRejectsUnknownRequireInvariant passes (require: [made_up] fails validation).\n5. internal/modelcatalog/manifest_test.go::TestUserProviderUnknownTypeRequiresBillingField passes.\n6. internal/modelcatalog/billing_test.go::TestBillingForProviderSystem_AllKnownTypes passes (10 known provider types mapped correctly).\n7. internal/modelcatalog/billing_test.go::TestBillingForHarness_SubscriptionHarnesses passes (claude/codex/gemini → subscription).\n8. internal/modelcatalog/catalog_test.go::TestCatalogPolicyAndPolicies passes (Catalog.Policy(name) + Catalog.Policies() return new shape).\n9. grep -rn \"targetEntry\\|surfaceValue\\|surfacePolicyEntry\\|profileEntry\\|profileCompatibilityTarget\" internal/modelcatalog/ returns zero matches.\n10. grep -rn \"Aliases\\b\" internal/modelcatalog/*.go returns zero matches in production code (no aliases concept).\n11. grep -n \"Tier\" internal/modelcatalog/manifest.go shows the Tier field is gone from ModelEntry.\n12. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./internal/modelcatalog/... -count=1 green.\n13. lefthook run pre-commit passes.",
+    "labels": [
+      "area:catalog",
+      "kind:redesign",
+      "phase:2",
+      "breaking",
+      "spec-id:ADR-009"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-08T21:48:24Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2341479",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: empty-output\"}",
+          "created_at": "2026-05-08T21:40:28.246547058Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"Well-structured bead with comprehensive problem statement, root cause analysis, and 13 specific acceptance criteria. Strong file:line references and clear non-scope boundaries. However, acceptance criterion 12 contains a hardcoded local path ('/Users/erik/Projects/fizeau') that is not portable/reproducible. The scope is quite large (10 proposed fix steps covering significant refactoring) which may benefit from splitting. Additionally, while the bead references 'Phase 1 (uses new error types)' in the deps section, there is no explicit parent task field - only a dependency listed.\",\"score\":85,\"suggested_fixes\":[\"Replace hardcoded path in acceptance criterion 12 with relative path or project root (e.g., 'cd ${PROJECT_ROOT}' or just 'go test ./internal/modelcatalog/... -count=1')\",\"Consider splitting into 2-3 smaller tasks given the 10-step proposed fix scope (e.g., schema redesign vs. billing.go vs. test fixtures)\",\"Add explicit 'parent' field referencing the Phase 1 task instead of only listing it in 'deps'\"],\"waivers_applied\":[]}",
+          "created_at": "2026-05-08T21:54:10.125002314Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "score=85"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-08T21:48:24.59803591Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260508T215412-a14bb77c",
+    "prompt": ".ddx/executions/20260508T215412-a14bb77c/prompt.md",
+    "manifest": ".ddx/executions/20260508T215412-a14bb77c/manifest.json",
+    "result": ".ddx/executions/20260508T215412-a14bb77c/result.json",
+    "checks": ".ddx/executions/20260508T215412-a14bb77c/checks.json",
+    "usage": ".ddx/executions/20260508T215412-a14bb77c/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-040f1f83-20260508T215412-a14bb77c"
+  },
+  "prompt_sha": "5c4b493899ee5e471f9bad1ffdda21d668c803aa7cc5e6f3e2f9c47855c91c1a"
+}

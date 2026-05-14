@@ -1,0 +1,85 @@
+{
+  "attempt_id": "20260506T025352-28571ca4",
+  "bead_id": "fizeau-b9d31351",
+  "base_rev": "25a7913831424c751f6df81cfe4b6b660df318bf",
+  "created_at": "2026-05-06T02:53:52.836746027Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b9d31351",
+    "title": "Add oMLX utilization tracking cassettes",
+    "description": "Implement normalized utilization tracking for the existing oMLX provider type. oMLX is an OpenAI/Anthropic-compatible Apple Silicon server with default Fizeau URL http://localhost:1235/v1. It exposes serving stats through `/api/status` and richer admin stats through `/admin/api/stats`; request usage also supports `stream_options.include_usage`.\n\nIn-scope files:\n- internal/provider/omlx utilization probe code and tests\n- shared provider utilization helpers if needed\n- provider cassette testdata for oMLX\n- route/status integration tests only where needed to prove normalized utilization is consumed\n- docs/helix/01-frame/features/FEAT-003-providers.md and FEAT-004-model-routing.md acceptance text if oMLX utilization needs explicit AC coverage\n\nRecord-mode environment:\n- Requires an oMLX server running on a macOS Apple Silicon device.\n- Use Vidar for the canonical live endpoint: `http://vidar:1235/v1`.\n- Record mode should allow overriding the base URL with an env var, but default documented operator target is Vidar port 1235.\n\nRequirements:\n- Derive status endpoint from OpenAI base URL. For `http://vidar:1235/v1`, probe `http://vidar:1235/api/status`.\n- Parse `/api/status` fields: total requests, active requests, waiting requests, total prompt/completion/cached tokens, cache efficiency, average prefill/generation TPS, loaded models, model memory used/max, and uptime.\n- Optionally support `/admin/api/stats` only when explicit admin credentials/config are supplied; normal utilization tracking must work without admin access.\n- Normalize to the same endpoint utilization shape used by vLLM and llama-server: active requests, queued requests, cache usage/hit metadata when known, source, freshness, observed time, and optional memory fields.\n- Probe failures return stale or unknown utilization and do not make the endpoint unavailable.\n\nOut of scope:\n- Changing oMLX chat/reasoning behavior.\n- Implementing Rapid-MLX support.\n- Multi-machine shared lease backends.",
+    "acceptance": "1. `go test ./internal/provider/omlx ./internal/provider/... -run 'OMLX.*Utilization|OMLX.*Cassette|Utilization'` passes in replay mode using committed cassettes.\n2. Record mode is gated by `FIZEAU_RECORD_PROVIDER_CASSETTES=1` plus a documented oMLX live-server URL env var and can record against `http://vidar:1235/v1`.\n3. Replay cassettes include `/v1/models`, `/api/status`, a minimal `/v1/chat/completions` request, and under-load `/api/status` evidence when feasible.\n4. Replay parsing extracts active requests, waiting requests, total prompt/completion/cached tokens, cache efficiency, average prefill/generation TPS, model memory used/max, and loaded model identifiers when present.\n5. Admin `/admin/api/stats` support, if implemented, is optional and never required for the base replay tests.\n6. Probe failure tests verify stale/unknown utilization does not mark the provider endpoint unavailable.",
+    "labels": [
+      "area:provider",
+      "kind:test"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:53:52Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T02:48:50.123574466Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T024000-c0e4de72\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8524194,\"output_tokens\":46260,\"total_tokens\":8570454,\"cost_usd\":0,\"duration_ms\":528046,\"exit_code\":0}",
+          "created_at": "2026-05-06T02:48:50.221912434Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8570454 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T02:48:51.983427344Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=06ab3a41cedef144d026278cbb294c914f7f91da\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T22:54:01-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=55993\noutput_bytes=0\nelapsed_ms=8248",
+          "created_at": "2026-05-06T02:49:01.265887416Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=06ab3a41cedef144d026278cbb294c914f7f91da\nbase_rev=bd7aea46bd067d2fd0bc5cd0c129cb3fc125500d",
+          "created_at": "2026-05-06T02:49:01.379365904Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T02:53:52.212544697Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T025352-28571ca4",
+    "prompt": ".ddx/executions/20260506T025352-28571ca4/prompt.md",
+    "manifest": ".ddx/executions/20260506T025352-28571ca4/manifest.json",
+    "result": ".ddx/executions/20260506T025352-28571ca4/result.json",
+    "checks": ".ddx/executions/20260506T025352-28571ca4/checks.json",
+    "usage": ".ddx/executions/20260506T025352-28571ca4/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b9d31351-20260506T025352-28571ca4"
+  },
+  "prompt_sha": "ffd378eee49a20d0afeb5e556d1ef48da2b1079da81b919bb76d3b6817f09272"
+}

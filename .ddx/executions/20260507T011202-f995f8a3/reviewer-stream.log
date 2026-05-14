@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The docs add LM Studio performance/model-management endpoints and the unknown fallback, but they still do not document freshness rules and do not clearly map any context-window/context-capacity signal to a concrete endpoint.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "AC2 is only partially met: the text documents the unknown/service-owned fallback, but it never states freshness/TTL/staleness rules for LM Studio signals, so readers still cannot tell when the documented stats are considered current enough for routing.",
+      "location": "docs/helix/01-frame/features/FEAT-003-providers.md:191"
+    },
+    {
+      "severity": "warn",
+      "summary": "AC1 asks for utilization, performance, context, and cache signals mapped to concrete endpoints. The new section covers performance and cache fallback, but it does not identify any concrete LM Studio endpoint for context-window/context-capacity data or explicitly call that surface out as an unresolved gap.",
+      "location": "docs/helix/01-frame/features/FEAT-003-providers.md:191"
+    }
+  ]
+}
+```

@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The LM Studio row now maps concrete endpoints and documents freshness/unknown fallback, but the missing live utilization probe is only noted with a generic follow-up bullet rather than a concrete tracked next-step bead.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "The documented LM Studio gap is not tied to an actual DDx bead or specific tracked follow-up. AC3 requires the missing live probe to be implemented or called out as a documented gap with a clear next-step bead; the current placeholder list item is too generic to satisfy that requirement.",
+      "location": "docs/research/provider-signal-matrix-2026-05-06.md:55"
+    }
+  ]
+}
+```

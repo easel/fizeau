@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The merge updates only three assertions. AC2 is still unmet because active benchmark fixtures still encode the native harness as `agent`, and some focused route-health tests also still hard-code `agent` instead of `fiz`.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "An in-repo fixture still describes the native harness as `agent`: multiple active beadbench arms keep `\"harness\": \"agent\"` and `Native agent...` rationale text. This directly misses the fixture-retargeting acceptance criterion.",
+      "location": "scripts/beadbench/manifest-v1.json:8"
+    },
+    {
+      "severity": "warn",
+      "summary": "Focused route-health unit tests still hard-code `Harness: \"agent\"` for native-harness examples, so the evidence update is not consistently retargeted to `fiz` across the remaining test surface.",
+      "location": "internal/routehealth/store_test.go:14"
+    }
+  ]
+}
+```

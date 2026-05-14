@@ -1,0 +1,6 @@
+verification_command: go test ./cmd/bench -run TestSweepShutdownTermGraceful -count=1 && bash scripts/benchmark/test_sweep_shutdown.bash
+
+The current checkout already satisfies the bead's shutdown acceptance checks:
+- `cmd/bench/matrix_test.go` contains `TestSweepShutdownTermGraceful`.
+- `scripts/benchmark/test_sweep_shutdown.bash` contains `TestSweepShutdownKillReapsProcessTree`, `TestSweepShutdownNoOrphans`, and `TestSweepShutdownReportState`.
+- Both commands above passed locally with no code changes required.

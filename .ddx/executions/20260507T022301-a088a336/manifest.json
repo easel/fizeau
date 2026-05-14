@@ -1,0 +1,199 @@
+{
+  "attempt_id": "20260507T022301-a088a336",
+  "bead_id": "fizeau-69570dcd",
+  "base_rev": "f6c77a4649dbdfcd89d2ad2e579e8ff27aad922e",
+  "created_at": "2026-05-07T02:23:02.871275798Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-69570dcd",
+    "title": "Add maximum context length to eligibility and evidence",
+    "description": "Capture maximum configured context length for route candidates, record its source, and use EstimatedPromptTokens as an eligibility filter. Context headroom should also be available as a scoring component for otherwise eligible candidates.",
+    "acceptance": "1. ModelInfo/Candidate/RouteDecision evidence includes context length and source: provider API, provider config, catalog, default, or unknown.\n2. EstimatedPromptTokens rejects candidates whose max context cannot fit the request, with a typed FilterReason.\n3. Context headroom appears as a score component for eligible candidates.\n4. route-status --json exposes context length and source for candidates.\n5. go test ./internal/routing ./cmd/fiz ./internal/serviceimpl -run \"Context|EstimatedPromptTokens|RouteStatus\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:provider",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:23:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:09.341704119Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:11.63826017Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=f26fcc0a69f7da1c15b80dcefda1af8d2684e471\nbase_rev=f26fcc0a69f7da1c15b80dcefda1af8d2684e471\nretry_after=2026-05-07T04:39:11Z",
+          "created_at": "2026-05-06T22:39:11.977853982Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:47:15.430259439Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:55:53.086238112Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T004715-f66297b8\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":14828508,\"output_tokens\":52758,\"total_tokens\":14881266,\"cost_usd\":0,\"duration_ms\":515982,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:55:53.190610936Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=14881266 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T004715-f66297b8\",\"bead_id\":\"fizeau-69570dcd\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:55:57.213614273Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:55:57.458776263Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "Context evidence and filtering are mostly wired through, but context headroom is only computed/exposed, not used in candidate scoring, so the scoring AC is not implemented.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15317\noutput_bytes=891\nelapsed_ms=108172",
+          "created_at": "2026-05-07T00:59:46.70754504Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:59:46.80986785Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nContext evidence and filtering are mostly wired through, but context headroom is only computed/exposed, not used in candidate scoring, so the scoring AC is not implemented.\nresult_rev=0a42a3325f5aca6d6b0c4a6e6452159b0e82cf9a\nbase_rev=d0a4830c1012bcbb8ff1bd7dc5ef17c77d69cf3f",
+          "created_at": "2026-05-07T00:59:46.984273404Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:00:19.147108533Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:03:22.18142524Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T010019-32e96b65\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3395636,\"output_tokens\":14823,\"total_tokens\":3410459,\"cost_usd\":0,\"duration_ms\":181282,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:03:22.28684807Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=3410459 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T010019-32e96b65\",\"bead_id\":\"fizeau-69570dcd\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:03:26.55083939Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:03:26.770167881Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=b139d38325666b48298305b2c0c4c77bc4455717\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15317\noutput_bytes=385\nelapsed_ms=88074",
+          "created_at": "2026-05-07T01:07:19.240170738Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll acceptance criteria are satisfied in the merged state: context evidence is surfaced end-to-end, EstimatedPromptTokens gates undersized candidates with a typed reason, context headroom now affects eligible ranking, route-status JSON includes the new fields, and the targeted tests pass.\nresult_rev=b139d38325666b48298305b2c0c4c77bc4455717\nbase_rev=a23f3415717fea816d6c064dbd17cc22d7fb63c9",
+          "created_at": "2026-05-07T01:07:19.344994693Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:23:00.787092135Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:23:00.985750313Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T022301-a088a336",
+    "prompt": ".ddx/executions/20260507T022301-a088a336/prompt.md",
+    "manifest": ".ddx/executions/20260507T022301-a088a336/manifest.json",
+    "result": ".ddx/executions/20260507T022301-a088a336/result.json",
+    "checks": ".ddx/executions/20260507T022301-a088a336/checks.json",
+    "usage": ".ddx/executions/20260507T022301-a088a336/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-69570dcd-20260507T022301-a088a336"
+  },
+  "prompt_sha": "a2d7d6c7b9880c521e7849a7824d6df25dee5d8de58c7bc16df63709baea5d3d"
+}

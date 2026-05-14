@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260414T001154-3b25834d",
+  "bead_id": "agent-0ac72188",
+  "base_rev": "df16b2557c664ba8e2434eeb19b3f28cb640c174",
+  "created_at": "2026-04-14T00:11:54.58362177Z",
+  "requested": {
+    "harness": "pi",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-0ac72188",
+    "title": "review: runtime loop and loop-detection (AR-2026-04-12)",
+    "description": "Review area: runtime loop, event emission, compaction, and loop-detection behavior as of v0.3.1.\n\nKey delta since AR-2026-04-10: ErrReasoningOverflow, ErrReasoningStall, ErrToolCallLoop are all implemented in loop.go, errors.go, and stream_consume.go and merged in v0.3.1. The two open beads (agent-7f1dec9b, agent-cf7e4cc8) describing this work are stale — implementation predates the alignment review.\n\nFinding: FEAT-001 acceptance criteria (AC-FEAT-001-01 through AC-FEAT-001-06) do not cover loop-detection behaviors. The three error sentinels (ErrReasoningOverflow, ErrReasoningStall, ErrToolCallLoop) and their corresponding loop exit paths are implemented and tested but have no governing acceptance criterion in FEAT-001. This is INCOMPLETE at the planning layer: implementation exists but no AC traces to it.",
+    "acceptance": "Gap classified; execution issue filed if non-ALIGNED",
+    "parent": "agent-0065014c",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:lib"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-14T00:11:54Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "793819"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260414T001154-3b25834d",
+    "prompt": ".ddx/executions/20260414T001154-3b25834d/prompt.md",
+    "manifest": ".ddx/executions/20260414T001154-3b25834d/manifest.json",
+    "result": ".ddx/executions/20260414T001154-3b25834d/result.json",
+    "worktree": ".ddx/.execute-bead-wt-agent-0ac72188-20260414T001154-3b25834d"
+  }
+}

@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "Docs/help and ModelRef deprecation guidance are in place, and the named tests pass, but AC 3 is not fully met: `code-high` still affects routing behavior on the explicit-harness execute path.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The explicit-harness execute path still treats `code-high` as a live profile constraint. `resolveExecuteRoute` calls `validateExplicitHarnessProfile`, and `explicitProfileConstraint` maps `code-high` to `subscription-only`, so the legacy name still influences profile/pin validation instead of being only a deprecated alias/error surface.",
+      "location": "service_execute.go:173"
+    }
+  ]
+}
+```

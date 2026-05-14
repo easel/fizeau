@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The slice updated two tests, but active benchmark fixtures still encode the native harness as `agent` rather than `fiz`, so AC 2 is not complete and the identity retarget is only partial.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The active beadbench manifest still hard-codes the native harness as `agent` in multiple arms and rationales (for example, `agent-openrouter-gpt54` and other native-provider arms), which violates the requirement to rename fixture assertions from the old native identity to `fiz`.",
+      "location": "scripts/beadbench/manifest-v1.json:9"
+    },
+    {
+      "severity": "block",
+      "summary": "The checked-in beadbench report fixture still records native-run results with `\"harness\": \"agent\"`, so downstream fixture/test surfaces remain on the old identity instead of `fiz`.",
+      "location": "cmd/bench/testdata/beadbench-report/report.json:23"
+    }
+  ]
+}
+```

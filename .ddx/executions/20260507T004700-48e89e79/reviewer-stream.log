@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The top-level rename landed and the primary baseline uses `fiz`, but CONTRACT-003 still shows the native route as `agent` in active event JSON examples, so the identity change is not fully consistent yet.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "Active CONTRACT-003 event examples still use `\"harness\": \"agent\"` for the native route (`routing_decision`, routed failure example, and `routing_actual`), which contradicts the new rule that `fiz` is the native harness identity and `agent` is reserved for external or historical references.",
+      "location": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md:1302"
+    }
+  ]
+}
+```

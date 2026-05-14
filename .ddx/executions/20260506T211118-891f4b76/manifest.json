@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260506T211118-891f4b76",
+  "bead_id": "fizeau-dbc21cce",
+  "base_rev": "ffde72ddab167c052c3fb21495db30e9ba181904",
+  "created_at": "2026-05-06T21:11:19.570668671Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dbc21cce",
+    "title": "Classify invalid TerminalBench runs separately from graded failures",
+    "description": "The medium comparison must not treat provider quota, authentication, setup, architecture, or provider routing failures as model capability failures. Recent Claude canaries produced 429/out_of_credits failures; pi and opencode can similarly fail from wrapper setup, local binary/account state, or provider/auth surfaces before a meaningful model attempt. Those should be reported as invalid cells, not failed benchmark attempts. Only verifier failures after a real agent attempt should count as graded failures.\n\nIn-scope files:\n- cmd/bench matrix aggregation/reporting code\n- benchmark result parsing helpers\n- fixtures for representative invalid logs/results across Claude, Codex, pi, and opencode lanes\n- matrix Markdown/JSON output tests\n\nOut-of-scope:\n- changing Harbor or TerminalBench verifier behavior\n- changing fiz session-log event schema unless needed for existing metadata consumption\n- benchmark profile selection\n\nImplementation notes:\n- Add stable invalid classes: `invalid_quota`, `invalid_auth`, `invalid_setup`, and `invalid_provider`.\n- Classify Claude 429/out_of_credits as `invalid_quota`.\n- Classify pi/opencode missing binary, account, permission, or wrapper startup failures before agent progress as `invalid_setup` or `invalid_auth` as appropriate.\n- Classify Docker/task image/native arch/setup failures before agent execution as `invalid_setup`.\n- Exclude invalid cells from pass-rate or mean-reward denominators while still displaying them prominently.",
+    "acceptance": "1. A fixture containing Claude 429/out_of_credits is classified as `invalid_quota`.\n2. Fixtures containing pi/opencode missing binary, account, or wrapper startup failure before agent progress are classified as `invalid_setup` or `invalid_auth` as appropriate.\n3. A fixture containing setup/native-arch/task-image failure before agent progress is classified as `invalid_setup`.\n4. A fixture containing a verifier failure after an agent attempt remains a graded failure, not invalid.\n5. Matrix Markdown and JSON outputs include invalid counts/classes and exclude invalid cells from capability pass-rate denominators.\n6. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:reporting",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T21:11:18Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:11:18.665225387Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T21:11:18.868208801Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T211118-891f4b76",
+    "prompt": ".ddx/executions/20260506T211118-891f4b76/prompt.md",
+    "manifest": ".ddx/executions/20260506T211118-891f4b76/manifest.json",
+    "result": ".ddx/executions/20260506T211118-891f4b76/result.json",
+    "checks": ".ddx/executions/20260506T211118-891f4b76/checks.json",
+    "usage": ".ddx/executions/20260506T211118-891f4b76/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dbc21cce-20260506T211118-891f4b76"
+  },
+  "prompt_sha": "db24f3325146fcda85013760c1eb89204d6d5081e672e6b9afa5e10b112e2306"
+}

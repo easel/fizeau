@@ -1,0 +1,63 @@
+{
+  "attempt_id": "20260513T162714-0a5b263a",
+  "bead_id": "fizeau-a2a39b80",
+  "base_rev": "17ecbec38debca45c06f9eb7de119eb8a287c9a3",
+  "created_at": "2026-05-13T16:27:17.743846492Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-a2a39b80",
+    "title": "enforce metered exclusion in route eligibility",
+    "description": "\u003ccontext-digest\u003eSpecs amended under fizeau-f0a71a4c. Unpinned automatic routing is defined as no Harness, no Provider, and no exact Model. Pay-per-token candidates must be removed before scoring unless provider default inclusion and explicit metered opt-in both allow them. Pins bypass default inclusion/metered opt-in but not policy requirements such as no_remote.\u003c/context-digest\u003e\nThread candidate-level billing through routing and enforce metered default-deny as an eligibility gate with typed trace evidence.",
+    "acceptance": "Routing candidates carry billing/payment kind at candidate level; unpinned default/smart/cheap route decisions reject pay-per-token candidates before scoring when metered opt-in is absent; explicit provider/model pins can select them; air-gapped plus metered remote pin fails policy requirement; route decision trace exposes a typed filter reason for metered exclusion or an existing default-exclusion reason that clearly distinguishes the gate",
+    "labels": [
+      "helix",
+      "phase:build",
+      "area:lib"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-13T16:20:16Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "632443",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-13T16:22:12.522916208Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: agent: provider error: openai: Post \\\"http://bragi:1234/v1/chat/completions\\\": dial tcp 100.127.38.115:1234: i/o timeout\"}",
+          "created_at": "2026-05-13T16:27:10.008630612Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx work",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-13T16:20:16.248921089Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260513T162714-0a5b263a",
+    "prompt": ".ddx/executions/20260513T162714-0a5b263a/prompt.md",
+    "manifest": ".ddx/executions/20260513T162714-0a5b263a/manifest.json",
+    "result": ".ddx/executions/20260513T162714-0a5b263a/result.json",
+    "checks": ".ddx/executions/20260513T162714-0a5b263a/checks.json",
+    "usage": ".ddx/executions/20260513T162714-0a5b263a/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-a2a39b80-20260513T162714-0a5b263a"
+  },
+  "prompt_sha": "66583e53d2aa8b03d62da2b80ebd98b4447c872ca63193b381b9ddaeaae90cfc"
+}

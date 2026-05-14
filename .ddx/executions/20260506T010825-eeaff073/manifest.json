@@ -1,0 +1,66 @@
+{
+  "harness": "claude",
+  "model": "claude-opus-4-6",
+  "base_rev": "d43300b10f5622811c8aa2cfdd004b68dea27475",
+  "result_rev": "46e249b71ddd93508ba079f8b0715a27414f0640",
+  "verdict": "BLOCK",
+  "bead_id": "fizeau-ed832d22",
+  "execution_dir": ".ddx/executions/20260506T010825-eeaff073",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1377,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 529,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "internal/provider/llamaserver/llamaserver.go",
+          "internal/provider/registry/registry_test.go",
+          "service_models.go",
+          "service_models_test.go",
+          "service_native_provider.go",
+          "service_providers.go",
+          "service_providers_test.go",
+          "service_routing.go",
+          "service_routing_test.go"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-003",
+        "bytes_included": 15446,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-003-principles.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 17878,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 37127,
+    "output_bytes": 0,
+    "elapsed_ms": 8274,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}

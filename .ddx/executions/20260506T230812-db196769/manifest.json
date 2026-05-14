@@ -1,0 +1,50 @@
+{
+  "attempt_id": "20260506T230812-db196769",
+  "bead_id": "fizeau-2c59b948",
+  "base_rev": "3c81416d1a3eea789acd38807f710ac1b5130e78",
+  "created_at": "2026-05-06T23:08:13.281572042Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2c59b948",
+    "title": "Import TerminalBench matrices into benchmark evidence ledger",
+    "description": "TerminalBench is the first high-value FHI benchmark. Matrix outputs must import into the benchmark evidence ledger with task-level rows where possible and with links to Fizeau session logs, Harbor trajectories, verifier rewards, invalid classifications, and matrix metadata. This importer is what enables claims like \"fiz native with Opus scores 81 on TerminalBench\".\n\nIn-scope files:\n- cmd/bench evidence import-terminalbench command or equivalent importer\n- cmd/bench matrix/matrix-aggregate parsing helpers if needed\n- test fixtures for matrix.json, matrix.md-adjacent metadata, session log paths, trajectory paths, reward files, and invalid cells\n\nOut-of-scope:\n- changing Harbor or TerminalBench scoring\n- running live benchmarks\n- FHI formula or claim generation\n\nImplementation notes:\n- Produce atomic task-level records when matrix.json contains per-task data.\n- Preserve matrix-level aggregate records only when task-level data is unavailable.\n- Populate benchmark version/dataset/subset/scorer, subject model/harness/provider, Fizeau version/git commit, harness wrapper/version, runtime metadata, session log path/hash, trajectory path/hash, and invalid-run fields.",
+    "acceptance": "1. A TerminalBench matrix fixture imports into benchmark-evidence/v1 JSONL with one record per task/rep/cell when task-level data exists.\n2. Imported records include Fizeau commit/version, harness pin, provider, model raw/canonical where known, benchmark dataset/subset, score/reward, final_status, invalid_class when applicable, and session/trajectory artifact hashes.\n3. Invalid quota/auth/setup/provider cells are imported with denominator exclusion metadata.\n4. `go run ./cmd/bench evidence import-terminalbench --matrix \u003cfixture-dir\u003e --out \u003ctmp.jsonl\u003e` produces valid records.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:terminalbench",
+      "area:evidence",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:08:12Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:08:11.904254114Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:08:12.075058881Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T230812-db196769",
+    "prompt": ".ddx/executions/20260506T230812-db196769/prompt.md",
+    "manifest": ".ddx/executions/20260506T230812-db196769/manifest.json",
+    "result": ".ddx/executions/20260506T230812-db196769/result.json",
+    "checks": ".ddx/executions/20260506T230812-db196769/checks.json",
+    "usage": ".ddx/executions/20260506T230812-db196769/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-2c59b948-20260506T230812-db196769"
+  },
+  "prompt_sha": "b12b31e04f06a5fa2086802b4195999b542796ed8a7ef9d73b5e86b83cfbdcfe"
+}

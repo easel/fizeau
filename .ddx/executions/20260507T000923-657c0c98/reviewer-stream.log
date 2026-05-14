@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The race warning is addressed, but the persisted `override` JSONL record is now written before `outcome` is populated, so historical routing-quality reconstruction from session logs remains incomplete.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The new close-ordering path writes `sl.override.payload` directly to the session log, but `outcome` is only added later in `makeOverrideEvent` for the public/tail stream. A local reproduction shows the persisted `override` record has no `outcome`, so the fix preserves the event but weakens the session-log data needed for UsageReport/routing-quality reconstruction.",
+      "location": "service_execute.go:894, service_override.go:197"
+    }
+  ]
+}
+```

@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "Context evidence and filtering are mostly wired through, but context headroom is only computed/exposed, not used in candidate scoring, so the scoring AC is not implemented.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The engine computes `ContextHeadroom` for eligible candidates, but `scorePolicy` never reads it. That means context headroom is not a scoring component, so the acceptance criterion requiring it to affect scoring is unmet.",
+      "location": "internal/routing/score.go:24"
+    },
+    {
+      "severity": "warn",
+      "summary": "`route-status --json` omits `context_length` when the value is 0 because of `omitempty`, so candidates with unknown context do not fully expose their context evidence in JSON output.",
+      "location": "agentcli/routing_smart.go:778"
+    }
+  ]
+}
+```

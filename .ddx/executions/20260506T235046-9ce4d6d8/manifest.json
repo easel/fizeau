@@ -1,0 +1,106 @@
+{
+  "attempt_id": "20260506T235046-9ce4d6d8",
+  "bead_id": "fizeau-fde8c9bd",
+  "base_rev": "7e759923180adbc68de053fb86f42d90a0944a9c",
+  "created_at": "2026-05-06T23:50:47.294847156Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-fde8c9bd",
+    "title": "Import beadbench reports into benchmark evidence ledger",
+    "description": "beadbench is the product-native benchmark for DDx/Fizeau execute-bead work. Its reports should become first-class evidence records so FHI reflects real implementation-loop behavior, not only external benchmark scores.\n\nIn-scope files:\n- scripts/beadbench/run_beadbench.py report schema/metadata if needed\n- cmd/bench evidence import-beadbench command or equivalent importer\n- fixtures under scripts/beadbench or cmd/bench testdata\n\nOut-of-scope:\n- changing beadbench task selection or running paid beadbench jobs\n- importing TerminalBench matrices\n- FHI formula or claim generation\n\nImplementation notes:\n- Import per-task/per-arm records from beadbench report.json.\n- Preserve DDx bead id, project/repo, harness/model/provider arm, Fizeau version if present, execution outcome, review outcome if present, runtime/cost/tool-call fields when present, and session/evidence artifact paths/hashes.\n- Distinguish implementation failures from setup/auth/provider invalids where the report has enough signal.",
+    "acceptance": "1. A beadbench report fixture imports into benchmark-evidence/v1 JSONL with one record per task/arm/run where available.\n2. Imported records preserve bead id, arm id, model/harness/provider, task category/capability, execution outcome, runtime/cost/tool-call fields when present, and session/evidence artifact references.\n3. Setup/auth/provider invalid outcomes are represented with invalid_class and denominator metadata when identifiable.\n4. `go run ./cmd/bench evidence import-beadbench --report \u003cfixture.json\u003e --out \u003ctmp.jsonl\u003e` produces valid records, or an equivalent documented command does.\n5. `go test ./cmd/bench` and `python3 scripts/beadbench/test_run_beadbench.py` pass.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:beadbench",
+      "area:evidence",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:50:46Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:22:11.671343811Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T23:30:40.964169013Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T232211-04f6dbed\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8146553,\"output_tokens\":57465,\"total_tokens\":8204018,\"cost_usd\":0,\"duration_ms\":505819,\"exit_code\":0}",
+          "created_at": "2026-05-06T23:30:41.069760715Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8204018 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260506T232211-04f6dbed\",\"bead_id\":\"fizeau-fde8c9bd\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-06T23:30:43.956943766Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T23:30:44.169874418Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=f4c3c6819427336caed3ecebee2335f428a0b2f1\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=3876\noutput_bytes=349\nelapsed_ms=61012",
+          "created_at": "2026-05-06T23:32:52.87079225Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe beadbench importer is implemented, emits one valid benchmark-evidence/v1 record per report result, preserves the required metadata and artifact references, classifies identifiable invalid runs, and the named Go and Python verification commands pass.\nresult_rev=f4c3c6819427336caed3ecebee2335f428a0b2f1\nbase_rev=378bd6721ec87604661d5f52caeee981f4575fc3",
+          "created_at": "2026-05-06T23:32:52.97149554Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:50:45.935940101Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:50:46.13119287Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T235046-9ce4d6d8",
+    "prompt": ".ddx/executions/20260506T235046-9ce4d6d8/prompt.md",
+    "manifest": ".ddx/executions/20260506T235046-9ce4d6d8/manifest.json",
+    "result": ".ddx/executions/20260506T235046-9ce4d6d8/result.json",
+    "checks": ".ddx/executions/20260506T235046-9ce4d6d8/checks.json",
+    "usage": ".ddx/executions/20260506T235046-9ce4d6d8/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-fde8c9bd-20260506T235046-9ce4d6d8"
+  },
+  "prompt_sha": "88ff2161a6996686b11c6285371ba05e4807655c9b23fca10cb3d21d80a9de36"
+}

@@ -1,0 +1,67 @@
+{
+  "attempt_id": "20260506T234036-3cdec434",
+  "bead_id": "fizeau-ff5fcc61",
+  "base_rev": "1a74e8c67e7a57e890c42700ed5ee6c956de517c",
+  "created_at": "2026-05-06T23:40:37.614059571Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-ff5fcc61",
+    "title": "Import external benchmark resources into evidence ledger",
+    "description": "SD-012 captures external benchmark resources for Rapid-MLX MHI, SkillsBench, SWE-bench, and HumanEval. Fizeau needs importer support for curated external rows/reports so those sources can contribute to model power and FHI without pretending every source is a live Fizeau run.\n\nIn-scope files:\n- cmd/bench evidence import-external or benchmark-specific import commands\n- parsers/fixtures for Rapid-MLX MHI JSON or curated Markdown/CSV, SkillsBench rows, SWE-bench leaderboard/task rows, and HumanEval pass@k/results JSONL\n- docs/resources import guidance updates if needed\n\nOut-of-scope:\n- running those benchmarks live\n- scraping sites in normal tests\n- changing FHI formula weights\n\nImplementation notes:\n- Prefer file-based import of curated snapshots over live network scraping.\n- Every imported row must record source URL, capture date, benchmark version, model_raw, harness/provider when known or `unknown` when hidden, score metric, score value, and source artifact hash.\n- HumanEval should be marked as low-cost raw coding/model-power evidence, not primary harness-intelligence evidence.",
+    "acceptance": "1. Fixtures for Rapid-MLX MHI, SkillsBench, SWE-bench, and HumanEval each import into valid benchmark-evidence/v1 JSONL.\n2. Importers preserve unknown harness/provider explicitly rather than omitting them.\n3. HumanEval records are component/model-power evidence and do not claim primary FHI coverage.\n4. `go run ./cmd/bench evidence import-external --source \u003cfixture\u003e --out \u003ctmp.jsonl\u003e` or equivalent documented commands produce valid records.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:evidence",
+      "area:external-benchmarks",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:30:28Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:30:28.015412917Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T23:40:34.059202961Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T233028-9ba32b7c\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8604193,\"output_tokens\":42332,\"total_tokens\":8646525,\"cost_usd\":0,\"duration_ms\":604672,\"exit_code\":0}",
+          "created_at": "2026-05-06T23:40:34.17282524Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8646525 model=gpt-5.4-mini"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:30:28.194517473Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T234036-3cdec434",
+    "prompt": ".ddx/executions/20260506T234036-3cdec434/prompt.md",
+    "manifest": ".ddx/executions/20260506T234036-3cdec434/manifest.json",
+    "result": ".ddx/executions/20260506T234036-3cdec434/result.json",
+    "checks": ".ddx/executions/20260506T234036-3cdec434/checks.json",
+    "usage": ".ddx/executions/20260506T234036-3cdec434/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ff5fcc61-20260506T234036-3cdec434"
+  },
+  "prompt_sha": "bf58bcbdc3084abeee62efd5ce066f9fe05a01929aff06152d07dd5eec45bf9f"
+}

@@ -1,0 +1,207 @@
+{
+  "attempt_id": "20260507T022617-2361c5fa",
+  "bead_id": "fizeau-33ed2078",
+  "base_rev": "55776858077f29620924a41c053f8b3fc8f757b1",
+  "created_at": "2026-05-07T02:26:23.640736193Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-33ed2078",
+    "title": "Document Ollama utilization signals",
+    "description": "Map Ollama request metrics and loaded-model inventory into the provider-signal matrix. Document native /api/chat or /api/generate timing fields, /api/ps inventory, context length, cache absence, and unknown-signal fallback.",
+    "acceptance": "1. The matrix or companion note maps Ollama utilization/performance/context signals to concrete endpoints. 2. Freshness and unknown-fallback behavior are documented. 3. Any missing live probe is either implemented or called out as a documented gap with a clear next-step bead.",
+    "parent": "fizeau-60171fa8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:26:17Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:16:54.564163454Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:20:17.869753476Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T011654-c2524b52\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1952519,\"output_tokens\":8424,\"total_tokens\":1960943,\"cost_usd\":0,\"duration_ms\":198906,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:20:17.987168882Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1960943 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T011654-c2524b52\",\"bead_id\":\"fizeau-33ed2078\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:20:19.77108529Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:20:19.976348585Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The new Ollama matrix row documents native `/api/chat`, `/api/generate`, and `/api/ps` as signals Fizeau can observe today, but the current provider still routes through the OpenAI-compatible `/v1` wrapper only, so the mapping is not accurate against the codebase.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=23974\noutput_bytes=910\nelapsed_ms=37940",
+          "created_at": "2026-05-07T01:21:41.458718261Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T01:21:41.577059875Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe new Ollama matrix row documents native `/api/chat`, `/api/generate`, and `/api/ps` as signals Fizeau can observe today, but the current provider still routes through the OpenAI-compatible `/v1` wrapper only, so the mapping is not accurate against the codebase.\nresult_rev=520d1ab8911b43bae6d6bb9b705190422b591f28\nbase_rev=2034432f73b9bfb0da6d2922f6d8abaa775b2c86",
+          "created_at": "2026-05-07T01:21:41.766947973Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:26:36.625592331Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-33ed2078\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:26:40.650375323Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD a3297371)\nerror: unable to create file .cache/go-build/a7/a75475d529786b1e8ffccd6eff0e06d5dea8bb38cc4e919328b19d60280d9b2a-a: No such file or directory\nerror: unable to create file .cache/go-build/a7/a760b1bbb6380690b2757c49b0bbc928275e6b736ed8d1c3c333c4ee43a24574-a: No such file or directory\nerror: unable to create file .cache/go-build/a7/a768e7e6af80b97181c1f16de839f55ed5dff48d48fcb336e1f8bf562a7d262b-a: No such file or directory\nerror: unable to create file .cache/go-build/a7/a76f98612916e45c7114a65c69e4f369f80c6634ef8fbe407a5636cc1dc3b4b3-d: No such file or directory\nerror: unable to create file .cache/go-build/a7/a78f58ace68c07ec3934442b25ca695046c79a0cbc52620b2f1a347dad7fc208-a: No such file or directory\nerror: unable to create file .cache/go-build/a7/a7d1fdce174fd2d7c8baafad2dbf3d00ddc3a922fbacee26f6d88749b2567dd4-a: No such file or directory\nerror: unable to create file .cache/go-build/a7/a7e4c2cf33ffdaeca6dd91b217beaa7a1a762ac4f810cde9e47d6aeccc36a2c5-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0154a58e9caaf9fbecf83fea9628a997f56e5c1dc1c2b7292d4ae4195fed5c5-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c01ddf12dc9c1f3282059301fe9d2d8537303fafd0d712b586753a972bf3ab77-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c03800a08c0f3bc37d82cdff25b96202c924ccccb418e728fc17436cfde7aa6f-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c03c674cb92c9938a177fd50a43bb7d4d289ae38881e97cf4e515c82a3ef44a7-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c068bdc1c6dd5cef34e2e3f07d930a28cd12adb0e029d099147abd9c0f221697-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c07b81e69b60ccc741af9afbdc003a06440e7fb1dba4711aefcf68c5de3638a0-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c07ca133d605d07d789b917870ec6e09c50ea8705e6ca9dea9fcf841d8fd7b58-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c08135dda21a7a5c1a0da87e490fa0a01ddcd7e2a84a7736bd947ad29fd5a3b4-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c084bb1fcfea0b9d3649af32e724afcbdb66fe1744e32db0bfc497fb702a6aca-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c09de481838ca3ef335602a76989dd4ff01fd3f15a96d483e476ea08086ca1de-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c09ec48e5db7e19e9178634e5fa976f11c78312a931c50c7e31b4b549aa8c627-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0a72d8e3d2e089d83d5fac932cc93393026c3784be92e7d71d4a6fd03e0f19e-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0bc3fbdbedfa7f8ecec95669886561e71d7ceda86655ae2e6110499c88b23a5-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0dc5756a2164edb4a488f0eec06d3f8a071cec545ea962680a25084c6c337b9-d: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0ec6a857314043a882b2b97bf8026d4241287975e9bf3991ead811c3d8f5de5-a: No such file or directory\nerror: unable to create file .cache/go-build/c0/c0f55e92693b7a7add1bb440ad99e8ea46fb0da483c4aec7d1059964449bdf65-a: No such file or directory\nfatal: cannot create directory at '.cache/go-build/c1': No such file or directory: exit status 128",
+          "created_at": "2026-05-07T01:26:51.155953846Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:05:45.078407107Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:07:48.71942496Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T020545-85490e00\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2253619,\"output_tokens\":10944,\"total_tokens\":2264563,\"cost_usd\":0,\"duration_ms\":121368,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:07:48.843889992Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2264563 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T020545-85490e00\",\"bead_id\":\"fizeau-33ed2078\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:07:52.532579595Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:07:52.749027932Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nThe docs now map Ollama timing, inventory, context-length, cache-unknown, and unknown/stale fallback behavior, but the missing live probe is only described as a future need and not tied to an actual follow-up bead.\nartifact: .ddx/executions/20260507T020545-85490e00/reviewer-stream.log\nharness=codex\nmodel=gpt-5.4\ninput_bytes=14739\noutput_bytes=674\nelapsed_ms=58317",
+          "created_at": "2026-05-07T02:09:49.003075836Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T02:09:49.110696672Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: REQUEST_CHANGES\nThe docs now map Ollama timing, inventory, context-length, cache-unknown, and unknown/stale fallback behavior, but the missing live probe is only described as a future need and not tied to an actual follow-up bead.\nresult_rev=68b57c146a3a02f39fd4f08a603d3cd6647d7493\nbase_rev=332c8021043bf563edd49fcd564514310df1aa90",
+          "created_at": "2026-05-07T02:09:49.284173499Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:26:17.568450867Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:26:17.846366402Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T022617-2361c5fa",
+    "prompt": ".ddx/executions/20260507T022617-2361c5fa/prompt.md",
+    "manifest": ".ddx/executions/20260507T022617-2361c5fa/manifest.json",
+    "result": ".ddx/executions/20260507T022617-2361c5fa/result.json",
+    "checks": ".ddx/executions/20260507T022617-2361c5fa/checks.json",
+    "usage": ".ddx/executions/20260507T022617-2361c5fa/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-33ed2078-20260507T022617-2361c5fa"
+  },
+  "prompt_sha": "0530b43bfa721c4ce4ca64d724b73fab6f10cc11a25b9a5efdf34de33a53156d"
+}

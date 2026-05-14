@@ -1,0 +1,99 @@
+{
+  "attempt_id": "20260506T165826-6a406ed7",
+  "bead_id": "fizeau-61668fd3",
+  "base_rev": "a4f443861f78f8d95bcf9e31b5d06704566f5733",
+  "created_at": "2026-05-06T16:58:27.280098876Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-61668fd3",
+    "title": "Rename Fizeau native harness identity from agent to fiz",
+    "description": "PROBLEM\nDDx is removing the term `agent` from its public and internal task-execution surfaces except where it literally means an external AI agent. Fizeau still exposes its native execution path as harness `agent` in code, tests, docs, progress fixtures, and contract prose. That makes downstream DDx specs confusing because `agent` can mean the old DDx CLI namespace, Fizeau native loop, or a real external coding agent.\n\nROOT CAUSE WITH FILE:LINE\nThe public contract and service request still document native-only behavior as Harness==\"agent\" in service.go:609-620. CONTRACT-003 selection docs at docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md:424-437 still describe hard `Harness` pins but do not reserve `agent` for real external agents or name the native Fizeau harness as `fiz`. Historical rename planning in docs/helix/02-design/plan-2026-04-08-rename-agent.md:143-164 discusses temporary aliases, but the downstream DDx decision for this work is remove, not deprecate.\n\nPROPOSED FIX\nMake `fiz` the public/native Fizeau harness identity across CONTRACT-003, the root facade comments, native harness registration, CLI/help text, route-status/list-models output, tests, and committed cassettes/fixtures as needed. Remove public `agent` native-harness aliases rather than adding deprecation shims. Keep the word `agent` only where it refers to a real external AI agent concept, historical artifact text that cannot be changed safely, or third-party standards language.\n\nNON-SCOPE\nDo not rename DDx commands or DDx packages in this repo. Do not alter routing scoring, provider eligibility, quota behavior, or model catalog contents except where tests/fixtures must be renamed from `agent` to `fiz`. Do not add a compatibility alias for `agent` unless a later bead explicitly changes the no-deprecation policy.\n\nIn-scope files include:\n- service.go\n- service_models.go and service_routing.go/native harness registration call sites as needed\n- agentcli/ and cmd/fiz/ help or command text if they expose native harness names\n- docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md\n- docs/helix/02-design/primary-harness-capability-baseline.md\n- tests/fixtures/cassettes that assert `agent` as the native harness identity\n\nOut-of-scope files:\n- DDx repository files under ../ddx\n- benchmark result archives unless an active test fixture requires the rename\n\nPARENT AND DEPENDENCIES\nParent: fizeau-06524f43. Dependencies: none.",
+    "acceptance": "1. `rg -n \"Harness==\\\"agent\\\"|Harness == \\\"agent\\\"|harness=agent|ListModels\\(.*Harness: \\\"agent\\\"|Name: \\\"agent\\\"\" service*.go agentcli cmd docs tests internal` returns no active contract/code/test hits except allowlisted historical archive comments.\n2. CONTRACT-003 documents `fiz` as the native Fizeau harness identity and states `agent` is reserved for real external AI-agent concepts, not the native Fizeau route.\n3. Focused tests such as `go test ./... -run \"Test(ListModels_harnessFilter|ResolveExecuteRoute|Harness|Native|Fiz)\"` pass after updating exact final test names.\n4. `fiz` CLI/list-models/route-status surfaces show the native harness as `fiz`, and explicit `Harness: \"fiz\"` requests execute through the native loop.\n5. Explicit `Harness: \"agent\"` no longer selects the native loop and fails with the existing typed unknown/incompatible harness error.\n6. `go test ./...` passes.\n7. `lefthook run pre-commit` passes.",
+    "parent": "fizeau-06524f43",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T16:58:25Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1364063",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T16:42:46.414924753Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T16:43:42.13534089Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T164248-2d590620\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":457640,\"output_tokens\":5630,\"total_tokens\":463270,\"cost_usd\":0,\"duration_ms\":52610,\"exit_code\":0}",
+          "created_at": "2026-05-06T16:43:42.24097242Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=463270 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The root bead is too broad for a safe single-pass implementation. It was decomposed into focused child beads instead of partially editing code in this attempt. child_beads: - fizeau-1e090b7d: rename native harness identity in code and CLI surfaces - fizeau-6e71b874: update CONTRACT-003 and capability docs for the fiz harness identity - fizeau-e4d06062: retarget tests and fixtures from agent to fiz harness identity",
+          "created_at": "2026-05-06T16:43:42.567812043Z",
+          "kind": "no_changes_needs_investigation",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes_needs_investigation"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\nrationale: status: needs_investigation\nreason: The root bead is too broad for a safe single-pass implementation. It was decomposed into focused child beads instead of partially editing code in this attempt.\nchild_beads:\n  - fizeau-1e090b7d: rename native harness identity in code and CLI surfaces\n  - fizeau-6e71b874: update CONTRACT-003 and capability docs for the fiz harness identity\n  - fizeau-e4d06062: retarget tests and fixtures from agent to fiz harness identity\nresult_rev=0b6223d9e8f3cadb57b9ebe40d5af12378997f51\nbase_rev=0b6223d9e8f3cadb57b9ebe40d5af12378997f51",
+          "created_at": "2026-05-06T16:43:42.772229984Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T16:58:25.789059229Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T16:58:25.978785406Z",
+      "execute-loop-no-changes-count": 1,
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T165826-6a406ed7",
+    "prompt": ".ddx/executions/20260506T165826-6a406ed7/prompt.md",
+    "manifest": ".ddx/executions/20260506T165826-6a406ed7/manifest.json",
+    "result": ".ddx/executions/20260506T165826-6a406ed7/result.json",
+    "checks": ".ddx/executions/20260506T165826-6a406ed7/checks.json",
+    "usage": ".ddx/executions/20260506T165826-6a406ed7/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-61668fd3-20260506T165826-6a406ed7"
+  },
+  "prompt_sha": "c5a3b9cfc34e4ffd45f78c00f0cf41b3d67cd784459c43e252db28ac12d747c4"
+}

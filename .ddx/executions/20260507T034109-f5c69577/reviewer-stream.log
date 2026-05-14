@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The canary memo is not reviewable as written: it omits the documented `OPENROUTER_API_KEY=...` invocation and cites a final artifact directory that is absent from the merged tree, so the six-lane and invalid-run claims are unsupported.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "AC1 requires recording the exact documented canary command, but the memo only records `scripts/benchmark/run_medium_model_terminalbench_comparison.sh canary` and omits the documented `OPENROUTER_API_KEY=sk-or-...` prefix.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:9"
+    },
+    {
+      "severity": "block",
+      "summary": "The memo's evidence points at `benchmark-results/matrix-medium-model-canary-20260507T034749Z/...`, but that artifact directory is not present in the merged tree; without the cited matrix files, the claimed six official lanes, `invalid_setup: 18`, and tool/session-log observations in AC2-4 are not verifiable.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:17"
+    },
+    {
+      "severity": "info",
+      "summary": "The tiny validation fix itself is present: `install_fail_permanent` and `install_failed` are now classified as `invalid_setup`, with a focused regression test covering the raw final-status case.",
+      "location": "cmd/bench/matrix_invalid.go:23"
+    }
+  ]
+}
+```

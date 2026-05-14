@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223902-981b4e6b",
+  "bead_id": "fizeau-69c585a1",
+  "base_rev": "5352b4b0a4f76545a9826209a2c2aeacd4becd97",
+  "created_at": "2026-05-06T22:39:03.425135987Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-69c585a1",
+    "title": "Derive stable server instance identity",
+    "description": "Add normalized server-instance identity for provider endpoints. Identity should prefer an explicit config field when present and otherwise derive from the endpoint host/port. This identity is diagnostic, appears in route evidence, and is the target of sticky affinity.",
+    "acceptance": "1. Provider endpoints can expose a configured server_instance value.\n2. When unset, server_instance is derived deterministically from base_url host/port after /v1 root normalization.\n3. ModelInfo, Candidate, RouteDecision, RouteStatus, and session routing evidence include server_instance.\n4. Tests cover grendel, vidar, and sindri-style base URLs plus explicit override.\n5. go test ./internal/config ./internal/routing ./cmd/fiz -run \"ServerInstance|EndpointIdentity|RouteStatus\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:config",
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:39:02Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:02.138756006Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:39:02.308031766Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223902-981b4e6b",
+    "prompt": ".ddx/executions/20260506T223902-981b4e6b/prompt.md",
+    "manifest": ".ddx/executions/20260506T223902-981b4e6b/manifest.json",
+    "result": ".ddx/executions/20260506T223902-981b4e6b/result.json",
+    "checks": ".ddx/executions/20260506T223902-981b4e6b/checks.json",
+    "usage": ".ddx/executions/20260506T223902-981b4e6b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-69c585a1-20260506T223902-981b4e6b"
+  },
+  "prompt_sha": "c3b759a065b0238b877c336148b11db77d337526844caa4263cbb9764b67657a"
+}

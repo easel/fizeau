@@ -1,0 +1,23 @@
+{
+  "bead_id": "agent-1ee144c7",
+  "attempt_id": "20260503T015849-b54da9b5",
+  "base_rev": "36b89daeb04ed55fdf31b32240924aafb239da4c",
+  "result_rev": "118d3032671c520dd8b75ba16eedebe04ccae4db",
+  "outcome": "task_succeeded",
+  "status": "success",
+  "detail": "success",
+  "harness": "claude",
+  "provider": "openrouter",
+  "session_id": "eb-ddcaab5b",
+  "duration_ms": 198359,
+  "tokens": 11372,
+  "cost_usd": 1.3623095,
+  "exit_code": 0,
+  "execution_dir": ".ddx/executions/20260503T015849-b54da9b5",
+  "prompt_file": ".ddx/executions/20260503T015849-b54da9b5/prompt.md",
+  "manifest_file": ".ddx/executions/20260503T015849-b54da9b5/manifest.json",
+  "result_file": ".ddx/executions/20260503T015849-b54da9b5/result.json",
+  "usage_file": ".ddx/executions/20260503T015849-b54da9b5/usage.json",
+  "started_at": "2026-05-03T01:58:49.943947548Z",
+  "finished_at": "2026-05-03T02:02:08.303068539Z"
+}

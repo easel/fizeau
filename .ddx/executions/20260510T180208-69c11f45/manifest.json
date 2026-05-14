@@ -1,0 +1,105 @@
+{
+  "attempt_id": "20260510T180208-69c11f45",
+  "bead_id": "fizeau-af9d5f1c",
+  "base_rev": "53c856c1503e71ddd8d6c14813a3d755a5cb2034",
+  "created_at": "2026-05-10T18:02:11.007118462Z",
+  "requested": {
+    "model": "anthropic/claude-opus-4.7",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-af9d5f1c",
+    "title": "fix: StageDir must use git add --force so evidence commits succeed in projects that gitignore .ddx/executions/",
+    "description": "## Problem\n\nProjects that include .ddx/executions/ in their .gitignore (including fizeau and\nany repo using the standard DDx .gitignore template) silently fail to land any bead.\nThe failure is invisible: the implementation is correct, tests pass, but agent.Land()\npreserves instead of landing on every attempt.\n\n## Root Cause\n\ncli/internal/agent/execute_bead_land.go:701 — RealLandingGitOps.StageDir:\n\n  args := append([]string{\"add\", \"--\", relPath}, EvidenceLandExcludePathspecs()...)\n  out, err := internalgit.Command(context.Background(), dir, args...).CombinedOutput()\n\ngit add without --force silently skips gitignored paths (exit 0, no output, no error).\nWhen .ddx/executions/ is gitignored, StageDir stages nothing. CommitStaged sees an\nempty index and returns sha=\"\". landEvidence calls evidenceDirHasTrackedFiles which\nalso returns false (gitignored files not tracked), so it returns error:\n\"no staged evidence files under .ddx/executions/...\". preserveAfterEvidenceFailure\nfires, rolls back master, and creates a preserve ref.\n\nCompounding issue: ApplyLandResultToExecuteBeadResult maps ALL non-pre-merge-check\npreserve reasons (including \"evidence commit failed\") to reasonForStatus=\"merge\nconflict\", which ClassifyExecuteBeadStatus returns as \"land_conflict\" (escalatable).\nThis causes runEscalatingSingleTierAttempts to burn through the entire model escalation\nladder (min_power 5→7→8→9) before exhausting.\n\nConfirmed in fizeau-bd5193ca: all 4 attempts preserved by evidence commit failure.\nInvestigation: .ddx/executions/20260510T023250-da87c8c9/fizeau-bd5193ca-investigation.md\n\n## Proposed Fix\n\nPart 1 (fix): In cli/internal/agent/execute_bead_land.go:701, StageDir, change:\n  args := append([]string{\"add\", \"--\", relPath}, ...)\nto:\n  args := append([]string{\"add\", \"--force\", \"--\", relPath}, ...)\n\nEvidence files are DDx infrastructure, not user source. They must be committed even\nwhen the project's .gitignore covers .ddx/executions/.\n\nPart 2 (defensive): In execute_bead_status.go, add \"evidence commit failed:\" as a\nnon-escalatable prefix in isPreservedNeedsReviewReason so infrastructure failures do\nnot burn the escalation ladder. Fixing Part 1 eliminates the failure path; Part 2\nprevents wasted escalation if any other evidence-commit edge case arises.",
+    "acceptance": "1. TestStageDirForcesGitIgnored: create a temp git repo with .gitignore covering a subdir, call StageDir on it, verify files are staged.\n   cd cli \u0026\u0026 go test -run TestStageDirForcesGitIgnored ./internal/agent/...\n\n2. TestEvidenceCommitSucceedsWhenGitignored: Land() end-to-end in a fixture repo whose .gitignore covers .ddx/executions/; verify status==\"landed\".\n   cd cli \u0026\u0026 go test -run TestEvidenceCommitSucceedsWhenGitignored ./internal/agent/...\n\n3. cd cli \u0026\u0026 go test ./internal/agent/... green\n\n4. lefthook run pre-commit passes",
+    "labels": [
+      "area:agent",
+      "kind:bug",
+      "phase:6",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-10T17:59:28Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1194026",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"Strong bug fix proposal with excellent root cause analysis, specific file/line references, and clear two-part remediation strategy. The fix is minimally invasive (adding --force flag), well-justified (infrastructure files should override user gitignore), and includes a defensive improvement to prevent escalation waste. Acceptance criteria are specific with concrete test commands and expected outcomes. One minor weakness: the acceptance criteria could be more explicit about expected output/assertions rather than just commands to run.\",\"score\":8,\"suggested_fixes\":[\"In acceptance criteria #1-2, add explicit assertions (e.g., 'verify staged files include .ddx/executions/... pathspecs' and 'verify result.Status equals \\\"landed\\\"') to make success conditions unambiguous\",\"Consider adding a regression test that simulates the exact fizeau-bd5193ca failure scenario from production\"],\"waivers_applied\":[]}",
+          "created_at": "2026-05-10T17:29:11.880703314Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "score=8"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"sindri-club-3090\",\"resolved_model\":\"qwen3.6-27b-autoround\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-10T17:44:20.4344037Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=sindri-club-3090 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260510T172913-ca2580fb\",\"harness\":\"fiz\",\"provider\":\"sindri-club-3090\",\"model\":\"qwen3.6-27b-autoround\",\"input_tokens\":37114,\"output_tokens\":600,\"total_tokens\":37714,\"cost_usd\":0,\"duration_ms\":903453,\"exit_code\":0}",
+          "created_at": "2026-05-10T17:44:20.444139775Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=37714 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.6-27b-autoround\",\"actual_power\":5,\"actual_provider\":\"sindri-club-3090\",\"attempt_id\":\"20260510T172913-ca2580fb\",\"bead_id\":\"fizeau-af9d5f1c\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-10T17:44:20.609897351Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=qwen3.6-27b-autoround harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-10T17:44:20.620512759Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"4f7bc7b7ee9834f333acfba98fe2a77acbdd6530\",\"classification\":\"no_changes\",\"decode_warnings\":[{\"field\":\"suggested_amendments\",\"warning\":\"expected array; dropped malformed field\",\"raw_excerpt\":\"[\\\"consider retrying with a higher-power model if no-changes persists on next attempt to give agent more reasoning capacity\\\",\\\"ensure the agent's prompt clearly emphasizes that evidence commits are required and provide an example of the git add --force change\\\"]\"},{\"field\":\"classification\",\"warning\":\"unknown classification\",\"raw_excerpt\":\"no_changes\"}],\"detail\":\"agent exited without a commit or no_changes_rationale.txt\",\"malformed\":true,\"rationale\":\"agent exited without producing changes or providing no_changes_rationale.txt; human explicitly marked no-changes as unjustified via triage label; this is first no-changes attempt (count=1) so retry before escalating\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"4f7bc7b7ee9834f333acfba98fe2a77acbdd6530\",\"session_id\":\"eb-ec8500c5\",\"status\":\"no_changes\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-10T17:46:23.634581535Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx agent execute-loop",
+          "summary": "unusable triage classification: no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\nresult_rev=4f7bc7b7ee9834f333acfba98fe2a77acbdd6530\nbase_rev=4f7bc7b7ee9834f333acfba98fe2a77acbdd6530\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-10T17:46:23.641545005Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"Bead has well-structured problem/root cause analysis with specific code references, but contains critical justification issues: (1) 'triage:no-changes-unjustified' label indicates changes weren't properly justified despite detailed analysis - missing explicit business impact quantification, (2) mixes two concerns in one fix (core fix + defensive escalation fix) when the defensive fix should be a separate bead, (3) acceptance criteria lack specificity about expected outcomes beyond test execution. The root cause analysis is thorough and the code changes are correctly targeted, but insufficient justification for why these changes are warranted as presented.\",\"score\":2,\"suggested_fixes\":[\"Separate the defensive fix (Part 2) into its own bead since it's addressing a different concern (escalation ladder management) than the core fix (git add --force)\",\"Add explicit impact quantification: how many beads/projects affected, estimated waste from escalation ladder burn-through, or user impact metrics\",\"Quantify the benefit: estimate how many preservation failures would be prevented post-fix\",\"Add expected behavior to acceptance criteria (e.g., 'verify git status shows files staged', 'verify commit SHA is non-empty')\",\"Clarify or remove the 'triage:no-changes-unjustified' label since the fix is justified but needs better business-case documentation\"],\"waivers_applied\":[]}",
+          "created_at": "2026-05-10T18:02:08.183482031Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "score=2"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-10T17:59:28.920219145Z",
+      "execute-loop-no-changes-count": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260510T180208-69c11f45",
+    "prompt": ".ddx/executions/20260510T180208-69c11f45/prompt.md",
+    "manifest": ".ddx/executions/20260510T180208-69c11f45/manifest.json",
+    "result": ".ddx/executions/20260510T180208-69c11f45/result.json",
+    "checks": ".ddx/executions/20260510T180208-69c11f45/checks.json",
+    "usage": ".ddx/executions/20260510T180208-69c11f45/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-af9d5f1c-20260510T180208-69c11f45"
+  },
+  "prompt_sha": "65c5e4a962deacbf14011d804718b2eb81319ce4fd6b55925862948b8a792383"
+}

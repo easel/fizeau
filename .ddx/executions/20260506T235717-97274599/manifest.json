@@ -1,0 +1,79 @@
+{
+  "attempt_id": "20260506T235717-97274599",
+  "bead_id": "fizeau-69c585a1",
+  "base_rev": "6e865342919da6a6b3a3749fd0a0cea253acf177",
+  "created_at": "2026-05-06T23:57:18.756418814Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-69c585a1",
+    "title": "Derive stable server instance identity",
+    "description": "Add normalized server-instance identity for provider endpoints. Identity should prefer an explicit config field when present and otherwise derive from the endpoint host/port. This identity is diagnostic, appears in route evidence, and is the target of sticky affinity.",
+    "acceptance": "1. Provider endpoints can expose a configured server_instance value.\n2. When unset, server_instance is derived deterministically from base_url host/port after /v1 root normalization.\n3. ModelInfo, Candidate, RouteDecision, RouteStatus, and session routing evidence include server_instance.\n4. Tests cover grendel, vidar, and sindri-style base URLs plus explicit override.\n5. go test ./internal/config ./internal/routing ./cmd/fiz -run \"ServerInstance|EndpointIdentity|RouteStatus\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:config",
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:57:17Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:02.138756006Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:04.059737111Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=5352b4b0a4f76545a9826209a2c2aeacd4becd97\nbase_rev=5352b4b0a4f76545a9826209a2c2aeacd4becd97\nretry_after=2026-05-07T04:39:04Z",
+          "created_at": "2026-05-06T22:39:04.39918284Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:57:17.337312489Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:57:17.545371614Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T235717-97274599",
+    "prompt": ".ddx/executions/20260506T235717-97274599/prompt.md",
+    "manifest": ".ddx/executions/20260506T235717-97274599/manifest.json",
+    "result": ".ddx/executions/20260506T235717-97274599/result.json",
+    "checks": ".ddx/executions/20260506T235717-97274599/checks.json",
+    "usage": ".ddx/executions/20260506T235717-97274599/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-69c585a1-20260506T235717-97274599"
+  },
+  "prompt_sha": "16daea149e430fe03456d69d5abf6dd7d4127b93d9650f1216d89bff8df1274b"
+}

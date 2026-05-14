@@ -1,0 +1,143 @@
+{
+  "attempt_id": "20260507T002748-b98935b0",
+  "bead_id": "fizeau-b4c78d49",
+  "base_rev": "84e42322263e387c9efd0d782d5d7e7362ef8d55",
+  "created_at": "2026-05-07T00:27:49.802688982Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b4c78d49",
+    "title": "Resolve profiles as power policy during routing",
+    "description": "Change route resolution so Profile expands to effective power policy before candidate filtering. ModelRef remains exact catalog-reference narrowing. Local auto-routable candidates with matching power must remain eligible under profiles such as standard even when they are not the profile's historical catalog target.",
+    "acceptance": "1. A request with Profile=standard and no ModelRef considers all discovered auto-routable candidates inside the effective power policy.\n2. A request with ModelRef still narrows model identity and does not broaden because Profile is also set.\n3. Route-status/ResolveRoute evidence shows requested profile and effective power policy.\n4. Tests include local power-5 candidates from grendel/vidar/sindri-style endpoints participating under standard.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Profile|PowerPolicy|Route\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:27:48Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:38:57.195818518Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:38:59.245748671Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=8e20edf88966aeed5fca06b2dd5f2a2d20a9be8f\nbase_rev=8e20edf88966aeed5fca06b2dd5f2a2d20a9be8f\nretry_after=2026-05-07T04:38:59Z",
+          "created_at": "2026-05-06T22:38:59.587535523Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:56:41.278762935Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:05:19.236403098Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T235641-d9055867\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":12987330,\"output_tokens\":57451,\"total_tokens\":13044781,\"cost_usd\":0,\"duration_ms\":516362,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:05:19.345921803Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=13044781 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260506T235641-d9055867\",\"bead_id\":\"fizeau-b4c78d49\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:05:23.222393992Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:05:23.449793938Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "Profiles are no longer treated as exact model refs, but they are not expanded into effective power bounds before routing. ResolveRoute/route-status only echo the caller inputs, so AC 1 and 3 remain unmet.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15412\noutput_bytes=1393\nelapsed_ms=117770",
+          "created_at": "2026-05-07T00:09:18.846674291Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:09:18.954630288Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nProfiles are no longer treated as exact model refs, but they are not expanded into effective power bounds before routing. ResolveRoute/route-status only echo the caller inputs, so AC 1 and 3 remain unmet.\nresult_rev=c56ce079dc5f89c6ad99bb784e0a8a83aa559303\nbase_rev=94fb3159221e1cc7f2a409e53350d9650b3c20d7",
+          "created_at": "2026-05-07T00:09:19.127772192Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:27:48.475452297Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:27:48.65965286Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T002748-b98935b0",
+    "prompt": ".ddx/executions/20260507T002748-b98935b0/prompt.md",
+    "manifest": ".ddx/executions/20260507T002748-b98935b0/manifest.json",
+    "result": ".ddx/executions/20260507T002748-b98935b0/result.json",
+    "checks": ".ddx/executions/20260507T002748-b98935b0/checks.json",
+    "usage": ".ddx/executions/20260507T002748-b98935b0/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b4c78d49-20260507T002748-b98935b0"
+  },
+  "prompt_sha": "0d435fa45dc93d2ef376c426b207adb5b859bb51bdadbd74bda9aee101a36f00"
+}

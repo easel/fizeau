@@ -1,0 +1,58 @@
+{
+  "attempt_id": "20260507T002039-5cce86db",
+  "bead_id": "fizeau-1e090b7d",
+  "base_rev": "89bd1b9643832473e0b038f907ee12ca8e2697cd",
+  "created_at": "2026-05-07T00:20:42.435903519Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1e090b7d",
+    "title": "Rename native harness identity in code and CLI",
+    "description": "Rename the native Fizeau harness identity from agent to fiz in service code, harness registration, route-status/list-models outputs, and CLI help strings. Remove native agent aliasing while preserving non-native historical references. Keep the implementation scoped to runtime behavior and any direct tests needed to prove it.",
+    "acceptance": "1. Native harness registration and service routing use fiz as the public/native harness name. 2. Explicit Harness: \"fiz\" executes through the native loop. 3. Explicit Harness: \"agent\" no longer selects the native loop and returns the existing typed incompatible/unknown harness error. 4. CLI/list-models/route-status surfaces show fiz for the native harness.",
+    "parent": "fizeau-61668fd3",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:20:39Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:20:39.081219276Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:20:39.282122866Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T002039-5cce86db",
+    "prompt": ".ddx/executions/20260507T002039-5cce86db/prompt.md",
+    "manifest": ".ddx/executions/20260507T002039-5cce86db/manifest.json",
+    "result": ".ddx/executions/20260507T002039-5cce86db/result.json",
+    "checks": ".ddx/executions/20260507T002039-5cce86db/checks.json",
+    "usage": ".ddx/executions/20260507T002039-5cce86db/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-1e090b7d-20260507T002039-5cce86db"
+  },
+  "prompt_sha": "5314ae539cb553bdb210d6440e87fa1690bb3db579ad2783d2850d125f9b8659"
+}

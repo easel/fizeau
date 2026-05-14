@@ -1,0 +1,122 @@
+{
+  "attempt_id": "20260507T005140-9cbfefb1",
+  "bead_id": "fizeau-e4d06062",
+  "base_rev": "7a12dc63d944d4304d73d26b41fd1eabcba83c14",
+  "created_at": "2026-05-07T00:51:44.404939637Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e4d06062",
+    "title": "Retarget tests and fixtures from agent to fiz harness identity",
+    "description": "Update focused tests, cassettes, and fixture assertions that still encode agent as the native harness identity so they assert fiz instead. Keep historical comments only where they describe external agents or unavoidable archival text. This slice owns evidence updates, not code-path redesign.",
+    "acceptance": "1. Remaining focused tests assert fiz as the native harness identity where appropriate. 2. Fixture/cassette assertions that hard-code agent as the native harness are renamed to fiz. 3. The targeted regression tests that prove the new identity still pass after the implementation slice lands.",
+    "parent": "fizeau-61668fd3",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:51:40Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:40:15.623099297Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:44:02.009226399Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T004015-52c7063e\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2535591,\"output_tokens\":8584,\"total_tokens\":2544175,\"cost_usd\":0,\"duration_ms\":220262,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:44:02.115446346Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2544175 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T004015-52c7063e\",\"bead_id\":\"fizeau-e4d06062\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:44:11.794173557Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:44:12.020152523Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The slice updated two tests, but active benchmark fixtures still encode the native harness as `agent` rather than `fiz`, so AC 2 is not complete and the identity retarget is only partial.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=92133\noutput_bytes=996\nelapsed_ms=105160",
+          "created_at": "2026-05-07T00:47:11.566488794Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:47:11.673511991Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe slice updated two tests, but active benchmark fixtures still encode the native harness as `agent` rather than `fiz`, so AC 2 is not complete and the identity retarget is only partial.\nresult_rev=18fa883f3c9bbd1bb1534e7840beffe3e4e0cab8\nbase_rev=da8c9695a0a4dd219ffb9ba8462c04a1149d56f9",
+          "created_at": "2026-05-07T00:47:11.847705336Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:51:39.822105298Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:51:40.011539837Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T005140-9cbfefb1",
+    "prompt": ".ddx/executions/20260507T005140-9cbfefb1/prompt.md",
+    "manifest": ".ddx/executions/20260507T005140-9cbfefb1/manifest.json",
+    "result": ".ddx/executions/20260507T005140-9cbfefb1/result.json",
+    "checks": ".ddx/executions/20260507T005140-9cbfefb1/checks.json",
+    "usage": ".ddx/executions/20260507T005140-9cbfefb1/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e4d06062-20260507T005140-9cbfefb1"
+  },
+  "prompt_sha": "ee25c8c8e4f1a2a029525cab1532c19388f3b20cfd390aac8e9cb5c07203e984"
+}

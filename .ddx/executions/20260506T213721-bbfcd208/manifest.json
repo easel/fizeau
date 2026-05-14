@@ -1,0 +1,104 @@
+{
+  "attempt_id": "20260506T213721-bbfcd208",
+  "bead_id": "fizeau-dbc21cce",
+  "base_rev": "7fbec61b07753329a0321ae10c73a990351ae3cb",
+  "created_at": "2026-05-06T21:37:23.623920626Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dbc21cce",
+    "title": "Classify invalid TerminalBench runs separately from graded failures",
+    "description": "The medium comparison must not treat provider quota, authentication, setup, architecture, or provider routing failures as model capability failures. Recent Claude canaries produced 429/out_of_credits failures; pi and opencode can similarly fail from wrapper setup, local binary/account state, or provider/auth surfaces before a meaningful model attempt. Those should be reported as invalid cells, not failed benchmark attempts. Only verifier failures after a real agent attempt should count as graded failures.\n\nIn-scope files:\n- cmd/bench matrix aggregation/reporting code\n- benchmark result parsing helpers\n- fixtures for representative invalid logs/results across Claude, Codex, pi, and opencode lanes\n- matrix Markdown/JSON output tests\n\nOut-of-scope:\n- changing Harbor or TerminalBench verifier behavior\n- changing fiz session-log event schema unless needed for existing metadata consumption\n- benchmark profile selection\n\nImplementation notes:\n- Add stable invalid classes: `invalid_quota`, `invalid_auth`, `invalid_setup`, and `invalid_provider`.\n- Classify Claude 429/out_of_credits as `invalid_quota`.\n- Classify pi/opencode missing binary, account, permission, or wrapper startup failures before agent progress as `invalid_setup` or `invalid_auth` as appropriate.\n- Classify Docker/task image/native arch/setup failures before agent execution as `invalid_setup`.\n- Exclude invalid cells from pass-rate or mean-reward denominators while still displaying them prominently.",
+    "acceptance": "1. A fixture containing Claude 429/out_of_credits is classified as `invalid_quota`.\n2. Fixtures containing pi/opencode missing binary, account, or wrapper startup failure before agent progress are classified as `invalid_setup` or `invalid_auth` as appropriate.\n3. A fixture containing setup/native-arch/task-image failure before agent progress is classified as `invalid_setup`.\n4. A fixture containing a verifier failure after an agent attempt remains a graded failure, not invalid.\n5. Matrix Markdown and JSON outputs include invalid counts/classes and exclude invalid cells from capability pass-rate denominators.\n6. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:reporting",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T21:37:21Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:11:18.665225387Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:19:11.927321801Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T211118-891f4b76\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":7434376,\"output_tokens\":40600,\"total_tokens\":7474976,\"cost_usd\":0,\"duration_ms\":472354,\"exit_code\":0}",
+          "created_at": "2026-05-06T21:19:12.035216896Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=7474976 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T21:19:14.190089212Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=76a3b78a99e3f155dde723cba1e0b843de7e2c89\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=33911\noutput_bytes=1067\nelapsed_ms=92464",
+          "created_at": "2026-05-06T21:22:44.377140646Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll ACs are covered: fixture-based classification handles quota/auth/setup/provider invalids, verifier failures after agent progress stay graded, matrix JSON/Markdown expose invalid counts and denominator exclusions, and `GOCACHE=/Users/erik/Projects/fizeau/.gocache go test ./cmd/bench` passes.\nresult_rev=76a3b78a99e3f155dde723cba1e0b843de7e2c89\nbase_rev=ffde72ddab167c052c3fb21495db30e9ba181904",
+          "created_at": "2026-05-06T21:22:44.480535474Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:37:20.833416366Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T21:37:21.024623615Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T213721-bbfcd208",
+    "prompt": ".ddx/executions/20260506T213721-bbfcd208/prompt.md",
+    "manifest": ".ddx/executions/20260506T213721-bbfcd208/manifest.json",
+    "result": ".ddx/executions/20260506T213721-bbfcd208/result.json",
+    "checks": ".ddx/executions/20260506T213721-bbfcd208/checks.json",
+    "usage": ".ddx/executions/20260506T213721-bbfcd208/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dbc21cce-20260506T213721-bbfcd208"
+  },
+  "prompt_sha": "af87f7537c6f5cd0c5bc228d99055914b01ac303e47c6f538d6a9593b7e10f58"
+}

@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260507T013717-64ee14a2",
+  "bead_id": "fizeau-e2724f0c",
+  "base_rev": "805913749c87b5885e803ca2cf6ff6aa3015a557",
+  "created_at": "2026-05-07T01:37:19.243272792Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e2724f0c",
+    "title": "Forward TerminalBench FIZEAU_* pins through FizeauAgent",
+    "description": "Official TerminalBench comparison runs should use the single Harbor installed agent `scripts/benchmark/harbor_agent.py:FizeauAgent`. That adapter currently forwards environment variables but invokes `fiz --json --preset default --work-dir ... -p ...` without converting `FIZEAU_HARNESS` into the new CLI hard pin. It must support every official fiz-wrapped harness lane: Claude, Codex, pi, and opencode. It also needs enough captured target metadata for diagnosis and matrix aggregation.\n\nIn-scope files:\n- scripts/benchmark/harbor_agent.py\n- tests for FizeauAgent command construction and trajectory metadata\n- narrow helper functions in scripts/benchmark if needed\n\nOut-of-scope:\n- raw Harbor Claude/Codex/pi/opencode adapters\n- medium comparison profile definitions\n- service or CLI harness-pin implementation\n\nImplementation notes:\n- Map `FIZEAU_HARNESS` to `--harness` for claude, codex, pi, and opencode.\n- Continue mapping/passing `FIZEAU_PROVIDER`, `FIZEAU_MODEL`, `FIZEAU_MODEL_REF`, and `FIZEAU_REASONING` through the supported fiz CLI surface.\n- Record the requested/resolved target in the trajectory/session artifact without parsing private harness-native streams.",
+    "acceptance": "1. Script-level tests prove `FIZEAU_HARNESS=claude`, `codex`, `pi`, and `opencode` each make FizeauAgent invoke fiz with the corresponding `--harness` value.\n2. A script-level test proves provider/model/model-ref/reasoning pins are preserved in the fiz invocation.\n3. A script-level test proves FizeauAgent trajectory metadata includes requested harness/provider/model information.\n4. The adapter does not invoke raw Harbor Claude, Codex, pi, or opencode adapters in this code path.\n5. The relevant Python test command for scripts/benchmark passes, or if no Python test harness exists yet, add one and document its command in the bead close evidence.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:37:17Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:37:17.411813634Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:37:17.594568934Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T013717-64ee14a2",
+    "prompt": ".ddx/executions/20260507T013717-64ee14a2/prompt.md",
+    "manifest": ".ddx/executions/20260507T013717-64ee14a2/manifest.json",
+    "result": ".ddx/executions/20260507T013717-64ee14a2/result.json",
+    "checks": ".ddx/executions/20260507T013717-64ee14a2/checks.json",
+    "usage": ".ddx/executions/20260507T013717-64ee14a2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e2724f0c-20260507T013717-64ee14a2"
+  },
+  "prompt_sha": "1131001d869cab10122bb5b4bfa88c8faab248a7691ce81d63515519acc618c0"
+}

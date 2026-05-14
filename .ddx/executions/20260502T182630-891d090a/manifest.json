@@ -1,0 +1,70 @@
+{
+  "attempt_id": "20260502T182630-891d090a",
+  "bead_id": "agent-bc214918",
+  "base_rev": "1b3f1f427f63af76c894a1ec70740db002ab03fb",
+  "created_at": "2026-05-02T18:26:32.95388849Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-bc214918",
+    "title": "CONTRACT-003: amend spec for Role + CorrelationID + Power",
+    "description": "Amend docs/helix/02-design/contracts/CONTRACT-003-ddx-agent-service.md per the parent epic. Sections to touch: Public types (line 216) for ExecuteRequest + RouteRequest + ServiceRoutingActual; Selection precedence (line 374) clarifying Role+CorrelationID are observational only; Metadata reserved-keys (around line 340) extending the list with role + correlation_id collision rules; Routing Policy Test Contract (line 1448) with the minimum test statements; new section on normalization rules with typed errors.",
+    "acceptance": "1. CONTRACT-003 spec PR with all amendments. 2. ddx doc audit clean for the contract artifact.",
+    "parent": "agent-3bb96bf5",
+    "labels": [
+      "contract:003",
+      "area:docs"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-02T18:26:30Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3355489",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:08:38.898161846Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:08:45.162000826Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-05-02T13:08:45.267368221Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-05-02T13:08:45.416641576Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-02T18:26:30.305412195Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260502T182630-891d090a",
+    "prompt": ".ddx/executions/20260502T182630-891d090a/prompt.md",
+    "manifest": ".ddx/executions/20260502T182630-891d090a/manifest.json",
+    "result": ".ddx/executions/20260502T182630-891d090a/result.json",
+    "checks": ".ddx/executions/20260502T182630-891d090a/checks.json",
+    "usage": ".ddx/executions/20260502T182630-891d090a/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-bc214918-20260502T182630-891d090a"
+  }
+}

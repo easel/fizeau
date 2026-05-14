@@ -1,0 +1,90 @@
+{
+  "attempt_id": "20260507T004700-48e89e79",
+  "bead_id": "fizeau-6e71b874",
+  "base_rev": "65ec88531b2106e84c0a2f3b6ff7db67637acb1a",
+  "created_at": "2026-05-07T00:47:05.312431027Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6e71b874",
+    "title": "Update contract and capability docs for fiz harness identity",
+    "description": "Update CONTRACT-003 and the primary harness capability baseline so the native Fizeau harness is named fiz, and reserve agent for real external AI-agent concepts or historical references that cannot be changed safely. Keep the wording aligned with the new identity but do not expand unrelated spec content.",
+    "acceptance": "1. CONTRACT-003 documents fiz as the native Fizeau harness identity. 2. CONTRACT-003 states agent is reserved for real external AI-agent concepts, not the native Fizeau route. 3. primary-harness-capability-baseline.md uses fiz for the native harness and no longer treats agent as the native identity in active contract prose.",
+    "parent": "fizeau-61668fd3",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:47:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:40:02.071089934Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-6e71b874\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:40:04.625455037Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"merge_conflict\",\"detail\":\"committing tracker: fatal: cannot lock ref 'HEAD': is at 0dfd7cbeb1167cdd0d1b77cd3f82096b3e582ff7 but expected ef20b8bb7623838f61c9dd9932f596e42dfce233: exit status 128\",\"rationale\":\"Tracker commit failed because HEAD advanced during the attempt (`cannot lock ref 'HEAD' ... expected ...`), which is a concurrent update/race rather than a spec or test failure.\",\"recommended_action\":\"retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Refresh the local branch state and rerun the tracker commit step; no contract wording changes are indicated by this failure.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T00:40:12.414661609Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "merge_conflict: retry"
+        },
+        {
+          "actor": "erik",
+          "body": "committing tracker: fatal: cannot lock ref 'HEAD': is at 0dfd7cbeb1167cdd0d1b77cd3f82096b3e582ff7 but expected ef20b8bb7623838f61c9dd9932f596e42dfce233: exit status 128\noutcome_reason=merge_conflict",
+          "created_at": "2026-05-07T00:40:12.522359097Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:46:59.842847228Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:47:00.034555558Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T004700-48e89e79",
+    "prompt": ".ddx/executions/20260507T004700-48e89e79/prompt.md",
+    "manifest": ".ddx/executions/20260507T004700-48e89e79/manifest.json",
+    "result": ".ddx/executions/20260507T004700-48e89e79/result.json",
+    "checks": ".ddx/executions/20260507T004700-48e89e79/checks.json",
+    "usage": ".ddx/executions/20260507T004700-48e89e79/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-6e71b874-20260507T004700-48e89e79"
+  },
+  "prompt_sha": "d95903d3db2921f15dc1643e81edf481309f1c8f8f4ba5d9eaf0011275ca222a"
+}

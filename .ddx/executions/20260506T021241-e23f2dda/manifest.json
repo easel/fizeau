@@ -1,0 +1,86 @@
+{
+  "attempt_id": "20260506T021241-e23f2dda",
+  "bead_id": "fizeau-1a8614fe",
+  "base_rev": "559e8412560a9284a1df5a35db139f67701dc656",
+  "created_at": "2026-05-06T02:12:41.620738378Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1a8614fe",
+    "title": "Record llama-server utilization cassettes",
+    "description": "Add llama.cpp llama-server real-server cassette coverage. In-scope files: internal/provider/llamaserver tests and committed testdata/cassettes, plus any small server bootstrap helper used only by record-mode tests. Record mode must install or pull llama-server, obtain or generate a trivial CPU GGUF model suitable for local test execution, start llama-server on a free local port with --metrics, /slots enabled, and --parallel 1, wait for /v1/models readiness, record /v1/models, /metrics, /slots, minimal /v1/chat/completions, and /metrics plus /slots while a request is in flight. Replay mode must be the default CI path and parse cassette data only. Out of scope: vLLM cassettes, route scoring, sticky leases, and hand-written HTTP mocks.",
+    "acceptance": "1. go test ./internal/provider/llamaserver ./... -run 'Llama.*Cassette|Llama.*Utilization' passes in replay mode using committed cassettes. 2. FIZEAU_RECORD_PROVIDER_CASSETTES=1 go test ./internal/provider/llamaserver -run 'Record' installs or starts llama-server itself and refreshes cassettes without requiring a manually pre-started server. 3. Cassettes include real /v1/models, /metrics, /slots, minimal chat, and busy-slot evidence. 4. Replay parsing extracts llamacpp:requests_processing, llamacpp:requests_deferred, llamacpp:kv_cache_usage_ratio, and slot is_processing occupancy. 5. No hand-written endpoint mocks define the provider contract.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:provider",
+      "kind:test"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:12:40Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T02:10:53.995250406Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T015821-13da0608\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":9851466,\"output_tokens\":60012,\"total_tokens\":9911478,\"cost_usd\":0,\"duration_ms\":751917,\"exit_code\":0}",
+          "created_at": "2026-05-06T02:10:54.105617048Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=9911478 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T02:10:55.952973014Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=2f0150c06b1dc6b58974bf43ac1883b55034860b\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T22:16:05-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=47846\noutput_bytes=0\nelapsed_ms=8249",
+          "created_at": "2026-05-06T02:11:05.627695827Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=2f0150c06b1dc6b58974bf43ac1883b55034860b\nbase_rev=2b7c64ea2dfcaa9744159d0bce33d0211206cbfd",
+          "created_at": "2026-05-06T02:11:05.72157502Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T02:12:40.982764143Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T021241-e23f2dda",
+    "prompt": ".ddx/executions/20260506T021241-e23f2dda/prompt.md",
+    "manifest": ".ddx/executions/20260506T021241-e23f2dda/manifest.json",
+    "result": ".ddx/executions/20260506T021241-e23f2dda/result.json",
+    "checks": ".ddx/executions/20260506T021241-e23f2dda/checks.json",
+    "usage": ".ddx/executions/20260506T021241-e23f2dda/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-1a8614fe-20260506T021241-e23f2dda"
+  },
+  "prompt_sha": "1f88974f1f19291a85ca0c436a2cfc2692de4b33dbd5ee32d155398019f455f9"
+}

@@ -1,0 +1,248 @@
+{
+  "attempt_id": "20260507T030529-d3ec7c21",
+  "bead_id": "fizeau-9ff62c35",
+  "base_rev": "c74ff88355fb252cb99538af919baf671bc82465",
+  "created_at": "2026-05-07T03:05:31.079477263Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9ff62c35",
+    "title": "Replace medium TerminalBench profiles with fiz wrapper lanes for all harnesses",
+    "description": "The medium TerminalBench comparison should compare targets by changing fiz routing pins, not by switching Harbor installed agents. The official lanes are fiz-wrapped Claude Sonnet 4.6, fiz-wrapped Codex GPT 5.4 mini, fiz-wrapped pi GPT 5.4 mini, fiz-wrapped opencode GPT 5.4 mini, fiz via OpenRouter Sonnet 4.6, and fiz via OpenRouter GPT 5.4 mini. Raw Harbor Claude/Codex/pi/opencode lanes may remain as diagnostics outside this official script, but they must not be part of the main comparison path.\n\nIn-scope files:\n- scripts/benchmark/run_medium_model_terminalbench_comparison.sh\n- benchmark profile or manifest files used by that script\n- focused shell/profile tests or dry-run checks\n- docs referenced directly by the script if needed\n\nOut-of-scope:\n- FizeauAgent implementation\n- CLI/service harness pin support\n- result aggregation logic\n\nImplementation notes:\n- The official script should invoke Harbor with only the `fiz` installed agent/harness.\n- Use lane labels from the spec: `fiz-harness-claude-sonnet-4-6`, `fiz-harness-codex-gpt-5-4-mini`, `fiz-harness-pi-gpt-5-4-mini`, `fiz-harness-opencode-gpt-5-4-mini`, `fiz-openrouter-claude-sonnet-4-6`, and `fiz-openrouter-gpt-5-4-mini`.\n- Default local TerminalBench task image behavior to native builds with `HARBOR_FORCE_BUILD=1` unless explicitly overridden.",
+    "acceptance": "1. A dry-run/test proves the official medium comparison script passes only the fiz Harbor adapter/installed-agent to Harbor.\n2. The generated profile matrix contains exactly the six official lane labels listed in the spec for the medium frontier comparison.\n3. The script defaults `HARBOR_FORCE_BUILD=1` for local native task-image builds while allowing an explicit user override.\n4. `bash -n scripts/benchmark/run_medium_model_terminalbench_comparison.sh` passes.\n5. Any profile-generation tests for scripts/benchmark pass.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:profiles",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:05:29Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:56:13.716929735Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:06:10.415835472Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T015613-2fb06c4d\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":10329879,\"output_tokens\":56727,\"total_tokens\":10386606,\"cost_usd\":0,\"duration_ms\":594880,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:06:10.534382425Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=10386606 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T015613-2fb06c4d\",\"bead_id\":\"fizeau-9ff62c35\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:06:15.081401721Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:06:15.308756801Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:09:52.245979523Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "The script now runs only `fiz` and the dry-run/profile checks pass, but the four `fiz-harness-*` lanes do not set any fiz harness pin. They collapse to the same provider/model routing, so the requested wrapper-lane comparison is not actually implemented.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=8989\noutput_bytes=1600\nelapsed_ms=109917",
+          "created_at": "2026-05-07T02:09:55.316045923Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-9ff62c35\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:09:55.440879454Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T02:09:55.434539667Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe script now runs only `fiz` and the dry-run/profile checks pass, but the four `fiz-harness-*` lanes do not set any fiz harness pin. They collapse to the same provider/model routing, so the requested wrapper-lane comparison is not actually implemented.\nresult_rev=5c2a6de71c4b4f250fb7c34fe42d1e8f9932c963\nbase_rev=08627b23ff05de9604c603b94c01548261b06417",
+          "created_at": "2026-05-07T02:09:55.767712083Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: staging changes: exit status 128",
+          "created_at": "2026-05-07T02:10:06.750718742Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:31:32.031475483Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-9ff62c35\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:31:32.990803346Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"creating isolated worktree: git worktree add: Preparing worktree (detached HEAD dc1453f6)\\nerror: unable to create file .cache/go-build/6a/6a8ab47851474302f277d815837f90b4629f353820bbe64a3274b62415b320fe-a: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6a919b499d27b817bf7a7bbc94eea8f1d70d5de16590776199e9a55c376a67e0-d: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6aa89b7f839f680482fad0fe9e10a019330400820cfaf627619afb06e833ae37-d: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6ab912b2a767ccca60b7ab64630c7a3f99d172034ad0a053b8baf6c467f1b0b9-d: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6abdfc1057d972ce3809fe23c6f17d936b99aed97ed1c8fcb0608206b93df054-a: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6abf1f8ab8aceafc7acabe90859dd26a750c017251e30f0fa4e3e009120ecd49-a: No such file or directory\\nerror: unable to create file .cache/go-build/6a/6ae80221b366d6547cb174a8188005efed4ad081839dd9ea1bffa997e87ec52d-a: No such file or directory\\nfatal: cannot create directory at '.cache/go-build/6b': No such file or directory: exit status 128\",\"rationale\":\"The attempt was blocked on review because the four `fiz-harness-*` lanes still do not set a fiz harness pin, so the official wrapper-lane comparison is not actually implemented. The earlier worktree failure is environmental, but the substantive failure is a design/implementation mismatch against the acceptance criteria.\",\"recommended_action\":\"rework\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Set distinct fiz harness pins for each `fiz-harness-*` lane so the script exercises wrapper lanes rather than collapsing to identical routing; keep the official six-lane matrix only; preserve the `HARBOR_FORCE_BUILD=1` default with an explicit override path; add or update dry-run/profile tests to assert the pin values and exact lane labels.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:31:44.202695283Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: rework"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD dc1453f6)\nerror: unable to create file .cache/go-build/6a/6a8ab47851474302f277d815837f90b4629f353820bbe64a3274b62415b320fe-a: No such file or directory\nerror: unable to create file .cache/go-build/6a/6a919b499d27b817bf7a7bbc94eea8f1d70d5de16590776199e9a55c376a67e0-d: No such file or directory\nerror: unable to create file .cache/go-build/6a/6aa89b7f839f680482fad0fe9e10a019330400820cfaf627619afb06e833ae37-d: No such file or directory\nerror: unable to create file .cache/go-build/6a/6ab912b2a767ccca60b7ab64630c7a3f99d172034ad0a053b8baf6c467f1b0b9-d: No such file or directory\nerror: unable to create file .cache/go-build/6a/6abdfc1057d972ce3809fe23c6f17d936b99aed97ed1c8fcb0608206b93df054-a: No such file or directory\nerror: unable to create file .cache/go-build/6a/6abf1f8ab8aceafc7acabe90859dd26a750c017251e30f0fa4e3e009120ecd49-a: No such file or directory\nerror: unable to create file .cache/go-build/6a/6ae80221b366d6547cb174a8188005efed4ad081839dd9ea1bffa997e87ec52d-a: No such file or directory\nfatal: cannot create directory at '.cache/go-build/6b': No such file or directory: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:31:44.312899947Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:38:46.347435007Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-9ff62c35\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:38:46.9717478Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 299c648d)\\nerror: unable to create file .cache/go-build/0f/0f9511554f5d3032b3962e4711dae9db0c038043ae82540cb95ef43f6aff22f9-a: No such file or directory\\nerror: unable to create file .cache/go-build/0f/0fa69015718a4baea7b1a5f6a6391cfaaf91d2b08daf0b00a67ab1cdfe3cc779-d: No such file or directory\\nerror: unable to create file .cache/go-build/0f/0fc45da9e44a90764d7a4f9546ebe4d33a50ea87e9d5312f5bad26fdeb9d6631-a: No such file or directory\\nerror: unable to create file .cache/go-build/0f/0fda37116d8a3a5ff3a9001eaa5c3ecb2c4d71df20ae353da01c5c321f5efa67-d: No such file or directory\\nfatal: cannot create directory at '.cache/go-build/10': No such file or directory: exit status 128\",\"rationale\":\"The attempt was blocked for a substantive implementation mismatch, not an environment-only failure: the medium comparison script still lacks distinct fiz harness pins for the four `fiz-harness-*` lanes, so it does not actually implement the requested wrapper-lane comparison. The worktree/cache error is secondary.\",\"recommended_action\":\"rework\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Set distinct fiz harness pins for each `fiz-harness-*` lane so the official comparison exercises wrapper lanes rather than collapsing to identical routing; keep the six official lane labels only; preserve the `HARBOR_FORCE_BUILD=1` default with an explicit override path; add or update dry-run/profile tests to assert both the pin values and the exact lane labels.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:38:58.635163375Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: rework"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 299c648d)\nerror: unable to create file .cache/go-build/0f/0f9511554f5d3032b3962e4711dae9db0c038043ae82540cb95ef43f6aff22f9-a: No such file or directory\nerror: unable to create file .cache/go-build/0f/0fa69015718a4baea7b1a5f6a6391cfaaf91d2b08daf0b00a67ab1cdfe3cc779-d: No such file or directory\nerror: unable to create file .cache/go-build/0f/0fc45da9e44a90764d7a4f9546ebe4d33a50ea87e9d5312f5bad26fdeb9d6631-a: No such file or directory\nerror: unable to create file .cache/go-build/0f/0fda37116d8a3a5ff3a9001eaa5c3ecb2c4d71df20ae353da01c5c321f5efa67-d: No such file or directory\nfatal: cannot create directory at '.cache/go-build/10': No such file or directory: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:38:58.742312336Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:01:09.340170511Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:03:23.350628179Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T030109-b18fec14\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":996526,\"output_tokens\":7538,\"total_tokens\":1004064,\"cost_usd\":0,\"duration_ms\":131677,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:03:23.461801365Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1004064 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T030109-b18fec14\",\"bead_id\":\"fizeau-9ff62c35\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:03:27.148141234Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:03:27.368599358Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:05:28.924028775Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:05:29.107235434Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T030529-d3ec7c21",
+    "prompt": ".ddx/executions/20260507T030529-d3ec7c21/prompt.md",
+    "manifest": ".ddx/executions/20260507T030529-d3ec7c21/manifest.json",
+    "result": ".ddx/executions/20260507T030529-d3ec7c21/result.json",
+    "checks": ".ddx/executions/20260507T030529-d3ec7c21/checks.json",
+    "usage": ".ddx/executions/20260507T030529-d3ec7c21/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-9ff62c35-20260507T030529-d3ec7c21"
+  },
+  "prompt_sha": "5a4e90b482e784125adda1b74b7259dd08f94596384e04695989835981e3ae76"
+}

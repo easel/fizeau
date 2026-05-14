@@ -1,0 +1,121 @@
+{
+  "attempt_id": "20260506T230608-91a2c468",
+  "bead_id": "fizeau-395d124d",
+  "base_rev": "ef47f77217f5a6e4f045d06d526d4e284979ed96",
+  "created_at": "2026-05-06T23:06:10.238710207Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-395d124d",
+    "title": "Add benchmark evidence ledger writer CLI",
+    "description": "Benchmark importers need a common append-only writer so evidence records are validated, assigned stable record IDs, and written consistently. This slice owns the generic ledger mechanics, not any benchmark-specific parser.\n\nIn-scope files:\n- cmd/bench evidence subcommand or equivalent cmd/bench importer entrypoint\n- Go package/helper for validating records against scripts/benchmark/benchmark-evidence.schema.json or an equivalent typed representation\n- tests and fixtures for append, duplicate handling, source hashes, and invalid record rejection\n\nOut-of-scope:\n- TerminalBench, beadbench, SkillsBench, SWE-bench, HumanEval, or MHI parsing\n- FHI formula or claim generation\n- changing existing matrix runner behavior\n\nImplementation notes:\n- Provide a command shape such as `go run ./cmd/bench evidence validate \u003cfile\u003e` and `go run ./cmd/bench evidence append --in \u003crecords.jsonl\u003e --ledger \u003cledger.jsonl\u003e`.\n- Records should get deterministic content-derived `record_id` values when absent.\n- The writer should be append-only and should report duplicates without silently mutating existing records.",
+    "acceptance": "1. `go run ./cmd/bench evidence validate \u003cvalid-fixture.jsonl\u003e` exits 0.\n2. `go run ./cmd/bench evidence validate \u003cinvalid-fixture.jsonl\u003e` exits non-zero with a useful error.\n3. `go run ./cmd/bench evidence append --in \u003cvalid-fixture.jsonl\u003e --ledger \u003ctmp-ledger.jsonl\u003e` writes validated records with stable record IDs.\n4. A duplicate append test proves duplicate records are detected and not silently duplicated.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:evidence",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:06:08Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:42:00.683841094Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:48:18.899999673Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T214200-14c54e85\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3736015,\"output_tokens\":35527,\"total_tokens\":3771542,\"cost_usd\":0,\"duration_ms\":376892,\"exit_code\":0}",
+          "created_at": "2026-05-06T21:48:19.014280322Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=3771542 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T21:48:22.752382392Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=a265df43def8b67e70fbb1533bfb3c21cd6389c5\n\nreview-group: review-error: transport: agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nharness=codex\nmodel=gpt-5.4\ninput_bytes=3737\noutput_bytes=0\nelapsed_ms=4",
+          "created_at": "2026-05-06T21:48:25.210270594Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: transport\nagent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=a265df43def8b67e70fbb1533bfb3c21cd6389c5\nbase_rev=3414162dd266c52c10b3943c78284792662a85fa",
+          "created_at": "2026-05-06T21:48:25.316789667Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:49:04.245175168Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:49:06.238325073Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=94dd3fd195c756b96dc61232af1edd2223ff5b00\nbase_rev=94dd3fd195c756b96dc61232af1edd2223ff5b00\nretry_after=2026-05-07T03:49:06Z",
+          "created_at": "2026-05-06T21:49:06.5747559Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:06:08.466402559Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:06:08.645536427Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T230608-91a2c468",
+    "prompt": ".ddx/executions/20260506T230608-91a2c468/prompt.md",
+    "manifest": ".ddx/executions/20260506T230608-91a2c468/manifest.json",
+    "result": ".ddx/executions/20260506T230608-91a2c468/result.json",
+    "checks": ".ddx/executions/20260506T230608-91a2c468/checks.json",
+    "usage": ".ddx/executions/20260506T230608-91a2c468/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-395d124d-20260506T230608-91a2c468"
+  },
+  "prompt_sha": "3b8c5bbb6c007da12006c811cd1ca24ef8950b33eb87074ed132ef2227e44583"
+}

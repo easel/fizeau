@@ -1,0 +1,105 @@
+{
+  "attempt_id": "20260507T042714-bc41c339",
+  "bead_id": "fizeau-1bbe2973",
+  "base_rev": "dea3dd4ffccdecce72fd13fffb0c272133e538c5",
+  "created_at": "2026-05-07T04:27:15.7095701Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1bbe2973",
+    "title": "Define TerminalBench 2.1 sweep lanes and resource groups",
+    "description": "Define the concrete TerminalBench 2.1 sweep matrix before changing runners. The desired full sweep is an experimental design to answer three comparison questions:\n\n1. Provider/quant deltas: how \"the same\" model family behaves across providers, endpoints, and quantization/configs, especially qwen3.6-27b across local providers such as Vidar oMLX, Bragi LM Studio, and bragi-club-3090 vLLM/autoround. These rows must preserve provider, endpoint, quant/config, context, sampling, and runtime metadata so differences are not collapsed into a misleading single model name.\n2. Harness deltas: how different harnesses perform with the same intended underlying model/provider where that is technically meaningful. The plan must distinguish true same-model comparisons from harness-native cases where the harness controls model selection.\n3. Frontier harness-vs-fiz deltas: how frontier model+harness combinations compare against fiz using the same model surface where possible, specifically Sonnet via OpenRouter/fiz native vs fiz Claude harness on Sonnet, and GPT-5.4-mini via OpenRouter/fiz native vs fiz Codex harness on GPT-5.4-mini.\n\nMeta goal: make fiz the strongest agentic harness for supported workloads and build evidence for model selection calculus across cost, speed, quality, reliability, and invalid-run behavior.\n\nThe sweep is staged, not one undifferentiated cross product:\n1. Canary: small 2.1 task subset proving every intended provider/harness lane can start, call its provider, write session/trajectory artifacts, and classify invalid cells separately from graded failures.\n2. Local Qwen sweep: local model providers × supported fiz/harness lanes, all running qwen3.6-27b-family models. Expected local providers include Vidar oMLX, Bragi local endpoint(s), and bragi-club-3090 vLLM if reachable. Local endpoints must be grouped by server/base_url so the runner can serialize or cap concurrency per provider.\n3. Sonnet comparison: fiz native/provider lane on Sonnet via OpenRouter versus fiz Claude harness lane on Sonnet.\n4. GPT comparison: fiz native/provider lane on GPT-5.4-mini via OpenRouter versus fiz Codex harness lane on GPT-5.4-mini.\n\nThe output of this bead is a checked-in lane/resource specification that implementation agents can use without chat context. It should explicitly list lane ids, profile ids, provider endpoints, harness pins, model ids, model-family/equivalence labels, quant/config labels, phase names, default reps, allowed concurrency, budget/rate-limit knobs, and what can run in parallel.\n\nIn scope:\n- docs/research or scripts/benchmark config describing phases/lanes/resources/comparison groups\n- updates to the TerminalBench 2.1 migration bead notes if needed\n\nOut of scope:\n- runner implementation\n- paid/full benchmark execution\n- changing historical TB-2.0 fixtures",
+    "acceptance": "1. A checked-in plan/config lists the four phases: canary, local-qwen, sonnet-comparison, gpt-comparison.\n2. The plan defines comparison groups for provider/quant deltas, harness deltas, and frontier harness-vs-fiz deltas.\n3. The local-qwen phase lists every intended local qwen3.6-27b-family provider and marks each with model_family, exact served model id, quant/config label where known, provider surface, endpoint, and resource_group keyed by server/base_url.\n4. The plan distinguishes fiz native/provider lanes from fiz harness-pinned lanes and names the exact FIZEAU_PROVIDER/FIZEAU_HARNESS/FIZEAU_MODEL/FIZEAU_BASE_URL inputs for each lane.\n5. The plan identifies which comparisons are true same-model/provider comparisons and which are approximate same-family/provider-or-quant comparisons, so claims cannot overstate equivalence.\n6. The plan states default concurrency: local resource groups default to one active cell per provider endpoint unless explicitly overridden; managed OpenRouter lanes use budget/rate caps and may run in parallel when provider limits allow.\n7. The plan defines resume semantics: rerun only missing, nonterminal, or explicitly retryable cells; never rerun completed graded/invalid cells unless force is set.\n8. The plan identifies metrics required for model-selection calculus: pass rate/reward, invalid class counts, wall time, token counts, cost, effective cost per valid/pass, context/sampling/quant metadata, and session/trajectory provenance.\n9. The plan identifies which existing profiles can be reused and which new profiles/config files must be created.\n10. rg over the new plan finds terminal-bench/terminal-bench-2-1 and does not relabel historical TB-2.0 artifacts.",
+    "parent": "fizeau-ee77ec7f",
+    "labels": [
+      "area:benchmark",
+      "area:terminalbench",
+      "kind:planning",
+      "phase:design"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T04:27:14Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:07:16.707545359Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T04:23:00.549379588Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T040716-45e49f40\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":23,\"output_tokens\":35430,\"total_tokens\":35453,\"cost_usd\":1.4891174000000003,\"duration_ms\":942620,\"exit_code\":0}",
+          "created_at": "2026-05-07T04:23:00.675434638Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=35453 cost_usd=1.4891 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"sonnet\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T040716-45e49f40\",\"bead_id\":\"fizeau-1bbe2973\",\"rejected_route_pins\":null,\"requested_tier\":\"smart\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T04:23:03.98192638Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=smart model=sonnet harness=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"sonnet\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T04:23:04.201218696Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=d4f591d21ecf7aa04e4be48c7a8ae1f450d2ff32\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=claude\nmodel=opus\ninput_bytes=6706\noutput_bytes=1316\nelapsed_ms=99899",
+          "created_at": "2026-05-07T04:26:40.599194211Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nPlan + machine-readable spec implement all 10 AC items: 4 phases, 3 comparison groups, 9 lanes with FIZEAU_* pins, 4 resource groups with concurrency, resume semantics, metrics, profile inventory, and TB-2.1 labeling without touching TB-2.0 artifacts.\nresult_rev=d4f591d21ecf7aa04e4be48c7a8ae1f450d2ff32\nbase_rev=d5281832b6d652ed23c1938cdfc934b07b207753",
+          "created_at": "2026-05-07T04:26:40.721034971Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:27:14.150212224Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T04:27:14.348724671Z",
+      "spec-id": "terminalbench-2.1-sweep-plan-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T042714-bc41c339",
+    "prompt": ".ddx/executions/20260507T042714-bc41c339/prompt.md",
+    "manifest": ".ddx/executions/20260507T042714-bc41c339/manifest.json",
+    "result": ".ddx/executions/20260507T042714-bc41c339/result.json",
+    "checks": ".ddx/executions/20260507T042714-bc41c339/checks.json",
+    "usage": ".ddx/executions/20260507T042714-bc41c339/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-1bbe2973-20260507T042714-bc41c339"
+  },
+  "prompt_sha": "3477e0854b98f1a1e5e38168527eff2fa4558b234b93e04f8e9775c0325878f3"
+}

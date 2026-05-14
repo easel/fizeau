@@ -1,0 +1,50 @@
+{
+  "attempt_id": "20260507T052732-078be82b",
+  "bead_id": "fizeau-c770193a",
+  "base_rev": "fa0ebacef5d051adc8c0d413a821e5b74875f7ed",
+  "created_at": "2026-05-07T05:27:33.179493885Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-c770193a",
+    "title": "Run full TerminalBench 2.1 sweep",
+    "description": "Run the full staged TerminalBench 2.1 sweep after the runner has been migrated to the official 2.1 Harbor dataset and has provider-aware resume/concurrency controls. This supersedes the unexecuted TB-2.0 matrix run beads; do not run the stale TB-2.0 pinned submodule matrices first.\n\nRequired sweep shape:\n1. Canary phase: a small 2.1 task subset proving every intended lane starts, reaches provider egress, writes artifacts, and classifies invalid quota/auth/setup/provider outcomes separately from graded failures.\n2. Local Qwen phase: local qwen3.6-27b providers × supported harness/fiz lanes. Local providers include the verified Vidar/Bragi/bragi-club-3090 endpoints from the migration beads. The runner must cap concurrency per local resource group so a shared endpoint is not overloaded.\n3. Sonnet comparison phase: fiz native/provider lane on Sonnet via OpenRouter versus fiz Claude harness lane on Sonnet.\n4. GPT comparison phase: fiz native/provider lane on GPT-5.4-mini via OpenRouter versus fiz Codex harness lane on GPT-5.4-mini.\n\nThis is intentional manual benchmark work. Run it only in a dedicated benchmark window with no unrelated TerminalBench, Harbor, Vidar/oMLX, Bragi, club-3090, OpenRouter, Claude, or Codex jobs that would contaminate timing, quotas, or local model capacity. Use the migrated 2.1 runner/subset/full-manifest path from the dependency beads.\n\nIn scope:\n- staged TerminalBench 2.1 sweep execution\n- matrix aggregation/import into benchmark evidence where applicable\n- committed memo with commands, environment, dataset, task/subset identity, pass/fail/invalid counts, costs, resource group settings, and artifact paths\n\nOut of scope:\n- further runner migration work\n- changing scoring policy\n- relabeling old TB-2.0 evidence",
+    "acceptance": "1. The TerminalBench 2.1 migration bead fizeau-ee77ec7f and runner bead fizeau-85d36567 are closed.\n2. Before starting, confirm no unrelated `bench matrix`, `harbor run`, `terminal-bench`, `vidar`, `omlx`, `bragi`, `club-3090`, OpenRouter, Claude, or Codex benchmark process is contending for the same resources.\n3. The canary phase completes first on the official TerminalBench 2.1 dataset terminal-bench/terminal-bench-2-1 and includes every intended lane, with invalid cells classified separately from graded failures.\n4. The local-qwen phase runs verified local qwen3.6-27b providers × supported harness/fiz lanes, with no more than the configured concurrency per local provider resource_group.\n5. The sonnet-comparison phase runs the model-controlled pair: fiz native/provider Sonnet via OpenRouter versus fiz Claude harness Sonnet.\n6. The gpt-comparison phase runs the model-controlled pair: fiz native/provider GPT-5.4-mini via OpenRouter versus fiz Codex harness GPT-5.4-mini.\n7. Every phase uses resume mode by default and writes terminal per-cell reports; reruns are limited to missing/nonterminal/retryable cells unless force-rerun is explicitly recorded.\n8. Aggregation/import commands for each produced matrix pass.\n9. Commit matrix summary artifacts or curated evidence plus a dated docs/research memo recording exact commands, environment prerequisites, dataset/subset identity, phase/lane definitions, resource group concurrency settings, total pass/fail/invalid counts, costs, and artifact paths.\n10. Do not close this bead from a partial, concurrently contaminated, or TB-2.0 dataset run.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "kind:benchmark",
+      "area:terminalbench",
+      "area:tooling",
+      "phase:measure",
+      "triage:manual"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T05:27:32Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T05:27:32.296863956Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T05:27:32.475899829Z",
+      "spec-id": "terminalbench-2.1-full-sweep-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T052732-078be82b",
+    "prompt": ".ddx/executions/20260507T052732-078be82b/prompt.md",
+    "manifest": ".ddx/executions/20260507T052732-078be82b/manifest.json",
+    "result": ".ddx/executions/20260507T052732-078be82b/result.json",
+    "checks": ".ddx/executions/20260507T052732-078be82b/checks.json",
+    "usage": ".ddx/executions/20260507T052732-078be82b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-c770193a-20260507T052732-078be82b"
+  },
+  "prompt_sha": "bf6ddf2cb32e9757d61bb28a7a1f6128011c62017f08fc3aac86fef9e7e72e6d"
+}

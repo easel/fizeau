@@ -1,0 +1,132 @@
+{
+  "attempt_id": "20260512T181453-5c79127d",
+  "bead_id": "fizeau-d18e11f5",
+  "base_rev": "4f0ee150f93be6c21ced5b72b9e4df2e412671a9",
+  "created_at": "2026-05-12T18:14:56.116884022Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d18e11f5",
+    "title": "Wire ProviderConfig.IncludeByDefault into routing eligibility filter",
+    "description": "PROBLEM\nThe `ProviderConfig.IncludeByDefault *bool` field at `internal/config/config.go` is plumbed into service config, but the reopened review found the existing routing bypass only covered provider/harness pins. Exact `Model` pins must also override provider `include_by_default: false`; otherwise an operator can request a known model and still have its provider removed from eligibility.\n\nCURRENT STATE\nThe original implementation landed in commit `cc2fadf187a77b4bcc78480469acc60a68646df6`, then this bead was reopened with note: \"include_by_default bypass only checks Provider/Harness pins, but FEAT/CONTRACT hard pins include exact Model. Add model-only pin behavior and tests.\"\n\nPROPOSED FIX\nIn the routing eligibility path, keep excluding `IncludeByDefault: false` providers from unpinned/default routing, but treat any explicit hard pin on `Harness`, `Provider`, or exact `Model` as intentional and allow that provider to remain eligible when the pin resolves to it. Preserve route-status evidence for default-route exclusions.\n\nIN-SCOPE FILES\n- `internal/routing/` eligibility/filter code and tests\n- `internal/config/` tests only if additional config fixture coverage is needed\n- `agentcli/` route-status tests only if surfaced output changes\n\nNON-SCOPE\n- Catalog-level `IncludeByDefault` defaults\n- Quota-aware routing\n- Per-model `ExactPinOnly` behavior unrelated to provider default inclusion",
+    "acceptance": "1. `go test ./internal/routing/... ./internal/config/... -run 'IncludeByDefault|Pin|Model' -count=1` passes and includes regression coverage for default-route exclusion, explicit provider pin bypass, and exact model pin bypass.\n2. `go test ./agentcli/... -run 'RouteStatus|IncludeByDefault|Pin|Model' -count=1` passes, or `go test ./agentcli/... -count=1` passes if no route-status implementation change is needed.\n3. `go vet ./...` passes.",
+    "labels": [
+      "area:routing",
+      "area:config",
+      "kind:bug",
+      "phase:implementation"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-12T18:13:31Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2683682",
+      "closing_commit_sha": "cc2fadf187a77b4bcc78480469acc60a68646df6",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[],\"requested_harness\":\"claude\",\"requested_model\":\"claude-sonnet-4-6\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260512T002540-24f5a3e3\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":39,\"output_tokens\":19425,\"total_tokens\":19464,\"cost_usd\":1.2875091,\"duration_ms\":314799,\"exit_code\":0}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=19464 cost_usd=1.2875 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"sonnet\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260512T002540-24f5a3e3\",\"bead_id\":\"fizeau-d18e11f5\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=sonnet harness=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"sonnet\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=cc2fadf187a77b4bcc78480469acc60a68646df6\nbase_rev=c2e1220f9c42c83665a225786fe1bbf7f6728eb7",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "2026-05-12T14:21:51.651756773Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review found model-pin bug"
+        },
+        {
+          "actor": "",
+          "body": "[{\"ac\":1,\"text\":\"`go test ./internal/routing/... ./internal/config/...` passes, including the three regression tests above.\",\"kind\":\"build-gate\",\"verifiable\":true},{\"ac\":2,\"text\":\"`go vet ./...` passes.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":3,\"text\":\"`IncludeByDefault: false` on a configured provider results in that provider being absent from default-routing candidates, but still reachable via explicit pin.\",\"kind\":\"prose\",\"verifiable\":false}]",
+          "created_at": "2026-05-12T17:36:59.491039834Z",
+          "kind": "ac-quality-low",
+          "source": "preclaim-ac-quality",
+          "summary": "score=0.33 threshold=0.50 verifiable=1/3"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"score 0.33 below threshold 0.50 (1/3 verifiable ACs)\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "2026-05-12T17:36:59.499280453Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-12T18:14:53.782791903Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-12T18:13:31.824281244Z",
+      "execution-eligible": true,
+      "session_id": "eb-b444de79",
+      "spec-id": "ADR-006"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-006",
+      "path": "docs/helix/02-design/adr/ADR-006-overrides-as-routing-failure-signals.md",
+      "title": "ADR-006: Manual Overrides Are Auto-Routing Failure Signals"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260512T181453-5c79127d",
+    "prompt": ".ddx/executions/20260512T181453-5c79127d/prompt.md",
+    "manifest": ".ddx/executions/20260512T181453-5c79127d/manifest.json",
+    "result": ".ddx/executions/20260512T181453-5c79127d/result.json",
+    "checks": ".ddx/executions/20260512T181453-5c79127d/checks.json",
+    "usage": ".ddx/executions/20260512T181453-5c79127d/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-d18e11f5-20260512T181453-5c79127d"
+  },
+  "prompt_sha": "b3e94801dc78f8063912841b45f5f03386273b209dd24ae4e94ef99956e32cec"
+}

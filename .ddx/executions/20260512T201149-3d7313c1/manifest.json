@@ -1,0 +1,58 @@
+{
+  "attempt_id": "20260512T201149-3d7313c1",
+  "bead_id": "fizeau-65233669",
+  "base_rev": "10d837ee33f8131f332c4f5b6e0de51f414b2d1f",
+  "created_at": "2026-05-12T20:11:52.650476602Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-65233669",
+    "title": "service: back ListModels with the unified model snapshot",
+    "description": "CONTEXT\nRoot `FizeauService.ListModels` still performs its own inline discovery in `service_models.go`, while `fiz models` reads `internal/modelregistry.ModelSnapshot`. SD-005 requires a single enriched available-model view. Keeping two discovery/enrichment paths creates operator/routing drift.\n\nCHANGE\nRewrite root `ListModels` to render from the same model snapshot helper used by `fiz models`, preserving public `ModelInfo` behavior. Delete or reduce legacy inline discovery helpers in `service_models.go` after the snapshot-backed path is in place.\n\nIN-SCOPE FILES\n- service_models.go\n- service_models_test.go\n- service_models_integration_test.go only if test expectations need refresh\n- shared snapshot adapter tests from the previous bead\n\nOUT-OF-SCOPE\n- Route resolution and scoring.\n- RouteStatus.\n- Removing the deprecated CLI `--list-models` compatibility flag unless an existing test explicitly covers that compatibility.",
+    "acceptance": "1. `go test . -run \"TestListModels\" -count=1` passes with root ListModels assertions updated to prove rows come from the enriched snapshot, including endpoint/server-instance/runtime quota metadata.\n2. `go test ./agentcli -run \"TestCLI_ListModels|TestModelsList\" -count=1` passes, proving CLI and root service render compatible model metadata.\n3. `rg -n \"func discoverAndRankModels|func discoverModelsInline|listModelsForProvider\" service_models.go` returns no matches, or any remaining match is a thin compatibility wrapper with a test name documenting why it remains.",
+    "parent": "fizeau-e6145528",
+    "labels": [
+      "area:service",
+      "area:modelregistry",
+      "kind:refactor",
+      "plan-2026-05-12-sd005"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-12T20:08:45Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2683682",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-12T20:11:49.827469037Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-12T20:08:45.246798135Z",
+      "spec-id": "SD-005"
+    }
+  },
+  "governing": [
+    {
+      "id": "SD-005",
+      "path": "docs/helix/02-design/solution-designs/SD-005-provider-config.md",
+      "title": "Solution Design: SD-005 — Provider Sources, Model Catalog, and Power Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260512T201149-3d7313c1",
+    "prompt": ".ddx/executions/20260512T201149-3d7313c1/prompt.md",
+    "manifest": ".ddx/executions/20260512T201149-3d7313c1/manifest.json",
+    "result": ".ddx/executions/20260512T201149-3d7313c1/result.json",
+    "checks": ".ddx/executions/20260512T201149-3d7313c1/checks.json",
+    "usage": ".ddx/executions/20260512T201149-3d7313c1/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-65233669-20260512T201149-3d7313c1"
+  },
+  "prompt_sha": "fc2a882203980f8ad6fa5a78b50cf7e13e375ffc02250bbada5ba9337baa5fbd"
+}

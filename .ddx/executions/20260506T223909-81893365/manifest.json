@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223909-81893365",
+  "bead_id": "fizeau-69570dcd",
+  "base_rev": "f26fcc0a69f7da1c15b80dcefda1af8d2684e471",
+  "created_at": "2026-05-06T22:39:10.618973442Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-69570dcd",
+    "title": "Add maximum context length to eligibility and evidence",
+    "description": "Capture maximum configured context length for route candidates, record its source, and use EstimatedPromptTokens as an eligibility filter. Context headroom should also be available as a scoring component for otherwise eligible candidates.",
+    "acceptance": "1. ModelInfo/Candidate/RouteDecision evidence includes context length and source: provider API, provider config, catalog, default, or unknown.\n2. EstimatedPromptTokens rejects candidates whose max context cannot fit the request, with a typed FilterReason.\n3. Context headroom appears as a score component for eligible candidates.\n4. route-status --json exposes context length and source for candidates.\n5. go test ./internal/routing ./cmd/fiz ./internal/serviceimpl -run \"Context|EstimatedPromptTokens|RouteStatus\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:provider",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:39:09Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:09.341704119Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:39:09.514100335Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223909-81893365",
+    "prompt": ".ddx/executions/20260506T223909-81893365/prompt.md",
+    "manifest": ".ddx/executions/20260506T223909-81893365/manifest.json",
+    "result": ".ddx/executions/20260506T223909-81893365/result.json",
+    "checks": ".ddx/executions/20260506T223909-81893365/checks.json",
+    "usage": ".ddx/executions/20260506T223909-81893365/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-69570dcd-20260506T223909-81893365"
+  },
+  "prompt_sha": "fcf7abc8c14fe102342dd4b15c7fa4032c42b81846da5ec344eec7cf9b123a49"
+}

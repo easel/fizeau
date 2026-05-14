@@ -1,0 +1,80 @@
+{
+  "attempt_id": "20260512T064853-6f589c4b",
+  "bead_id": "fizeau-b0366923",
+  "base_rev": "df8b4defd530a52ed2604f25e03bd841acac86d0",
+  "created_at": "2026-05-12T06:48:56.316826267Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.5",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b0366923",
+    "title": "Wire ReasoningLevels from harness discovery into reasoning policy validation",
+    "description": "Mirror of bead B but for the reasoning-effort axis.\nModelDiscoverySnapshot already captures `ReasoningLevels []string` per\nharness via `--effort \u003clevel\u003e ... (low,medium,high)` parsing. Today\nnothing reads it.\n\n## Scope\n\n1. When reasoningRequestOptions resolves the wire form for a harness\n   request, if the discovery snapshot for that harness includes a\n   ReasoningLevels list, validate the caller's policy against it:\n   - If caller passed `KindNamed` and the value IS in the harness's\n     ReasoningLevels: emit as-is.\n   - If caller passed `KindNamed` and the value is NOT supported: snap\n     to nearest supported tier via PortableBudgets distance, log a\n     structured signal.\n   - If caller passed `KindTokens`: convert to nearest tier via bead\n     A's PortableBudgets path, then validate against ReasoningLevels.\n\n2. When discovery snapshot has no ReasoningLevels (older cassette,\n   discovery failure), fall through to today's behavior (no validation).\n\n3. Surface the resolved effort + the source (caller / snapped /\n   default) in the route status / session jsonl.\n\n## In-scope files\n\n- internal/reasoning/policy.go (or wherever resolution lives) — add\n  validation against discovery's ReasoningLevels\n- internal/harnesses/{claude,codex}/runner.go — pass discovery snapshot\n  to reasoning resolution\n- internal/reasoning/policy_test.go — table tests for snap-to-supported\n  behavior\n\n## Out of scope\n\n- Auto-detecting ReasoningLevels from the harness CLI live (already\n  captured by existing model_discovery.go code; this bead just consumes\n  the result).\n- Reasoning effort × model interaction (some models in the catalog\n  declare their own `reasoning_levels` in the catalog entry; that\n  signal is already consumed elsewhere — this bead adds the\n  harness-level signal as an additional source).",
+    "acceptance": "1. `go test ./internal/reasoning/... ./internal/harnesses/...` passes,\n   including:\n   - Caller `reasoning: high` on a harness whose ReasoningLevels =\n     [low, medium] snaps to `medium` and emits a structured warning\n     log.\n   - Caller `reasoning: high` on a harness whose ReasoningLevels =\n     [low, medium, high] emits as `high` with no warning.\n   - Discovery snapshot with empty ReasoningLevels falls through to\n     today's behavior.\n2. `go vet ./...` passes.",
+    "labels": [
+      "area:harnesses",
+      "area:reasoning",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-12T06:45:44Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1864078",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"acceptance criteria dropped or altered\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "2026-05-12T05:30:47.872263431Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "Operator patched local DDx pre-claim intake to stop requesting rewrites; retry.",
+          "created_at": "2026-05-12T05:37:40.207711032Z",
+          "kind": "needs_human_resolved",
+          "source": "ddx bead human resolve",
+          "summary": "action=retry"
+        },
+        {
+          "actor": "erik",
+          "body": "Operator patched local DDx pre-claim intake to stop rewrite parking; retry.",
+          "created_at": "2026-05-12T05:39:48.185005119Z",
+          "kind": "needs_human_resolved",
+          "source": "ddx bead human resolve",
+          "summary": "action=retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-12T06:48:53.436758153Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-12T06:45:44.222832293Z",
+      "spec-id": "ADR-005"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-005",
+      "path": "docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md",
+      "title": "ADR-005: Power-Based Routing Replaces `model_routes`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260512T064853-6f589c4b",
+    "prompt": ".ddx/executions/20260512T064853-6f589c4b/prompt.md",
+    "manifest": ".ddx/executions/20260512T064853-6f589c4b/manifest.json",
+    "result": ".ddx/executions/20260512T064853-6f589c4b/result.json",
+    "checks": ".ddx/executions/20260512T064853-6f589c4b/checks.json",
+    "usage": ".ddx/executions/20260512T064853-6f589c4b/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b0366923-20260512T064853-6f589c4b"
+  },
+  "prompt_sha": "a81525e89eb4013ce581e32b9e2b4dda6ee22186f174a56a5fa6f0b8438b7b32"
+}

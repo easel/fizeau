@@ -1,0 +1,9 @@
+{
+  "attempt_id": "20260503T015849-b54da9b5",
+  "harness": "claude",
+  "provider": "openrouter",
+  "tokens": 11372,
+  "input_tokens": 43,
+  "output_tokens": 11329,
+  "cost_usd": 1.3623095
+}

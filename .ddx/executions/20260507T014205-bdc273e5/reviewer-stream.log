@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The diff improves reported metadata, but the new PowerPolicy evidence does not match the inputs actually used for routing. ResolveRoute still sends raw MinPower/MaxPower to the engine, so AC3 is not implemented correctly.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "Reported PowerPolicy is expanded from the catalog, but routing still executes with raw req.MinPower/req.MaxPower. That means ResolveRoute/route-status can claim an effective numeric policy that was never applied during candidate filtering, which misses AC3.",
+      "location": "service_routing.go:72"
+    },
+    {
+      "severity": "warn",
+      "summary": "The added test locks in that mismatch: it expects PowerPolicy=7..8 while also expecting a power-5 model to win. This verifies reporting only, not that the reported policy matches the actual routing inputs.",
+      "location": "service_routing_test.go:124"
+    }
+  ]
+}
+```

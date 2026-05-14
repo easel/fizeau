@@ -1,0 +1,143 @@
+{
+  "attempt_id": "20260507T023755-5dbafdce",
+  "bead_id": "fizeau-b73fed1a",
+  "base_rev": "3abc8cdcc64d93bb7efa9c964d75e80db07b0d2f",
+  "created_at": "2026-05-07T02:37:57.155691861Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b73fed1a",
+    "title": "Bias correlation IDs to sticky server instances",
+    "description": "Use validated CorrelationID as the sticky route key and bind it to a server instance, not to model identity. Sticky affinity is a score bonus after eligibility, not a hard pin. Related requests should prefer the same server across model changes when that server remains eligible.",
+    "acceptance": "1. The sticky lease map keys validated CorrelationID to server_instance with TTL/expiry behavior.\n2. Repeated ResolveRoute/Execute requests with the same CorrelationID prefer the same server instance across different eligible models.\n3. Stickiness never makes an ineligible candidate eligible and can be outweighed by hard saturation or severe performance/utilization pressure.\n4. RouteDecision/RouteStatus expose sticky status, server_instance, reason, and bonus without leaking raw sensitive keys in operator JSON.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Sticky|Correlation|ServerInstance|Lease\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:37:55Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:04.747925268Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:07.469950052Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=4c99ec5b5d751939a8f73a4c2309ab67b4fe475f\nbase_rev=4c99ec5b5d751939a8f73a4c2309ab67b4fe475f\nretry_after=2026-05-07T04:39:07Z",
+          "created_at": "2026-05-06T22:39:07.945298531Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:23:57.533406308Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:23:59.497403505Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"excluding execute-bead cleanup metadata: exit status 128\",\"rationale\":\"The attempt failed before implementation started because the service could not load config: provider \\\"grendel-rapid-mlx\\\" declares unsupported type \\\"rapid-mlx\\\". This is a repository/environment configuration problem, not a code or test failure.\",\"recommended_action\":\"fix_config_then_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Update the provider configuration so every provider type is one of the supported values, or remove the stale grendel-rapid-mlx entry if it is no longer valid. Re-run the bead only after config loading succeeds.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:24:10.057518602Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: fix_config_then_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "excluding execute-bead cleanup metadata: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:24:10.279136434Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:29:20.860182954Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:29:24.534353904Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 510f1726)\\nfatal: cannot create directory at '.agents': No such file or directory: exit status 128\",\"rationale\":\"The attempt failed before implementation started because `git worktree add` could not create the isolated worktree: `.agents` was missing in the target path. This is a repository/environment setup problem, not a code or test failure.\",\"recommended_action\":\"fix_environment_then_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Ensure the repository layout required by the execute-bead harness exists before retrying, especially the `.agents` directory used during worktree creation. If that directory is intentionally absent, update the harness/worktree setup to create or target a valid path.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:29:34.053016934Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: fix_environment_then_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 510f1726)\nfatal: cannot create directory at '.agents': No such file or directory: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:29:34.21554106Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:37:55.034067448Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:37:55.222288909Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T023755-5dbafdce",
+    "prompt": ".ddx/executions/20260507T023755-5dbafdce/prompt.md",
+    "manifest": ".ddx/executions/20260507T023755-5dbafdce/manifest.json",
+    "result": ".ddx/executions/20260507T023755-5dbafdce/result.json",
+    "checks": ".ddx/executions/20260507T023755-5dbafdce/checks.json",
+    "usage": ".ddx/executions/20260507T023755-5dbafdce/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b73fed1a-20260507T023755-5dbafdce"
+  },
+  "prompt_sha": "a30484559e1ff61e64948dfabdcbddba0a6599c28fe60d7c2446602dfef608ba"
+}

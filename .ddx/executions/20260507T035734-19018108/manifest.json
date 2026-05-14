@@ -1,0 +1,201 @@
+{
+  "attempt_id": "20260507T035734-19018108",
+  "bead_id": "fizeau-66c928b3",
+  "base_rev": "58a41b69f830b94d464f9d2921324206906eaf7f",
+  "created_at": "2026-05-07T03:57:35.447881341Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-66c928b3",
+    "title": "Run and summarize the fiz-wrapper TerminalBench canary matrix",
+    "description": "Once the service pin, CLI flag, FizeauAgent forwarding, official profiles, invalid classification, and reproducibility docs are in place, run the canary matrix to prove the process works end to end. This bead is for validation and summary, not for adding more implementation except tiny fixes needed to make the documented command run as specified. The canary must include fiz-wrapped Claude, Codex, pi, and opencode lanes plus the fiz OpenRouter lanes.\n\nIn-scope files:\n- benchmark output artifacts produced by the documented canary command\n- docs/research summary memo for the canary result\n- tiny follow-up fixes directly required to make the documented command execute\n\nOut-of-scope:\n- broad benchmark subset redesign\n- changing model choices or official lane definitions\n- raw Claude/Codex/pi/opencode Harbor adapter productionization\n\nImplementation notes:\n- Run the documented canary command by itself, not concurrently with unrelated pi/fiz/opencode runs on the same provider.\n- Confirm each official lane is present in the output.\n- Confirm invalid quota/auth/setup/provider cells are classified separately from graded failures.\n- Summarize any observed tool-call/session-log differences only from captured artifacts.",
+    "acceptance": "1. The documented canary command completes or exits with only classified invalid cells; record the exact command and exit status in a docs/research memo.\n2. The canary output contains all six official lanes: fiz-wrapped Claude, fiz-wrapped Codex, fiz-wrapped pi, fiz-wrapped opencode, fiz OpenRouter Sonnet, and fiz OpenRouter GPT.\n3. Any provider quota/auth/setup failures are shown as invalid classes rather than graded failures.\n4. The docs/research memo summarizes pass/fail/invalid counts and any tool-call/session-log observations supported by artifacts.\n5. `go test ./cmd/bench ./agentcli ./internal/harnesses/...` passes after any tiny fixes made during validation.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:validation",
+      "kind:task",
+      "phase:verify"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:57:34Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:24:42.335671059Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:41:08.020357143Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T032442-6b0bebe5\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8299264,\"output_tokens\":32624,\"total_tokens\":8331888,\"cost_usd\":0,\"duration_ms\":984734,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:41:08.127919551Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8331888 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-07T03:48:25.248582559Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T034109-f5c69577\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8022560,\"output_tokens\":18995,\"total_tokens\":8041555,\"cost_usd\":0,\"duration_ms\":435647,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:48:25.359408755Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8041555 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T034109-f5c69577\",\"bead_id\":\"fizeau-66c928b3\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:48:27.684016512Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:48:27.910193693Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:50:35.203367699Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "The canary memo is not reviewable as written: it omits the documented `OPENROUTER_API_KEY=...` invocation and cites a final artifact directory that is absent from the merged tree, so the six-lane and invalid-run claims are unsupported.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=9869\noutput_bytes=1455\nelapsed_ms=97569",
+          "created_at": "2026-05-07T03:51:46.915589075Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T03:51:47.027541104Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe canary memo is not reviewable as written: it omits the documented `OPENROUTER_API_KEY=...` invocation and cites a final artifact directory that is absent from the merged tree, so the six-lane and invalid-run claims are unsupported.\nresult_rev=3e6ac703b0f5f0dce1ad7c038839c559083e6aa2\nbase_rev=7f605c1e0b7a08834022f909dff3f9200e5cf155",
+          "created_at": "2026-05-07T03:51:47.226417934Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:53:37.089488591Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T035035-97f5561b\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1436165,\"output_tokens\":6677,\"total_tokens\":1442842,\"cost_usd\":0,\"duration_ms\":180472,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:53:37.199907663Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1442842 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T035035-97f5561b\",\"bead_id\":\"fizeau-66c928b3\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:53:39.663507801Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:53:39.900955264Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The bead is not reviewable as implemented: the only committed change is a memo that cites a non-existent final artifact directory, and the committed canary matrices do not show the required six official lanes or the claimed invalid-run classification summary.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=9869\noutput_bytes=1218\nelapsed_ms=96298",
+          "created_at": "2026-05-07T03:57:00.883946524Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"escalate_tier\",\"mode\":\"review_block\",\"tier_hint\":\"standard\"}",
+          "created_at": "2026-05-07T03:57:00.995182429Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: escalate_tier"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe bead is not reviewable as implemented: the only committed change is a memo that cites a non-existent final artifact directory, and the committed canary matrices do not show the required six official lanes or the claimed invalid-run classification summary.\nresult_rev=712aae7f95b8eb12d923403761c41c552475e6fe\nbase_rev=43cedc7b6196e50c1bb5c28f0cdd7dce2bed4aa6",
+          "created_at": "2026-05-07T03:57:01.287581428Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:57:34.616277725Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:57:34.819714282Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "triage.tier_hint": "standard"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T035734-19018108",
+    "prompt": ".ddx/executions/20260507T035734-19018108/prompt.md",
+    "manifest": ".ddx/executions/20260507T035734-19018108/manifest.json",
+    "result": ".ddx/executions/20260507T035734-19018108/result.json",
+    "checks": ".ddx/executions/20260507T035734-19018108/checks.json",
+    "usage": ".ddx/executions/20260507T035734-19018108/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-66c928b3-20260507T035734-19018108"
+  },
+  "prompt_sha": "b6ac29aabc364e8be9bf6ba155cd067ad1d4f16cf9e8fad83d736172412b4efe"
+}

@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The power-policy fields are added, but AC 3 is not met: `code-medium` and `code-high` remain first-class catalog profiles and are still recognized by routing as profiles rather than compatibility-only references.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "`code-medium` and `code-high` are still declared under `profiles`, so the compatibility names remain real profile definitions instead of metadata-only targets.",
+      "location": "internal/modelcatalog/catalog/models.yaml:459"
+    },
+    {
+      "severity": "block",
+      "summary": "Routing still treats any catalog profile name as a profile request. Because `code-medium`/`code-high` exist as profiles, they are still target routing profiles, which contradicts AC 3.",
+      "location": "service_routing.go:418"
+    },
+    {
+      "severity": "warn",
+      "summary": "The new tests reinforce the old behavior by asserting `catalog.Profile(\"code-medium\")`/`catalog.Profile(\"code-high\")` succeed and resolve like normal profiles; there is no test proving those names are excluded from routing-profile treatment.",
+      "location": "internal/modelcatalog/catalog_test.go:98"
+    }
+  ]
+}
+```

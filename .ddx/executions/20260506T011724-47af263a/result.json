@@ -1,0 +1,52 @@
+{
+  "verdict": "BLOCK",
+  "rationale": "agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:22:33-04:00)",
+  "error": "review-error: transport",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1461,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 121,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260506T011608-765fc81f/no_changes_rationale.txt"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-004",
+        "bytes_included": 11876,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-004-plugin-packaging.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 1144,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 16499,
+    "output_bytes": 0,
+    "elapsed_ms": 8261,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}

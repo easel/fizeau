@@ -1,0 +1,86 @@
+{
+  "attempt_id": "20260506T012231-48a2b4a8",
+  "bead_id": "fizeau-5d4b5f68",
+  "base_rev": "400dbc56519a115eaa6b27ed2e830113fe8f937b",
+  "created_at": "2026-05-06T01:22:33.040046795Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5d4b5f68",
+    "title": "Add go-vcr provider cassette harness",
+    "description": "Add shared test infrastructure for provider HTTP record/replay using the established go-vcr library. In-scope files: a small helper package under internal/provider or internal/provider/testutil, go.mod/go.sum dependency updates, and tests proving replay-only behavior. The helper should default to replay-only mode, switch to record mode only with FIZEAU_RECORD_PROVIDER_CASSETTES=1, redact Authorization/API-key headers before saving, provide stable request matching suitable for /v1/models, /metrics, /slots, and chat completions, and fail when a replay interaction is missing. Out of scope: actual vLLM or llama-server cassettes, server bootstrapping, routing changes, and provider-specific parsing.",
+    "acceptance": "1. go test ./internal/provider/... -run 'VCR|Cassette|Replay' passes. 2. go.mod declares gopkg.in/dnaeon/go-vcr.v4 or a current maintained go-vcr import as a direct test dependency. 3. Replay mode is default without network access and fails on missing cassette interactions. 4. Record mode is gated by FIZEAU_RECORD_PROVIDER_CASSETTES=1. 5. Saved cassettes do not contain Authorization headers or API keys.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:test",
+      "kind:infra"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:22:31Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:15:11.890658706Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T010833-6acf5813\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":5470806,\"output_tokens\":33878,\"total_tokens\":5504684,\"cost_usd\":0,\"duration_ms\":397066,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:15:12.004991901Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=5504684 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:15:13.921942785Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=5f363e3a005752d2844a96709316d583f8c40430\n\nreviewer: review-error: unparseable: reviewer output: unparseable JSON verdict: no JSON object found (raw output 66 bytes; see .ddx/executions/20260506T011514-d232bbfd)\nharness=claude\nmodel=opus\ninput_bytes=31251\noutput_bytes=66\nelapsed_ms=52699",
+          "created_at": "2026-05-06T01:16:07.557492202Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=5f363e3a005752d2844a96709316d583f8c40430\nbase_rev=d2f6f1e90050763d46ae8cc9ff234152904a3407",
+          "created_at": "2026-05-06T01:16:07.647872617Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T01:22:31.86390081Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T012231-48a2b4a8",
+    "prompt": ".ddx/executions/20260506T012231-48a2b4a8/prompt.md",
+    "manifest": ".ddx/executions/20260506T012231-48a2b4a8/manifest.json",
+    "result": ".ddx/executions/20260506T012231-48a2b4a8/result.json",
+    "checks": ".ddx/executions/20260506T012231-48a2b4a8/checks.json",
+    "usage": ".ddx/executions/20260506T012231-48a2b4a8/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-5d4b5f68-20260506T012231-48a2b4a8"
+  },
+  "prompt_sha": "6368c983c989609829a45c7f2b7c9719c586cb9cf0c2b06182d0639a60f5c2f8"
+}

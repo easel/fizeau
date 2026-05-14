@@ -1,0 +1,112 @@
+{
+  "attempt_id": "20260506T233300-cacee8d1",
+  "bead_id": "fizeau-03f1e51b",
+  "base_rev": "11e077f62d2d743982aa74b16733cebf3103eb83",
+  "created_at": "2026-05-06T23:33:01.800064382Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-03f1e51b",
+    "title": "Expose fiz run --harness as a hard pin",
+    "description": "The TerminalBench fiz-wrapper comparison profiles need to select Claude Code, Codex, or OpenRouter through fiz without duplicating adapter-specific flags in Harbor. The `fiz run` command currently exposes provider/model/model-ref options but not a harness hard pin, while routing docs already describe harness hard pins.\n\nIn-scope files:\n- agentcli run command flag definitions and option plumbing\n- cmd/fiz integration surface if needed\n- CLI help and option tests\n\nOut-of-scope:\n- service-layer routing semantics; depend on the service harness-pin bead\n- benchmark scripts and Harbor adapter changes\n- changing existing provider/model flag names\n\nImplementation notes:\n- Add `--harness \u003cname\u003e` to `fiz run`.\n- The flag must set the service-level harness pin, not just an environment variable.\n- Keep backward compatibility for existing provider/model/model-ref invocations.",
+    "acceptance": "1. `fiz run --help` includes `--harness` and describes it as a harness hard pin.\n2. A CLI test proves `--harness codex` is passed into the service request/options used by `fiz run`.\n3. Existing CLI tests for provider/model/model-ref still pass.\n4. `go test ./agentcli ./cmd/fiz` passes.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:cli",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:33:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:14:23.047562679Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T23:24:46.094556597Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T231423-77242576\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":7191980,\"output_tokens\":24045,\"total_tokens\":7216025,\"cost_usd\":0,\"duration_ms\":621631,\"exit_code\":0}",
+          "created_at": "2026-05-06T23:24:46.211067081Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=7216025 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260506T231423-77242576\",\"bead_id\":\"fizeau-03f1e51b\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-06T23:24:49.625037225Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T23:24:49.841261375Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=cab8906e374ecc4813249042449f2bb17ed6afc9\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=8263\noutput_bytes=388\nelapsed_ms=103177",
+          "created_at": "2026-05-06T23:28:13.254718131Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe bead adds `fiz run --harness` to help and legacy passthrough, plumbs it into `ServiceExecuteRequest.Harness`, and preserves existing provider/model/model-ref CLI coverage. Targeted bead tests pass; the only broader test failure is an unrelated sandbox `httptest` port-binding restriction.\nresult_rev=cab8906e374ecc4813249042449f2bb17ed6afc9\nbase_rev=cceaf1d95cc95e3a849c140b33e90409ffe2dd09",
+          "created_at": "2026-05-06T23:28:13.367036328Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:33:00.349077155Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:33:00.556663562Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T233300-cacee8d1",
+    "prompt": ".ddx/executions/20260506T233300-cacee8d1/prompt.md",
+    "manifest": ".ddx/executions/20260506T233300-cacee8d1/manifest.json",
+    "result": ".ddx/executions/20260506T233300-cacee8d1/result.json",
+    "checks": ".ddx/executions/20260506T233300-cacee8d1/checks.json",
+    "usage": ".ddx/executions/20260506T233300-cacee8d1/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-03f1e51b-20260506T233300-cacee8d1"
+  },
+  "prompt_sha": "36ab08dfd041e59b817006fdfc0d23370185e4f0b57f041ba99970ec64f4e716"
+}

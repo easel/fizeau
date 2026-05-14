@@ -1,0 +1,85 @@
+{
+  "attempt_id": "20260506T011733-5c4491fc",
+  "bead_id": "fizeau-52a7e4db",
+  "base_rev": "a37ba488f05f99acf963cff6552491c610f69fd8",
+  "created_at": "2026-05-06T01:17:34.653402818Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-52a7e4db",
+    "title": "Add Rapid-MLX provider type",
+    "description": "Add a first-class Rapid-MLX provider type. Rapid-MLX is an OpenAI-compatible Apple Silicon server from https://github.com/raullenchai/Rapid-MLX with default serving URL http://localhost:8000/v1, but it should have a concrete provider type distinct from vllm because utilization is exposed through /v1/status rather than root /metrics.\n\nIn-scope files:\n- internal/provider/rapidmlx/ (new package wrapping the shared OpenAI-compatible provider)\n- internal/config/config.go and config tests\n- internal/provider/registry tests\n- internal/harnesses registry/capability lists if provider types are enumerated there\n- docs/helix/01-frame/features/FEAT-003-providers.md if acceptance criteria need the new provider type listed\n\nRequirements:\n- Accept config `type: rapid-mlx` and, if local naming conventions prefer no hyphen in package names, map it to package path internal/provider/rapidmlx.\n- Default base URL is http://localhost:8000/v1.\n- Registry construction, endpoint-pool support, provider/model listing, native provider dispatch, ProviderType telemetry labels, and capability lookup work the same way as other OpenAI-compatible concrete providers.\n- Do not collapse Rapid-MLX into vllm or generic openai; provider type must be distinct because utilization probing differs.\n\nOut of scope:\n- Implementing /v1/status utilization parsing.\n- Adding real-server cassettes.\n- Changing routing score policy.",
+    "acceptance": "1. `go test ./internal/provider/registry ./internal/config ./internal/provider/rapidmlx ./... -run 'Registry|ProviderType|Rapid|rapid-mlx'` passes.\n2. A config entry with `type: rapid-mlx` and no base_url constructs a provider with default base URL `http://localhost:8000/v1`.\n3. Provider/model listing and native provider dispatch preserve `ProviderType == \"rapid-mlx\"` or the documented canonical spelling chosen in code, without emitting `openai-compat`.\n4. `rg -n \"rapid-mlx|rapidmlx\" internal docs/helix/01-frame/features/FEAT-003-providers.md` shows the provider type is documented where provider types are enumerated.\n5. No utilization probe, cassette recorder, or route scoring logic is implemented in this bead.",
+    "labels": [
+      "area:provider",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:17:33Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T00:59:22.120465766Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T005440-76c14d2c\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":5294114,\"output_tokens\":22525,\"total_tokens\":5316639,\"cost_usd\":0,\"duration_ms\":280192,\"exit_code\":0}",
+          "created_at": "2026-05-06T00:59:22.223694866Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=5316639 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T00:59:24.075660481Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=4e556672911f623c245ac6c1b05a75961b0125ce\n\nreviewer: review-error: unparseable: reviewer output: unparseable JSON verdict: no JSON object found (raw output 66 bytes; see .ddx/executions/20260506T005924-2eec49bb)\nharness=claude\nmodel=opus\ninput_bytes=36434\noutput_bytes=66\nelapsed_ms=52829",
+          "created_at": "2026-05-06T01:00:19.929009795Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=4e556672911f623c245ac6c1b05a75961b0125ce\nbase_rev=bce8148fbae865c7fbc2a9a5ef2d4e1aaf3f8e53",
+          "created_at": "2026-05-06T01:00:20.041804935Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T01:17:33.759746617Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T011733-5c4491fc",
+    "prompt": ".ddx/executions/20260506T011733-5c4491fc/prompt.md",
+    "manifest": ".ddx/executions/20260506T011733-5c4491fc/manifest.json",
+    "result": ".ddx/executions/20260506T011733-5c4491fc/result.json",
+    "checks": ".ddx/executions/20260506T011733-5c4491fc/checks.json",
+    "usage": ".ddx/executions/20260506T011733-5c4491fc/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-52a7e4db-20260506T011733-5c4491fc"
+  },
+  "prompt_sha": "b6a050a2dc930b15abc4408eee14cc57798415e9eb31f9b31618a7cefacc8bd5"
+}

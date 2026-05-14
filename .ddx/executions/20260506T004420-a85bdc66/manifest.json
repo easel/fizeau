@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T004420-a85bdc66",
+  "bead_id": "fizeau-dac696fc",
+  "base_rev": "8c357607a6dbd858288ff7343a74776b99983d95",
+  "created_at": "2026-05-06T00:44:21.784199541Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dac696fc",
+    "title": "Add in-process sticky route leases",
+    "description": "Add an in-process route lease store for sticky local endpoint assignment. In-scope files: internal/routing or internal/routehealth lease store package, service routing wiring only as needed to pass a validated sticky key, and focused tests. Requirements: key leases by sticky route key plus resolved provider/model scope; store provider, endpoint, model, acquired/refreshed/expires timestamps; refresh on reuse; expire abandoned leases; invalidate leases when endpoint disappears, stops advertising the model, or enters cooldown. Role remains observational; validated CorrelationID is the first sticky key source unless a more specific worker/session key already exists. Out of scope: provider utilization probes, route scoring with utilization, route-status UI, and distributed/shared lease backend.",
+    "acceptance": "1. go test ./internal/routing ./... -run 'Sticky|Lease|Routing' passes. 2. Same sticky key repeatedly returns the same provider endpoint while the lease is live and endpoint remains eligible. 3. Expired sticky key is assigned fresh. 4. Removed, unavailable, or model-mismatched endpoint invalidates the lease and records an invalidation reason. 5. Different sticky keys can hold different endpoint leases concurrently without data races.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:routing",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T00:44:20Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T00:44:20.767010145Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T004420-a85bdc66",
+    "prompt": ".ddx/executions/20260506T004420-a85bdc66/prompt.md",
+    "manifest": ".ddx/executions/20260506T004420-a85bdc66/manifest.json",
+    "result": ".ddx/executions/20260506T004420-a85bdc66/result.json",
+    "checks": ".ddx/executions/20260506T004420-a85bdc66/checks.json",
+    "usage": ".ddx/executions/20260506T004420-a85bdc66/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dac696fc-20260506T004420-a85bdc66"
+  },
+  "prompt_sha": "dafd699219d7762e40ec7194ec3edef81e43406ac49971b50f106ea84cff49fb"
+}

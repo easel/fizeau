@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The new Ollama matrix row documents native `/api/chat`, `/api/generate`, and `/api/ps` as signals Fizeau can observe today, but the current provider still routes through the OpenAI-compatible `/v1` wrapper only, so the mapping is not accurate against the codebase.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The Ollama row claims current provider-signal coverage from native `/api/chat`, `/api/generate`, and `/api/ps`, and cites `internal/provider/ollama/ollama.go` as the existing probe/capture. That file actually constructs an OpenAI-compatible provider with base URL `http://localhost:11434/v1` and contains no native Ollama probe or `/api/ps` inventory capture, so the matrix overstates what Fizeau can observe today.",
+      "location": "docs/research/provider-signal-matrix-2026-05-06.md:28"
+    }
+  ]
+}
+```

@@ -1,0 +1,58 @@
+{
+  "harness": "claude",
+  "model": "claude-opus-4-6",
+  "base_rev": "e781d3a7f627313f2813c2d850cac54275f97e9e",
+  "result_rev": "a2c16887a78fc734118f3da02742b3290b1cbd00",
+  "verdict": "BLOCK",
+  "bead_id": "fizeau-dc6d5f1f",
+  "execution_dir": ".ddx/executions/20260506T010216-4395784f",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1404,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 277,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+          "docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md",
+          "docs/helix/02-design/plan-2026-05-05-shared-lease-backend.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-004",
+        "bytes_included": 11876,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-004-plugin-packaging.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 7235,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 22689,
+    "output_bytes": 0,
+    "elapsed_ms": 8353,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "attempt_id": "20260507T043200-aa499006",
+  "bead_id": "fizeau-169b19c4",
+  "base_rev": "9b866bed8bb680a8aa543c635cade4ebd7372c4e",
+  "created_at": "2026-05-07T04:32:01.35183257Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-169b19c4",
+    "title": "Add TerminalBench 2.1 local Qwen provider profiles",
+    "description": "Add or update benchmark profiles for every local qwen3.6-27b provider intended for the TerminalBench 2.1 local sweep. The intended local provider set is now explicit:\n\n- vidar-qwen3-6-27b: native oMLX at http://vidar:1235/v1 serving Qwen3.6-27B-MLX-8bit\n- grendel-rapid-mlx: Rapid-MLX at http://grendel:8000/v1 serving mlx-community/Qwen3.6-27B-8bit\n- bragi-club-3090: vLLM-compatible club-3090 at http://bragi:8020/v1 serving qwen3.6-27b-autoround\n- sindri-club-3090: vLLM-compatible club-3090 at http://sindri:8020/v1 serving qwen3.6-27b-autoround\n\nDo not include Vidar through an OpenAI-compatible alias as a separate sweep lane; Vidar should be represented by the native oMLX provider type only. Bragi LM Studio may remain as historical/existing profile data, but it is not part of the verified local Qwen sweep unless it passes a fresh preflight.\n\nIn scope:\n- scripts/benchmark/profiles/*.yaml for the intended local qwen3.6-27b providers\n- benchmark profile schema support for provider types used by those profiles\n- any lane/resource config consumed by the 2.1 sweep runner\n- lightweight reachability/model-list checks documented as preflight, not as committed secrets\n\nOut of scope:\n- running the full sweep\n- changing managed OpenRouter profiles",
+    "acceptance": "1. Profiles exist for each intended local qwen3.6-27b provider: Vidar native oMLX, Grendel Rapid-MLX, Bragi club-3090 vLLM on http://bragi:8020/v1, and Sindri club-3090 vLLM on http://sindri:8020/v1.\n2. Vidar is not represented as a separate OpenAI-compatible sweep lane; the active Vidar local profile uses provider type omlx.\n3. Each profile records provider type, model id, base_url, api_key_env, pricing=0, context/output limits, sampling/reasoning defaults, and versioning snapshot/resolved_at.\n4. The club-3090 profiles use model qwen3.6-27b-autoround unless preflight discovers a different exact served id.\n5. The Grendel Rapid-MLX profile uses model mlx-community/Qwen3.6-27B-8bit unless preflight discovers a different exact served id.\n6. Each local provider lane is assigned or can be mapped to a resource_group keyed by endpoint/server so runner concurrency can be capped.\n7. `go run ./cmd/bench profiles list --json` loads the profiles successfully.\n8. Any live model-list smoke checks are recorded in notes/docs without committing secrets or machine-local config.",
+    "parent": "fizeau-ee77ec7f",
+    "labels": [
+      "area:benchmark",
+      "area:provider",
+      "area:terminalbench",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T04:32:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:32:00.341173298Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T04:32:00.527419998Z",
+      "spec-id": "terminalbench-2.1-local-qwen-profiles-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T043200-aa499006",
+    "prompt": ".ddx/executions/20260507T043200-aa499006/prompt.md",
+    "manifest": ".ddx/executions/20260507T043200-aa499006/manifest.json",
+    "result": ".ddx/executions/20260507T043200-aa499006/result.json",
+    "checks": ".ddx/executions/20260507T043200-aa499006/checks.json",
+    "usage": ".ddx/executions/20260507T043200-aa499006/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-169b19c4-20260507T043200-aa499006"
+  },
+  "prompt_sha": "c057b9d2c092939c4ccb5a3f46d318c235094c85aed0f7b98dd13bf5b5a7b526"
+}

@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260418T023201-36db884d",
+  "bead_id": "agent-a365bcf2",
+  "base_rev": "dc1cb893fb0a1496877ac343bd3d0f3fbab1b760",
+  "created_at": "2026-04-18T02:32:01.903841133Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-a365bcf2",
+    "title": "preset: rename harness-flavored preset names to intent-flavored (smart / default / cheap)",
+    "description": "## Problem\n\nCurrent preset names (prompt/presets.go, exposed via cmd/ddx-agent main.go --preset flag) are:\n  agent | benchmark | claude | codex | cursor | minimal\n\nFive of six are named after OTHER harnesses or products (claude, codex, cursor) or internal labels (agent, minimal). This creates real cognitive-load bugs in practice:\n\n- 'preset codex' on the embedded 'agent' harness is semantically contradictory. 'codex' is a HARNESS (OpenAI's Codex CLI). Using it as a preset name on the ddx-agent invocation implies 'use the embedded agent but pretend to be codex' — why not just use the codex harness directly? The preset name should name an INTENT, not another implementation.\n\n- Downstream config files like DocumentDrivenDX/ddx .ddx/config.yaml end up with lines like:\n\n      harnesses:\n        agent:\n          binary: ./ddx-agent\n          base_args: ['--json', '--preset', 'codex']\n\n  A reader reasonably assumes this routes through codex. It doesn't. It runs the embedded ddx-agent with a prompt template styled in a 'codex-ish' way. Confusing and load-bearing wrong.\n\n- Preset names encode prompt STYLE (instruction verbosity, tool description format, etc.), not provider choice. Calling that style 'codex' pins the meaning to whatever codex happens to do today; when codex changes, the preset either drifts or becomes misleadingly named.\n\n## Proposed rename\n\nAlign preset vocabulary with DDx routing profile vocabulary (cheap | fast | smart) and add a 'default' for the middle. Explicit intent, no cross-reference to other tools.\n\n  agent      -\u003e default    (neutral prompt, balanced tool descriptions)\n  benchmark  -\u003e benchmark  (unchanged — evals use a named fixture, not a production preset)\n  claude     -\u003e smart      (the richest/most-verbose preset today; used when quality matters and tokens are cheap)\n  codex      -\u003e cheap      (the terse preset today; used when tokens/latency matter)\n  cursor     -\u003e (drop or merge into default) — 'cursor' is a specific IDE product, not a prompt-intent category\n  minimal    -\u003e minimal    (unchanged — legitimate style: smallest possible prompt, for latency-critical or low-context use)\n\nFinal name set: cheap | default | smart | minimal | benchmark (5, down from 6).\n\n## Migration\n\n1. Add the new names as first-class preset IDs; keep the old names as deprecated aliases that emit a stderr warning on resolution ('preset name 'codex' is deprecated; use 'cheap' — this warning will be fatal in vX.X.X'). Don't break downstream configs at first.\n\n2. Update README.md, SD-003, and any other doc that references the old names.\n\n3. After one release with deprecation warnings, remove the old names and upgrade the warning to an error.\n\n4. DocumentDrivenDX/ddx will update its .ddx/config.yaml in a coordinated commit once new names ship.\n\n## Other issues with preset names\n\n- 'claude' as a preset name pins Claude-specific prompt conventions into a label that will be wrong if Claude's prompting conventions change. 'smart' is future-proof.\n- Preset naming is exposed in session logs, bead execution evidence, and routing events. Confusing names poison those artifacts for anyone reading them later.\n\n## Out of scope\n\n- Changing what each preset actually DOES (tool description text, instruction style). Only the names.\n- Adding new presets. The rename is a pure renaming exercise until new intent categories emerge.",
+    "acceptance": "1. prompt/presets.go exposes preset IDs: cheap, default, smart, minimal, benchmark. Old IDs (agent, claude, codex, cursor) are retained as deprecated aliases that resolve to their new equivalents AND emit a stderr warning 'preset name X is deprecated; use Y instead; this alias will be removed in vZ'.\n\n2. cmd/ddx-agent main.go --preset flag help string lists the new names first; old names documented as deprecated.\n\n3. README.md and docs/helix/02-design/solution-designs/SD-003-system-prompts.md updated to use the new names in every example.\n\n4. Unit test asserts that --preset codex still resolves (back-compat) AND emits the deprecation warning.\n\n5. Unit test asserts new names (smart, default, cheap) resolve to the correct preset bodies.\n\n6. CHANGELOG.md entry documenting the rename and the deprecation timeline.\n\n7. Follow-up bead filed for the hard removal of deprecated aliases in a future release.",
+    "labels": [
+      "agent",
+      "kind:enhancement",
+      "area:prompt",
+      "area:preset",
+      "area:api"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-18T02:32:01Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1756303",
+      "execute-loop-heartbeat-at": "2026-04-18T02:32:01.812575652Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260418T023201-36db884d",
+    "prompt": ".ddx/executions/20260418T023201-36db884d/prompt.md",
+    "manifest": ".ddx/executions/20260418T023201-36db884d/manifest.json",
+    "result": ".ddx/executions/20260418T023201-36db884d/result.json",
+    "checks": ".ddx/executions/20260418T023201-36db884d/checks.json",
+    "usage": ".ddx/executions/20260418T023201-36db884d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-a365bcf2-20260418T023201-36db884d"
+  }
+}

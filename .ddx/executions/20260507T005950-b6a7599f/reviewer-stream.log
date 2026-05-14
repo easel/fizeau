@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The matrix itself is present, but the bead does not satisfy the tracker/test acceptance requirements: the listed follow-ups are not actual tracked beads, and the bead record does not capture the required test result or documentation-only scope.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "AC3 requires missing probes to be listed as explicit follow-up beads, but this section only contains prose placeholders like `follow-up: add ...`; no corresponding bead entries were added to `.ddx/beads.jsonl` in this implementation.",
+      "location": "docs/research/provider-signal-matrix-2026-05-06.md:52"
+    },
+    {
+      "severity": "block",
+      "summary": "AC4 is not met. The merged change adds no test evidence, and the bead record does not note which providers are documentation-only for this step. The required `go test ./internal/provider/... -run \"Utilization|Perf|Context|Probe\"` condition is therefore not satisfied by the implementation as landed.",
+      "location": ".ddx/beads.jsonl:611"
+    }
+  ]
+}
+```

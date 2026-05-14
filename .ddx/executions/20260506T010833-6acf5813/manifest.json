@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T010833-6acf5813",
+  "bead_id": "fizeau-5d4b5f68",
+  "base_rev": "d2f6f1e90050763d46ae8cc9ff234152904a3407",
+  "created_at": "2026-05-06T01:08:34.82136402Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5d4b5f68",
+    "title": "Add go-vcr provider cassette harness",
+    "description": "Add shared test infrastructure for provider HTTP record/replay using the established go-vcr library. In-scope files: a small helper package under internal/provider or internal/provider/testutil, go.mod/go.sum dependency updates, and tests proving replay-only behavior. The helper should default to replay-only mode, switch to record mode only with FIZEAU_RECORD_PROVIDER_CASSETTES=1, redact Authorization/API-key headers before saving, provide stable request matching suitable for /v1/models, /metrics, /slots, and chat completions, and fail when a replay interaction is missing. Out of scope: actual vLLM or llama-server cassettes, server bootstrapping, routing changes, and provider-specific parsing.",
+    "acceptance": "1. go test ./internal/provider/... -run 'VCR|Cassette|Replay' passes. 2. go.mod declares gopkg.in/dnaeon/go-vcr.v4 or a current maintained go-vcr import as a direct test dependency. 3. Replay mode is default without network access and fails on missing cassette interactions. 4. Record mode is gated by FIZEAU_RECORD_PROVIDER_CASSETTES=1. 5. Saved cassettes do not contain Authorization headers or API keys.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:test",
+      "kind:infra"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:08:33Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T01:08:33.897259713Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T010833-6acf5813",
+    "prompt": ".ddx/executions/20260506T010833-6acf5813/prompt.md",
+    "manifest": ".ddx/executions/20260506T010833-6acf5813/manifest.json",
+    "result": ".ddx/executions/20260506T010833-6acf5813/result.json",
+    "checks": ".ddx/executions/20260506T010833-6acf5813/checks.json",
+    "usage": ".ddx/executions/20260506T010833-6acf5813/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-5d4b5f68-20260506T010833-6acf5813"
+  },
+  "prompt_sha": "285157d54d53d63e4d635aec874a179791e84fd0dc427348a65eff0d4985a59b"
+}

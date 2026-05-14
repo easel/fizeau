@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The native harness rename is present, but the merged diff also regresses ResolveRoute by coercing Profile into ModelRef, changing routing semantics for harness-pinned and smart-profile requests.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "ResolveRoute now sets `modelRef = req.Profile` whenever `req.Harness` is set (and for `Profile == \"smart\"`). `ModelRef` is the exact catalog-reference surface, not a profile alias, so this silently turns profile-based routing into exact model-ref resolution and can produce wrong or no routes for requests like `Harness:\"fiz\", Profile:\"standard\"`.",
+      "location": "service_routing.go:48"
+    }
+  ]
+}
+```

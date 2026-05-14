@@ -1,0 +1,111 @@
+{
+  "attempt_id": "20260507T012654-4bbccc3c",
+  "bead_id": "fizeau-4d01efdc",
+  "base_rev": "6f5b5e719bac721569007eca89bf370398d46fc2",
+  "created_at": "2026-05-07T01:26:56.122732169Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-4d01efdc",
+    "title": "Document OpenRouter and OpenAI-compatible signal gaps",
+    "description": "Inventory routing-evidence surfaces for OpenRouter and generic OpenAI-compatible providers. Document context-limit discovery, quota headers, cost attribution, and the absence of a provider-owned live utilization probe in this step.",
+    "acceptance": "1. The matrix or companion note classifies OpenRouter and generic OpenAI-compatible providers as ranking-only or documentation-only for utilization. 2. Existing context-limit and quota/cost probes are mapped to the matrix. 3. Missing live-utilization probes are listed as explicit follow-up beads or explicitly marked unavailable.",
+    "parent": "fizeau-60171fa8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:26:54Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:21:44.999719099Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:24:59.324817639Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T012145-b8634b43\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":951499,\"output_tokens\":9934,\"total_tokens\":961433,\"cost_usd\":0,\"duration_ms\":192230,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:24:59.448205832Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=961433 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T012145-b8634b43\",\"bead_id\":\"fizeau-4d01efdc\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:25:04.129671381Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:25:04.394847461Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=cbbbb9daefe408a7c453ebacaf92b8e1f7fa98ba\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=14819\noutput_bytes=366\nelapsed_ms=27309",
+          "created_at": "2026-05-07T01:26:33.831921022Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe new SD-013 note satisfies all three acceptance criteria: it classifies OpenRouter and generic OpenAI-compatible utilization status, maps existing context/quota/cost probes to concrete code paths, and explicitly marks live-utilization probes unavailable in this step.\nresult_rev=cbbbb9daefe408a7c453ebacaf92b8e1f7fa98ba\nbase_rev=74c8ff2915b302dd3698830ca9c3c9bd5c5237f2",
+          "created_at": "2026-05-07T01:26:33.952515759Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:26:54.241725422Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:26:54.446537341Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T012654-4bbccc3c",
+    "prompt": ".ddx/executions/20260507T012654-4bbccc3c/prompt.md",
+    "manifest": ".ddx/executions/20260507T012654-4bbccc3c/manifest.json",
+    "result": ".ddx/executions/20260507T012654-4bbccc3c/result.json",
+    "checks": ".ddx/executions/20260507T012654-4bbccc3c/checks.json",
+    "usage": ".ddx/executions/20260507T012654-4bbccc3c/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-4d01efdc-20260507T012654-4bbccc3c"
+  },
+  "prompt_sha": "0ba0fc32e86d78c697adcfa2c0f7fd9463facf00aa0df65b6a5f6f0cd5062259"
+}

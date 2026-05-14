@@ -1,0 +1,39 @@
+{
+  "attempt_id": "20260503T024210-ba0f73b4",
+  "bead_id": "agent-ed2c69b5",
+  "base_rev": "eb72ff65ed3b5442755843e8d1ca617dc9b41206",
+  "created_at": "2026-05-03T02:42:10.703276135Z",
+  "requested": {
+    "harness": "claude",
+    "provider": "openrouter",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-ed2c69b5",
+    "title": "SKILL: SkillsConfig in config.go + FIZEAU_SKILLS_DIR + integration test",
+    "description": "Add SkillsConfig struct and Skills SkillsConfig yaml:\"skills,omitempty\" field to config.Config. Add FIZEAU_SKILLS_DIR env override in applyEnvOverrides. Add TestLoad_SkillsConfig_ParsedFromYAML (round-trip YAML + env precedence). Add integration test: temp dir with .fizeau/skills/example/SKILL.md, verify catalog in system prompt and load_skill returns body.",
+    "acceptance": "Skills.Dir parses from YAML; FIZEAU_SKILLS_DIR overrides; integration test passes with virtual provider; go test ./... green.",
+    "parent": "agent-4caf82e8",
+    "labels": [
+      "kind:feature",
+      "area:config",
+      "kind:test",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-03T02:42:10Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "12461",
+      "execute-loop-heartbeat-at": "2026-05-03T02:42:10.192131092Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260503T024210-ba0f73b4",
+    "prompt": ".ddx/executions/20260503T024210-ba0f73b4/prompt.md",
+    "manifest": ".ddx/executions/20260503T024210-ba0f73b4/manifest.json",
+    "result": ".ddx/executions/20260503T024210-ba0f73b4/result.json",
+    "checks": ".ddx/executions/20260503T024210-ba0f73b4/checks.json",
+    "usage": ".ddx/executions/20260503T024210-ba0f73b4/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-ed2c69b5-20260503T024210-ba0f73b4"
+  }
+}

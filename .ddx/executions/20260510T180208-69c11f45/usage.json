@@ -1,0 +1,10 @@
+{
+  "attempt_id": "20260510T180208-69c11f45",
+  "harness": "fiz",
+  "provider": "openrouter",
+  "model": "anthropic/claude-opus-4.7",
+  "tokens": 414031,
+  "input_tokens": 408144,
+  "output_tokens": 5887,
+  "cost_usd": 2.1878949999999997
+}

@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260429T193122-a6b719d3",
+  "bead_id": "agent-aa009da8",
+  "base_rev": "e2a96fff2e30d6f7562cfa6d1ac20a32d63f7209",
+  "created_at": "2026-04-29T19:31:22.52509132Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-aa009da8",
+    "title": "Step 5b — Anchor profile YAML (post-census)",
+    "description": "Land scripts/benchmark/profiles/\u003canchor\u003e.yaml using the model selected in NEW6 (Step 0 census). Fields: id, provider.{type,model,base_url,api_key_env}, pricing (all four streams), limits (max_output_tokens, context_tokens, rate_limit_rpm/tpm), sampling.{temperature, reasoning}, versioning.{resolved_at, snapshot}. The snapshot field captures the resolved model snapshot ID at profile-creation time (since aliases drift). Loader test passes for it.",
+    "acceptance": "Anchor profile YAML lands with all v7 schema fields populated + resolved snapshot ID + resolved_at date; loader test passes; ddx-agent-bench profiles list shows it.",
+    "parent": "agent-6c7a4c11",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:benchmark",
+      "area:tooling"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-29T19:31:22Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1247930",
+      "execute-loop-heartbeat-at": "2026-04-29T19:31:22.225841923Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260429T193122-a6b719d3",
+    "prompt": ".ddx/executions/20260429T193122-a6b719d3/prompt.md",
+    "manifest": ".ddx/executions/20260429T193122-a6b719d3/manifest.json",
+    "result": ".ddx/executions/20260429T193122-a6b719d3/result.json",
+    "checks": ".ddx/executions/20260429T193122-a6b719d3/checks.json",
+    "usage": ".ddx/executions/20260429T193122-a6b719d3/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-aa009da8-20260429T193122-a6b719d3"
+  }
+}

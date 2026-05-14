@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "Core assertions were retargeted and the affected root-package regressions pass, but several touched tests still describe the native `fiz` harness as `agent` in failure messages/diagnostics, so the evidence update is incomplete.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "This focused routing test still reports the native `fiz` harness as `agent` in failure text (`local agent harness`), which leaves the identity retarget incomplete in the touched evidence.",
+      "location": "service_routing_errors_test.go:215"
+    },
+    {
+      "severity": "warn",
+      "summary": "The same touched routing test still uses `agent` in multiple failure diagnostics (`agent Available=true`, `agent Providers=`, `providerless agent candidate`), even though the asserted harness value is now `fiz`.",
+      "location": "service_routing_test.go:328"
+    },
+    {
+      "severity": "info",
+      "summary": "Targeted regressions for the changed root-package tests passed when rerun with a writable `GOCACHE`; broader `go test ./...` was not a clean signal because the sandbox blocks the default Go build cache and unrelated `httptest` port-binding tests fail in this environment.",
+      "location": "service_execute_test.go:229"
+    }
+  ]
+}
+```

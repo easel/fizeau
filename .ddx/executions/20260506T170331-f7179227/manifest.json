@@ -1,0 +1,154 @@
+{
+  "attempt_id": "20260506T170331-f7179227",
+  "bead_id": "fizeau-400b57fe",
+  "base_rev": "bd11751b6787028a928a43baa28aaf0557179735",
+  "created_at": "2026-05-06T17:03:32.298983191Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-400b57fe",
+    "title": "Define Fizeau-owned fuzzy model constraint resolution",
+    "description": "PROBLEM\nDDx needs to expose `--model \u003cvalue\u003e` as an operator escape hatch for routing failures and experimentation, but DDx must pass the raw value unchanged and must not implement model aliases, normalization, fuzzy matching, catalog lookup, or ambiguity handling. Fizeau therefore needs CONTRACT-003 to define how explicit model constraints such as `qwen36` resolve against discovered/provider model IDs such as `Qwen-3.6-27b-MLX-8bit`.\n\nROOT CAUSE WITH FILE:LINE\nFizeau already has partial OpenAI-compatible provider matching in internal/provider/openai/discovery.go:135-155: it lowercases, strips the first slash prefix, and substring-matches the requested string. That is not yet the public contract, and it does not remove punctuation/special separators, so `qwen36` will not reliably match `Qwen-3.6-27b-MLX-8bit`. CONTRACT-003 currently says ModelRef concrete refs are exact at docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md:429-433, but it does not define explicit `Model` normalization/fuzzy behavior, ambiguity errors, or no-match evidence for the Execute path.\n\nPROPOSED FIX\nAmend CONTRACT-003 so Fizeau owns model constraint resolution for `ServiceExecuteRequest.Model` and `RouteRequest.Model`. The matching contract should normalize case, whitespace, and separators such as hyphen, underscore, dot, slash, colon, and other non-alphanumeric delimiters before substring matching; allow catalog aliases where present; resolve a single match to the provider/discovered canonical model ID; return a typed ambiguity error with candidates on multiple matches; and return a typed no-match error or existing provider error with nearby candidates/evidence when none match. Apply the same semantics consistently to Execute and ResolveRoute. DDx will pass raw `--model qwen36` through unchanged and record the actual model Fizeau reports.\n\nNON-SCOPE\nDo not add DDx-side normalization or matching. Do not change profile/ModelRef semantics except to clarify the difference from raw Model constraint resolution. Do not change route scoring or auto-routing eligibility except where exact/fuzzy explicit model constraints need candidate filtering. Do not make broad Levenshtein-style fuzzy guesses unless ambiguity/no-match behavior is explicitly test-covered.\n\nIn-scope files include:\n- docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md\n- service_routing.go and routing helper packages used by Execute/ResolveRoute\n- internal/provider/openai/discovery.go if its matching primitive is generalized or reused\n- routing_errors.go if typed ambiguity/no-match errors need public shape\n- service_routing_errors_test.go, service_http_provider_test.go, internal/provider/openai/discovery_test.go, and public contract tests\n\nOut-of-scope files:\n- DDx repository files under ../ddx\n- model catalog manifest content unless adding an alias fixture is necessary for tests\n\nPARENT AND DEPENDENCIES\nParent: fizeau-06524f43. Dependencies: none.",
+    "acceptance": "1. CONTRACT-003 states that Fizeau, not DDx, owns normalization, alias lookup, substring matching, ambiguity handling, no-match handling, and final route selection for raw `Model` constraints on Execute and ResolveRoute.\n2. A focused unit test proves `qwen36` matches a single model named `Qwen-3.6-27b-MLX-8bit` after separator normalization.\n3. A focused unit test proves case-insensitive, whitespace-insensitive, slash-prefix-tolerant matching still works for existing examples such as `qwen/qwen3.6` and `QWEN3.6`.\n4. A focused unit test proves ambiguous normalized substrings return a typed ambiguity error including candidate model IDs, not an arbitrary first match.\n5. A focused unit test proves no-match behavior preserves typed evidence for operators and does not silently fall back to an unrelated model.\n6. Execute and ResolveRoute use the same model constraint resolution semantics; a service-level test covers both paths.\n7. `go test ./... -run \"Test.*(Model.*Fuzzy|Model.*Alias|NormalizeModel|ResolveExecuteRoute|ResolveRoute).*\"` passes after updating exact final test names.\n8. `go test ./...` passes.\n9. `lefthook run pre-commit` passes.",
+    "parent": "fizeau-06524f43",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:routing",
+      "area:model-catalog",
+      "kind:feature",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T17:03:31Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1364063",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T16:43:43.143395192Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T16:57:40.757653041Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T164343-2a6f32f3\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":20094864,\"output_tokens\":79094,\"total_tokens\":20173958,\"cost_usd\":0,\"duration_ms\":836769,\"exit_code\":0}",
+          "created_at": "2026-05-06T16:57:40.86623386Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=20173958 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T16:57:44.445865724Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=dffc9331fead9a8f8fb57783539e44442ae4e2fe\n\nreview-group: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-06T13:02:54-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=94284\noutput_bytes=0\nelapsed_ms=8885",
+          "created_at": "2026-05-06T16:57:55.024016084Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: transport\nagent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-06T13:02:54-04:00)\nresult_rev=dffc9331fead9a8f8fb57783539e44442ae4e2fe\nbase_rev=954de2d690554dc72f769ea834a0415a405aa834",
+          "created_at": "2026-05-06T16:57:55.212666206Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T16:59:09.182947014Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T17:02:06.071121901Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T165909-a45a4243\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1589934,\"output_tokens\":6982,\"total_tokens\":1596916,\"cost_usd\":0,\"duration_ms\":176049,\"exit_code\":0}",
+          "created_at": "2026-05-06T17:02:06.186717008Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1596916 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T17:02:08.2204636Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=4fd4fbf992665d6b1b3f7bc6b78852ed590dfdbc\n\nreview-group: review-error: unparseable: reviewer output: unparseable JSON verdict: no JSON object found (raw output 59 bytes; see .ddx/executions/20260506T170209-04656c00)\nharness=claude\nmodel=opus\ninput_bytes=95950\noutput_bytes=59\nelapsed_ms=48519",
+          "created_at": "2026-05-06T17:03:00.1661013Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nresult_rev=4fd4fbf992665d6b1b3f7bc6b78852ed590dfdbc\nbase_rev=a93d96e522060a95a0fc94170aad255f1b351a41",
+          "created_at": "2026-05-06T17:03:00.278036992Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T17:03:30.827858247Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T17:03:31.036487978Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T170331-f7179227",
+    "prompt": ".ddx/executions/20260506T170331-f7179227/prompt.md",
+    "manifest": ".ddx/executions/20260506T170331-f7179227/manifest.json",
+    "result": ".ddx/executions/20260506T170331-f7179227/result.json",
+    "checks": ".ddx/executions/20260506T170331-f7179227/checks.json",
+    "usage": ".ddx/executions/20260506T170331-f7179227/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-400b57fe-20260506T170331-f7179227"
+  },
+  "prompt_sha": "6602ea5dbdb3b61ed1949f8d1660db6d9cee10b0d3a2284a42faef2afd2fba0e"
+}

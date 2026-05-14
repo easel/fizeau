@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223904-f8cea729",
+  "bead_id": "fizeau-b73fed1a",
+  "base_rev": "4c99ec5b5d751939a8f73a4c2309ab67b4fe475f",
+  "created_at": "2026-05-06T22:39:06.114670342Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b73fed1a",
+    "title": "Bias correlation IDs to sticky server instances",
+    "description": "Use validated CorrelationID as the sticky route key and bind it to a server instance, not to model identity. Sticky affinity is a score bonus after eligibility, not a hard pin. Related requests should prefer the same server across model changes when that server remains eligible.",
+    "acceptance": "1. The sticky lease map keys validated CorrelationID to server_instance with TTL/expiry behavior.\n2. Repeated ResolveRoute/Execute requests with the same CorrelationID prefer the same server instance across different eligible models.\n3. Stickiness never makes an ineligible candidate eligible and can be outweighed by hard saturation or severe performance/utilization pressure.\n4. RouteDecision/RouteStatus expose sticky status, server_instance, reason, and bonus without leaking raw sensitive keys in operator JSON.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Sticky|Correlation|ServerInstance|Lease\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:39:04Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:04.747925268Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:39:04.925786813Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223904-f8cea729",
+    "prompt": ".ddx/executions/20260506T223904-f8cea729/prompt.md",
+    "manifest": ".ddx/executions/20260506T223904-f8cea729/manifest.json",
+    "result": ".ddx/executions/20260506T223904-f8cea729/result.json",
+    "checks": ".ddx/executions/20260506T223904-f8cea729/checks.json",
+    "usage": ".ddx/executions/20260506T223904-f8cea729/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b73fed1a-20260506T223904-f8cea729"
+  },
+  "prompt_sha": "e5d0ea1f5d573d362c0a10b8f90a73a648d47f497cf65454ccdf8ad038619f3b"
+}

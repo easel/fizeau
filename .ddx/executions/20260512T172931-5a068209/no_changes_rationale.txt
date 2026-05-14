@@ -1,0 +1,9 @@
+verification_command: bash scripts/benchmark/test_sweep_shutdown.bash && go test ./cmd/bench -run TestSweepShutdownTermGraceful -count=1
+
+The current worktree already satisfies the bead's named shutdown checks:
+- `TestSweepShutdownKillReapsProcessTree`
+- `TestSweepShutdownNoOrphans`
+- `TestSweepShutdownReportState`
+- `TestSweepShutdownTermGraceful`
+
+No code changes were needed in this execution pass.

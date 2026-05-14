@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The docs now map Ollama timing, inventory, context-length, cache-unknown, and unknown/stale fallback behavior, but the missing live probe is only described as a future need and not tied to an actual follow-up bead.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "AC3 is only partially met for Ollama: the documented gap names a future live-utilization probe, but unlike the OpenRouter/OpenAI entries it does not reference a concrete follow-up bead or tracking ID.",
+      "location": "docs/helix/02-design/solution-designs/SD-013-provider-signal-matrix.md:58"
+    }
+  ]
+}
+```

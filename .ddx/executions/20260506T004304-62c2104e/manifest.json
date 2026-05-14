@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T004304-62c2104e",
+  "bead_id": "fizeau-e6b6e3d2",
+  "base_rev": "a5d872d24aa191fc18ce9f6dbaadcae04856e7c3",
+  "created_at": "2026-05-06T00:43:05.208730042Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e6b6e3d2",
+    "title": "Ratify provider utilization and VCR specs",
+    "description": "Update and verify the provider design documents for first-class vLLM and llama-server utilization support and real-server cassette acceptance. In-scope files: docs/helix/01-frame/features/FEAT-003-providers.md, docs/helix/02-design/solution-designs/SD-005-provider-config.md, and CONTRACT-003 if provider info or model info public fields change. Required behavior: type: llama-server is first-class; vLLM probes root /metrics; llama-server probes root /metrics when --metrics is enabled and falls back to /slots; go-vcr cassettes are recorded from real bootstrapped servers; ordinary tests replay cassettes. Out of scope: implementing providers, installing servers, or adding cassettes.",
+    "acceptance": "1. rg -n 'llama-server|Provider Utilization Discovery|Real-Server Provider Cassettes|go-vcr' docs/helix/01-frame/features/FEAT-003-providers.md succeeds. 2. rg -n 'D12A|D12B|D17|type: llama-server|type: vllm' docs/helix/02-design/solution-designs/SD-005-provider-config.md succeeds. 3. rg -n 'AC-FEAT-003-12|AC-FEAT-003-13|AC-FEAT-003-14' docs/helix/01-frame/features/FEAT-003-providers.md succeeds. 4. ddx doc stale exits successfully or reports no stale provider docs caused by this change.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:docs",
+      "kind:design"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T00:43:04Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T00:43:04.571274417Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T004304-62c2104e",
+    "prompt": ".ddx/executions/20260506T004304-62c2104e/prompt.md",
+    "manifest": ".ddx/executions/20260506T004304-62c2104e/manifest.json",
+    "result": ".ddx/executions/20260506T004304-62c2104e/result.json",
+    "checks": ".ddx/executions/20260506T004304-62c2104e/checks.json",
+    "usage": ".ddx/executions/20260506T004304-62c2104e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e6b6e3d2-20260506T004304-62c2104e"
+  },
+  "prompt_sha": "07da9eb4df7cf9e4e36dc7c33a65bb2d9c14d9710768bef656ffeb4b204e6144"
+}

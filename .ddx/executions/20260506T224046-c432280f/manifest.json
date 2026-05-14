@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T224046-c432280f",
+  "bead_id": "fizeau-0409d151",
+  "base_rev": "3929ed6433b664373479fdf171210f00a39a7182",
+  "created_at": "2026-05-06T22:40:47.180110765Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-0409d151",
+    "title": "Register Rapid-MLX provider type",
+    "description": "Teach config loading and provider registration about type rapid-mlx so configured endpoints such as http://grendel:8000/v1 are accepted as first-class local providers. This is the prerequisite for utilization/performance probing and for DDx execution in environments where grendel-rapid-mlx is present in the local config.",
+    "acceptance": "1. Config validation accepts provider type rapid-mlx and rejects malformed Rapid-MLX endpoint config with clear errors.\n2. Rapid-MLX endpoints participate in model discovery through the existing OpenAI-compatible surface where applicable.\n3. Route-status/list-models can show grendel-rapid-mlx without service startup failure.\n4. Tests cover config load, provider registry selection, and a replayed /v1/models response.\n5. go test ./internal/config ./internal/provider/... ./internal/serviceimpl -run \"RapidMLX|ProviderType|ModelDiscovery\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:provider",
+      "area:config",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:40:46Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:40:45.835072121Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:40:46.02552628Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T224046-c432280f",
+    "prompt": ".ddx/executions/20260506T224046-c432280f/prompt.md",
+    "manifest": ".ddx/executions/20260506T224046-c432280f/manifest.json",
+    "result": ".ddx/executions/20260506T224046-c432280f/result.json",
+    "checks": ".ddx/executions/20260506T224046-c432280f/checks.json",
+    "usage": ".ddx/executions/20260506T224046-c432280f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-0409d151-20260506T224046-c432280f"
+  },
+  "prompt_sha": "43ad0bfd93a7821c06d7887b51f320302c9a478932cb708bd5378bf5894c1f9a"
+}

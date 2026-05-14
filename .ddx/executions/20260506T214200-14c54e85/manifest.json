@@ -1,0 +1,49 @@
+{
+  "attempt_id": "20260506T214200-14c54e85",
+  "bead_id": "fizeau-395d124d",
+  "base_rev": "3414162dd266c52c10b3943c78284792662a85fa",
+  "created_at": "2026-05-06T21:42:02.005024976Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-395d124d",
+    "title": "Add benchmark evidence ledger writer CLI",
+    "description": "Benchmark importers need a common append-only writer so evidence records are validated, assigned stable record IDs, and written consistently. This slice owns the generic ledger mechanics, not any benchmark-specific parser.\n\nIn-scope files:\n- cmd/bench evidence subcommand or equivalent cmd/bench importer entrypoint\n- Go package/helper for validating records against scripts/benchmark/benchmark-evidence.schema.json or an equivalent typed representation\n- tests and fixtures for append, duplicate handling, source hashes, and invalid record rejection\n\nOut-of-scope:\n- TerminalBench, beadbench, SkillsBench, SWE-bench, HumanEval, or MHI parsing\n- FHI formula or claim generation\n- changing existing matrix runner behavior\n\nImplementation notes:\n- Provide a command shape such as `go run ./cmd/bench evidence validate \u003cfile\u003e` and `go run ./cmd/bench evidence append --in \u003crecords.jsonl\u003e --ledger \u003cledger.jsonl\u003e`.\n- Records should get deterministic content-derived `record_id` values when absent.\n- The writer should be append-only and should report duplicates without silently mutating existing records.",
+    "acceptance": "1. `go run ./cmd/bench evidence validate \u003cvalid-fixture.jsonl\u003e` exits 0.\n2. `go run ./cmd/bench evidence validate \u003cinvalid-fixture.jsonl\u003e` exits non-zero with a useful error.\n3. `go run ./cmd/bench evidence append --in \u003cvalid-fixture.jsonl\u003e --ledger \u003ctmp-ledger.jsonl\u003e` writes validated records with stable record IDs.\n4. A duplicate append test proves duplicate records are detected and not silently duplicated.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:evidence",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T21:42:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:42:00.683841094Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T21:42:00.862112813Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T214200-14c54e85",
+    "prompt": ".ddx/executions/20260506T214200-14c54e85/prompt.md",
+    "manifest": ".ddx/executions/20260506T214200-14c54e85/manifest.json",
+    "result": ".ddx/executions/20260506T214200-14c54e85/result.json",
+    "checks": ".ddx/executions/20260506T214200-14c54e85/checks.json",
+    "usage": ".ddx/executions/20260506T214200-14c54e85/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-395d124d-20260506T214200-14c54e85"
+  },
+  "prompt_sha": "35c5a846b51dc6eb48c4866f7639b493cb37d246d75b7b76ebf3172ff12b6af5"
+}

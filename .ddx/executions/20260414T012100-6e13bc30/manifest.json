@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260414T012100-6e13bc30",
+  "bead_id": "agent-cb9a5ec5",
+  "base_rev": "65b4a5fc7e27d8de2b5fa52994698bb1b40554cd",
+  "created_at": "2026-04-14T01:21:01.070101222Z",
+  "requested": {
+    "harness": "agent",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-cb9a5ec5",
+    "title": "docs: update SD-004 StreamDelta definition to include ReasoningContent field",
+    "description": "SD-004-streaming.md defines the StreamDelta struct without the ReasoningContent field. The shipped stream.go has:\n\n    ReasoningContent string `json:\"reasoning_content,omitempty\"`  // thinking/reasoning tokens for extended-reasoning models\n\nThis field is consumed in stream_consume.go to implement ErrReasoningOverflow and ErrReasoningStall detection. SD-004 is therefore stale with respect to the actual StreamDelta type.\n\nWork: Add ReasoningContent to the StreamDelta struct definition in SD-004, with a note on its role in loop-detection behavior. Cross-reference the reasoning-overflow/stall heuristics.\n\nDiscovered by alignment review agent-35bf3d08, review issue agent-ecc79bf0.",
+    "acceptance": "SD-004 StreamDelta definition includes ReasoningContent with an explanation of its role; no code changes required",
+    "parent": "agent-ecc79bf0",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:build",
+      "area:lib"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-14T01:20:57Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "807070"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260414T012100-6e13bc30",
+    "prompt": ".ddx/executions/20260414T012100-6e13bc30/prompt.md",
+    "manifest": ".ddx/executions/20260414T012100-6e13bc30/manifest.json",
+    "result": ".ddx/executions/20260414T012100-6e13bc30/result.json",
+    "worktree": ".ddx/.execute-bead-wt-agent-cb9a5ec5-20260414T012100-6e13bc30"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "attempt_id": "20260421T104920-15730142",
+  "bead_id": "agent-f5a2a6c2",
+  "base_rev": "b35b0b35767e45d81663a968365ced4f3c0e561c",
+  "created_at": "2026-04-21T10:49:20.585692295Z",
+  "requested": {
+    "harness": "gemini",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-f5a2a6c2",
+    "title": "harness-pty: capture Claude and Codex token usage",
+    "description": "Capture token utilization for the primary TUI harnesses through the ADR-002 direct PTY and cassette path. Token usage is core capability evidence for Claude and Codex runs, distinct from quota headroom. The implementation should normalize input/output/cache/reasoning totals when exposed by the harness, preserve unknown fields instead of fabricating zeros, and use a documented source-precedence policy when multiple sources disagree.",
+    "acceptance": "1. Claude run results capture token usage from the native stream, transcript/session artifact, status output, or another documented source of truth and normalize it into CONTRACT-003 final metadata.\n2. Codex run results capture token usage from the native stream, transcript/session artifact, status output, or another documented source of truth and normalize it into CONTRACT-003 final metadata.\n3. Usage extraction distinguishes unavailable usage from zero usage and preserves source/freshness metadata.\n4. Source precedence is explicit and tested: native stream wins over transcript/session artifact, transcript/session artifact wins over status output, and status output wins over any documented fallback.\n5. When multiple sources disagree, final metadata records a normalized warning with the sources and values rather than silently picking a value.\n6. Replay tests use sanitized cassettes for Claude and Codex runs with usage present, usage absent, malformed/changed usage shapes, and disagreeing source values.\n7. Opt-in record tests can refresh authenticated Claude and Codex usage cassettes, serialize per harness account, and fail fast without accepted artifacts when auth, binary, quota, transport prerequisites, or account locks are unavailable.\n8. go test ./... passes; AGENT_HARNESS_RECORD=1 go test -tags=integration -run usage passes in an authenticated environment.",
+    "parent": "agent-e5367528",
+    "labels": [
+      "area:harness",
+      "area:usage",
+      "area:pty",
+      "kind:implementation",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-21T10:49:20Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1588781",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "tier=standard harness=agent model=qwen3.5-27b probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T10:45:59.139132598Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=smart harness=gemini model= probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T10:45:59.274074501Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"harness\":\"gemini\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-21T10:45:59.314579255Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "ddx",
+          "body": "escalation exhausted: pre-execute-bead checkpoint: staging changes: exit status 1\ntier=smart\nprobe_result=ok",
+          "created_at": "2026-04-21T10:45:59.391211147Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-21T10:49:20.376462804Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260421T104920-15730142",
+    "prompt": ".ddx/executions/20260421T104920-15730142/prompt.md",
+    "manifest": ".ddx/executions/20260421T104920-15730142/manifest.json",
+    "result": ".ddx/executions/20260421T104920-15730142/result.json",
+    "checks": ".ddx/executions/20260421T104920-15730142/checks.json",
+    "usage": ".ddx/executions/20260421T104920-15730142/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-f5a2a6c2-20260421T104920-15730142"
+  }
+}

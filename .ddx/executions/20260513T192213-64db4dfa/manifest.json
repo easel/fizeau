@@ -1,0 +1,76 @@
+{
+  "attempt_id": "20260513T192213-64db4dfa",
+  "bead_id": "fizeau-cb82a2bb",
+  "base_rev": "f7fed17c8a7185488cc3d3570369645f1ecf3f47",
+  "created_at": "2026-05-13T19:22:15.079929645Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized",
+    "min_power": 8
+  },
+  "bead": {
+    "id": "fizeau-cb82a2bb",
+    "title": "Route only from client inputs and the models snapshot",
+    "description": "Refactor/verify autorouting purity: ResolveRoute and Execute autorouting decisions must consume only explicit client inputs plus the current fiz models snapshot.\\n\\nNo hidden provider-health, quota, discovery, or utilization probes should run in the scorer or candidate builder. Freshness updates are done by the snapshot refresh path before routing, not by a parallel route-side fact path. This makes routing decisions replayable from snapshot fixtures and operator-visible via fiz models.\\n\\nHard gates remain allowed for true constraints or dispatchability represented in the snapshot: exact pins/pin conflicts, no_remote, metered actual-spend refusal, missing required tools/context/reasoning, known down endpoints, quota exhausted, and policy require[] constraints. Unknown/stale/refresh_failed facts should normally become penalties unless the snapshot explicitly says known-down or exhausted.\\n\\nIn scope: service ResolveRoute inputs, internal routing input projection, tests with fixture snapshots and fake providers that panic if probed.\\n\\nOut of scope: changing score weights; changing fiz models CLI behavior.",
+    "acceptance": "1. go test . ./internal/routing/... ./internal/modelregistry/... -run 'Test.*Route.*Snapshot|Test.*Autorouting.*Snapshot|Test.*NoProviderProbe|Test.*ResolveRoute' -count=1 passes.\\n2. A test constructs a snapshot fixture and client inputs, disables provider probing, and ResolveRoute produces the expected decision.\\n3. A test proves routing does not call provider health/quota/model discovery directly when snapshot fields are present.\\n4. rg -n 'probeProviderStatus|HealthCheck|Refresh|Discover|quota.*Refresh' service_routing.go internal/routing returns no route-decision production call path except explicit snapshot refresh orchestration outside scoring.\\n5. Route errors for no_remote + all-local-down and metered opt-out + only-metered-candidates identify the user constraint that prevents selection.",
+    "parent": "fizeau-4847c99e",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:feature",
+      "plan-2026-05-13-snapshot-routing"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-13T19:03:28Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2683682",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-13T19:06:49.270227294Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.4-mini\"}",
+          "created_at": "2026-05-13T19:22:10.677848461Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260513T190649-f024d7ca\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":15652873,\"output_tokens\":88695,\"total_tokens\":15741568,\"cost_usd\":0,\"duration_ms\":917748,\"exit_code\":0}",
+          "created_at": "2026-05-13T19:22:10.69405702Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=15741568 model=gpt-5.4-mini"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-13T19:03:28.300483264Z",
+      "schema_version": 1,
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260513T192213-64db4dfa",
+    "prompt": ".ddx/executions/20260513T192213-64db4dfa/prompt.md",
+    "manifest": ".ddx/executions/20260513T192213-64db4dfa/manifest.json",
+    "result": ".ddx/executions/20260513T192213-64db4dfa/result.json",
+    "checks": ".ddx/executions/20260513T192213-64db4dfa/checks.json",
+    "usage": ".ddx/executions/20260513T192213-64db4dfa/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-cb82a2bb-20260513T192213-64db4dfa"
+  },
+  "prompt_sha": "87fcc9f384e32efccfd127e1381317b7301a3a73c10bf78a36523d8b8b2634af"
+}

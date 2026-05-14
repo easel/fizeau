@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260506T045046-b8d75352",
+  "bead_id": "fizeau-2b024ccf",
+  "base_rev": "7776e74eac46d841e4bda01373fcbe2a0ccb3a95",
+  "created_at": "2026-05-06T04:50:47.038744533Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2b024ccf",
+    "title": "Integrate v0.10.9 point release",
+    "description": "Context: latest published release tag before this work is v0.10.8. A local annotated tag v0.10.9 was created on master at commit 86cfbee64e51c3e38147918435898e44a5ecfd3f with message Release v0.10.9, but it has not been pushed yet. The working tree also had unrelated DDx tracker/attachment changes at the time this bead was filed; do not revert user or tracker work that is not required for the release integration.\n\nGoal: complete the v0.10.9 point-release integration using the repo release conventions. Ensure the release notes/changelog and any release metadata accurately describe the code shipped since v0.10.8, verify the tag points at the intended commit, and push the release branch/tag only after local verification.\n\nIn-scope files/actions:\n- CHANGELOG.md if the release entry is missing or incomplete.\n- Release metadata/scripts only if existing project conventions require them.\n- Git refs for master and tag v0.10.9.\n\nOut-of-scope:\n- Do not close or mutate unrelated manual benchmark beads.\n- Do not rewrite, rebase, squash, amend, or filter execute-bead history.\n- Do not include unrelated uncommitted tracker/attachment changes unless they are required release evidence.",
+    "acceptance": "1. `git tag -n99 v0.10.9` shows an annotated release tag for v0.10.9 and `git rev-list -n1 v0.10.9` resolves to the intended release commit.\n2. `git log --oneline v0.10.8..v0.10.9` contains the release changes intended for v0.10.9 and no rewritten execute-bead history.\n3. `CHANGELOG.md` contains an accurate v0.10.9 entry dated 2026-05-06, or the bead notes explicitly justify why no changelog change is required under this repo release convention.\n4. `go test ./...` passes locally before pushing the release tag.\n5. `git ls-remote --tags origin v0.10.9` shows the pushed tag, and `git ls-remote origin master` contains the tagged commit or a descendant.\n6. Close the bead only with evidence listing the tag SHA, pushed remote refs, and verification commands.",
+    "labels": [
+      "area:release",
+      "kind:release"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T04:50:46Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T04:50:46.398531927Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T045046-b8d75352",
+    "prompt": ".ddx/executions/20260506T045046-b8d75352/prompt.md",
+    "manifest": ".ddx/executions/20260506T045046-b8d75352/manifest.json",
+    "result": ".ddx/executions/20260506T045046-b8d75352/result.json",
+    "checks": ".ddx/executions/20260506T045046-b8d75352/checks.json",
+    "usage": ".ddx/executions/20260506T045046-b8d75352/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-2b024ccf-20260506T045046-b8d75352"
+  },
+  "prompt_sha": "71dbbc087a34731e29c2a9ef7c9b743b6ea4995cfb86818b0798c49ab3c4fcd4"
+}

@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260506T024000-c0e4de72",
+  "bead_id": "fizeau-b9d31351",
+  "base_rev": "bd7aea46bd067d2fd0bc5cd0c129cb3fc125500d",
+  "created_at": "2026-05-06T02:40:02.074304077Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b9d31351",
+    "title": "Add oMLX utilization tracking cassettes",
+    "description": "Implement normalized utilization tracking for the existing oMLX provider type. oMLX is an OpenAI/Anthropic-compatible Apple Silicon server with default Fizeau URL http://localhost:1235/v1. It exposes serving stats through `/api/status` and richer admin stats through `/admin/api/stats`; request usage also supports `stream_options.include_usage`.\n\nIn-scope files:\n- internal/provider/omlx utilization probe code and tests\n- shared provider utilization helpers if needed\n- provider cassette testdata for oMLX\n- route/status integration tests only where needed to prove normalized utilization is consumed\n- docs/helix/01-frame/features/FEAT-003-providers.md and FEAT-004-model-routing.md acceptance text if oMLX utilization needs explicit AC coverage\n\nRecord-mode environment:\n- Requires an oMLX server running on a macOS Apple Silicon device.\n- Use Vidar for the canonical live endpoint: `http://vidar:1235/v1`.\n- Record mode should allow overriding the base URL with an env var, but default documented operator target is Vidar port 1235.\n\nRequirements:\n- Derive status endpoint from OpenAI base URL. For `http://vidar:1235/v1`, probe `http://vidar:1235/api/status`.\n- Parse `/api/status` fields: total requests, active requests, waiting requests, total prompt/completion/cached tokens, cache efficiency, average prefill/generation TPS, loaded models, model memory used/max, and uptime.\n- Optionally support `/admin/api/stats` only when explicit admin credentials/config are supplied; normal utilization tracking must work without admin access.\n- Normalize to the same endpoint utilization shape used by vLLM and llama-server: active requests, queued requests, cache usage/hit metadata when known, source, freshness, observed time, and optional memory fields.\n- Probe failures return stale or unknown utilization and do not make the endpoint unavailable.\n\nOut of scope:\n- Changing oMLX chat/reasoning behavior.\n- Implementing Rapid-MLX support.\n- Multi-machine shared lease backends.",
+    "acceptance": "1. `go test ./internal/provider/omlx ./internal/provider/... -run 'OMLX.*Utilization|OMLX.*Cassette|Utilization'` passes in replay mode using committed cassettes.\n2. Record mode is gated by `FIZEAU_RECORD_PROVIDER_CASSETTES=1` plus a documented oMLX live-server URL env var and can record against `http://vidar:1235/v1`.\n3. Replay cassettes include `/v1/models`, `/api/status`, a minimal `/v1/chat/completions` request, and under-load `/api/status` evidence when feasible.\n4. Replay parsing extracts active requests, waiting requests, total prompt/completion/cached tokens, cache efficiency, average prefill/generation TPS, model memory used/max, and loaded model identifiers when present.\n5. Admin `/admin/api/stats` support, if implemented, is optional and never required for the base replay tests.\n6. Probe failure tests verify stale/unknown utilization does not mark the provider endpoint unavailable.",
+    "labels": [
+      "area:provider",
+      "kind:test"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:40:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T02:40:00.790950906Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T024000-c0e4de72",
+    "prompt": ".ddx/executions/20260506T024000-c0e4de72/prompt.md",
+    "manifest": ".ddx/executions/20260506T024000-c0e4de72/manifest.json",
+    "result": ".ddx/executions/20260506T024000-c0e4de72/result.json",
+    "checks": ".ddx/executions/20260506T024000-c0e4de72/checks.json",
+    "usage": ".ddx/executions/20260506T024000-c0e4de72/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b9d31351-20260506T024000-c0e4de72"
+  },
+  "prompt_sha": "e3007e6ecbe2c5990bf11a1b17fa5868ee15cbaf88379194f0e9410dbb6dca1e"
+}

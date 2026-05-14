@@ -1,0 +1,89 @@
+{
+  "attempt_id": "20260507T015450-6123098e",
+  "bead_id": "fizeau-d5e91885",
+  "base_rev": "67523758a063649de59bd975650bade8a60bd50b",
+  "created_at": "2026-05-07T01:54:54.418958707Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d5e91885",
+    "title": "Implement versioned FHI formula and claim generator",
+    "description": "After records exist in the benchmark evidence ledger, Fizeau needs a versioned FHI derivation and claim generator that can produce defensible statements like local oMLX Qwen is 6 FHI points behind Opus, or fiz-native is 0.7 TerminalBench points below Claude Code on the same model/subset. This slice owns report derivation from ledger records, not importers.\n\nIn-scope files:\n- cmd/bench fhi or evidence claim subcommands\n- FHI formula/config file under scripts/benchmark or docs/research as appropriate\n- tests with small ledger fixtures covering local-vs-frontier, harness-vs-harness, and insufficient-coverage refusal\n\nOut-of-scope:\n- changing benchmark runners\n- importing new evidence sources\n- changing catalog model power generation directly\n\nImplementation notes:\n- FHI formula must be versioned, list included benchmarks/weights, evidence window, exclusion rules, invalid-run denominator handling, and confidence/coverage notes.\n- Claim generator must refuse or confidence-penalize comparisons when benchmark coverage, formula version, evidence window, scorer, or denominator rules differ.\n- Support benchmark-specific deltas and cross-benchmark FHI rankings separately.",
+    "acceptance": "1. A ledger fixture produces a TerminalBench-specific delta claim with pinned model/provider/benchmark/subset/scorer/reps and source artifact hashes.\n2. A ledger fixture produces a local-vs-frontier FHI claim including Fizeau version, local runtime version, quantization, hardware, provider endpoint, formula version, included benchmarks, and delta.\n3. A fixture with mismatched benchmark coverage causes the claim generator to refuse the comparison or emit an explicit confidence penalty.\n4. Output includes invalid-run counts/classes and denominator handling.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:fhi",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:54:50Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:38:46.151847097Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:52:56.033729144Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T013846-cb9ea534\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":14091640,\"output_tokens\":74725,\"total_tokens\":14166365,\"cost_usd\":0,\"duration_ms\":847601,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:52:56.152716637Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=14166365 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T013846-cb9ea534\",\"bead_id\":\"fizeau-d5e91885\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:53:00.308371173Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:53:00.521744595Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:54:49.925075996Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:54:50.124034513Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T015450-6123098e",
+    "prompt": ".ddx/executions/20260507T015450-6123098e/prompt.md",
+    "manifest": ".ddx/executions/20260507T015450-6123098e/manifest.json",
+    "result": ".ddx/executions/20260507T015450-6123098e/result.json",
+    "checks": ".ddx/executions/20260507T015450-6123098e/checks.json",
+    "usage": ".ddx/executions/20260507T015450-6123098e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-d5e91885-20260507T015450-6123098e"
+  },
+  "prompt_sha": "b6033d418de0cc0965fc4f64ce8dc2a51577d1a407b80c58225b3cb72658ddae"
+}

@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260507T010426-0994bce8",
+  "bead_id": "fizeau-08ff33d4",
+  "base_rev": "f35b6f965e0fb5b1222806d84591a986fe6f31e2",
+  "created_at": "2026-05-07T01:04:30.72503385Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-08ff33d4",
+    "title": "Clean up legacy code-medium and code-high routing names",
+    "description": "Remove code-medium and code-high as primary routing concepts. Preserve compatibility only as explicit ModelRef/catalog aliases or deprecate them with replacement guidance toward --profile and numeric power bounds.",
+    "acceptance": "1. User-facing docs and CLI help present profiles/power bounds as the target interface and do not recommend code-medium/code-high.\n2. code-medium/code-high either resolve as compatibility ModelRef aliases with warnings or fail with actionable replacement guidance, according to the chosen migration policy.\n3. They do not influence profile selection or automatic routing policy.\n4. go test ./internal/modelcatalog ./cmd/fiz -run \"CodeMedium|CodeHigh|Profile|ModelRef|Deprecation\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:catalog",
+      "area:cli",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:04:26Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:04:26.331575502Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:04:26.517366007Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T010426-0994bce8",
+    "prompt": ".ddx/executions/20260507T010426-0994bce8/prompt.md",
+    "manifest": ".ddx/executions/20260507T010426-0994bce8/manifest.json",
+    "result": ".ddx/executions/20260507T010426-0994bce8/result.json",
+    "checks": ".ddx/executions/20260507T010426-0994bce8/checks.json",
+    "usage": ".ddx/executions/20260507T010426-0994bce8/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-08ff33d4-20260507T010426-0994bce8"
+  },
+  "prompt_sha": "351de5f366a47e28c49980c63f94f98e10f920d62b842a8b2ca706088f7e77d7"
+}

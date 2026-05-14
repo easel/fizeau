@@ -1,0 +1,337 @@
+{
+  "attempt_id": "20260512T225504-08316216",
+  "bead_id": "fizeau-b76d6a2c",
+  "base_rev": "af65bca4c2d4d32d1a995a0c207833ec96dfb60b",
+  "created_at": "2026-05-12T22:55:07.095599681Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b76d6a2c",
+    "title": "bench: clean shutdown — kill -TERM sweep reaps the whole process tree",
+    "description": "Killing a sweep parent (run_terminalbench_2_1_sweep.sh PID) does not currently kill its descendant matrix-runner / harbor children. They are reparented to init (PPID=1) and keep executing. Concrete failures this session:\n\n1. **2026-05-11 ~22:30Z** — Killed the local-lane sweep (PID 463900). Vidar matrix-runner child kept running on the dead oMLX server, wasted 70 cells with retry-spam pattern before I noticed.\n\n2. **2026-05-11 ~18:15Z** — Killed the timing-baseline ds4 sweep (PID 942197) after the reasoning-not-supported bug. The matrix-runner became orphan (945491, PPID=1). Then I launched a replacement (991522 → 999500) and a second iteration (975660, orphan). All three were running simultaneously against ds4's single graph worker, contending for the slot and writing to the same report.json paths. Smoke tests timed out because of slot contention. Took ~30 min to notice and clean up.\n\nThe general pattern: any time we `kill -KILL \u003csweep_pid\u003e` to restart with new config (multiplier change, profile fix, server-side issue), one or more children survive. They consume identical work, race the new sweep, and corrupt the per-cell results.\n\nPROPOSED FIX\n\nTwo interlocking pieces:\n\nA. **run_terminalbench_2_1_sweep.sh: trap signals + propagate.** Add a trap handler in the shell script that on SIGTERM/SIGINT/EXIT:\n   - Records the matrix-runner PIDs as they spawn\n   - On signal, sends SIGTERM to each matrix-runner PID; if still alive after 10s, SIGKILL\n   - Then exits\n\nB. **cmd/bench (sweep + matrix subcommands): handle SIGTERM by killing harbor children.** When fiz-bench receives SIGTERM, propagate to in-flight `harbor run` subprocesses (exec.CommandContext already supports this via context cancellation). The existing `cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }` is correct shape; verify it actually fires on parent SIGTERM and not just on context.WithTimeout.\n\nC. **Alternative (single-knob fix): process groups.** Have the sweep script start fiz-bench in its own process group (`setpgid`), and have the kill path send SIGTERM to the entire process group (`kill -TERM -\u003cpgid\u003e`). One signal takes out the whole tree atomically. Simpler than A+B; downside is no graceful per-process shutdown order.\n\nIn-scope files:\n- scripts/benchmark/run_terminalbench_2_1_sweep.sh — trap handler + PID tracking\n- cmd/bench/sweep.go and cmd/bench/matrix.go — signal handling on the Go side (verify existing exec.CommandContext + cmd.Cancel work as intended on SIGTERM, not just context cancel)\n- Tests / integration: confirm a `kill -TERM $sweep_pid` reaps the entire process tree within 30s.\n\nOut-of-scope:\n- Persistent state recovery (sweep resume from interrupted cell). Already handled by --resume + report.json being the durable state.\n- Distinguishing \"user-initiated kill\" from \"supervisor-initiated kill\" — both should cleanly shut down.\n\nACCEPTANCE IS A COMMAND\n\n1. `bash scripts/benchmark/run_terminalbench_2_1_sweep.sh --phase canary --lanes ds4 \u0026` then `kill $!` results in ZERO surviving fiz-bench or harbor processes within 30s (verify via `pgrep -f \"fiz-bench|harbor run\"`).\n\n2. Same scenario but `kill -TERM` — the shutdown is graceful: each in-flight cell's harbor invocation gets SIGTERM (lets it tear down its docker-compose stack via the existing `--delete` finalizer, see cmd/bench/matrix.go cmd.Cancel handler), waits up to 60s for it to finish, then exits.\n\n3. New integration test scripts/benchmark/test_sweep_shutdown.bash spawns a sweep, sends SIGTERM, asserts (a) all sweep-related processes are gone within 60s, (b) report.json files for in-flight cells are either complete or absent (no half-written state).",
+    "acceptance": "1. `TestSweepShutdownKillReapsProcessTree` covers `bash scripts/benchmark/run_terminalbench_2_1_sweep.sh --phase canary --lanes ds4 \u0026` followed by `kill $!`, leaving zero surviving `fiz-bench` or `harbor run` processes within 30s as verified with `pgrep -f \"fiz-bench|harbor run\"`.\n2. `TestSweepShutdownTermGraceful` covers `kill -TERM $!`, proving each in-flight Harbor invocation receives SIGTERM, can run docker-compose teardown through the existing `--delete` finalizer, waits up to 60s, then exits.\n3. `TestSweepShutdownNoOrphans` in `scripts/benchmark/test_sweep_shutdown.bash` spawns a sweep, sends SIGTERM, and asserts all sweep-related processes are gone within 60s.\n4. `TestSweepShutdownReportState` in `scripts/benchmark/test_sweep_shutdown.bash` asserts report.json files for in-flight cells are either complete or absent, with no half-written state.",
+    "parent": "fizeau-1a5353cd",
+    "labels": [
+      "area:benchmark",
+      "kind:reliability",
+      "kind:tooling",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "closing_commit_sha": "09c2f6c9547c2f92d9305b0271a4527e6cbbf317",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"acceptance criteria dropped or altered\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"acceptance criteria dropped or altered\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "Operator reviewed intake block; retry unchanged to keep worker queue moving.",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "needs_human_resolved",
+          "source": "ddx bead human resolve",
+          "summary": "action=retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"acceptance criteria dropped or altered\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "Operator disabled intake rewrites in bead-lifecycle skill and normalized acceptance; retry.",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "needs_human_resolved",
+          "source": "ddx bead human resolve",
+          "summary": "action=retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: canceled: context canceled\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.5\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.5\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.5"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"agent exited without a commit or no_changes_rationale.txt\",\"harness\":\"codex\",\"model\":\"gpt-5.5\",\"reason\":\"context_canceled\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "disruption_detected",
+          "source": "ddx agent execute-loop",
+          "summary": "context_canceled"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.5\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260512T053456-eca6a7ce\",\"bead_id\":\"fizeau-b76d6a2c\",\"rejected_route_pins\":null,\"requested_tier\":\"smart\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=smart model=gpt-5.5 harness=codex"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\nresult_rev=262c49ca1a16707af602242039b3c1e607001898\nbase_rev=262c49ca1a16707af602242039b3c1e607001898\noutcome_reason=no_evidence_produced",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "",
+          "body": "[{\"ac\":1,\"text\":\"`bash scripts/benchmark/run_terminalbench_2_1_sweep.sh --phase canary --lanes ds4 \\u0026` followed by `kill $!` leaves zero surviving `fiz-bench` or `harbor run` processes within 30s, verified with `pgrep -f \\\"fiz-bench|harbor run\\\"`.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":2,\"text\":\"The same scenario with `kill -TERM $!` performs graceful shutdown: each in-flight Harbor invocation receives SIGTERM, can run docker-compose teardown through the existing `--delete` finalizer, waits up to 60s, then exits.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":3,\"text\":\"New integration coverage in `scripts/benchmark/test_sweep_shutdown.bash` spawns a sweep, sends SIGTERM, and asserts all sweep-related processes are gone within 60s.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":4,\"text\":\"The same integration test asserts report.json files for in-flight cells are either complete or absent, with no half-written state.\",\"kind\":\"prose\",\"verifiable\":false}]",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "ac-quality-low",
+          "source": "preclaim-ac-quality",
+          "summary": "score=0.00 threshold=0.50 verifiable=0/4"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"score 0.00 below threshold 0.50 (0/4 verifiable ACs)\",\"intake_outcome\":\"operator_required\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "intake.blocked",
+          "source": "ddx agent execute-loop",
+          "summary": "operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "Operator made ACs mechanically verifiable and cleared stale AC-quality gate metadata; retry.",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "needs_human_resolved",
+          "source": "ddx bead human resolve",
+          "summary": "action=retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.5\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.5\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.5"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260512T063345-1dcef918\",\"harness\":\"codex\",\"model\":\"gpt-5.5\",\"input_tokens\":5797822,\"output_tokens\":19743,\"total_tokens\":5817565,\"cost_usd\":0,\"duration_ms\":712015,\"exit_code\":0}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=5817565 model=gpt-5.5"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.5\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260512T063345-1dcef918\",\"bead_id\":\"fizeau-b76d6a2c\",\"rejected_route_pins\":null,\"requested_tier\":\"smart\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=smart model=gpt-5.5 harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.5\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.5"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=f52e2c6e62d0f62e497e75ea189924f1459b9c27\nbase_rev=110a7520075f25895ac83cd9d3b60a5fdb347f05",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review found failing acceptance test"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.4-mini\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260512T172931-5a068209\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":984149,\"output_tokens\":8875,\"total_tokens\":993024,\"cost_usd\":0,\"duration_ms\":113272,\"exit_code\":0}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=993024 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260512T172931-5a068209\",\"bead_id\":\"fizeau-b76d6a2c\",\"rejected_route_pins\":null,\"requested_tier\":\"smart\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=smart model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "erik",
+          "body": "verification_command=bash scripts/benchmark/test_sweep_shutdown.bash \u0026\u0026 go test ./cmd/bench -run TestSweepShutdownTermGraceful -count=1\nexit_code=0\noutput:\n=== RUN TestSweepShutdownKillReapsProcessTree\n--- PASS TestSweepShutdownKillReapsProcessTree\n=== RUN TestSweepShutdownNoOrphans\n--- PASS TestSweepShutdownNoOrphans\n=== RUN TestSweepShutdownReportState\n--- PASS TestSweepShutdownReportState\nok  \tgithub.com/easel/fizeau/cmd/bench\t1.025s\n",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "no_changes_verified",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes_verified"
+        },
+        {
+          "actor": "erik",
+          "body": "verification_command passed: bash scripts/benchmark/test_sweep_shutdown.bash \u0026\u0026 go test ./cmd/bench -run TestSweepShutdownTermGraceful -count=1\nrationale: verification_command: bash scripts/benchmark/test_sweep_shutdown.bash \u0026\u0026 go test ./cmd/bench -run TestSweepShutdownTermGraceful -count=1\n\nThe current worktree already satisfies the bead's named shutdown checks:\n- `TestSweepShutdownKillReapsProcessTree`\n- `TestSweepShutdownNoOrphans`\n- `TestSweepShutdownReportState`\n- `TestSweepShutdownTermGraceful`\n\nNo code changes were needed in this execution pass.\nresult_rev=09c2f6c9547c2f92d9305b0271a4527e6cbbf317\nbase_rev=09c2f6c9547c2f92d9305b0271a4527e6cbbf317\noutcome_reason=no_changes",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "already_satisfied"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review found structural acceptance test failing"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.4-mini\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260512T223933-2fe233a3\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1485612,\"output_tokens\":6531,\"total_tokens\":1492143,\"cost_usd\":0,\"duration_ms\":110668,\"exit_code\":0}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1492143 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260512T223933-2fe233a3\",\"bead_id\":\"fizeau-b76d6a2c\",\"rejected_route_pins\":null,\"requested_tier\":\"smart\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=smart model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx agent execute-loop",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\nresult_rev=7f93c955e19f9519416850d2a741077b92e47157\nbase_rev=7f93c955e19f9519416850d2a741077b92e47157\noutcome_reason=no_evidence_produced",
+          "created_at": "0001-01-01T00:00:00Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "2026-05-12T22:52:19.142223139Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review found shell acceptance still failing"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-12T22:55:04.111394296Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-no-changes-count": 3,
+      "session_id": "eb-d8d7d4aa"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260512T225504-08316216",
+    "prompt": ".ddx/executions/20260512T225504-08316216/prompt.md",
+    "manifest": ".ddx/executions/20260512T225504-08316216/manifest.json",
+    "result": ".ddx/executions/20260512T225504-08316216/result.json",
+    "checks": ".ddx/executions/20260512T225504-08316216/checks.json",
+    "usage": ".ddx/executions/20260512T225504-08316216/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b76d6a2c-20260512T225504-08316216"
+  },
+  "prompt_sha": "6ceb870708d57888590d5177fa54d035c81f10ea4e9a67e9bc52aae65810aa0c"
+}

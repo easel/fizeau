@@ -1,0 +1,20 @@
+{
+  "bead_id": "fizeau-69570dcd",
+  "attempt_id": "20260506T223909-81893365",
+  "base_rev": "f26fcc0a69f7da1c15b80dcefda1af8d2684e471",
+  "result_rev": "f26fcc0a69f7da1c15b80dcefda1af8d2684e471",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)",
+  "session_id": "eb-ae98b36b",
+  "duration_ms": 1,
+  "exit_code": 1,
+  "error": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260506T223909-81893365",
+  "prompt_file": ".ddx/executions/20260506T223909-81893365/prompt.md",
+  "manifest_file": ".ddx/executions/20260506T223909-81893365/manifest.json",
+  "result_file": ".ddx/executions/20260506T223909-81893365/result.json",
+  "started_at": "2026-05-06T22:39:10.619260609Z",
+  "finished_at": "2026-05-06T22:39:10.620807232Z"
+}

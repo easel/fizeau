@@ -1,0 +1,122 @@
+{
+  "attempt_id": "20260507T004310-86820580",
+  "bead_id": "fizeau-1e090b7d",
+  "base_rev": "59ee7e88677ae5f211e110c1e805e222d22cbdeb",
+  "created_at": "2026-05-07T00:43:12.683605048Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1e090b7d",
+    "title": "Rename native harness identity in code and CLI",
+    "description": "Rename the native Fizeau harness identity from agent to fiz in service code, harness registration, route-status/list-models outputs, and CLI help strings. Remove native agent aliasing while preserving non-native historical references. Keep the implementation scoped to runtime behavior and any direct tests needed to prove it.",
+    "acceptance": "1. Native harness registration and service routing use fiz as the public/native harness name. 2. Explicit Harness: \"fiz\" executes through the native loop. 3. Explicit Harness: \"agent\" no longer selects the native loop and returns the existing typed incompatible/unknown harness error. 4. CLI/list-models/route-status surfaces show fiz for the native harness.",
+    "parent": "fizeau-61668fd3",
+    "labels": [
+      "phase:build",
+      "area:contract",
+      "area:harness",
+      "area:rename",
+      "kind:breaking",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:43:10Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:20:39.081219276Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:29:04.749262971Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T002039-5cce86db\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":12559568,\"output_tokens\":30625,\"total_tokens\":12590193,\"cost_usd\":0,\"duration_ms\":502310,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:29:04.865670943Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=12590193 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T002039-5cce86db\",\"bead_id\":\"fizeau-1e090b7d\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:29:08.806564388Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:29:09.027237343Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The native harness rename is present, but the merged diff also regresses ResolveRoute by coercing Profile into ModelRef, changing routing semantics for harness-pinned and smart-profile requests.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=92218\noutput_bytes=746\nelapsed_ms=115298",
+          "created_at": "2026-05-07T00:33:03.699727557Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T00:33:03.897871094Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe native harness rename is present, but the merged diff also regresses ResolveRoute by coercing Profile into ModelRef, changing routing semantics for harness-pinned and smart-profile requests.\nresult_rev=ebedafd89cc9bd71f01aaf7490ae4e4846b071d9\nbase_rev=89bd1b9643832473e0b038f907ee12ca8e2697cd",
+          "created_at": "2026-05-07T00:33:04.215738445Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:43:10.721357463Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:43:10.922063659Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T004310-86820580",
+    "prompt": ".ddx/executions/20260507T004310-86820580/prompt.md",
+    "manifest": ".ddx/executions/20260507T004310-86820580/manifest.json",
+    "result": ".ddx/executions/20260507T004310-86820580/result.json",
+    "checks": ".ddx/executions/20260507T004310-86820580/checks.json",
+    "usage": ".ddx/executions/20260507T004310-86820580/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-1e090b7d-20260507T004310-86820580"
+  },
+  "prompt_sha": "f0b01bd66d0b4f921059e6f12d3f150dc61130c5bd1b9a16fb81d774050523b6"
+}

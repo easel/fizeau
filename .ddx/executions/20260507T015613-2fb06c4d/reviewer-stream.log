@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The script now runs only `fiz` and the dry-run/profile checks pass, but the four `fiz-harness-*` lanes do not set any fiz harness pin. They collapse to the same provider/model routing, so the requested wrapper-lane comparison is not actually implemented.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The `fiz` Harbor adapter never forwards `FIZEAU_HARNESS`, `FIZEAU_MODEL_REF`, or `FIZEAU_REASONING` from the medium comparison profiles. As a result, the new `fiz-harness-*` rows are only labels; they do not switch fiz onto Claude/Codex/pi/opencode wrapper lanes and therefore do not implement the bead's core comparison behavior.",
+      "location": "scripts/benchmark/harness_adapters/fiz.py:26"
+    },
+    {
+      "severity": "block",
+      "summary": "Representative `fiz-harness-*` profiles encode only OpenRouter provider/model fields. This `codex` lane is functionally identical to the `pi` and `opencode` lanes apart from its ID/comment, so the matrix does not produce distinct harness-pinned cells.",
+      "location": "scripts/benchmark/profiles/fiz-harness-codex-gpt-5-4-mini.yaml:3"
+    },
+    {
+      "severity": "warn",
+      "summary": "The new tests prove the script pins Harbor to `--harnesses=fiz`, defaults `HARBOR_FORCE_BUILD=1`, and enumerates the six labels, but they never assert that the harness-labeled profiles generate distinct fiz route pins. This let the mislabeled duplicate lanes pass.",
+      "location": "cmd/bench/medium_terminalbench_comparison_test.go:25"
+    }
+  ]
+}
+```

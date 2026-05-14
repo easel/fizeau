@@ -1,0 +1,57 @@
+{
+  "attempt_id": "20260512T131647-210e9d95",
+  "bead_id": "fizeau-c2a23daa",
+  "base_rev": "ea35a573d8efd74dc861eeaa8d7a9437752b4d56",
+  "created_at": "2026-05-12T13:16:49.37539073Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.5",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-c2a23daa",
+    "title": "OR sub-provider expansion: openrouter/\u003cmodel\u003e@\u003csub_provider\u003e in snapshot",
+    "description": "DEFERRED. Filed proposed-status for future work.\n\nOpenRouter routes a single model (e.g. qwen/qwen3.6-27b) to multiple\nupstream sub-providers (DeepInfra, Together, Fireworks, etc.). Each\nhas its own pricing, latency, context window, and rate limits. For\nhigh-fidelity routing, the snapshot should distinguish them.\n\n## Syntax (per ADR-012 naming convention)\n\n`\u003cprovider\u003e/\u003cmodel\u003e@\u003csub_provider\u003e`. Examples:\n- `openrouter/qwen/qwen3.6-27b@deepinfra`\n- `openrouter/qwen/qwen3.6-27b@together`\n- `openrouter/anthropic/claude-sonnet-4-6@anthropic`\n\n## Source\n\nOR's `/api/v1/models/\u003cid\u003e/endpoints` returns:\n```\n{\n  \"data\": {\n    \"endpoints\": [\n      {\"provider_name\": \"DeepInfra\", \"context_length\": ..., ...},\n      {\"provider_name\": \"Together\", \"context_length\": ..., ...}\n    ]\n  }\n}\n```\n\n## Why deferred\n\n- Per-OR-model API call (N+1 problem; OR has hundreds of models)\n- Cardinality blowup in the snapshot (each model becomes N entries)\n- Requires routing-layer changes to actually USE the sub-provider\n  selection\n- Marginal value for current benchmark-mode use case (we're not\n  routing through OR at scale)\n\n## Re-evaluate when\n\n- We ship cost-based routing (ADR-011, bead E2) and quota signals\n  start mattering across OR sub-providers\n- We benchmark OR-Qwen3 across multiple upstream sub-providers and\n  see measurable performance differences\n- An operator explicitly requests it\n\n## Depends on\n\n- M2 (snapshot assembler) — extension, not parallel implementation",
+    "acceptance": "DEFERRED — no implementation in this bead. Promoted from proposed\nto open when one of the re-evaluation triggers fires.",
+    "labels": [
+      "area:routing",
+      "area:cache",
+      "kind:feature",
+      "kind:future"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-12T13:14:04Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2476731",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-12T13:16:47.790694355Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-12T13:14:04.323864803Z",
+      "spec-id": "ADR-012"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-012",
+      "path": "docs/helix/02-design/adr/ADR-012-per-source-on-disk-cache.md",
+      "title": "ADR-012: Per-Source On-Disk Cache for Discovery + Runtime Signals"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260512T131647-210e9d95",
+    "prompt": ".ddx/executions/20260512T131647-210e9d95/prompt.md",
+    "manifest": ".ddx/executions/20260512T131647-210e9d95/manifest.json",
+    "result": ".ddx/executions/20260512T131647-210e9d95/result.json",
+    "checks": ".ddx/executions/20260512T131647-210e9d95/checks.json",
+    "usage": ".ddx/executions/20260512T131647-210e9d95/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-c2a23daa-20260512T131647-210e9d95"
+  },
+  "prompt_sha": "a4ac88f9b2c6f6ca95f2da4516a6fe60f17821c3b7d653c5db3c36b038aeca57"
+}

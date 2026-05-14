@@ -1,0 +1,103 @@
+{
+  "attempt_id": "20260508T185436-48823cb0",
+  "bead_id": "fizeau-bd5193ca",
+  "base_rev": "c205c788fdcefae3437b6449c8eaadeeaaa31390",
+  "created_at": "2026-05-08T18:54:36.826529128Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 9
+  },
+  "bead": {
+    "id": "fizeau-bd5193ca",
+    "title": "Fix fiz version JSON output",
+    "description": "Context:\n`fiz --version` currently exists but local builds print incomplete metadata such as `fiz dev (commit , built )`. Benchmark output roots are going to be keyed by the fiz version, so the CLI needs a stable machine-readable version surface before benchmark directory/version guards are implemented.\n\nRequired behavior:\n- Preserve the existing `fiz --version` flag and `fiz version` command behavior for humans.\n- Add `fiz version --json` that prints parseable JSON with at least: `version`, `commit`, `dirty`, and `built`.\n- For release builds, use existing ldflags (`Version`, `GitCommit`, `BuildTime`).\n- For local builds where ldflags are empty/dev, compute best-effort metadata from Go build info and/or the git checkout so `commit` is not empty when run from a repository checkout.\n- Dirty state should reflect uncommitted work in the repository when computed from git.\n\nIn-scope files:\n- `cmd/fiz/main.go` and tests\n- `agentcli/run.go` and tests for version command/flag behavior\n- small helper files under `internal/` only if needed to avoid duplicating version logic\n\nOut-of-scope:\n- benchmark output directory restructuring\n- benchmark result consolidation/indexing\n- changing benchmark runner resume behavior",
+    "acceptance": "1. `go test ./cmd/fiz ./agentcli` passes.\n2. `go run ./cmd/fiz --version` prints a human-readable version string with non-empty commit metadata when run from this git checkout.\n3. `go run ./cmd/fiz version --json` prints valid JSON containing non-empty `version` and `commit` fields plus a boolean `dirty` field.\n4. Existing `fiz version` and `fiz --version` behavior remains backward-compatible for human output.",
+    "labels": [
+      "area:cli",
+      "area:benchmark",
+      "kind:bug"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-08T17:54:12Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1160870",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"Well-scoped task bead with clear context, concrete acceptance criteria, and explicit in/out-of-scope boundaries. Minor gaps: (1) no explicit test coverage requirement for the --json flag itself in acceptance criteria (only 'go test passes', not 'tests cover new JSON path'); (2) 'best-effort metadata' for local builds is underspecified — no guidance on precedence (build info vs git, fallback values if neither available); (3) acceptance criterion 2 tests --version human output but does not specify what 'non-empty commit metadata' means (hash length, format); (4) no mention of error behavior if git is unavailable in a non-repository context (e.g., installed binary outside a checkout).\",\"score\":88,\"suggested_fixes\":[\"Add an acceptance criterion explicitly testing the --json output schema: 'go run ./cmd/fiz version --json | jq -e .dirty' exits 0.\",\"Specify fallback precedence for local build metadata: prefer git rev-parse HEAD, fall back to debug.ReadBuildInfo vcs.revision, fall back to 'unknown'.\",\"Clarify commit format expectation (e.g., full 40-char SHA or short 7-char) to avoid ambiguity between implementations.\",\"Add an out-of-scope or explicit behavior note for non-git environments (installed binary): 'commit may be empty string, dirty must be false'.\"],\"waivers_applied\":[]}",
+          "created_at": "2026-05-08T17:56:38.104415941Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "score=88"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-08T18:12:03.071987364Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260508T175640-b12741e5\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":61,\"output_tokens\":39256,\"total_tokens\":39317,\"cost_usd\":2.5934314000000005,\"duration_ms\":921444,\"exit_code\":0}",
+          "created_at": "2026-05-08T18:12:03.078072567Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=39317 cost_usd=2.5934 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-08T18:30:01.028990654Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260508T181204-20d01e6d\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":68,\"output_tokens\":46753,\"total_tokens\":46821,\"cost_usd\":2.6830718000000005,\"duration_ms\":1075429,\"exit_code\":0}",
+          "created_at": "2026-05-08T18:30:01.033570024Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=46821 cost_usd=2.6831 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[],\"requested_min_power\":7}",
+          "created_at": "2026-05-08T18:45:00.209532861Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260508T183001-483c8a6e\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":54,\"output_tokens\":32411,\"total_tokens\":32465,\"cost_usd\":1.7379311000000004,\"duration_ms\":897907,\"exit_code\":0}",
+          "created_at": "2026-05-08T18:45:00.213785857Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=32465 cost_usd=1.7379 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[],\"requested_min_power\":8}",
+          "created_at": "2026-05-08T18:54:35.244374381Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-08T17:54:12.000458321Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260508T185436-48823cb0",
+    "prompt": ".ddx/executions/20260508T185436-48823cb0/prompt.md",
+    "manifest": ".ddx/executions/20260508T185436-48823cb0/manifest.json",
+    "result": ".ddx/executions/20260508T185436-48823cb0/result.json",
+    "checks": ".ddx/executions/20260508T185436-48823cb0/checks.json",
+    "usage": ".ddx/executions/20260508T185436-48823cb0/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-bd5193ca-20260508T185436-48823cb0"
+  },
+  "prompt_sha": "a9b2a7493e73d942b74d80b4fdb62f647f12f8f921ee53f38b96873bee7a84f2"
+}

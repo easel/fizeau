@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260502T184817-840a41cd",
+  "bead_id": "agent-3bb96bf5",
+  "base_rev": "ff23c880616baa60821370c4597ecea7a95416f3",
+  "created_at": "2026-05-02T18:48:17.583601495Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-3bb96bf5",
+    "title": "CONTRACT-003: add Role + CorrelationID + Power for downstream observability and DDx-side retry/escalation",
+    "description": "DDx (downstream) needs three contract additions to express retry/escalation and reviewer-pairing intent without becoming a router itself. The additions are pure observability + one return field; whether and how Fizeau evolves role/correlation-aware routing intelligence over time is a Fizeau-internal decision and is NOT specified here.\n\n## Background\n\nDDx today imports github.com/DocumentDrivenDX/fizeau (CONTRACT-003 at docs/helix/02-design/contracts/CONTRACT-003-ddx-agent-service.md). To implement Story 10's automatic escalation + reviewer pairing without DDx becoming a router (DDx must not pin Provider/Model — the spec calls that out as anti-pattern at line 374), DDx needs:\n\n1. To know the **power** of the model that was actually dispatched, so it can request 'next call must be at least one rung stronger' via MinPower without importing catalog code into DDx.\n2. To **tag** calls with what kind of work they're doing (Role) so Fizeau, telemetry consumers, and session log readers can distinguish implementer / reviewer / decomposer / etc.\n3. To **link** calls that share work context (CorrelationID — e.g., 'bead_123:attempt_4') so reviewer + implementer + retry attempts can be joined in logs and aggregations.\n\nDay 1 these are PURE observability — Fizeau's routing logic is unchanged. Future Fizeau evolution may use Role/CorrelationID for routing decisions; that's separate work, not specified by this contract change.\n\n## What changes\n\nExecuteRequest gains:\n- Role string — normalized: lowercased, alphanumeric+hyphen only, max 64 chars; reject invalid pre-dispatch with typed RoleNormalizationError. Empty = unset.\n- CorrelationID string — normalized: printable ASCII (no control chars, no whitespace except hyphen/colon/underscore), max 256 chars; reject invalid with typed CorrelationIDNormalizationError. Empty = unset.\n\nRouteRequest gains the same two fields with the same normalization (parity with Execute so ResolveRoute previews don't diverge).\n\nServiceRoutingActual gains:\n- Power int — catalog-projected power value (per § Catalog Power Projection at line 983) for the actually-dispatched Model. 0 means unknown/exact-pin-only when applicable.\n\nCONTRACT-003 reserved-cross-tool metadata keys list (today: produces_artifact, media_type) extends with:\n- role\n- correlation_id\nCollision behavior: top-level field wins; emit MetadataKeyCollision warning event when caller also sets Metadata['role'] or Metadata['correlation_id']. Future versions may reject duplicates.\n\nEcho behavior: Role + CorrelationID echoed into Final + RoutingDecision event.Metadata, plus session log header (one line per session). NOT echoed into per-event text_delta metadata to avoid per-token bloat (existing Metadata echo path on text_delta still applies for caller-supplied metadata that is NOT these reserved keys).\n\nSelection precedence (line 374) is UNCHANGED for Day 1. Role and CorrelationID are observational only; they do NOT enter the precedence chain. If a future change adds routing-affecting behavior keyed on these fields, the precedence section must be amended at that time.\n\nRouting Policy Test Contract (line 1448) gains minimum statements:\n- Role + CorrelationID are echoed into RoutingDecision + Final events\n- Role + CorrelationID are echoed into the session-log header\n- Role + CorrelationID are NOT echoed into text_delta event metadata\n- Role + CorrelationID never affect eligibility filtering Day 1\n- Without a CorrelationID, routing is unchanged from baseline\n- ResolveRoute and Execute observe identical routing policy for the same correlation-aware request (Day 1: both ignore for routing)\n- Invalid Role / CorrelationID values rejected pre-dispatch with the typed errors\n- ServiceRoutingActual.Power reflects the catalog-projected power of the dispatched Model\n- When caller sets both top-level Role and Metadata['role'], top-level wins and a MetadataKeyCollision warning is emitted\n\n## What this enables downstream (informational)\n\nDDx will use these fields to:\n- Compute next-attempt MinPower from previous.RoutingActual.Power + rung_step (cost-tier escalation)\n- Tag implementer + reviewer calls with Role for telemetry; share CorrelationID for trace-join\n- Set MinPower = implementer.RoutingActual.Power + 1 on the reviewer call (best-effort 'more powerful'); 'different provider' is best-effort emergent, not promised\n- When same-provider results on review, log a degradation event for operator visibility\n\nDDx will NOT:\n- Pin Provider/Model\n- Implement any tiebreaker keyed on CorrelationID\n- Define role-specific routing policy\n\n## Out of scope\n\n- Role-specific Fizeau routing policy (config registry, per-role defaults, etc.)\n- Correlation-aware routing intelligence (tiebreakers, diversity bias, learned preferences)\n- Multi-tenant correlation namespacing\n- Cancellation semantics for any future correlation state\n- DDx→Fizeau outcome-feedback API\n- Anything keyed on Role or CorrelationID that affects routing\n\nIf Fizeau evolves any of the above, those are separate proposals with their own design docs (correlation-aware routing must specify state lifecycle, multi-tenant boundaries, cancellation behavior, ResolveRoute parity, and full test contract — none of that is in scope here).",
+    "acceptance": "1. CONTRACT-003 amended with the three additions above and the test-contract additions. 2. ExecuteRequest, RouteRequest, ServiceRoutingActual updated in Go types. 3. Normalization validators + typed errors implemented. 4. Echo paths added (RoutingDecision, Final, session-log header). 5. Routing Policy Test Contract tests added per the minimum statements. 6. Tagged release published (e.g., v0.10.0 or appropriate version). 7. ddx repo can import the tagged release and access the new fields without errors.",
+    "labels": [
+      "contract:003",
+      "area:fizeau",
+      "downstream:ddx",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-02T18:48:17Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3446765",
+      "execute-loop-heartbeat-at": "2026-05-02T18:48:17.109352152Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260502T184817-840a41cd",
+    "prompt": ".ddx/executions/20260502T184817-840a41cd/prompt.md",
+    "manifest": ".ddx/executions/20260502T184817-840a41cd/manifest.json",
+    "result": ".ddx/executions/20260502T184817-840a41cd/result.json",
+    "checks": ".ddx/executions/20260502T184817-840a41cd/checks.json",
+    "usage": ".ddx/executions/20260502T184817-840a41cd/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-3bb96bf5-20260502T184817-840a41cd"
+  },
+  "prompt_sha": "b135d7af14a00d08d49a10e963011edc540f35a801106eb4bf0d29195097b851"
+}

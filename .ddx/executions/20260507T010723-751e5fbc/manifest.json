@@ -1,0 +1,143 @@
+{
+  "attempt_id": "20260507T010723-751e5fbc",
+  "bead_id": "fizeau-60171fa8",
+  "base_rev": "fe4a2f1ef050c860686345f7dc22a0698ce63b7b",
+  "created_at": "2026-05-07T01:07:24.72385653Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-60171fa8",
+    "title": "Inventory provider utilization and performance signals",
+    "description": "Document and codify which providers expose utilization, performance, context, and cache-related routing evidence. Cover vLLM, Rapid-MLX, oMLX, llama-server, LM Studio, OpenRouter/OpenAI-compatible providers, and subprocess harnesses.",
+    "acceptance": "1. A provider-signal matrix documents utilization, performance, context length, cache indicators, source endpoints, freshness rules, and unknown-signal fallback.\n2. The matrix distinguishes eligibility-critical signals from ranking-only signals.\n3. Existing provider probes are mapped to the matrix, and missing probes are listed as explicit follow-up beads.\n4. go test ./internal/provider/... -run \"Utilization|Perf|Context|Probe\" passes or the bead notes which providers are documentation-only for this step.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:07:23Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:12.315329713Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:14.567859679Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=34dd44abb0efa27b78fa838cbe8287ce1b3c9126\nbase_rev=34dd44abb0efa27b78fa838cbe8287ce1b3c9126\nretry_after=2026-05-07T04:39:14Z",
+          "created_at": "2026-05-06T22:39:14.901581538Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:59:50.256821909Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:02:31.772884578Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T005950-b6a7599f\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1783515,\"output_tokens\":13932,\"total_tokens\":1797447,\"cost_usd\":0,\"duration_ms\":159633,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:02:31.893001402Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1797447 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T005950-b6a7599f\",\"bead_id\":\"fizeau-60171fa8\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:02:35.769760136Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:02:35.975130883Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The matrix itself is present, but the bead does not satisfy the tracker/test acceptance requirements: the listed follow-ups are not actual tracked beads, and the bead record does not capture the required test result or documentation-only scope.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15297\noutput_bytes=1111\nelapsed_ms=51353",
+          "created_at": "2026-05-07T01:04:22.991083666Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T01:04:23.111578198Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe matrix itself is present, but the bead does not satisfy the tracker/test acceptance requirements: the listed follow-ups are not actual tracked beads, and the bead record does not capture the required test result or documentation-only scope.\nresult_rev=7c6607de9cd15e05eab844c285b5371fcfd3044d\nbase_rev=90bfdbb0a1432838c7f249fd72177f0dc008de2f",
+          "created_at": "2026-05-07T01:04:23.284387875Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:07:22.907904173Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:07:23.105888174Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T010723-751e5fbc",
+    "prompt": ".ddx/executions/20260507T010723-751e5fbc/prompt.md",
+    "manifest": ".ddx/executions/20260507T010723-751e5fbc/manifest.json",
+    "result": ".ddx/executions/20260507T010723-751e5fbc/result.json",
+    "checks": ".ddx/executions/20260507T010723-751e5fbc/checks.json",
+    "usage": ".ddx/executions/20260507T010723-751e5fbc/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-60171fa8-20260507T010723-751e5fbc"
+  },
+  "prompt_sha": "1440064a5118fc380eb811d49c1f041c2ca80fc3db49aa211f9f576155dda1cd"
+}

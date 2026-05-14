@@ -1,0 +1,87 @@
+{
+  "attempt_id": "20260507T013022-a848e1a9",
+  "bead_id": "fizeau-89312cef",
+  "base_rev": "797e0de3549b21c9517c11888b165954bfa9647e",
+  "created_at": "2026-05-07T01:30:27.052708737Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-89312cef",
+    "title": "Document subprocess harness evidence signals",
+    "description": "Inventory the routing evidence available from subprocess harnesses such as codex and claude. Document which signals are eligibility-critical versus ranking-only, what freshness rules apply, and which live-utilization probes are intentionally absent in this step.",
+    "acceptance": "1. The matrix or companion note classifies subprocess harness evidence sources by eligibility-critical versus ranking-only use. 2. Freshness rules and unknown-signal fallback are documented. 3. Any missing live-utilization probe is listed as an explicit follow-up bead or documented as unavailable.",
+    "parent": "fizeau-60171fa8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:30:22Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:26:37.222637271Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-89312cef\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:26:40.648950241Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"creating isolated worktree: git worktree add: Preparing worktree (detached HEAD a3297371)\\nerror: unable to create file .cache/go-build/8b/8b8d4c3a08de419f6b37bd9a27a7bdb3bf1a64eafb2b8e1de9459f02566e055c-d: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8b93b3d49f49565ceedbd51c04414be744914b24165ec3b15d1779c455382bf4-a: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8ba3d616a3bf227717771b96cc6810897b0fd3e23111265eb8b9f658a279a07e-a: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8ba6d5021fa517619dd0fcf338600614f1778fdf59fa85c3ff0103b3eb9c19f6-a: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8bac5607c8bda66a3bf3a0c052e139d215a020c174d35628f54f9e564af5ec92-a: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8bb5853f93f95fbb84b072f687041a110c22bbc555b7be127c16ec43dd5065cd-a: No such file or directory\\nerror: unable to create file .cache/go-build/8b/8bb881846ff60b96961f6a35c59e2e68479849beb4ec0e82a08376d5eb73b9a4-a: No such file or directory\\nerror: unable to create file .cache/go-build/ab/abbab3be05b5e10a76215766b3dbefc5ed6a6fe4cad47f8cb04985e43ec5cb37-a: No such file or directory\\nerror: unable to create file .cache/go-build/ab/abbc8f7896b2e8705b580fc435a9d45f97674410381c325107fb226d4ff4f6ec-a: No such file or directory\\nfatal: cannot create directory at '.cache/go-build/ac': No such file or directory: exit status 128\",\"rationale\":\"Execution failed before any bead work ran: isolated worktree creation aborted because git could not create missing .cache/go-build directories. This looks like an environment/setup failure rather than a code or test failure.\",\"recommended_action\":\"retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Ensure the worktree bootstrap creates or excludes .cache/go-build before isolation, or pre-seeds the cache directory in the workspace.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T01:26:50.226216213Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "transport: retry"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD a3297371)\nerror: unable to create file .cache/go-build/8b/8b8d4c3a08de419f6b37bd9a27a7bdb3bf1a64eafb2b8e1de9459f02566e055c-d: No such file or directory\nerror: unable to create file .cache/go-build/8b/8b93b3d49f49565ceedbd51c04414be744914b24165ec3b15d1779c455382bf4-a: No such file or directory\nerror: unable to create file .cache/go-build/8b/8ba3d616a3bf227717771b96cc6810897b0fd3e23111265eb8b9f658a279a07e-a: No such file or directory\nerror: unable to create file .cache/go-build/8b/8ba6d5021fa517619dd0fcf338600614f1778fdf59fa85c3ff0103b3eb9c19f6-a: No such file or directory\nerror: unable to create file .cache/go-build/8b/8bac5607c8bda66a3bf3a0c052e139d215a020c174d35628f54f9e564af5ec92-a: No such file or directory\nerror: unable to create file .cache/go-build/8b/8bb5853f93f95fbb84b072f687041a110c22bbc555b7be127c16ec43dd5065cd-a: No such file or directory\nerror: unable to create file .cache/go-build/8b/8bb881846ff60b96961f6a35c59e2e68479849beb4ec0e82a08376d5eb73b9a4-a: No such file or directory\nerror: unable to create file .cache/go-build/ab/abbab3be05b5e10a76215766b3dbefc5ed6a6fe4cad47f8cb04985e43ec5cb37-a: No such file or directory\nerror: unable to create file .cache/go-build/ab/abbc8f7896b2e8705b580fc435a9d45f97674410381c325107fb226d4ff4f6ec-a: No such file or directory\nfatal: cannot create directory at '.cache/go-build/ac': No such file or directory: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-07T01:26:50.332767295Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:30:22.391925162Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:30:22.573057143Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T013022-a848e1a9",
+    "prompt": ".ddx/executions/20260507T013022-a848e1a9/prompt.md",
+    "manifest": ".ddx/executions/20260507T013022-a848e1a9/manifest.json",
+    "result": ".ddx/executions/20260507T013022-a848e1a9/result.json",
+    "checks": ".ddx/executions/20260507T013022-a848e1a9/checks.json",
+    "usage": ".ddx/executions/20260507T013022-a848e1a9/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-89312cef-20260507T013022-a848e1a9"
+  },
+  "prompt_sha": "edfb608825d2d934e7c8422a4ac18c18940daad5ed2ad578007f6540c1334208"
+}

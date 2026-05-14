@@ -1,0 +1,23 @@
+{
+  "bead_id": "fizeau-bd5193ca",
+  "attempt_id": "20260508T183001-483c8a6e",
+  "base_rev": "e9e33bba16bbdc4e2660e394b9e7a6b57e891ad7",
+  "result_rev": "ee71983507dfed60420142f23d8b5f29c7348e20",
+  "outcome": "task_succeeded",
+  "status": "success",
+  "detail": "success",
+  "harness": "claude",
+  "model": "sonnet",
+  "session_id": "eb-adaa452b",
+  "duration_ms": 897907,
+  "tokens": 32465,
+  "cost_usd": 1.7379311000000004,
+  "exit_code": 0,
+  "execution_dir": ".ddx/executions/20260508T183001-483c8a6e",
+  "prompt_file": ".ddx/executions/20260508T183001-483c8a6e/prompt.md",
+  "manifest_file": ".ddx/executions/20260508T183001-483c8a6e/manifest.json",
+  "result_file": ".ddx/executions/20260508T183001-483c8a6e/result.json",
+  "usage_file": ".ddx/executions/20260508T183001-483c8a6e/usage.json",
+  "started_at": "2026-05-08T18:30:02.299331715Z",
+  "finished_at": "2026-05-08T18:45:00.207008113Z"
+}

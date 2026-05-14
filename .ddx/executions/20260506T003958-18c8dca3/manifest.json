@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260506T003958-18c8dca3",
+  "bead_id": "fizeau-c58969b6",
+  "base_rev": "d9d912801092c5fd3d7479051d06de076732009d",
+  "created_at": "2026-05-06T00:39:59.156135533Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-c58969b6",
+    "title": "Implement sticky utilization-aware local routing",
+    "description": "Coordinate the spec and implementation work for sticky utilization-aware routing across local OpenAI-compatible providers. The target behavior is: provider type drives observability; vLLM and llama-server expose normalized endpoint utilization; new long-running worker sequences choose the least-loaded equivalent local endpoint; requests in the same sequence stay pinned to that endpoint; route-status/session evidence expose sticky and utilization facts; multi-machine correctness is tracked separately through shared lease design. This epic owns decomposition only; child beads carry implementation scope and acceptance.",
+    "acceptance": "1. All child beads are closed with evidence. 2. docs/helix/01-frame/features/FEAT-003-providers.md and FEAT-004-model-routing.md include acceptance criteria for provider-owned vLLM/llama-server utilization, go-vcr real-server cassettes, sticky same-key routing, and different-key load distribution. 3. go test ./... passes after implementation beads land.",
+    "labels": [
+      "area:routing",
+      "kind:epic"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T00:39:56Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T00:39:56.605040896Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T003958-18c8dca3",
+    "prompt": ".ddx/executions/20260506T003958-18c8dca3/prompt.md",
+    "manifest": ".ddx/executions/20260506T003958-18c8dca3/manifest.json",
+    "result": ".ddx/executions/20260506T003958-18c8dca3/result.json",
+    "checks": ".ddx/executions/20260506T003958-18c8dca3/checks.json",
+    "usage": ".ddx/executions/20260506T003958-18c8dca3/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-c58969b6-20260506T003958-18c8dca3"
+  },
+  "prompt_sha": "1f7b4f675469076a5bcb966293da12cd4b7793bef019efe228e1e95c9f8b2019"
+}

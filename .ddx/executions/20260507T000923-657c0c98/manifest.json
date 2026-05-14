@@ -1,0 +1,82 @@
+{
+  "attempt_id": "20260507T000923-657c0c98",
+  "bead_id": "fizeau-83b7cc1f",
+  "base_rev": "9a66486d1942c2ea632f8be273ddfe0bc03f98f5",
+  "created_at": "2026-05-07T00:09:24.146070774Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-83b7cc1f",
+    "title": "Fix session logger close race for final override events",
+    "description": "PROBLEM\nA completed Fizeau/DDx run can print a warning after the agent succeeds:\n\nWARN session logger: write error err=\"write .ddx/agent-logs/svc-1778103547795097343.jsonl: file already closed\"\n\nThe observed run completed its command_execution, created detached-HEAD commit 50ba08b, and produced a final response. The warning is post-run session-log persistence noise, but it can also mean a late routing-quality override event was not persisted to the per-session JSONL log. That weakens UsageReport/routing-quality reconstruction even though the user-visible execution succeeded.\n\nROOT CAUSE WITH FILE:LINE\nservice_session_log.go:34 opens the service-owned session logger and service_session_log.go:91 writes terminal session.end events through the same logger. service_execute.go:423 defers final write/close from the runExecute goroutine and service_execute.go:436 closes the logger as soon as runExecute unwinds. service_taillog.go:153 handles final-event fanout and service_taillog.go:163 writes an override event to the same serviceSessionLog from the fanout goroutine immediately before forwarding the final event. That fanout write can race with runExecute closing the logger. internal/session/logger.go:93 closes the underlying file, but internal/session/logger.go:97-100 leaves l.file non-nil, so any late Write reaches internal/session/logger.go:85 and logs \"session logger: write error\" against a closed file.\n\nPROPOSED FIX\nMake service session-log ownership deterministic so all session-log events that belong to an Execute call are persisted before the logger is closed. Prefer moving or synchronizing override-event persistence so the final-event fanout cannot write to a logger after runExecute closes it. Add a defensive logger close behavior only if it complements, rather than hides, the ordering fix: Logger.Close may set l.file nil after close, but the regression test must still prove the override event is persisted, not silently dropped.\n\nIn-scope files:\n- service_execute.go\n- service_taillog.go\n- service_session_log.go\n- internal/session/logger.go\n- focused tests in service_*_test.go and/or internal/session/logger_test.go\n\nNON-SCOPE\nDo not change the public Execute event schema, harness-native stream parsers, benchmark matrix reporting, DDx CLI behavior, or TerminalBench/FHI logic. Do not suppress the warning without preserving the late override/routing-quality session-log event.\n\nPARENT AND DEPENDENCIES\nParent: fizeau-06524f43. Dependencies: none.",
+    "acceptance": "1. Add a regression test named TestExecuteSessionLogOverrideEventPersistsBeforeClose (or an equivalently specific Test* name) that exercises an Execute request with override axes and SessionLogDir, drains the returned event stream, then reads the session JSONL and asserts session.start, override, and session.end records are present in deterministic order or otherwise all present without a write-to-closed-file warning.\n2. Add or update a focused logger lifecycle test named TestLoggerClosePreventsLateClosedFileWriteWarning (or equivalent) only if Logger.Close behavior changes; the test must verify a late Write after Close does not attempt to write to a closed *os.File.\n3. The fix preserves one terminal final event on the public Execute stream and does not drop override events from TailSessionLog subscribers.\n4. The warning string \"session logger: write error\" is not emitted in the regression path; tests should capture slog output or otherwise prove the closed-file path is not reached.\n5. go test ./... passes.\n6. lefthook run pre-commit passes.",
+    "parent": "fizeau-06524f43",
+    "labels": [
+      "phase:build",
+      "area:session-log",
+      "area:service",
+      "area:routing-quality",
+      "kind:bug",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T00:09:22Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:48:25.662958402Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:48:30.44041772Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=3a1d8fd419edb2689af29c85722f115bac8d75b4\nbase_rev=3a1d8fd419edb2689af29c85722f115bac8d75b4\nretry_after=2026-05-07T03:48:30Z",
+          "created_at": "2026-05-06T21:48:30.773869176Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:09:22.761100045Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T00:09:22.963554342Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-003",
+      "path": "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+      "title": "CONTRACT-003: FizeauService Service Interface"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T000923-657c0c98",
+    "prompt": ".ddx/executions/20260507T000923-657c0c98/prompt.md",
+    "manifest": ".ddx/executions/20260507T000923-657c0c98/manifest.json",
+    "result": ".ddx/executions/20260507T000923-657c0c98/result.json",
+    "checks": ".ddx/executions/20260507T000923-657c0c98/checks.json",
+    "usage": ".ddx/executions/20260507T000923-657c0c98/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-83b7cc1f-20260507T000923-657c0c98"
+  },
+  "prompt_sha": "2445ac8256b69b93457f748fe1aff9ff2cadd6e7b4f72d0c4a8e4321c42374b0"
+}

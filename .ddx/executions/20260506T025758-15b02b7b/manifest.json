@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T025758-15b02b7b",
+  "bead_id": "fizeau-67145c14",
+  "base_rev": "a4b0fa0a9cb74ebc5ae93901dd2c296312720df4",
+  "created_at": "2026-05-06T02:57:59.35310668Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-67145c14",
+    "title": "Expose sticky utilization routing evidence",
+    "description": "Expose sticky route and endpoint utilization evidence through public route/status/session surfaces. In-scope files: public service structs if needed, route-status JSON/text rendering, session-log routing decision projection, and tests. Requirements: RouteDecision/Candidate/RouteStatus show selected endpoint, sticky assignment status, sticky key status without leaking sensitive keys when inappropriate, utilization source, freshness, active/queued counts, max concurrency/cache pressure when known, and score components. Session artifacts record enough facts to explain why a worker stayed pinned or why a new key chose an endpoint. Out of scope: implementing provider probes, lease store internals, and route scoring policy.",
+    "acceptance": "1. go test ./cmd/fiz ./internal/session ./... -run 'RouteStatus|RoutingDecision|Session|Utilization|Sticky' passes. 2. route-status --json includes endpoint, sticky state, utilization source/freshness, active/queued counts when known, and score components. 3. Session artifacts include selected endpoint and sticky assignment reason for routed requests. 4. Text rendering remains readable and does not require parsing private provider internals. 5. Public contract docs stay aligned with any exported fields.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:cli",
+      "kind:observability"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:57:58Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T02:57:58.692526426Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T025758-15b02b7b",
+    "prompt": ".ddx/executions/20260506T025758-15b02b7b/prompt.md",
+    "manifest": ".ddx/executions/20260506T025758-15b02b7b/manifest.json",
+    "result": ".ddx/executions/20260506T025758-15b02b7b/result.json",
+    "checks": ".ddx/executions/20260506T025758-15b02b7b/checks.json",
+    "usage": ".ddx/executions/20260506T025758-15b02b7b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-67145c14-20260506T025758-15b02b7b"
+  },
+  "prompt_sha": "2cd94a78cdac89632f629df76fac8b7a76df7086faaae59cfdb4cc71e9cbd2e1"
+}

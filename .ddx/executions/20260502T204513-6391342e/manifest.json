@@ -1,0 +1,39 @@
+{
+  "attempt_id": "20260502T204513-6391342e",
+  "bead_id": "fizeau-92b4b823",
+  "base_rev": "bbc5b607c67a0dce6f7ac31b09e33670138802b9",
+  "created_at": "2026-05-02T20:45:14.013179133Z",
+  "requested": {
+    "harness": "claude",
+    "provider": "openrouter",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-92b4b823",
+    "title": "fizeau: provider quota state machine + NoViableProviderForNow error",
+    "description": "Introduce per-provider quota state (available -\u003e quota_exhausted -\u003e available) with retry_after timestamp. Routing engine excludes quota_exhausted providers from candidate selection. Define new typed error NoViableProviderForNow returned when Execute has zero eligible providers solely because all are quota_exhausted (i.e., would otherwise be available). Error carries retry_after timestamp (earliest expected provider recovery) and exhausted_providers []string. DDx (downstream) consumes this to pause its drain loop and resume on retry_after. This slice is the foundational plumbing — header parsing, burn-rate tracking, and probe behavior land in sibling beads. Reuses existing provider abstraction; no schema changes needed for state machine itself. Distinct from existing 'no-candidate' / 'config' errors and from the per-request transient feedback path (RecordRouteAttempt).",
+    "acceptance": "1. Per-provider state machine with two states (available, quota_exhausted) and retry_after timestamp; explicit transition API. 2. Routing candidate selection excludes quota_exhausted providers whose retry_after is in the future. 3. NoViableProviderForNow typed error with retry_after time.Time and exhausted_providers []string fields, exported and errors.As-friendly. 4. Execute returns NoViableProviderForNow only when every otherwise-eligible provider is quota_exhausted (existing 'no-candidate'/'config' errors unaffected). 5. Unit tests cover state transitions, candidate-selection exclusion, NoViableProviderForNow error shape and exposure of fields. 6. Existing tests pass.",
+    "labels": [
+      "area:fizeau",
+      "area:routing",
+      "kind:feature",
+      "downstream:ddx"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-02T20:45:13Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3905826",
+      "execute-loop-heartbeat-at": "2026-05-02T20:45:13.509176226Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260502T204513-6391342e",
+    "prompt": ".ddx/executions/20260502T204513-6391342e/prompt.md",
+    "manifest": ".ddx/executions/20260502T204513-6391342e/manifest.json",
+    "result": ".ddx/executions/20260502T204513-6391342e/result.json",
+    "checks": ".ddx/executions/20260502T204513-6391342e/checks.json",
+    "usage": ".ddx/executions/20260502T204513-6391342e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-92b4b823-20260502T204513-6391342e"
+  },
+  "prompt_sha": "fa0e40c87493366bc10a6da568909dbe609fc97235773dcc97ded0b3a99094ed"
+}

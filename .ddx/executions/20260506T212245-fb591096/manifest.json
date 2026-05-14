@@ -1,0 +1,49 @@
+{
+  "attempt_id": "20260506T212245-fb591096",
+  "bead_id": "fizeau-39b9669a",
+  "base_rev": "fa48595c7262b1522ab41897c3f60e128014f598",
+  "created_at": "2026-05-06T21:22:51.853308142Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-39b9669a",
+    "title": "Extend benchmark evidence schema for versioned FHI axes",
+    "description": "SD-012 requires evidence records to support claims over Fizeau version x harness version x model version x provider version x benchmark version, with local runtime details and session provenance. The current schema has basic source/benchmark/subject/scope/score fields but does not require enough structured metadata for FHI or local-vs-frontier claims.\n\nIn-scope files:\n- scripts/benchmark/benchmark-evidence.schema.json\n- schema fixture/test files under scripts/benchmark or cmd/bench testdata\n- focused schema validation tests\n\nOut-of-scope:\n- implementing importers or writers\n- changing benchmark runners\n- defining the FHI formula\n\nImplementation notes:\n- Add structured provenance/runtime fields for Fizeau version/git commit, harness wrapper/version, wrapped harness CLI/runtime version, provider endpoint/API surface/version, model snapshot/version, deployment class, quantization, local runtime/server version, hardware/accelerator metadata, session_log_path/session_log_sha256, trajectory_path/trajectory_sha256, invalid_class, denominator handling, and formula-ready coverage metadata.\n- Preserve backwards compatibility by allowing existing fields where practical, but add tests proving FHI-required sample records validate.",
+    "acceptance": "1. Schema fixtures for a managed frontier row and a local oMLX Qwen row validate against benchmark-evidence/v1.\n2. The local fixture includes Fizeau version/git commit, oMLX version, quantization, hardware, provider endpoint, model snapshot/raw name, session log path/hash, and benchmark subset/version.\n3. The managed frontier fixture includes provider surface/version or capture timestamp, model snapshot/raw name, harness wrapper/version, and benchmark subset/version.\n4. Invalid-run fixture includes invalid_class and denominator exclusion metadata.\n5. The schema validation test command for scripts/benchmark or cmd/bench passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:evidence",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T21:22:45Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:22:44.854403653Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T21:22:45.027395171Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260506T212245-fb591096",
+    "prompt": ".ddx/executions/20260506T212245-fb591096/prompt.md",
+    "manifest": ".ddx/executions/20260506T212245-fb591096/manifest.json",
+    "result": ".ddx/executions/20260506T212245-fb591096/result.json",
+    "checks": ".ddx/executions/20260506T212245-fb591096/checks.json",
+    "usage": ".ddx/executions/20260506T212245-fb591096/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-39b9669a-20260506T212245-fb591096"
+  },
+  "prompt_sha": "946c7dbc09519f3cf1e633123d4988c101efbb7a6830a433879f20c997cbc287"
+}

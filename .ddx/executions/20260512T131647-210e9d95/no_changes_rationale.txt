@@ -1,0 +1,10 @@
+status: proposed
+reason: operator needed; this bead is explicitly deferred future work and its acceptance says no implementation should be done in this bead.
+
+What was checked:
+- Bead fizeau-c2a23daa acceptance is "DEFERRED -- no implementation in this bead."
+- ADR-012 keeps OR sub-provider cache out of scope and defers it to a future bead, noting that sub-provider routing metadata needs a separate cache tier and TTL strategy.
+- The bead's own re-evaluation triggers remain policy decisions: cost-based routing/quota relevance, measured OR-Qwen3 sub-provider differences, or explicit operator request.
+
+Follow-up needed:
+- When an operator decides one of those triggers has fired, promote/refine this work into implementation beads scoped around endpoint discovery, snapshot cardinality, routing-layer use of sub-provider selection, and tests.

@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "Profiles are no longer treated as exact model refs, but they are not expanded into effective power bounds before routing. ResolveRoute/route-status only echo the caller inputs, so AC 1 and 3 remain unmet.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "ResolveRoute never derives profile power bounds from the catalog. It forwards `req.MinPower`/`req.MaxPower` unchanged into `routing.Request`, so `Profile=standard` does not filter candidates by the profile's effective policy before scoring.",
+      "location": "service_routing.go:61"
+    },
+    {
+      "severity": "block",
+      "summary": "The new route evidence is not the effective power policy; it just mirrors the raw request fields. For `--profile standard` without explicit numeric bounds, `PowerPolicy.MinPower/MaxPower` stay zero instead of exposing the resolved profile policy required by the AC.",
+      "location": "service_routing.go:98"
+    },
+    {
+      "severity": "warn",
+      "summary": "The added tests prove the current bug rather than the intended behavior: they expect power-5 candidates to remain eligible under `standard`, but the catalog defines `standard` as min/max power 7..8, and the route-status test never asserts those effective bounds.",
+      "location": "internal/routing/score_power_test.go:77"
+    }
+  ]
+}
+```

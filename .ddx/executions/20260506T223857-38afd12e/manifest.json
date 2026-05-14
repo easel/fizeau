@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223857-38afd12e",
+  "bead_id": "fizeau-b4c78d49",
+  "base_rev": "8e20edf88966aeed5fca06b2dd5f2a2d20a9be8f",
+  "created_at": "2026-05-06T22:38:58.485182747Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b4c78d49",
+    "title": "Resolve profiles as power policy during routing",
+    "description": "Change route resolution so Profile expands to effective power policy before candidate filtering. ModelRef remains exact catalog-reference narrowing. Local auto-routable candidates with matching power must remain eligible under profiles such as standard even when they are not the profile's historical catalog target.",
+    "acceptance": "1. A request with Profile=standard and no ModelRef considers all discovered auto-routable candidates inside the effective power policy.\n2. A request with ModelRef still narrows model identity and does not broaden because Profile is also set.\n3. Route-status/ResolveRoute evidence shows requested profile and effective power policy.\n4. Tests include local power-5 candidates from grendel/vidar/sindri-style endpoints participating under standard.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Profile|PowerPolicy|Route\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:38:57Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:38:57.195818518Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:38:57.377438559Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223857-38afd12e",
+    "prompt": ".ddx/executions/20260506T223857-38afd12e/prompt.md",
+    "manifest": ".ddx/executions/20260506T223857-38afd12e/manifest.json",
+    "result": ".ddx/executions/20260506T223857-38afd12e/result.json",
+    "checks": ".ddx/executions/20260506T223857-38afd12e/checks.json",
+    "usage": ".ddx/executions/20260506T223857-38afd12e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b4c78d49-20260506T223857-38afd12e"
+  },
+  "prompt_sha": "fe9ed167375980ad083c45f81253df7eaf3e887a4adb97204d438d2f5fb48fc9"
+}

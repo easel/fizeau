@@ -1,0 +1,120 @@
+{
+  "attempt_id": "20260507T041530-95ff2449",
+  "bead_id": "fizeau-b50ea3ef",
+  "base_rev": "651aa0dd61a14af42af19252851c52edaaf667a5",
+  "created_at": "2026-05-07T04:15:31.432765372Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b50ea3ef",
+    "title": "Expose routing evidence in model and status queries",
+    "description": "Update model-listing, route-status, and session routing artifacts so operators can inspect the same evidence used by scoring: server instance, maximum context length and source, utilization source/freshness, active/queued counts, performance signal, sticky status, and score components.",
+    "acceptance": "1. fiz --list-models --json includes server_instance, context length/source, perf signal, and utilization summary where available.\n2. fiz route-status --json includes selected endpoint, server_instance, sticky status/reason/bonus, utilization source/freshness, active/queued counts, performance signal, context evidence, and score components.\n3. Session routing artifacts record the same selected-route evidence without requiring callers to parse provider-native responses.\n4. Golden tests cover vLLM, Rapid-MLX, and oMLX local endpoint evidence shapes with stable fixtures.\n5. go test ./cmd/fiz ./internal/session ./internal/provider/... -run \"ListModels|RouteStatus|RoutingDecision|Utilization|Golden\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:cli",
+      "area:routing",
+      "area:provider",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T04:15:30Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:57:21.265295344Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T04:07:17.836378339Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T035721-91afd48e\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":20121694,\"output_tokens\":53620,\"total_tokens\":20175314,\"cost_usd\":0,\"duration_ms\":595677,\"exit_code\":0}",
+          "created_at": "2026-05-07T04:07:17.945502409Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=20175314 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T035721-91afd48e\",\"bead_id\":\"fizeau-b50ea3ef\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T04:07:20.654021061Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T04:07:20.891703109Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The CLI JSON surfaces were extended, but the persisted routing artifact still omits part of the required evidence and the requested golden fixture coverage for vLLM/Rapid-MLX/oMLX was not added.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15266\noutput_bytes=1046\nelapsed_ms=117479",
+          "created_at": "2026-05-07T04:12:11.018833688Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T04:12:11.128494033Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe CLI JSON surfaces were extended, but the persisted routing artifact still omits part of the required evidence and the requested golden fixture coverage for vLLM/Rapid-MLX/oMLX was not added.\nresult_rev=ba951586420c7ebe7c7e6b73df6ac9b8cac668db\nbase_rev=f573d8d2f67bc2e7224e61966136b1f248e3c35c",
+          "created_at": "2026-05-07T04:12:11.313475816Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:15:30.547356525Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T04:15:30.747468055Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T041530-95ff2449",
+    "prompt": ".ddx/executions/20260507T041530-95ff2449/prompt.md",
+    "manifest": ".ddx/executions/20260507T041530-95ff2449/manifest.json",
+    "result": ".ddx/executions/20260507T041530-95ff2449/result.json",
+    "checks": ".ddx/executions/20260507T041530-95ff2449/checks.json",
+    "usage": ".ddx/executions/20260507T041530-95ff2449/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b50ea3ef-20260507T041530-95ff2449"
+  },
+  "prompt_sha": "400b92ab7a97ba01251018ad215b193a5d08bf01229606fe2ea4da96031551b9"
+}

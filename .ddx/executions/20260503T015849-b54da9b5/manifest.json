@@ -1,0 +1,123 @@
+{
+  "attempt_id": "20260503T015849-b54da9b5",
+  "bead_id": "agent-1ee144c7",
+  "base_rev": "36b89daeb04ed55fdf31b32240924aafb239da4c",
+  "created_at": "2026-05-03T01:58:49.943494423Z",
+  "requested": {
+    "harness": "claude",
+    "provider": "openrouter",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-1ee144c7",
+    "title": "FZ-066 Tag final Fizeau release",
+    "description": "After the pre-release, DDx validation, repo rename verification, and external-consumer audit, tag the final Fizeau release with final fiz artifacts.",
+    "acceptance": "A final non-prerelease Fizeau tag exists, release artifacts are named fiz*, install/update paths are verified, and release notes link the migration guide.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:release",
+      "phase:release"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-03T01:58:49Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "12461",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:07:56.477791676Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:08:02.711780502Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-05-02T13:08:02.800256005Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-05-02T13:08:02.964749541Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:10:10.6708202Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-05-02T13:10:16.954307008Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-05-02T13:10:17.063075925Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-05-02T13:10:17.223830863Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"openrouter\",\"fallback_chain\":[],\"requested_harness\":\"claude\",\"requested_provider\":\"openrouter\"}",
+          "created_at": "2026-05-02T20:55:36.521167759Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=openrouter"
+        },
+        {
+          "actor": "ddx",
+          "body": "exit status 1\nresult_rev=316cebd239b4ede208b81bd6c17ac32d9c54bd0c\nbase_rev=316cebd239b4ede208b81bd6c17ac32d9c54bd0c\nretry_after=2026-05-02T23:42:06Z",
+          "created_at": "2026-05-02T20:55:36.752715186Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-03T01:58:49.451714384Z",
+      "execute-loop-last-detail": "exit status 1",
+      "execute-loop-last-status": "execution_failed",
+      "execute-loop-retry-after": "2026-05-02T23:42:06Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260503T015849-b54da9b5",
+    "prompt": ".ddx/executions/20260503T015849-b54da9b5/prompt.md",
+    "manifest": ".ddx/executions/20260503T015849-b54da9b5/manifest.json",
+    "result": ".ddx/executions/20260503T015849-b54da9b5/result.json",
+    "checks": ".ddx/executions/20260503T015849-b54da9b5/checks.json",
+    "usage": ".ddx/executions/20260503T015849-b54da9b5/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-1ee144c7-20260503T015849-b54da9b5"
+  }
+}

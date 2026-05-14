@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260506T210307-be042599",
+  "bead_id": "fizeau-5e68eb28",
+  "base_rev": "a64355dbba39e486c5c96a808b9753a6c5154858",
+  "created_at": "2026-05-06T21:03:07.767954056Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5e68eb28",
+    "title": "Implement service-level TerminalBench harness pins",
+    "description": "TerminalBench official comparisons need fiz to normalize Claude, Codex, pi, opencode, and provider-path targets behind one Harbor adapter. The service layer must accept an explicit harness hard pin and route execution to that harness without broadening to another harness when provider/model hints are also present.\n\nIn-scope files:\n- public request/service types that carry run routing options\n- internal/serviceimpl routing/execution code\n- internal/harnesses metadata or selection helpers\n- focused routing/service tests\n\nOut-of-scope:\n- agentcli flag parsing; create a separate CLI bead for --harness\n- scripts/benchmark/harbor_agent.py\n- benchmark matrix aggregation and reporting\n\nImplementation notes:\n- Treat the harness pin as a hard constraint for this run.\n- Support hard pins for claude, codex, pi, opencode, and the native fiz harness identity where registered.\n- If the requested harness cannot satisfy the target, return a clear configuration/setup error before falling back to a different harness.\n- Preserve existing provider/model routing behavior when no harness pin is provided.",
+    "acceptance": "1. Service-level tests prove requests pinned to harness=codex, harness=pi, and harness=opencode dispatch through the requested harness even when other providers/harnesses are configured.\n2. A service-level test proves an unsatisfied harness pin fails with a clear configuration/setup error and does not broaden to another harness.\n3. Existing provider/model routing tests still pass.\n4. `go test ./internal/serviceimpl ./internal/harnesses/...` passes.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:routing",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T21:03:05Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:03:04.876541356Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T21:03:05.058857078Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T210307-be042599",
+    "prompt": ".ddx/executions/20260506T210307-be042599/prompt.md",
+    "manifest": ".ddx/executions/20260506T210307-be042599/manifest.json",
+    "result": ".ddx/executions/20260506T210307-be042599/result.json",
+    "checks": ".ddx/executions/20260506T210307-be042599/checks.json",
+    "usage": ".ddx/executions/20260506T210307-be042599/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-5e68eb28-20260506T210307-be042599"
+  },
+  "prompt_sha": "de60bc383b7359328a33f78d46beff50f7f45d59500ec738c85f654c5c9efe41"
+}

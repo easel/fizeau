@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The README now documents the run→import→append→claim pipeline and artifact policy, but it still misses two acceptance details: explicit claim examples for both comparison modes and direct links to the benchmark resource notes.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "The new workflow explains pinned axes, but it does not include concrete local-vs-frontier and harness-vs-harness claim examples. The only shown claim command is a generic `fhi delta` invocation, so AC 2 is only partially met.",
+      "location": "scripts/benchmark/README.md:201"
+    },
+    {
+      "severity": "warn",
+      "summary": "The README links SD-012 and lists the import/claim commands, but it does not directly link the benchmark resource notes required by AC 4 (for example the Rapid-MLX, SkillsBench, SWE-bench, and HumanEval resource docs).",
+      "location": "scripts/benchmark/README.md:409"
+    }
+  ]
+}
+```

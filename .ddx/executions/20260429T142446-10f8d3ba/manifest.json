@@ -1,0 +1,41 @@
+{
+  "attempt_id": "20260429T142446-10f8d3ba",
+  "bead_id": "agent-58323132",
+  "base_rev": "eb6e33766fc4f83756da34a9b7d6f999fd429541",
+  "created_at": "2026-04-29T14:24:47.049685476Z",
+  "requested": {
+    "harness": "agent",
+    "model": "standard",
+    "provider": "lucebox",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-58323132",
+    "title": "Amend SD-008 §6 — Multi-harness extension",
+    "description": "Add Section 6 'Multi-Harness Extension' to docs/helix/02-design/solution-designs/SD-008-terminal-bench-integration.md: (a) in-container installability checklist for non-ddx-agent harnesses (current §1 covers ddx-agent BaseInstalledAgent flow only); (b) per-harness adapter file location at scripts/benchmark/harness_adapters/; (c) egress requirements for harnesses calling provider APIs from inside the container; (d) drop rule — harnesses that can't be installed in-container are documented and excluded, NOT run host-side. Cross-references SD-010.",
+    "acceptance": "New §6 lands in SD-008; cross-references SD-010 by ID; existing §1-§5 unchanged.",
+    "parent": "agent-6c7a4c11",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:benchmark",
+      "area:cli",
+      "area:tooling"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-29T14:24:42Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "590616",
+      "execute-loop-heartbeat-at": "2026-04-29T14:24:42.620104425Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260429T142446-10f8d3ba",
+    "prompt": ".ddx/executions/20260429T142446-10f8d3ba/prompt.md",
+    "manifest": ".ddx/executions/20260429T142446-10f8d3ba/manifest.json",
+    "result": ".ddx/executions/20260429T142446-10f8d3ba/result.json",
+    "checks": ".ddx/executions/20260429T142446-10f8d3ba/checks.json",
+    "usage": ".ddx/executions/20260429T142446-10f8d3ba/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-58323132-20260429T142446-10f8d3ba"
+  }
+}

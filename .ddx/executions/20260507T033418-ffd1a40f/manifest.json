@@ -1,0 +1,134 @@
+{
+  "attempt_id": "20260507T033418-ffd1a40f",
+  "bead_id": "fizeau-fc7b8878",
+  "base_rev": "bff2da16eab9510e3a45f6f2d0145ed540f14943",
+  "created_at": "2026-05-07T03:34:18.785526471Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-fc7b8878",
+    "title": "Score utilization performance context and stickiness",
+    "description": "Add score components for normalized utilization, performance/latency/throughput, context headroom, and sticky server-instance affinity. Unknown signals should carry a mild explicit penalty or neutral value according to policy, not an accidental zero that dominates routing.",
+    "acceptance": "1. Candidate ScoreComponents include power, cost, deployment/locality, quota/health, utilization, performance, context headroom, and sticky affinity where applicable.\n2. Unknown utilization/performance is represented deliberately and tested so it cannot beat known healthy evidence by accident.\n3. Hard saturation can reject or heavily penalize a candidate; mild load only affects ranking.\n4. Statement-backed tests prove severe pressure can beat sticky affinity while a merely better score does not churn an existing sticky server.\n5. go test ./internal/routing ./cmd/fiz -run \"Score|Utilization|Performance|Context|Sticky\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:34:18Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:08.300204662Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: staging changes: exit status 128",
+          "created_at": "2026-05-06T22:39:08.997944269Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:16:29.733700678Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:26:45.202252645Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T031629-667effc8\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":14208639,\"output_tokens\":50515,\"total_tokens\":14259154,\"cost_usd\":0,\"duration_ms\":613815,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:26:45.33060873Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=14259154 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T031629-667effc8\",\"bead_id\":\"fizeau-fc7b8878\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:26:48.455200862Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:26:48.696292241Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The sticky/saturation behavior and focused test slice check out, but the unknown-signal policy is still neutral-zero in code, so a candidate with missing utilization/performance can still outrank a known lightly loaded peer. That misses AC2.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15150\noutput_bytes=881\nelapsed_ms=80794",
+          "created_at": "2026-05-07T03:29:22.175191555Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T03:29:22.305554126Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe sticky/saturation behavior and focused test slice check out, but the unknown-signal policy is still neutral-zero in code, so a candidate with missing utilization/performance can still outrank a known lightly loaded peer. That misses AC2.\nresult_rev=e82c8dae3f9c7334361c3a60fbdd536136c88dc5\nbase_rev=8a2e849350965f56d4a5faa6e79fb483c738105e",
+          "created_at": "2026-05-07T03:29:22.510916957Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:34:17.890285327Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:34:18.084865846Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T033418-ffd1a40f",
+    "prompt": ".ddx/executions/20260507T033418-ffd1a40f/prompt.md",
+    "manifest": ".ddx/executions/20260507T033418-ffd1a40f/manifest.json",
+    "result": ".ddx/executions/20260507T033418-ffd1a40f/result.json",
+    "checks": ".ddx/executions/20260507T033418-ffd1a40f/checks.json",
+    "usage": ".ddx/executions/20260507T033418-ffd1a40f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-fc7b8878-20260507T033418-ffd1a40f"
+  },
+  "prompt_sha": "cb8bf6649c1a196d8e41658a747a9831fcdc964f98a9b62b05ff3fe30487d9e1"
+}

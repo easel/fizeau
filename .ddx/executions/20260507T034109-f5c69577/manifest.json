@@ -1,0 +1,73 @@
+{
+  "attempt_id": "20260507T034109-f5c69577",
+  "bead_id": "fizeau-66c928b3",
+  "base_rev": "7f605c1e0b7a08834022f909dff3f9200e5cf155",
+  "created_at": "2026-05-07T03:41:09.594433839Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-66c928b3",
+    "title": "Run and summarize the fiz-wrapper TerminalBench canary matrix",
+    "description": "Once the service pin, CLI flag, FizeauAgent forwarding, official profiles, invalid classification, and reproducibility docs are in place, run the canary matrix to prove the process works end to end. This bead is for validation and summary, not for adding more implementation except tiny fixes needed to make the documented command run as specified. The canary must include fiz-wrapped Claude, Codex, pi, and opencode lanes plus the fiz OpenRouter lanes.\n\nIn-scope files:\n- benchmark output artifacts produced by the documented canary command\n- docs/research summary memo for the canary result\n- tiny follow-up fixes directly required to make the documented command execute\n\nOut-of-scope:\n- broad benchmark subset redesign\n- changing model choices or official lane definitions\n- raw Claude/Codex/pi/opencode Harbor adapter productionization\n\nImplementation notes:\n- Run the documented canary command by itself, not concurrently with unrelated pi/fiz/opencode runs on the same provider.\n- Confirm each official lane is present in the output.\n- Confirm invalid quota/auth/setup/provider cells are classified separately from graded failures.\n- Summarize any observed tool-call/session-log differences only from captured artifacts.",
+    "acceptance": "1. The documented canary command completes or exits with only classified invalid cells; record the exact command and exit status in a docs/research memo.\n2. The canary output contains all six official lanes: fiz-wrapped Claude, fiz-wrapped Codex, fiz-wrapped pi, fiz-wrapped opencode, fiz OpenRouter Sonnet, and fiz OpenRouter GPT.\n3. Any provider quota/auth/setup failures are shown as invalid classes rather than graded failures.\n4. The docs/research memo summarizes pass/fail/invalid counts and any tool-call/session-log observations supported by artifacts.\n5. `go test ./cmd/bench ./agentcli ./internal/harnesses/...` passes after any tiny fixes made during validation.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:validation",
+      "kind:task",
+      "phase:verify"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:24:42Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:24:42.335671059Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:41:08.020357143Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T032442-6b0bebe5\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":8299264,\"output_tokens\":32624,\"total_tokens\":8331888,\"cost_usd\":0,\"duration_ms\":984734,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:41:08.127919551Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=8331888 model=gpt-5.4-mini"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:24:42.551026004Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T034109-f5c69577",
+    "prompt": ".ddx/executions/20260507T034109-f5c69577/prompt.md",
+    "manifest": ".ddx/executions/20260507T034109-f5c69577/manifest.json",
+    "result": ".ddx/executions/20260507T034109-f5c69577/result.json",
+    "checks": ".ddx/executions/20260507T034109-f5c69577/checks.json",
+    "usage": ".ddx/executions/20260507T034109-f5c69577/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-66c928b3-20260507T034109-f5c69577"
+  },
+  "prompt_sha": "a165c7ebe7a0464f879b7669db57be4f3853161277c5f4439270185457f46bfe"
+}

@@ -1,0 +1,49 @@
+{
+  "attempt_id": "20260513T160111-0296e5ca",
+  "bead_id": "fizeau-f0a71a4c",
+  "base_rev": "88b640810cefbc1bc8d8a58d9a7357db7e04137a",
+  "created_at": "2026-05-13T16:01:14.26065691Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f0a71a4c",
+    "title": "evolve: specify metered routing opt-in",
+    "description": "\u003ccontext-digest\u003eAmend routing specs after DDx autorouting selected a pay-per-token Opus route under policy=default. Relevant artifacts: FEAT-004, ADR-009, ADR-011, SD-005, CONTRACT-003, docs/routing. Desired contract: pay-per-token default-deny for unpinned autorouting; exact pins can consider metered providers; policy requirements beat pins; power bounds remain soft scoring inputs; cheapest-qualified ranking must be defined against policy power fit and capability gates.\u003c/context-digest\u003e\nThread metered routing opt-in and model-selection algorithm through affected governing artifacts.",
+    "acceptance": "Affected routing specs consistently define metered default-deny opt-in, unpinned semantics, soft power scoring, and cheapest-qualified model selection; review pass reports no unresolved contradictions",
+    "labels": [
+      "helix",
+      "kind:planning",
+      "action:evolve"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-13T15:58:29Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2683682",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: dispatch-failure: ResolveRoute: policy \\\"air-gapped\\\" has no candidate satisfying local endpoint: 5 candidates rejected\"}",
+          "created_at": "2026-05-13T16:01:11.975120243Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-13T15:58:29.485340981Z",
+      "schema_version": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260513T160111-0296e5ca",
+    "prompt": ".ddx/executions/20260513T160111-0296e5ca/prompt.md",
+    "manifest": ".ddx/executions/20260513T160111-0296e5ca/manifest.json",
+    "result": ".ddx/executions/20260513T160111-0296e5ca/result.json",
+    "checks": ".ddx/executions/20260513T160111-0296e5ca/checks.json",
+    "usage": ".ddx/executions/20260513T160111-0296e5ca/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-f0a71a4c-20260513T160111-0296e5ca"
+  },
+  "prompt_sha": "9c3d3fe3ed6909961293af0736e725e1f3cc5e58e008fb8b98e3952da672a0b1"
+}

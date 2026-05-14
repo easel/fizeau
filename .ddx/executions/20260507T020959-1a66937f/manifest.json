@@ -1,0 +1,114 @@
+{
+  "attempt_id": "20260507T020959-1a66937f",
+  "bead_id": "fizeau-dcb621f8",
+  "base_rev": "d4ed7783e06a566e0644f96d0ae797f1c7267c85",
+  "created_at": "2026-05-07T02:10:00.788098808Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dcb621f8",
+    "title": "Document the FHI benchmark evidence workflow",
+    "description": "The benchmark system needs a clear operator workflow from running/importing benchmarks to generating FHI and comparative claims. Current docs describe individual scripts and resources, but not the end-to-end evidence pipeline.\n\nIn-scope files:\n- scripts/benchmark/README.md\n- docs/helix/02-design/solution-designs/SD-012-benchmark-evidence-ledger.md references if needed\n- docs/research or docs/resources workflow examples\n\nOut-of-scope:\n- implementing importers or formula code\n- running paid benchmarks\n- rewriting unrelated historical benchmark memos\n\nImplementation notes:\n- Document canonical commands for TerminalBench matrix -\u003e evidence ledger -\u003e FHI claim.\n- Document how beadbench and curated external benchmark snapshots enter the ledger.\n- Include examples for local-vs-frontier and harness-vs-harness claims.\n- State where large raw artifacts live and what curated snapshots, if any, may be checked in.",
+    "acceptance": "1. Documentation shows the end-to-end workflow from benchmark run/import to validated ledger to FHI/claim output.\n2. Documentation includes local-vs-frontier and harness-vs-harness claim examples with required pinned axes.\n3. Documentation states large raw benchmark artifacts remain gitignored and curated snapshots/source hashes are the committed evidence.\n4. Documentation links SD-012, the benchmark resource notes, and the relevant import/claim commands.\n5. Any documented commands have matching tests or `--help` coverage where practical.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:docs",
+      "area:benchmark",
+      "area:fhi",
+      "kind:docs",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:09:59Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:57:03.859151775Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:01:14.125353679Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T015704-fc13c63b\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2859286,\"output_tokens\":12933,\"total_tokens\":2872219,\"cost_usd\":0,\"duration_ms\":248461,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:01:14.25444729Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2872219 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T015704-fc13c63b\",\"bead_id\":\"fizeau-dcb621f8\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:01:16.458185511Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:01:16.698020915Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nThe README now documents the run→import→append→claim pipeline and artifact policy, but it still misses two acceptance details: explicit claim examples for both comparison modes and direct links to the benchmark resource notes.\nartifact: .ddx/executions/20260507T015704-fc13c63b/reviewer-stream.log\nharness=codex\nmodel=gpt-5.4\ninput_bytes=8532\noutput_bytes=1005\nelapsed_ms=62753",
+          "created_at": "2026-05-07T02:03:02.643031194Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T02:03:02.76111398Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: REQUEST_CHANGES\nThe README now documents the run→import→append→claim pipeline and artifact policy, but it still misses two acceptance details: explicit claim examples for both comparison modes and direct links to the benchmark resource notes.\nresult_rev=7ca8dc25455ea50fbb4dbd4759af0c5b9619249a\nbase_rev=beada407bdfce8cbcc5f8374c30edda1c032abc7",
+          "created_at": "2026-05-07T02:03:02.976863942Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:09:58.84188923Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:09:59.028942964Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T020959-1a66937f",
+    "prompt": ".ddx/executions/20260507T020959-1a66937f/prompt.md",
+    "manifest": ".ddx/executions/20260507T020959-1a66937f/manifest.json",
+    "result": ".ddx/executions/20260507T020959-1a66937f/result.json",
+    "checks": ".ddx/executions/20260507T020959-1a66937f/checks.json",
+    "usage": ".ddx/executions/20260507T020959-1a66937f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dcb621f8-20260507T020959-1a66937f"
+  },
+  "prompt_sha": "008c267e6dfd6efd962b2a4bcf8431fe5a95f8014068c7ff9e94c35dc1f7c841"
+}

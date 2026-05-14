@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T010020-783b11f0",
+  "bead_id": "fizeau-dc6d5f1f",
+  "base_rev": "e781d3a7f627313f2813c2d850cac54275f97e9e",
+  "created_at": "2026-05-06T01:00:21.358014323Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dc6d5f1f",
+    "title": "Design shared lease backend for multi-machine routing",
+    "description": "Design the multi-machine extension for sticky route leases. In-scope files: FEAT-004/ADR-005 follow-up text or a new design note under docs/helix/02-design, plus beads for concrete backend implementation if selected. Required design: explain why server metrics alone are advisory and racy; define shared lease records with sticky key, provider, endpoint, model, owner, expiry, and refresh semantics; define atomic acquire/refresh/release behavior; choose or defer a backend such as Redis or Postgres; document failure behavior when the lease backend is unavailable. Out of scope: implementing Redis/Postgres backend in this bead.",
+    "acceptance": "1. rg -n 'shared lease|multi-machine|server metrics alone|atomic' docs/helix/01-frame/features/FEAT-004-model-routing.md docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md docs/helix/02-design || true shows a coherent design note. 2. The design states that metrics are advisory and shared leases are required for cross-process stickiness. 3. Follow-up implementation beads exist if a concrete shared backend is selected. 4. ddx doc stale exits successfully or reports no stale routing docs caused by this design.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:routing",
+      "kind:design"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:00:20Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T01:00:20.423078749Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T010020-783b11f0",
+    "prompt": ".ddx/executions/20260506T010020-783b11f0/prompt.md",
+    "manifest": ".ddx/executions/20260506T010020-783b11f0/manifest.json",
+    "result": ".ddx/executions/20260506T010020-783b11f0/result.json",
+    "checks": ".ddx/executions/20260506T010020-783b11f0/checks.json",
+    "usage": ".ddx/executions/20260506T010020-783b11f0/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dc6d5f1f-20260506T010020-783b11f0"
+  },
+  "prompt_sha": "5e17f3dfcb83c377c06f9bed6ec6cb04cf74037f1a49b8463569dcb89a50be94"
+}

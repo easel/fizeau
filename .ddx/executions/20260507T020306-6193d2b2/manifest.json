@@ -1,0 +1,183 @@
+{
+  "attempt_id": "20260507T020306-6193d2b2",
+  "bead_id": "fizeau-be3cb865",
+  "base_rev": "c419cb1382e5726fdc4e3f5d78f4589030e8e60b",
+  "created_at": "2026-05-07T02:03:12.772778562Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-be3cb865",
+    "title": "Document LM Studio utilization probe",
+    "description": "Map LM Studio's verified utilization and performance surfaces into the provider-signal matrix. Document the native /api/v1/chat stats path, any confirmed status/model-management endpoint, freshness rules, cache indicators, and the current unknown-signal fallback.",
+    "acceptance": "1. The matrix or companion note maps LM Studio utilization/performance/context/cache signals to concrete endpoints. 2. Freshness and unknown-fallback behavior are documented. 3. Any missing live probe is either implemented or called out as a documented gap with a clear next-step bead.",
+    "parent": "fizeau-60171fa8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T02:03:06Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:12:02.440171401Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:15:44.216975431Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T011202-f995f8a3\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2868949,\"output_tokens\":11971,\"total_tokens\":2880920,\"cost_usd\":0,\"duration_ms\":217033,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:15:44.333232047Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2880920 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T011202-f995f8a3\",\"bead_id\":\"fizeau-be3cb865\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:15:46.191925518Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:15:46.4442759Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nThe docs add LM Studio performance/model-management endpoints and the unknown fallback, but they still do not document freshness rules and do not clearly map any context-window/context-capacity signal to a concrete endpoint.\nartifact: .ddx/executions/20260507T011202-f995f8a3/reviewer-stream.log\nharness=codex\nmodel=gpt-5.4\ninput_bytes=17644\noutput_bytes=1158\nelapsed_ms=17381",
+          "created_at": "2026-05-07T01:16:51.039642981Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T01:16:51.166429838Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: REQUEST_CHANGES\nThe docs add LM Studio performance/model-management endpoints and the unknown fallback, but they still do not document freshness rules and do not clearly map any context-window/context-capacity signal to a concrete endpoint.\nresult_rev=3b6a2a5f52ea144d213569bbd114a76d46f57aec\nbase_rev=fcae722c5868dde0f39cfa07e4a2fb81a69b6346",
+          "created_at": "2026-05-07T01:16:51.361959099Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:21:34.524167424Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:24:42.449371211Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T012134-c4dd9eae\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1533130,\"output_tokens\":7904,\"total_tokens\":1541034,\"cost_usd\":0,\"duration_ms\":183299,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:24:42.610972874Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1541034 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T012134-c4dd9eae\",\"bead_id\":\"fizeau-be3cb865\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:24:46.778881667Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:24:47.008498567Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nThe LM Studio row now maps concrete endpoints and documents freshness/unknown fallback, but the missing live utilization probe is only noted with a generic follow-up bullet rather than a concrete tracked next-step bead.\nartifact: .ddx/executions/20260507T012134-c4dd9eae/reviewer-stream.log\nharness=codex\nmodel=gpt-5.4\ninput_bytes=14789\noutput_bytes=747\nelapsed_ms=40746",
+          "created_at": "2026-05-07T01:26:33.116878426Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-07T01:26:33.228944879Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: REQUEST_CHANGES\nThe LM Studio row now maps concrete endpoints and documents freshness/unknown fallback, but the missing live utilization probe is only noted with a generic follow-up bullet rather than a concrete tracked next-step bead.\nresult_rev=236a9cc4cdf7c9c9b1af1e94a4331823ae6b5b38\nbase_rev=54c89641606569202398dd9ee20cdc8eb1559095",
+          "created_at": "2026-05-07T01:26:33.411026441Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:03:06.340920158Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T02:03:06.741825106Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T020306-6193d2b2",
+    "prompt": ".ddx/executions/20260507T020306-6193d2b2/prompt.md",
+    "manifest": ".ddx/executions/20260507T020306-6193d2b2/manifest.json",
+    "result": ".ddx/executions/20260507T020306-6193d2b2/result.json",
+    "checks": ".ddx/executions/20260507T020306-6193d2b2/checks.json",
+    "usage": ".ddx/executions/20260507T020306-6193d2b2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-be3cb865-20260507T020306-6193d2b2"
+  },
+  "prompt_sha": "ceee1965990759b8ff4a01262024a27be05b07a932b4367a87efff93ebd6039d"
+}

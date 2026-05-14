@@ -1,0 +1,184 @@
+{
+  "attempt_id": "20260506T225937-8a234c3b",
+  "bead_id": "fizeau-5e68eb28",
+  "base_rev": "93192bffd01b2137aa64b077766cf55aa1c1d157",
+  "created_at": "2026-05-06T22:59:38.249429446Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5e68eb28",
+    "title": "Implement service-level TerminalBench harness pins",
+    "description": "TerminalBench official comparisons need fiz to normalize Claude, Codex, pi, opencode, and provider-path targets behind one Harbor adapter. The service layer must accept an explicit harness hard pin and route execution to that harness without broadening to another harness when provider/model hints are also present.\n\nIn-scope files:\n- public request/service types that carry run routing options\n- internal/serviceimpl routing/execution code\n- internal/harnesses metadata or selection helpers\n- focused routing/service tests\n\nOut-of-scope:\n- agentcli flag parsing; create a separate CLI bead for --harness\n- scripts/benchmark/harbor_agent.py\n- benchmark matrix aggregation and reporting\n\nImplementation notes:\n- Treat the harness pin as a hard constraint for this run.\n- Support hard pins for claude, codex, pi, opencode, and the native fiz harness identity where registered.\n- If the requested harness cannot satisfy the target, return a clear configuration/setup error before falling back to a different harness.\n- Preserve existing provider/model routing behavior when no harness pin is provided.",
+    "acceptance": "1. Service-level tests prove requests pinned to harness=codex, harness=pi, and harness=opencode dispatch through the requested harness even when other providers/harnesses are configured.\n2. A service-level test proves a known but unsatisfied harness pin, such as harness=codex with an unsupported model/provider/profile combination while another harness/provider could otherwise satisfy the request, fails with a clear configuration/setup or typed incompatibility error and does not broaden to another harness.\n3. Existing provider/model routing tests still pass.\n4. `go test ./internal/serviceimpl ./internal/harnesses/...` passes.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:routing",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:59:35Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:03:04.876541356Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:07:00.81105075Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T210307-be042599\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":4418925,\"output_tokens\":25129,\"total_tokens\":4444054,\"cost_usd\":0,\"duration_ms\":233040,\"exit_code\":0}",
+          "created_at": "2026-05-06T21:07:00.931345858Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=4444054 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T21:07:04.214829442Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=4c10d631024100afc8528d887bd275e7f99fb265\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=14865\noutput_bytes=683\nelapsed_ms=122117",
+          "created_at": "2026-05-06T21:11:17.897526988Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe criteria are met: explicit codex/pi/opencode/fiz harness pins resolve to the requested runner, unknown pins fail without fallback, and `go test ./internal/serviceimpl ./internal/harnesses/...` passes with a writable GOCACHE.\nresult_rev=4c10d631024100afc8528d887bd275e7f99fb265\nbase_rev=a64355dbba39e486c5c96a808b9753a6c5154858",
+          "created_at": "2026-05-06T21:11:18.018158804Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:30:51.272000231Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:35:04.715017383Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T213051-9a275961\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3118046,\"output_tokens\":12344,\"total_tokens\":3130390,\"cost_usd\":0,\"duration_ms\":252062,\"exit_code\":0}",
+          "created_at": "2026-05-06T21:35:04.829936407Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=3130390 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T21:35:07.251534159Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "The added tests extend subprocess smoke coverage to codex, but they do not prove the required hard-pin no-broadening failure path. AC2 remains unverified, so the bead cannot be accepted from this diff.\nharness=codex\nmodel=gpt-5.4\ninput_bytes=10659\noutput_bytes=1048\nelapsed_ms=59996",
+          "created_at": "2026-05-06T21:37:20.12319078Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"re_attempt_with_context\",\"mode\":\"review_block\"}",
+          "created_at": "2026-05-06T21:37:20.248608587Z",
+          "kind": "triage-decision",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block: re_attempt_with_context"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: BLOCK (flagged for human)\nThe added tests extend subprocess smoke coverage to codex, but they do not prove the required hard-pin no-broadening failure path. AC2 remains unverified, so the bead cannot be accepted from this diff.\nresult_rev=491b9e65e40ffa63637874ec7b5cfb8271a10123\nbase_rev=0ea3cb092fce8da45ff5472f26a290bafd1c3865",
+          "created_at": "2026-05-06T21:37:20.441079293Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T21:49:01.342349526Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T21:49:03.58476171Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=f8fc44b7e66155cc628baece24e4610c904c6e63\nbase_rev=f8fc44b7e66155cc628baece24e4610c904c6e63\nretry_after=2026-05-07T03:49:03Z",
+          "created_at": "2026-05-06T21:49:03.918248041Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:59:34.924232197Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:59:35.105866531Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T225937-8a234c3b",
+    "prompt": ".ddx/executions/20260506T225937-8a234c3b/prompt.md",
+    "manifest": ".ddx/executions/20260506T225937-8a234c3b/manifest.json",
+    "result": ".ddx/executions/20260506T225937-8a234c3b/result.json",
+    "checks": ".ddx/executions/20260506T225937-8a234c3b/checks.json",
+    "usage": ".ddx/executions/20260506T225937-8a234c3b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-5e68eb28-20260506T225937-8a234c3b"
+  },
+  "prompt_sha": "faf9794f251ec3e0635fb31c17cd2ccf558a65a4f609d4ef0782e538772042f3"
+}

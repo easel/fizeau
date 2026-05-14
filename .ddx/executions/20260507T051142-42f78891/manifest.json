@@ -1,0 +1,130 @@
+{
+  "attempt_id": "20260507T051142-42f78891",
+  "bead_id": "fizeau-85d36567",
+  "base_rev": "d9ca89a4a4eea95a011caacc7eb7870962b3e584",
+  "created_at": "2026-05-07T05:11:43.548896798Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-85d36567",
+    "title": "Implement resumable TerminalBench 2.1 phase runner",
+    "description": "Implement the runner support needed for the TerminalBench 2.1 sweep plan. The current matrix command has tuple-level reports, --resume, --force-rerun, and --jobs, but the sweep needs higher-level phase orchestration and provider-aware parallelism.\n\nRequired behavior:\n- Run named phases independently: canary, local-qwen, sonnet-comparison, gpt-comparison, or all.\n- Use the official TerminalBench 2.1 dataset/task source selected by the migration bead.\n- Resume at cell granularity using existing report.json/matrix.json artifacts.\n- Run cells in parallel where safe. Managed provider lanes may use jobs \u003e 1 subject to budget/rate caps. Local model providers must be serialized or capped by resource_group/server/base_url so two cells do not overload the same local model server.\n- Support dry-run/plan output that prints the exact cells, resource groups, concurrency caps, and commands without launching Harbor.\n- Preserve invalid-run classification and matrix aggregation/import compatibility.\n\nLikely in-scope files:\n- scripts/benchmark/run_terminalbench_2_1_sweep.sh or equivalent orchestrator\n- cmd/bench/matrix.go if provider-aware scheduling belongs in the Go runner\n- scripts/benchmark/profiles/*.yaml and/or a lane config under scripts/benchmark/\n- focused tests for planning/resume/resource-group behavior\n\nOut of scope:\n- running the full paid sweep\n- broad benchmark evidence schema redesign\n- changing historical TB-2.0 fixtures",
+    "acceptance": "1. A documented command can dry-run the full 2.1 sweep and prints phases, lane ids, comparison_group ids, task count, reps, resource groups, max parallelism, and output directory without invoking Harbor.\n2. Canary, local-qwen, sonnet-comparison, and gpt-comparison can each be invoked independently and all share the same resume/output layout.\n3. Resume mode skips terminal completed cells and reruns only missing/nonterminal cells unless force-rerun is set; tests or fixtures prove this behavior.\n4. Resource-group scheduling prevents more than the configured concurrency for each local provider endpoint while still allowing independent managed-provider/resource groups to run in parallel.\n5. Budget/per-run budget/rate-limit knobs are preserved or documented for managed lanes.\n6. `bash -n` passes for changed shell scripts.\n7. `go test ./cmd/bench` passes if Go runner code changes; otherwise focused script/Python tests cover the orchestrator planning logic.\n8. The runner writes enough metadata for evidence import: benchmark dataset/version, subset/manifest id, phase, lane id, comparison_group, comparison_type, model_family, exact model id, quant/config label, profile id, harness pin/provider/model/base_url, resource_group, reps, and command.\n9. Matrix summary output supports the model-selection calculus by exposing pass/fail/invalid counts, wall time, token counts, cost, effective cost per valid run, effective cost per pass when computable, and invalid-class denominators per lane/comparison group.",
+    "parent": "fizeau-ee77ec7f",
+    "labels": [
+      "area:benchmark",
+      "area:terminalbench",
+      "area:tooling",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T05:11:42Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:51:55.809002856Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:51:56.161093729Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-85d36567\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T04:51:56.334981769Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"pre-execute-bead checkpoint: staging changes: exit status 128\",\"rationale\":\"The attempt failed at the pre-execute-bead checkpoint during staging (git staging exit status 128), before any substantive work was attempted. This is a harness/transport-level failure unrelated to the bead content. The lint events show a missing-harness warning and routing intent was degraded with no actual route facts. No code was written or tested.\",\"recommended_action\":\"retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"none\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T04:52:03.150842106Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "transport: retry"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: staging changes: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-07T04:52:03.261996454Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:52:29.254467568Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T05:10:13.912415392Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T045229-786e1d81\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":63,\"output_tokens\":60184,\"total_tokens\":60247,\"cost_usd\":3.2804507,\"duration_ms\":1063673,\"exit_code\":0}",
+          "created_at": "2026-05-07T05:10:14.020287199Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=60247 cost_usd=3.2805 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"sonnet\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T045229-786e1d81\",\"bead_id\":\"fizeau-85d36567\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T05:10:16.228162538Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=sonnet harness=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"sonnet\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T05:10:16.440993612Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T05:11:42.202251958Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T05:11:42.391233204Z",
+      "spec-id": "terminalbench-2.1-sweep-runner-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T051142-42f78891",
+    "prompt": ".ddx/executions/20260507T051142-42f78891/prompt.md",
+    "manifest": ".ddx/executions/20260507T051142-42f78891/manifest.json",
+    "result": ".ddx/executions/20260507T051142-42f78891/result.json",
+    "checks": ".ddx/executions/20260507T051142-42f78891/checks.json",
+    "usage": ".ddx/executions/20260507T051142-42f78891/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-85d36567-20260507T051142-42f78891"
+  },
+  "prompt_sha": "0bb24321b6da431397c5916986d28f3767ca59a60660a9bc5355c5e122426c01"
+}

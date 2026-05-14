@@ -1,0 +1,92 @@
+{
+  "attempt_id": "20260422T080243-5d7668e1",
+  "bead_id": "agent-0c6189f5",
+  "base_rev": "fd56b2d692a82641b62cc4c258f0bb41f4f7265a",
+  "created_at": "2026-04-22T08:02:43.566803834Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-0c6189f5",
+    "title": "redesign: endpoint-first routing (kill named-provider profiles)",
+    "description": "User-stated design direction (2026-04-21, DDx session). Current routing is built around named provider profiles (e.g. 'vidar-omlx', 'vidar-coder', 'bragi') each with a hard-coded model declaration. This breaks in multiple ugly ways and drove a zero-success drain of 32 test-migration beads on DDx:\n\nFailure 1: 'cheap: qwen/qwen3.6' in .ddx/config.yaml routed to a DEAD vidar lmstudio endpoint (http://vidar:1234, 502 Bad Gateway) because the named profile declared its model as 'qwen3.5-27b' and the request fuzzy-matched on that string before any liveness check ran.\n\nFailure 2: When failover hit vidar-omlx (http://vidar:1235), the request carried 'qwen3.5-27b' as the model string — but vidar-omlx actually serves 'Qwen3.5-27B-4bit' and 'Qwen3.6-35B-A3B-4bit'. Every attempt 404'd with 'Model not found'.\n\nFailure 3: routing_smart.go already has NormalizeModelID (internal/provider/openai/discovery.go) doing case-insensitive + suffix match against a discovered catalog, but it is only wired in cmd/agent routing_smart.go — NOT in the Service.Execute path that every consumer (DDx, etc.) actually hits.\n\nDesired shape:\n\n1. Config = endpoint pairs, not named profiles:\n   endpoints:\n     - {type: lmstudio, host: vidar, port: 1234}\n     - {type: omlx, host: vidar, port: 1235}\n     - {type: lmstudio, host: bragi, port: 1234}\n     - {type: openrouter, api_key: ...}\n\n2. On every dispatch, probe each endpoint's /v1/models with a short timeout. Skip endpoints that 502/timeout/empty.\n\n3. Build a live {endpoint, model_id} matrix from the probe. The model_id is whatever the server actually serves — no per-provider name hardcoding.\n\n4. Resolve the request (user asks for 'qwen3.6' or any case-variant) against the matrix:\n   - case-insensitive contains / suffix / prefix match against every live model_id\n   - if multiple endpoints match, tie-break on prior performance (latency, success rate, cost) from the routing-metrics store\n   - if one matches, use it\n   - if none match, explicit error ('no live endpoint offers a match for qwen3.6') + caller escalates\n\n5. Kill the named-profile config-block lookups in the routing hot path. User-facing aliases (labels) are fine as shorthand but resolve through the same discovery flow.\n\n6. NormalizeModelID's logic is the right primitive; extend and wire it into Service.Execute so every consumer benefits.",
+    "acceptance": "(1) Config schema supports endpoint-only blocks (no per-provider 'name' or 'model' fields required). (2) Service.Execute (not just cmd/agent routing_smart.go) probes /v1/models and normalizes the requested model against live catalogs case-insensitively, including suffix/prefix variants (Qwen3.5-27B-4bit ↔ qwen3.5-27b, qwen/qwen3.6 ↔ Qwen3.6-35B-A3B-4bit). (3) Dead endpoints are skipped at probe time, not on the failing request. (4) When multiple live endpoints serve the same requested model, selection uses routing-metrics signals, not config ordering. (5) DDx's .ddx/config.yaml can express 'give me the best qwen3.6 you can find' without naming vidar-omlx or any specific provider. (6) Integration test: with two endpoints A (dead) and B (live, serves Qwen3.6-35B-A3B-4bit), 'qwen3.6' resolves to B without hand-holding. (7) Regression: no existing acceptance test regresses.",
+    "labels": [
+      "area:routing",
+      "area:providers",
+      "kind:design",
+      "kind:refactor",
+      "phase:design"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-22T07:39:18.135858021Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260422T073820-b1096b9e\",\"harness\":\"agent\",\"provider\":\"bragi\",\"model\":\"qwen3.5-27b\",\"input_tokens\":2373,\"output_tokens\":160,\"total_tokens\":2533,\"cost_usd\":0,\"duration_ms\":57505,\"exit_code\":0}",
+          "created_at": "2026-04-22T07:39:18.177880257Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2533 model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=standard harness=agent model=qwen3.5-27b probe=ok\nno_changes",
+          "created_at": "2026-04-22T07:39:18.221661857Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"gemini\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-22T07:49:57.23885448Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=gemini"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=smart harness=gemini model= probe=ok\nexit status 1",
+          "created_at": "2026-04-22T07:49:57.297083322Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"no_changes\",\"cost_usd\":0,\"duration_ms\":57505},{\"tier\":\"smart\",\"harness\":\"gemini\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":638779}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-22T07:49:57.332373027Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "ddx",
+          "body": "escalation exhausted: exit status 1\ntier=smart\nprobe_result=ok\nresult_rev=60893b90e8b78acbcd39d79b592f9bc4e16e2a57\nbase_rev=5b3aae087d7505bb17973eefaba3a0ca9d970c99",
+          "created_at": "2026-04-22T07:49:57.402559647Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260422T080243-5d7668e1",
+    "prompt": ".ddx/executions/20260422T080243-5d7668e1/prompt.md",
+    "manifest": ".ddx/executions/20260422T080243-5d7668e1/manifest.json",
+    "result": ".ddx/executions/20260422T080243-5d7668e1/result.json",
+    "checks": ".ddx/executions/20260422T080243-5d7668e1/checks.json",
+    "usage": ".ddx/executions/20260422T080243-5d7668e1/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-0c6189f5-20260422T080243-5d7668e1"
+  }
+}

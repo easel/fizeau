@@ -1,0 +1,54 @@
+{
+  "attempt_id": "20260506T223900-4ba30f2f",
+  "bead_id": "fizeau-903adbda",
+  "base_rev": "9df0669c4d535c2e80f383462fc396bc586af1e0",
+  "created_at": "2026-05-06T22:39:01.247648827Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-903adbda",
+    "title": "Enforce routing eligibility before scoring",
+    "description": "Make the routing boundary explicit in code: hard pins and capability/context/power constraints determine eligibility before any cost, utilization, performance, or sticky scoring is applied. This complements the existing harness-pin work rather than replacing it.",
+    "acceptance": "1. Harness, provider/source/endpoint, and model pins filter candidates before scoring and never broaden to another value.\n2. Profile/MinPower/MaxPower filter only unpinned automatic routing and never override hard pins.\n3. Rejected candidates carry machine-readable FilterReason values for the first eligibility failure.\n4. Statement-backed routing tests cover hard pins, power bounds, exact-pin-only models, and no-candidate evidence.\n5. go test ./internal/routing ./internal/serviceimpl ./... -run \"Eligibility|HardPin|NoCandidate|FilterReason\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:39:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:38:59.958223848Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:39:00.131999104Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223900-4ba30f2f",
+    "prompt": ".ddx/executions/20260506T223900-4ba30f2f/prompt.md",
+    "manifest": ".ddx/executions/20260506T223900-4ba30f2f/manifest.json",
+    "result": ".ddx/executions/20260506T223900-4ba30f2f/result.json",
+    "checks": ".ddx/executions/20260506T223900-4ba30f2f/checks.json",
+    "usage": ".ddx/executions/20260506T223900-4ba30f2f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-903adbda-20260506T223900-4ba30f2f"
+  },
+  "prompt_sha": "a8e494cf5e98de8056624fd2f44e56cadd4f0af1a0eaf58d4410facaaacf1526"
+}

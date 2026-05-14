@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260506T005440-76c14d2c",
+  "bead_id": "fizeau-52a7e4db",
+  "base_rev": "bce8148fbae865c7fbc2a9a5ef2d4e1aaf3f8e53",
+  "created_at": "2026-05-06T00:54:41.559445082Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-52a7e4db",
+    "title": "Add Rapid-MLX provider type",
+    "description": "Add a first-class Rapid-MLX provider type. Rapid-MLX is an OpenAI-compatible Apple Silicon server from https://github.com/raullenchai/Rapid-MLX with default serving URL http://localhost:8000/v1, but it should have a concrete provider type distinct from vllm because utilization is exposed through /v1/status rather than root /metrics.\n\nIn-scope files:\n- internal/provider/rapidmlx/ (new package wrapping the shared OpenAI-compatible provider)\n- internal/config/config.go and config tests\n- internal/provider/registry tests\n- internal/harnesses registry/capability lists if provider types are enumerated there\n- docs/helix/01-frame/features/FEAT-003-providers.md if acceptance criteria need the new provider type listed\n\nRequirements:\n- Accept config `type: rapid-mlx` and, if local naming conventions prefer no hyphen in package names, map it to package path internal/provider/rapidmlx.\n- Default base URL is http://localhost:8000/v1.\n- Registry construction, endpoint-pool support, provider/model listing, native provider dispatch, ProviderType telemetry labels, and capability lookup work the same way as other OpenAI-compatible concrete providers.\n- Do not collapse Rapid-MLX into vllm or generic openai; provider type must be distinct because utilization probing differs.\n\nOut of scope:\n- Implementing /v1/status utilization parsing.\n- Adding real-server cassettes.\n- Changing routing score policy.",
+    "acceptance": "1. `go test ./internal/provider/registry ./internal/config ./internal/provider/rapidmlx ./... -run 'Registry|ProviderType|Rapid|rapid-mlx'` passes.\n2. A config entry with `type: rapid-mlx` and no base_url constructs a provider with default base URL `http://localhost:8000/v1`.\n3. Provider/model listing and native provider dispatch preserve `ProviderType == \"rapid-mlx\"` or the documented canonical spelling chosen in code, without emitting `openai-compat`.\n4. `rg -n \"rapid-mlx|rapidmlx\" internal docs/helix/01-frame/features/FEAT-003-providers.md` shows the provider type is documented where provider types are enumerated.\n5. No utilization probe, cassette recorder, or route scoring logic is implemented in this bead.",
+    "labels": [
+      "area:provider",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T00:54:40Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T00:54:40.62451068Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T005440-76c14d2c",
+    "prompt": ".ddx/executions/20260506T005440-76c14d2c/prompt.md",
+    "manifest": ".ddx/executions/20260506T005440-76c14d2c/manifest.json",
+    "result": ".ddx/executions/20260506T005440-76c14d2c/result.json",
+    "checks": ".ddx/executions/20260506T005440-76c14d2c/checks.json",
+    "usage": ".ddx/executions/20260506T005440-76c14d2c/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-52a7e4db-20260506T005440-76c14d2c"
+  },
+  "prompt_sha": "9fb932e8ac050d7f6098c99f4b6808f3fa907d6d44b9f34f34f0cbbff205adf0"
+}

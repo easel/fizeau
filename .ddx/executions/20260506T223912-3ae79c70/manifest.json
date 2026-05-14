@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260506T223912-3ae79c70",
+  "bead_id": "fizeau-60171fa8",
+  "base_rev": "34dd44abb0efa27b78fa838cbe8287ce1b3c9126",
+  "created_at": "2026-05-06T22:39:13.615005474Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-60171fa8",
+    "title": "Inventory provider utilization and performance signals",
+    "description": "Document and codify which providers expose utilization, performance, context, and cache-related routing evidence. Cover vLLM, Rapid-MLX, oMLX, llama-server, LM Studio, OpenRouter/OpenAI-compatible providers, and subprocess harnesses.",
+    "acceptance": "1. A provider-signal matrix documents utilization, performance, context length, cache indicators, source endpoints, freshness rules, and unknown-signal fallback.\n2. The matrix distinguishes eligibility-critical signals from ranking-only signals.\n3. Existing provider probes are mapped to the matrix, and missing probes are listed as explicit follow-up beads.\n4. go test ./internal/provider/... -run \"Utilization|Perf|Context|Probe\" passes or the bead notes which providers are documentation-only for this step.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T22:39:12Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3152234",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:12.315329713Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T22:39:12.485856764Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T223912-3ae79c70",
+    "prompt": ".ddx/executions/20260506T223912-3ae79c70/prompt.md",
+    "manifest": ".ddx/executions/20260506T223912-3ae79c70/manifest.json",
+    "result": ".ddx/executions/20260506T223912-3ae79c70/result.json",
+    "checks": ".ddx/executions/20260506T223912-3ae79c70/checks.json",
+    "usage": ".ddx/executions/20260506T223912-3ae79c70/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-60171fa8-20260506T223912-3ae79c70"
+  },
+  "prompt_sha": "384735156f159fb244fe0d8f28d55b43df9a0daa0182341609433b0c0dbebd5f"
+}

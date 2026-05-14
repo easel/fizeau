@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260507T012145-b8634b43",
+  "bead_id": "fizeau-4d01efdc",
+  "base_rev": "74c8ff2915b302dd3698830ca9c3c9bd5c5237f2",
+  "created_at": "2026-05-07T01:21:47.092716634Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-4d01efdc",
+    "title": "Document OpenRouter and OpenAI-compatible signal gaps",
+    "description": "Inventory routing-evidence surfaces for OpenRouter and generic OpenAI-compatible providers. Document context-limit discovery, quota headers, cost attribution, and the absence of a provider-owned live utilization probe in this step.",
+    "acceptance": "1. The matrix or companion note classifies OpenRouter and generic OpenAI-compatible providers as ranking-only or documentation-only for utilization. 2. Existing context-limit and quota/cost probes are mapped to the matrix. 3. Missing live-utilization probes are listed as explicit follow-up beads or explicitly marked unavailable.",
+    "parent": "fizeau-60171fa8",
+    "labels": [
+      "area:provider",
+      "area:docs",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:21:45Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:21:44.999719099Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:21:45.293739155Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T012145-b8634b43",
+    "prompt": ".ddx/executions/20260507T012145-b8634b43/prompt.md",
+    "manifest": ".ddx/executions/20260507T012145-b8634b43/manifest.json",
+    "result": ".ddx/executions/20260507T012145-b8634b43/result.json",
+    "checks": ".ddx/executions/20260507T012145-b8634b43/checks.json",
+    "usage": ".ddx/executions/20260507T012145-b8634b43/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-4d01efdc-20260507T012145-b8634b43"
+  },
+  "prompt_sha": "b0e734dd731a8cbbdf577541e71594bf1e401eb5d5e6555e6a81c72eb6fcef8d"
+}

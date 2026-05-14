@@ -1,0 +1,106 @@
+{
+  "attempt_id": "20260507T044818-21b528d9",
+  "bead_id": "fizeau-169b19c4",
+  "base_rev": "b72c659b4c07150a0fb32611600cfb01ada13391",
+  "created_at": "2026-05-07T04:48:18.89199323Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-169b19c4",
+    "title": "Add TerminalBench 2.1 local Qwen provider profiles",
+    "description": "Add or update benchmark profiles for every local qwen3.6-27b provider intended for the TerminalBench 2.1 local sweep. The intended local provider set is now explicit:\n\n- vidar-qwen3-6-27b: native oMLX at http://vidar:1235/v1 serving Qwen3.6-27B-MLX-8bit\n- grendel-rapid-mlx: Rapid-MLX at http://grendel:8000/v1 serving mlx-community/Qwen3.6-27B-8bit\n- bragi-club-3090: vLLM-compatible club-3090 at http://bragi:8020/v1 serving qwen3.6-27b-autoround\n- sindri-club-3090: vLLM-compatible club-3090 at http://sindri:8020/v1 serving qwen3.6-27b-autoround\n\nDo not include Vidar through an OpenAI-compatible alias as a separate sweep lane; Vidar should be represented by the native oMLX provider type only. Bragi LM Studio may remain as historical/existing profile data, but it is not part of the verified local Qwen sweep unless it passes a fresh preflight.\n\nIn scope:\n- scripts/benchmark/profiles/*.yaml for the intended local qwen3.6-27b providers\n- benchmark profile schema support for provider types used by those profiles\n- any lane/resource config consumed by the 2.1 sweep runner\n- lightweight reachability/model-list checks documented as preflight, not as committed secrets\n\nOut of scope:\n- running the full sweep\n- changing managed OpenRouter profiles",
+    "acceptance": "1. Profiles exist for each intended local qwen3.6-27b provider: Vidar native oMLX, Grendel Rapid-MLX, Bragi club-3090 vLLM on http://bragi:8020/v1, and Sindri club-3090 vLLM on http://sindri:8020/v1.\n2. Vidar is not represented as a separate OpenAI-compatible sweep lane; the active Vidar local profile uses provider type omlx.\n3. Each profile records provider type, model id, base_url, api_key_env, pricing=0, context/output limits, sampling/reasoning defaults, and versioning snapshot/resolved_at.\n4. The club-3090 profiles use model qwen3.6-27b-autoround unless preflight discovers a different exact served id.\n5. The Grendel Rapid-MLX profile uses model mlx-community/Qwen3.6-27B-8bit unless preflight discovers a different exact served id.\n6. Each local provider lane is assigned or can be mapped to a resource_group keyed by endpoint/server so runner concurrency can be capped.\n7. `go run ./cmd/bench profiles list --json` loads the profiles successfully.\n8. Any live model-list smoke checks are recorded in notes/docs without committing secrets or machine-local config.",
+    "parent": "fizeau-ee77ec7f",
+    "labels": [
+      "area:benchmark",
+      "area:provider",
+      "area:terminalbench",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T04:48:18Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:32:00.341173298Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T04:41:54.627484858Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T043200-aa499006\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":21,\"output_tokens\":21471,\"total_tokens\":21492,\"cost_usd\":1.0024249500000002,\"duration_ms\":593272,\"exit_code\":0}",
+          "created_at": "2026-05-07T04:41:54.754777713Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=21492 cost_usd=1.0024 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"sonnet\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T043200-aa499006\",\"bead_id\":\"fizeau-169b19c4\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T04:41:56.609148207Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=sonnet harness=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"sonnet\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T04:41:56.840666087Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=184220785b311a4a81262dff6ae5112a4276490d\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=claude\nmodel=opus\ninput_bytes=18703\noutput_bytes=1172\nelapsed_ms=132852",
+          "created_at": "2026-05-07T04:45:12.27402884Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll four intended local Qwen profiles exist with verified endpoints/model IDs (vidar omlx, grendel rapid-mlx, bragi/sindri club-3090 vllm). Schema supports vllm and rapid-mlx provider types. Resource groups, sampling/reasoning defaults, pricing=0, and versioning snapshots are present. Preflight notes recorded without secrets.\nresult_rev=184220785b311a4a81262dff6ae5112a4276490d\nbase_rev=9b866bed8bb680a8aa543c635cade4ebd7372c4e",
+          "created_at": "2026-05-07T04:45:12.385398228Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T04:48:17.879178231Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T04:48:18.075207849Z",
+      "spec-id": "terminalbench-2.1-local-qwen-profiles-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T044818-21b528d9",
+    "prompt": ".ddx/executions/20260507T044818-21b528d9/prompt.md",
+    "manifest": ".ddx/executions/20260507T044818-21b528d9/manifest.json",
+    "result": ".ddx/executions/20260507T044818-21b528d9/result.json",
+    "checks": ".ddx/executions/20260507T044818-21b528d9/checks.json",
+    "usage": ".ddx/executions/20260507T044818-21b528d9/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-169b19c4-20260507T044818-21b528d9"
+  },
+  "prompt_sha": "49b4d8776b6ca3ddcdf49f5fa8bc29d7bf87d0bd8973d18822fdd0a712e0277e"
+}

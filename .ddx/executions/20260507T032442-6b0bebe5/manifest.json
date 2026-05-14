@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260507T032442-6b0bebe5",
+  "bead_id": "fizeau-66c928b3",
+  "base_rev": "6fefa94f04ddf268ed047ad2e404d118f5b78dbd",
+  "created_at": "2026-05-07T03:24:43.27170271Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-66c928b3",
+    "title": "Run and summarize the fiz-wrapper TerminalBench canary matrix",
+    "description": "Once the service pin, CLI flag, FizeauAgent forwarding, official profiles, invalid classification, and reproducibility docs are in place, run the canary matrix to prove the process works end to end. This bead is for validation and summary, not for adding more implementation except tiny fixes needed to make the documented command run as specified. The canary must include fiz-wrapped Claude, Codex, pi, and opencode lanes plus the fiz OpenRouter lanes.\n\nIn-scope files:\n- benchmark output artifacts produced by the documented canary command\n- docs/research summary memo for the canary result\n- tiny follow-up fixes directly required to make the documented command execute\n\nOut-of-scope:\n- broad benchmark subset redesign\n- changing model choices or official lane definitions\n- raw Claude/Codex/pi/opencode Harbor adapter productionization\n\nImplementation notes:\n- Run the documented canary command by itself, not concurrently with unrelated pi/fiz/opencode runs on the same provider.\n- Confirm each official lane is present in the output.\n- Confirm invalid quota/auth/setup/provider cells are classified separately from graded failures.\n- Summarize any observed tool-call/session-log differences only from captured artifacts.",
+    "acceptance": "1. The documented canary command completes or exits with only classified invalid cells; record the exact command and exit status in a docs/research memo.\n2. The canary output contains all six official lanes: fiz-wrapped Claude, fiz-wrapped Codex, fiz-wrapped pi, fiz-wrapped opencode, fiz OpenRouter Sonnet, and fiz OpenRouter GPT.\n3. Any provider quota/auth/setup failures are shown as invalid classes rather than graded failures.\n4. The docs/research memo summarizes pass/fail/invalid counts and any tool-call/session-log observations supported by artifacts.\n5. `go test ./cmd/bench ./agentcli ./internal/harnesses/...` passes after any tiny fixes made during validation.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:validation",
+      "kind:task",
+      "phase:verify"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:24:42Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:24:42.335671059Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:24:42.551026004Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T032442-6b0bebe5",
+    "prompt": ".ddx/executions/20260507T032442-6b0bebe5/prompt.md",
+    "manifest": ".ddx/executions/20260507T032442-6b0bebe5/manifest.json",
+    "result": ".ddx/executions/20260507T032442-6b0bebe5/result.json",
+    "checks": ".ddx/executions/20260507T032442-6b0bebe5/checks.json",
+    "usage": ".ddx/executions/20260507T032442-6b0bebe5/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-66c928b3-20260507T032442-6b0bebe5"
+  },
+  "prompt_sha": "e34d1a108dc00915dfaff74cb84e67eec7da7e91243e11f7d288c67990c929d7"
+}

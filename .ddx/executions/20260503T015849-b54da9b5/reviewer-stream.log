@@ -1,0 +1,17 @@
+---
+## Review: agent-1ee144c7 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Final non-prerelease Fizeau tag exists | APPROVE | release_evidence.md — v0.9.28 at 86b4e8f, no prerelease suffix, published |
+| 2 | Release artifacts named fiz* | APPROVE | release_evidence.md — four fiz-<os>-<arch> assets confirmed via `gh release view` |
+| 3 | Install/update paths verified | APPROVE | install.sh:15-16,102 + agentcli/update.go:21,211 + productinfo.go:6 cited; asset URL returns 302 |
+| 4 | Release notes link migration guide | APPROVE | release_evidence.md — body links CHANGELOG.md#v0926--2026-05-01 anchor |
+
+### Summary
+
+The evidence file thoroughly documents that v0.9.28 satisfies all four acceptance criteria, with concrete verification commands and file:line citations for the install/update paths. The note that the actual `git tag`/`git push` was performed outside the worktree (per project policy) is reasonable, and the published release independently confirms the tag exists with fiz-* assets and a migration-guide link.

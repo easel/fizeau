@@ -1,0 +1,24 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The memo’s updated artifact directory does not exist in the worktree, and the claims about the six-lane canary/18 invalid runs are not backed by any committed matrix artifacts, so the acceptance criteria cannot be validated from this change.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The memo now cites `benchmark-results/matrix-medium-model-canary-20260507T035806Z/...`, but that directory is not present in the repository. This breaks the evidence trail for the recorded command, exit status, counts, and log observations.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:17"
+    },
+    {
+      "severity": "block",
+      "summary": "The summary claims a final matrix with all six official `fiz-*` lanes and `18` `invalid_setup` runs, but the committed `benchmark-results/matrix-medium-model-canary-*` artifacts in the worktree do not support that: the available canary `matrix.json` files contain only one profile each, and the sampled `matrix.md` shape differs materially.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:23"
+    },
+    {
+      "severity": "warn",
+      "summary": "The memo records the command as `scripts/benchmark/run_medium_model_terminalbench_comparison.sh canary`, omitting the required `OPENROUTER_API_KEY=...` prefix from the documented operator command. That makes the 'exact command' record incomplete relative to the governing doc.",
+      "location": "docs/research/terminalbench-fiz-wrapper-canary-2026-05-06.md:10"
+    }
+  ]
+}
+```

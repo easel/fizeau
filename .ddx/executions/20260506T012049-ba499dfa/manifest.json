@@ -1,0 +1,86 @@
+{
+  "attempt_id": "20260506T012049-ba499dfa",
+  "bead_id": "fizeau-ed832d22",
+  "base_rev": "fced38e9f9f865791916f04abf6279b4476fbbf7",
+  "created_at": "2026-05-06T01:20:49.858581978Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ed832d22",
+    "title": "Add llama-server provider type",
+    "description": "Add first-class provider type llama-server for llama.cpp's OpenAI-compatible server. In-scope files: internal/provider/llamaserver/*, internal/config/config.go and config tests, provider registry tests, service provider/model listing tests if they assert known types. The provider should wrap the shared OpenAI-compatible provider path like vllm/lmstudio/omlx, default to http://localhost:8080/v1, use default port 8080 for host-based endpoint expansion, support endpoint pools, and construct through the registry in both config-time and service-time native provider paths. Out of scope: utilization probe implementation, VCR cassette infrastructure, sticky routing, and shared lease backend.",
+    "acceptance": "1. go test ./internal/provider/registry ./internal/config ./... -run 'Registry|ProviderType|llama|NormalizeServiceProviderType' passes. 2. registry.Types includes llama-server and its factory returns a non-nil provider. 3. Loading config with type: llama-server and no base_url resolves default http://localhost:8080/v1 and creates a default endpoint. 4. Host/endpoint expansion for type: llama-server uses port 8080. 5. No existing provider type behavior changes.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:provider",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:20:49Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:08:21.891359546Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T010357-4c4308c0\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":6664109,\"output_tokens\":24360,\"total_tokens\":6688469,\"cost_usd\":0,\"duration_ms\":263389,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:08:22.013949404Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=6688469 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:08:24.11347594Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=46e249b71ddd93508ba079f8b0715a27414f0640\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:13:33-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=37127\noutput_bytes=0\nelapsed_ms=8274",
+          "created_at": "2026-05-06T01:08:33.365549134Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=46e249b71ddd93508ba079f8b0715a27414f0640\nbase_rev=d43300b10f5622811c8aa2cfdd004b68dea27475",
+          "created_at": "2026-05-06T01:08:33.495677863Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T01:20:49.134533069Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T012049-ba499dfa",
+    "prompt": ".ddx/executions/20260506T012049-ba499dfa/prompt.md",
+    "manifest": ".ddx/executions/20260506T012049-ba499dfa/manifest.json",
+    "result": ".ddx/executions/20260506T012049-ba499dfa/result.json",
+    "checks": ".ddx/executions/20260506T012049-ba499dfa/checks.json",
+    "usage": ".ddx/executions/20260506T012049-ba499dfa/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ed832d22-20260506T012049-ba499dfa"
+  },
+  "prompt_sha": "3bcf034f4970adbd6c59602246ce27b127df51d18c1f4f6912abea452d0398b7"
+}

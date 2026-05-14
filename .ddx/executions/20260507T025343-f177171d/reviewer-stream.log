@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "REQUEST_CHANGES",
+  "summary": "The main fiz assertion/fixture updates landed and the targeted regressions pass, but one focused routing test in this slice still refers to the native harness as \"agent\" in its diagnostics.",
+  "findings": [
+    {
+      "severity": "warn",
+      "summary": "This renamed fiz-focused regression still emits \"agent\" for the native harness in its failure diagnostics (\"providerless agent candidate\"), so the evidence update is incomplete for this test slice.",
+      "location": "service_routing_test.go:514"
+    }
+  ]
+}
+```

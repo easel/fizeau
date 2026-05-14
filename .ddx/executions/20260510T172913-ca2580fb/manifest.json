@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260510T172913-ca2580fb",
+  "bead_id": "fizeau-af9d5f1c",
+  "base_rev": "4f7bc7b7ee9834f333acfba98fe2a77acbdd6530",
+  "created_at": "2026-05-10T17:29:16.340619951Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-af9d5f1c",
+    "title": "fix: StageDir must use git add --force so evidence commits succeed in projects that gitignore .ddx/executions/",
+    "description": "## Problem\n\nProjects that include .ddx/executions/ in their .gitignore (including fizeau and\nany repo using the standard DDx .gitignore template) silently fail to land any bead.\nThe failure is invisible: the implementation is correct, tests pass, but agent.Land()\npreserves instead of landing on every attempt.\n\n## Root Cause\n\ncli/internal/agent/execute_bead_land.go:701 — RealLandingGitOps.StageDir:\n\n  args := append([]string{\"add\", \"--\", relPath}, EvidenceLandExcludePathspecs()...)\n  out, err := internalgit.Command(context.Background(), dir, args...).CombinedOutput()\n\ngit add without --force silently skips gitignored paths (exit 0, no output, no error).\nWhen .ddx/executions/ is gitignored, StageDir stages nothing. CommitStaged sees an\nempty index and returns sha=\"\". landEvidence calls evidenceDirHasTrackedFiles which\nalso returns false (gitignored files not tracked), so it returns error:\n\"no staged evidence files under .ddx/executions/...\". preserveAfterEvidenceFailure\nfires, rolls back master, and creates a preserve ref.\n\nCompounding issue: ApplyLandResultToExecuteBeadResult maps ALL non-pre-merge-check\npreserve reasons (including \"evidence commit failed\") to reasonForStatus=\"merge\nconflict\", which ClassifyExecuteBeadStatus returns as \"land_conflict\" (escalatable).\nThis causes runEscalatingSingleTierAttempts to burn through the entire model escalation\nladder (min_power 5→7→8→9) before exhausting.\n\nConfirmed in fizeau-bd5193ca: all 4 attempts preserved by evidence commit failure.\nInvestigation: .ddx/executions/20260510T023250-da87c8c9/fizeau-bd5193ca-investigation.md\n\n## Proposed Fix\n\nPart 1 (fix): In cli/internal/agent/execute_bead_land.go:701, StageDir, change:\n  args := append([]string{\"add\", \"--\", relPath}, ...)\nto:\n  args := append([]string{\"add\", \"--force\", \"--\", relPath}, ...)\n\nEvidence files are DDx infrastructure, not user source. They must be committed even\nwhen the project's .gitignore covers .ddx/executions/.\n\nPart 2 (defensive): In execute_bead_status.go, add \"evidence commit failed:\" as a\nnon-escalatable prefix in isPreservedNeedsReviewReason so infrastructure failures do\nnot burn the escalation ladder. Fixing Part 1 eliminates the failure path; Part 2\nprevents wasted escalation if any other evidence-commit edge case arises.",
+    "acceptance": "1. TestStageDirForcesGitIgnored: create a temp git repo with .gitignore covering a subdir, call StageDir on it, verify files are staged.\n   cd cli \u0026\u0026 go test -run TestStageDirForcesGitIgnored ./internal/agent/...\n\n2. TestEvidenceCommitSucceedsWhenGitignored: Land() end-to-end in a fixture repo whose .gitignore covers .ddx/executions/; verify status==\"landed\".\n   cd cli \u0026\u0026 go test -run TestEvidenceCommitSucceedsWhenGitignored ./internal/agent/...\n\n3. cd cli \u0026\u0026 go test ./internal/agent/... green\n\n4. lefthook run pre-commit passes",
+    "labels": [
+      "area:agent",
+      "kind:bug",
+      "phase:6"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-10T17:26:15Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1166153",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"Strong bug fix proposal with excellent root cause analysis, specific file/line references, and clear two-part remediation strategy. The fix is minimally invasive (adding --force flag), well-justified (infrastructure files should override user gitignore), and includes a defensive improvement to prevent escalation waste. Acceptance criteria are specific with concrete test commands and expected outcomes. One minor weakness: the acceptance criteria could be more explicit about expected output/assertions rather than just commands to run.\",\"score\":8,\"suggested_fixes\":[\"In acceptance criteria #1-2, add explicit assertions (e.g., 'verify staged files include .ddx/executions/... pathspecs' and 'verify result.Status equals \\\"landed\\\"') to make success conditions unambiguous\",\"Consider adding a regression test that simulates the exact fizeau-bd5193ca failure scenario from production\"],\"waivers_applied\":[]}",
+          "created_at": "2026-05-10T17:29:11.880703314Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "score=8"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-10T17:26:15.264888464Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260510T172913-ca2580fb",
+    "prompt": ".ddx/executions/20260510T172913-ca2580fb/prompt.md",
+    "manifest": ".ddx/executions/20260510T172913-ca2580fb/manifest.json",
+    "result": ".ddx/executions/20260510T172913-ca2580fb/result.json",
+    "checks": ".ddx/executions/20260510T172913-ca2580fb/checks.json",
+    "usage": ".ddx/executions/20260510T172913-ca2580fb/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-af9d5f1c-20260510T172913-ca2580fb"
+  },
+  "prompt_sha": "35755db1c82f520fcca8aa613d3c7932b767f24081b430a59fec6b15fe14d293"
+}

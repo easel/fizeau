@@ -1,0 +1,86 @@
+{
+  "attempt_id": "20260506T031336-29557329",
+  "bead_id": "fizeau-67145c14",
+  "base_rev": "86cfbee64e51c3e38147918435898e44a5ecfd3f",
+  "created_at": "2026-05-06T03:13:37.379554086Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-67145c14",
+    "title": "Expose sticky utilization routing evidence",
+    "description": "Expose sticky route and endpoint utilization evidence through public route/status/session surfaces. In-scope files: public service structs if needed, route-status JSON/text rendering, session-log routing decision projection, and tests. Requirements: RouteDecision/Candidate/RouteStatus show selected endpoint, sticky assignment status, sticky key status without leaking sensitive keys when inappropriate, utilization source, freshness, active/queued counts, max concurrency/cache pressure when known, and score components. Session artifacts record enough facts to explain why a worker stayed pinned or why a new key chose an endpoint. Out of scope: implementing provider probes, lease store internals, and route scoring policy.",
+    "acceptance": "1. go test ./cmd/fiz ./internal/session ./... -run 'RouteStatus|RoutingDecision|Session|Utilization|Sticky' passes. 2. route-status --json includes endpoint, sticky state, utilization source/freshness, active/queued counts when known, and score components. 3. Session artifacts include selected endpoint and sticky assignment reason for routed requests. 4. Text rendering remains readable and does not require parsing private provider internals. 5. Public contract docs stay aligned with any exported fields.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:cli",
+      "kind:observability"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T03:13:36Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T03:12:23.124911373Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T025758-15b02b7b\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":22084925,\"output_tokens\":60556,\"total_tokens\":22145481,\"cost_usd\":0,\"duration_ms\":863767,\"exit_code\":0}",
+          "created_at": "2026-05-06T03:12:23.22677424Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=22145481 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T03:12:25.621747969Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=8998cfa06cb3cb9eb9b9084438c6a82afc2066a8\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T23:17:35-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=67560\noutput_bytes=0\nelapsed_ms=8281",
+          "created_at": "2026-05-06T03:12:35.364810197Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=8998cfa06cb3cb9eb9b9084438c6a82afc2066a8\nbase_rev=a4b0fa0a9cb74ebc5ae93901dd2c296312720df4",
+          "created_at": "2026-05-06T03:12:35.470267602Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T03:13:36.220922957Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T031336-29557329",
+    "prompt": ".ddx/executions/20260506T031336-29557329/prompt.md",
+    "manifest": ".ddx/executions/20260506T031336-29557329/manifest.json",
+    "result": ".ddx/executions/20260506T031336-29557329/result.json",
+    "checks": ".ddx/executions/20260506T031336-29557329/checks.json",
+    "usage": ".ddx/executions/20260506T031336-29557329/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-67145c14-20260506T031336-29557329"
+  },
+  "prompt_sha": "b554573ae5f9efe469dfbd520f187042c94736b69569aced19ea012e40a59eed"
+}

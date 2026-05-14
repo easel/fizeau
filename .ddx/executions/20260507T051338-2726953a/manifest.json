@@ -1,0 +1,50 @@
+{
+  "attempt_id": "20260507T051338-2726953a",
+  "bead_id": "fizeau-ee77ec7f",
+  "base_rev": "70000e9c688f4513ca4d89d706a958a906ed48ce",
+  "created_at": "2026-05-07T05:13:38.774238529Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ee77ec7f",
+    "title": "Migrate TerminalBench benchmark runners to 2.1",
+    "description": "TerminalBench 2.1 is now the target benchmark. Update Fizeau benchmark runners and active operator docs to use the official Harbor dataset terminal-bench/terminal-bench-2-1, while preserving TB-2.0 historical fixtures and evidence records as historical 2.0 data.\n\nThis migration is now explicitly staged because the full sweep has multiple resource classes:\n- canary across all intended lanes,\n- local qwen3.6-27b providers × supported harness/fiz lanes,\n- Sonnet via fiz native/provider versus fiz Claude harness,\n- GPT-5.4-mini via fiz native/provider versus fiz Codex harness.\n\nThe runner must be restartable and smart about concurrency: local model providers are grouped by server/base_url and default to one active cell per resource group, while independent managed-provider lanes may run in parallel under budget/rate caps.\n\nThis bead intentionally replaces the stale plan to run unexecuted TB-2.0 matrices first. It must coordinate with the in-progress TerminalBench canary/documentation beads and must not relabel checked-in 2.0 subset/result fixtures as 2.1 without verifying task compatibility.\n\nIn scope:\n- active benchmark runner defaults and env templates\n- TerminalBench 2.1 subset/manifest strategy\n- staged lane/resource-group plan\n- local qwen provider profiles including bragi-club-3090 vLLM if verified\n- resumable/provider-aware phase runner\n- canary preflight consistency for Harbor dataset vs local TB-2.0 task-dir mode\n- focused benchmark docs after the current README workflow bead lands\n\nOut of scope:\n- rewriting historical TB-2.0 reports, evidence fixtures, or old research memos\n- running the paid/full sweep itself",
+    "acceptance": "1. The official runnable Harbor dataset is recorded as terminal-bench/terminal-bench-2-1, with TerminalBench 2.1 named distinctly from TB-2.0 in active scripts/docs.\n2. Child beads define the staged lane/resource plan, add required local qwen provider profiles, and implement the resumable provider-aware phase runner.\n3. Active runner defaults use the 2.1 dataset only after any required canary/documentation in-progress work is closed or explicitly reconciled.\n4. Existing TB-2.0 fixtures, subset manifests, import tests, and historical research artifacts remain labeled TB-2.0 unless they are regenerated or verified against 2.1.\n5. The existing subset task IDs are verified against TerminalBench 2.1, or a new 2.1 subset/full manifest is generated and the old subsets are explicitly marked TB-2.0-only.\n6. The runner supports the phases canary, local-qwen, sonnet-comparison, gpt-comparison, and all.\n7. The runner defaults to resume-safe behavior and provider-aware concurrency caps so shared local model endpoints are not overloaded.\n8. Egress/canary preflight cannot validate a TB-2.0 local task directory while running against the 2.1 Harbor dataset without an explicit compatibility note.\n9. bash -n passes for changed benchmark shell scripts.\n10. go test ./cmd/bench passes.\n11. The follow-up full-sweep bead fizeau-c770193a depends on this migration and runner work.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:terminalbench",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T05:13:38Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T05:13:37.858501002Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T05:13:38.051901871Z",
+      "spec-id": "terminalbench-2.1-migration-2026-05-07"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T051338-2726953a",
+    "prompt": ".ddx/executions/20260507T051338-2726953a/prompt.md",
+    "manifest": ".ddx/executions/20260507T051338-2726953a/manifest.json",
+    "result": ".ddx/executions/20260507T051338-2726953a/result.json",
+    "checks": ".ddx/executions/20260507T051338-2726953a/checks.json",
+    "usage": ".ddx/executions/20260507T051338-2726953a/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ee77ec7f-20260507T051338-2726953a"
+  },
+  "prompt_sha": "4934102c9fd25807e6c8def28a07a0cc06d2e13861ff81a7f8acf73b5cdb6cc8"
+}

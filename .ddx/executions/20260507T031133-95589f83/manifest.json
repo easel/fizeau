@@ -1,0 +1,255 @@
+{
+  "attempt_id": "20260507T031133-95589f83",
+  "bead_id": "fizeau-b73fed1a",
+  "base_rev": "ba4611bf1dd8dc1b52f6d5dadf1106f0b6f8976e",
+  "created_at": "2026-05-07T03:11:38.25932538Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b73fed1a",
+    "title": "Bias correlation IDs to sticky server instances",
+    "description": "Use validated CorrelationID as the sticky route key and bind it to a server instance, not to model identity. Sticky affinity is a score bonus after eligibility, not a hard pin. Related requests should prefer the same server across model changes when that server remains eligible.",
+    "acceptance": "1. The sticky lease map keys validated CorrelationID to server_instance with TTL/expiry behavior.\n2. Repeated ResolveRoute/Execute requests with the same CorrelationID prefer the same server instance across different eligible models.\n3. Stickiness never makes an ineligible candidate eligible and can be outweighed by hard saturation or severe performance/utilization pressure.\n4. RouteDecision/RouteStatus expose sticky status, server_instance, reason, and bonus without leaking raw sensitive keys in operator JSON.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Sticky|Correlation|ServerInstance|Lease\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:11:33Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:04.747925268Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:07.469950052Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=4c99ec5b5d751939a8f73a4c2309ab67b4fe475f\nbase_rev=4c99ec5b5d751939a8f73a4c2309ab67b4fe475f\nretry_after=2026-05-07T04:39:07Z",
+          "created_at": "2026-05-06T22:39:07.945298531Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:23:57.533406308Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:23:59.497403505Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"excluding execute-bead cleanup metadata: exit status 128\",\"rationale\":\"The attempt failed before implementation started because the service could not load config: provider \\\"grendel-rapid-mlx\\\" declares unsupported type \\\"rapid-mlx\\\". This is a repository/environment configuration problem, not a code or test failure.\",\"recommended_action\":\"fix_config_then_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Update the provider configuration so every provider type is one of the supported values, or remove the stale grendel-rapid-mlx entry if it is no longer valid. Re-run the bead only after config loading succeeds.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:24:10.057518602Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: fix_config_then_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "excluding execute-bead cleanup metadata: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:24:10.279136434Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:29:20.860182954Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:29:24.534353904Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"needs_human\",\"detail\":\"creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 510f1726)\\nfatal: cannot create directory at '.agents': No such file or directory: exit status 128\",\"rationale\":\"The attempt failed before implementation started because `git worktree add` could not create the isolated worktree: `.agents` was missing in the target path. This is a repository/environment setup problem, not a code or test failure.\",\"recommended_action\":\"fix_environment_then_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":\"Ensure the repository layout required by the execute-bead harness exists before retrying, especially the `.agents` directory used during worktree creation. If that directory is intentionally absent, update the harness/worktree setup to create or target a valid path.\",\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-07T02:29:34.053016934Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx agent execute-loop",
+          "summary": "needs_human: fix_environment_then_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "creating isolated worktree: git worktree add: Preparing worktree (detached HEAD 510f1726)\nfatal: cannot create directory at '.agents': No such file or directory: exit status 128\noutcome_reason=needs_human",
+          "created_at": "2026-05-07T02:29:34.21554106Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:37:55.034067448Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:47:12.184534517Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T023755-5dbafdce\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":12809615,\"output_tokens\":46438,\"total_tokens\":12856053,\"cost_usd\":0,\"duration_ms\":555026,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:47:12.305301707Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=12856053 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T023755-5dbafdce\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:47:17.414633039Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:47:17.644070521Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T02:49:21.581212149Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=2998f0525cd81be79ffbac5f0955a7459c2500d5\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15462\noutput_bytes=358\nelapsed_ms=90613",
+          "created_at": "2026-05-07T02:51:32.980120478Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nLease keys now normalize to CorrelationID only, routing applies server-instance sticky affinity across model changes without bypassing eligibility, saturation/load can override the bonus, and public routing surfaces expose sticky state without exposing raw keys.\nresult_rev=2998f0525cd81be79ffbac5f0955a7459c2500d5\nbase_rev=3abc8cdcc64d93bb7efa9c964d75e80db07b0d2f",
+          "created_at": "2026-05-07T02:51:33.091449668Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T02:54:59.642807025Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T024921-c2faf8c1\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":7893834,\"output_tokens\":31738,\"total_tokens\":7925572,\"cost_usd\":0,\"duration_ms\":332925,\"exit_code\":0}",
+          "created_at": "2026-05-07T02:54:59.752458456Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=7925572 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T024921-c2faf8c1\",\"bead_id\":\"fizeau-b73fed1a\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T02:55:03.790753547Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T02:55:03.999672226Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=6af7332bcf823000729f8e35319ac8e79e73724d\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15462\noutput_bytes=398\nelapsed_ms=94106",
+          "created_at": "2026-05-07T02:59:36.433397369Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll acceptance criteria are satisfied in the merged tree: validated correlation IDs back TTL leases keyed to sticky keys, server-instance affinity survives model changes as a score bonus only, operator JSON exposes sticky/server-instance evidence without leaking raw keys, and the scoped Go tests pass.\nresult_rev=6af7332bcf823000729f8e35319ac8e79e73724d\nbase_rev=d85e300c52896ef51e3eae69f0d9767675214fa9",
+          "created_at": "2026-05-07T02:59:36.8283468Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:11:33.147048494Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:11:33.342544058Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T031133-95589f83",
+    "prompt": ".ddx/executions/20260507T031133-95589f83/prompt.md",
+    "manifest": ".ddx/executions/20260507T031133-95589f83/manifest.json",
+    "result": ".ddx/executions/20260507T031133-95589f83/result.json",
+    "checks": ".ddx/executions/20260507T031133-95589f83/checks.json",
+    "usage": ".ddx/executions/20260507T031133-95589f83/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b73fed1a-20260507T031133-95589f83"
+  },
+  "prompt_sha": "1f5cae3ce32d6f623e40594ebc4367c4749fd1770e6871aa4955c3d3b7cead01"
+}

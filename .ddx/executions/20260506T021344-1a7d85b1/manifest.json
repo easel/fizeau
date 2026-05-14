@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T021344-1a7d85b1",
+  "bead_id": "fizeau-97c486b6",
+  "base_rev": "a54250f4053806ac6bee442dc77ff28cf7f58e50",
+  "created_at": "2026-05-06T02:13:45.162474999Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-97c486b6",
+    "title": "Normalize provider endpoint utilization",
+    "description": "Implement provider-owned utilization probes for vLLM and llama-server and normalize them into a shared endpoint utilization shape. In-scope files: internal/provider/vllm, internal/provider/llamaserver, shared provider/utilization helper package if needed, and provider tests using cassette replay. Requirements: derive server root from base_url ending in /v1; vLLM reads /metrics running/waiting/cache metrics; llama-server reads /metrics processing/deferred/cache metrics and falls back to /slots occupancy when metrics are unavailable; probe failures return stale or unknown utilization without marking endpoints unavailable. Out of scope: route lease store, route scoring changes, shared multi-machine lease backend, and server record-mode bootstrapping beyond cassettes already added.",
+    "acceptance": "1. go test ./internal/provider/vllm ./internal/provider/llamaserver ./internal/provider/... -run 'Utilization|Metrics|Slots|Cassette' passes. 2. vLLM base_url http://host:8000/v1 probes http://host:8000/metrics. 3. llama-server base_url http://host:8080/v1 probes http://host:8080/metrics and falls back to http://host:8080/slots. 4. Normalized utilization includes active requests, queued/deferred requests, cache usage when known, source, freshness, observed time, and max concurrency when slots expose it. 5. Probe failure returns stale/unknown utilization and does not make the endpoint unavailable.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:provider",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T02:13:44Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T02:13:44.500960447Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T021344-1a7d85b1",
+    "prompt": ".ddx/executions/20260506T021344-1a7d85b1/prompt.md",
+    "manifest": ".ddx/executions/20260506T021344-1a7d85b1/manifest.json",
+    "result": ".ddx/executions/20260506T021344-1a7d85b1/result.json",
+    "checks": ".ddx/executions/20260506T021344-1a7d85b1/checks.json",
+    "usage": ".ddx/executions/20260506T021344-1a7d85b1/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-97c486b6-20260506T021344-1a7d85b1"
+  },
+  "prompt_sha": "65c5227e9b89d0f143ccc763edbd3a6d0a5834901e4b6ba96d4f53c5cf9f8a07"
+}

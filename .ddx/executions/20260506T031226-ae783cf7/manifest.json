@@ -1,0 +1,72 @@
+{
+  "harness": "claude",
+  "model": "claude-opus-4-6",
+  "base_rev": "a4b0fa0a9cb74ebc5ae93901dd2c296312720df4",
+  "result_rev": "8998cfa06cb3cb9eb9b9084438c6a82afc2066a8",
+  "verdict": "BLOCK",
+  "bead_id": "fizeau-67145c14",
+  "execution_dir": ".ddx/executions/20260506T031226-ae783cf7",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1469,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 813,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "agentcli/routing_cli_test.go",
+          "agentcli/routing_smart.go",
+          "docs/helix/02-design/contracts/CONTRACT-003-fizeau-service.md",
+          "internal/routehealth/utilization_store.go",
+          "internal/serviceimpl/session_projection_test.go",
+          "internal/session/event.go",
+          "internal/session/replay.go",
+          "internal/session/replay_test.go",
+          "service.go",
+          "service_events.go",
+          "service_execute.go",
+          "service_route_leases.go",
+          "service_route_leases_test.go",
+          "service_routestatus.go",
+          "service_routestatus_test.go",
+          "service_routing.go",
+          "service_session_log.go"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-004",
+        "bytes_included": 11876,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-004-plugin-packaging.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 51505,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 67560,
+    "output_bytes": 0,
+    "elapsed_ms": 8281,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}

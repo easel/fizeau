@@ -1,0 +1,79 @@
+{
+  "attempt_id": "20260506T235641-d9055867",
+  "bead_id": "fizeau-b4c78d49",
+  "base_rev": "94fb3159221e1cc7f2a409e53350d9650b3c20d7",
+  "created_at": "2026-05-06T23:56:42.871628664Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b4c78d49",
+    "title": "Resolve profiles as power policy during routing",
+    "description": "Change route resolution so Profile expands to effective power policy before candidate filtering. ModelRef remains exact catalog-reference narrowing. Local auto-routable candidates with matching power must remain eligible under profiles such as standard even when they are not the profile's historical catalog target.",
+    "acceptance": "1. A request with Profile=standard and no ModelRef considers all discovered auto-routable candidates inside the effective power policy.\n2. A request with ModelRef still narrows model identity and does not broaden because Profile is also set.\n3. Route-status/ResolveRoute evidence shows requested profile and effective power policy.\n4. Tests include local power-5 candidates from grendel/vidar/sindri-style endpoints participating under standard.\n5. go test ./internal/routing ./internal/serviceimpl ./cmd/fiz -run \"Profile|PowerPolicy|Route\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:routing",
+      "area:service",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T23:56:41Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:38:57.195818518Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:38:59.245748671Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=8e20edf88966aeed5fca06b2dd5f2a2d20a9be8f\nbase_rev=8e20edf88966aeed5fca06b2dd5f2a2d20a9be8f\nretry_after=2026-05-07T04:38:59Z",
+          "created_at": "2026-05-06T22:38:59.587535523Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:56:41.278762935Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T23:56:41.456110169Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T235641-d9055867",
+    "prompt": ".ddx/executions/20260506T235641-d9055867/prompt.md",
+    "manifest": ".ddx/executions/20260506T235641-d9055867/manifest.json",
+    "result": ".ddx/executions/20260506T235641-d9055867/result.json",
+    "checks": ".ddx/executions/20260506T235641-d9055867/checks.json",
+    "usage": ".ddx/executions/20260506T235641-d9055867/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b4c78d49-20260506T235641-d9055867"
+  },
+  "prompt_sha": "7f254f909c75d04d27e54b99c0efcbd97053076c49bad7301833caec1ea389dd"
+}

@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The added tests extend subprocess smoke coverage to codex, but they do not prove the required hard-pin no-broadening failure path. AC2 remains unverified, so the bead cannot be accepted from this diff.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "The new failure test only empties PATH and checks for `codex binary not found`; it never configures a competing satisfiable route, so it does not prove that an unsatisfied harness pin fails instead of broadening to another harness/provider as AC2 requires.",
+      "location": "service_harness_dispatch_test.go:94"
+    },
+    {
+      "severity": "warn",
+      "summary": "The added dispatch coverage is still just a generic subprocess smoke test. It does not assert routing remains pinned when other explicit provider/harness options are concurrently available, which is the specific TerminalBench hard-pin behavior called out by AC1.",
+      "location": "service_harness_dispatch_test.go:15"
+    }
+  ]
+}
+```

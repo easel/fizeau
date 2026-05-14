@@ -1,0 +1,37 @@
+{
+  "attempt_id": "20260502T191816-621eaec2",
+  "bead_id": "agent-744cd55e",
+  "base_rev": "c2dd61a880f1cc73b07fd71164186a6a8dcede8e",
+  "created_at": "2026-05-02T19:18:16.795880511Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-744cd55e",
+    "title": "fizeau: tag release with CONTRACT-003 v2 additions; downstream notification",
+    "description": "Cut a tagged release (likely v0.10.0 or appropriate) once contract + types + echo + tests are merged. Notify downstream consumers (DDx in particular) so they can bump their import (per project memory: ddx must always import properly tagged agent releases; no go.mod replace).",
+    "acceptance": "1. Release tag pushed. 2. Release notes mention the new fields + reserved-key extensions + Power return field. 3. DDx repo notified (e.g., comment on the corresponding DDx S10_1 bead, or PR opened against ddx go.mod).",
+    "parent": "agent-3bb96bf5",
+    "labels": [
+      "contract:003",
+      "kind:release"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-02T19:18:16Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3446765",
+      "execute-loop-heartbeat-at": "2026-05-02T19:18:16.283951651Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260502T191816-621eaec2",
+    "prompt": ".ddx/executions/20260502T191816-621eaec2/prompt.md",
+    "manifest": ".ddx/executions/20260502T191816-621eaec2/manifest.json",
+    "result": ".ddx/executions/20260502T191816-621eaec2/result.json",
+    "checks": ".ddx/executions/20260502T191816-621eaec2/checks.json",
+    "usage": ".ddx/executions/20260502T191816-621eaec2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-744cd55e-20260502T191816-621eaec2"
+  },
+  "prompt_sha": "d213e448b78b438eaf5b76cebe982b838ea92737f9e348fedabe86a9fa97171f"
+}

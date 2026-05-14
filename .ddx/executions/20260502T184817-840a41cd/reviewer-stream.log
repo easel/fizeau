@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "All ACs implemented: contract amended with Role/CorrelationID/Power fields, Go types updated, typed validators wired into Execute and ResolveRoute, echo paths cover routing_decision/final/session-log header (not text_delta), test contract statements covered, CHANGELOG entry for v0.10.0. Tag/import (AC6/7) appropriately deferred to merge pipeline.",
+  "findings": [
+    {"severity": "info", "summary": "ValidateCorrelationID comment mentions 'allow hyphen/colon/underscore' but the range 0x21-0x7E actually permits all printable ASCII including symbols beyond those — matches contract wording ('printable ASCII... no whitespace except hyphen/colon/underscore') ambiguously; behavior is permissive (any printable). Worth clarifying contract or tightening validator if stricter intent.", "location": "role_correlation.go:90"},
+    {"severity": "info", "summary": "metadataReservedKeyCollisions only flags collisions when caller value differs from top-level; identical values silently pass. Contract says 'when caller also sets' — current behavior is reasonable but slightly lenient.", "location": "role_correlation.go:139"}
+  ]
+}
+```

@@ -1,0 +1,207 @@
+{
+  "attempt_id": "20260507T015102-eed83c83",
+  "bead_id": "fizeau-69c585a1",
+  "base_rev": "077f78812f94eac036e4a7dd761c9e07a6f27305",
+  "created_at": "2026-05-07T01:51:08.008404791Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-69c585a1",
+    "title": "Derive stable server instance identity",
+    "description": "Add normalized server-instance identity for provider endpoints. Identity should prefer an explicit config field when present and otherwise derive from the endpoint host/port. This identity is diagnostic, appears in route evidence, and is the target of sticky affinity.",
+    "acceptance": "1. Provider endpoints can expose a configured server_instance value.\n2. When unset, server_instance is derived deterministically from base_url host/port after /v1 root normalization.\n3. ModelInfo, Candidate, RouteDecision, RouteStatus, and session routing evidence include server_instance.\n4. Tests cover grendel, vidar, and sindri-style base URLs plus explicit override.\n5. go test ./internal/config ./internal/routing ./cmd/fiz -run \"ServerInstance|EndpointIdentity|RouteStatus\" passes.",
+    "parent": "fizeau-5931f1f8",
+    "labels": [
+      "area:config",
+      "area:routing",
+      "kind:task"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:51:02Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3542492",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T22:39:02.138756006Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-06T22:39:04.059737111Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "agent: build service: agent.New: load config: config: provider \"grendel-rapid-mlx\" has unknown type \"rapid-mlx\" (use openai, openrouter, lmstudio, omlx, luce, vllm, ollama, or anthropic)\nresult_rev=5352b4b0a4f76545a9826209a2c2aeacd4becd97\nbase_rev=5352b4b0a4f76545a9826209a2c2aeacd4becd97\nretry_after=2026-05-07T04:39:04Z",
+          "created_at": "2026-05-06T22:39:04.39918284Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-06T23:57:17.337312489Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:10:33.102852369Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T235717-97274599\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":20836074,\"output_tokens\":77535,\"total_tokens\":20913609,\"cost_usd\":0,\"duration_ms\":794343,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:10:33.211694574Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=20913609 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-07T00:23:22.649668021Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T001035-3dcb983d\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":24492486,\"output_tokens\":72769,\"total_tokens\":24565255,\"cost_usd\":0,\"duration_ms\":766408,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:23:22.841008178Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=24565255 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T001035-3dcb983d\",\"bead_id\":\"fizeau-69c585a1\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:23:25.761093046Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:23:25.979222315Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=176b0ca86c1919f38647829088f0837831f35ad2\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=15295\noutput_bytes=319\nelapsed_ms=96943",
+          "created_at": "2026-05-07T00:27:44.759444246Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll acceptance criteria are implemented: config supports explicit and derived server_instance values, routing/status/session/model surfaces carry it through, targeted URL cases are tested, and the named test command passes.\nresult_rev=176b0ca86c1919f38647829088f0837831f35ad2\nbase_rev=7d8e84d400475586a7adbc722eca31db09e64dae",
+          "created_at": "2026-05-07T00:27:44.860580537Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T00:33:07.804972219Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T00:37:25.672428193Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T003308-0cf2e3ad\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3862599,\"output_tokens\":15675,\"total_tokens\":3878274,\"cost_usd\":0,\"duration_ms\":253259,\"exit_code\":0}",
+          "created_at": "2026-05-07T00:37:25.782562387Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=3878274 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T003308-0cf2e3ad\",\"bead_id\":\"fizeau-69c585a1\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T00:37:27.552325938Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T00:37:27.770700786Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=ef20b8bb7623838f61c9dd9932f596e42dfce233\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=18320\noutput_bytes=342\nelapsed_ms=64510",
+          "created_at": "2026-05-07T00:39:57.842060488Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe codebase satisfies the bead: explicit and derived server-instance identities are wired through config normalization, model/routing/status public surfaces, session routing evidence, and the targeted tests pass when run with a writable GOCACHE.\nresult_rev=ef20b8bb7623838f61c9dd9932f596e42dfce233\nbase_rev=e64c8a2ef44ddae0f8b8b281da707f9b563c79c6",
+          "created_at": "2026-05-07T00:39:57.95343718Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:51:02.604614421Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:51:02.790823071Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T015102-eed83c83",
+    "prompt": ".ddx/executions/20260507T015102-eed83c83/prompt.md",
+    "manifest": ".ddx/executions/20260507T015102-eed83c83/manifest.json",
+    "result": ".ddx/executions/20260507T015102-eed83c83/result.json",
+    "checks": ".ddx/executions/20260507T015102-eed83c83/checks.json",
+    "usage": ".ddx/executions/20260507T015102-eed83c83/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-69c585a1-20260507T015102-eed83c83"
+  },
+  "prompt_sha": "c0e65fc80f9cf8d29a28b60dfb0657d2282f507a395d9108240f54304530c7f0"
+}

@@ -1,0 +1,112 @@
+{
+  "attempt_id": "20260507T015513-fe0e946f",
+  "bead_id": "fizeau-e2724f0c",
+  "base_rev": "cd854ea3aecded67ceb3813a9e9d4b6f21eaebdb",
+  "created_at": "2026-05-07T01:55:15.063854925Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e2724f0c",
+    "title": "Forward TerminalBench FIZEAU_* pins through FizeauAgent",
+    "description": "Official TerminalBench comparison runs should use the single Harbor installed agent `scripts/benchmark/harbor_agent.py:FizeauAgent`. That adapter currently forwards environment variables but invokes `fiz --json --preset default --work-dir ... -p ...` without converting `FIZEAU_HARNESS` into the new CLI hard pin. It must support every official fiz-wrapped harness lane: Claude, Codex, pi, and opencode. It also needs enough captured target metadata for diagnosis and matrix aggregation.\n\nIn-scope files:\n- scripts/benchmark/harbor_agent.py\n- tests for FizeauAgent command construction and trajectory metadata\n- narrow helper functions in scripts/benchmark if needed\n\nOut-of-scope:\n- raw Harbor Claude/Codex/pi/opencode adapters\n- medium comparison profile definitions\n- service or CLI harness-pin implementation\n\nImplementation notes:\n- Map `FIZEAU_HARNESS` to `--harness` for claude, codex, pi, and opencode.\n- Continue mapping/passing `FIZEAU_PROVIDER`, `FIZEAU_MODEL`, `FIZEAU_MODEL_REF`, and `FIZEAU_REASONING` through the supported fiz CLI surface.\n- Record the requested/resolved target in the trajectory/session artifact without parsing private harness-native streams.",
+    "acceptance": "1. Script-level tests prove `FIZEAU_HARNESS=claude`, `codex`, `pi`, and `opencode` each make FizeauAgent invoke fiz with the corresponding `--harness` value.\n2. A script-level test proves provider/model/model-ref/reasoning pins are preserved in the fiz invocation.\n3. A script-level test proves FizeauAgent trajectory metadata includes requested harness/provider/model information.\n4. The adapter does not invoke raw Harbor Claude, Codex, pi, or opencode adapters in this code path.\n5. The relevant Python test command for scripts/benchmark passes, or if no Python test harness exists yet, add one and document its command in the bead close evidence.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:harness",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:55:13Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:37:17.411813634Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T01:40:38.422191439Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T013717-64ee14a2\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2352984,\"output_tokens\":24095,\"total_tokens\":2377079,\"cost_usd\":0,\"duration_ms\":199176,\"exit_code\":0}",
+          "created_at": "2026-05-07T01:40:38.550506094Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=2377079 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T013717-64ee14a2\",\"bead_id\":\"fizeau-e2724f0c\",\"rejected_route_pins\":null,\"requested_tier\":\"standard\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T01:40:44.682909991Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T01:40:44.920663468Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=22b65958aa18e0e727c9c67d20e1f058edb67cad\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=8947\noutput_bytes=343\nelapsed_ms=40332",
+          "created_at": "2026-05-07T01:42:01.673457584Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nAll acceptance criteria are met: FizeauAgent now forwards official FIZEAU_* pins into the fiz CLI, records requested/resolved target metadata in trajectory output, avoids raw Harbor adapters on this path, and the focused Python test target passes.\nresult_rev=22b65958aa18e0e727c9c67d20e1f058edb67cad\nbase_rev=805913749c87b5885e803ca2cf6ff6aa3015a557",
+          "created_at": "2026-05-07T01:42:01.782204191Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:55:12.965378041Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:55:13.220204266Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T015513-fe0e946f",
+    "prompt": ".ddx/executions/20260507T015513-fe0e946f/prompt.md",
+    "manifest": ".ddx/executions/20260507T015513-fe0e946f/manifest.json",
+    "result": ".ddx/executions/20260507T015513-fe0e946f/result.json",
+    "checks": ".ddx/executions/20260507T015513-fe0e946f/checks.json",
+    "usage": ".ddx/executions/20260507T015513-fe0e946f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e2724f0c-20260507T015513-fe0e946f"
+  },
+  "prompt_sha": "fba57ff53a848bff0265650e6d67d65a026750daa8f3033e64a911a7e532c932"
+}

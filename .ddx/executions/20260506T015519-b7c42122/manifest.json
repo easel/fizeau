@@ -1,0 +1,206 @@
+{
+  "attempt_id": "20260506T015519-b7c42122",
+  "bead_id": "fizeau-ed832d22",
+  "base_rev": "78a3f87bff981a6ba08755f9df63cd2c27b31def",
+  "created_at": "2026-05-06T01:55:20.311887422Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ed832d22",
+    "title": "Add llama-server provider type",
+    "description": "Add first-class provider type llama-server for llama.cpp's OpenAI-compatible server. In-scope files: internal/provider/llamaserver/*, internal/config/config.go and config tests, provider registry tests, service provider/model listing tests if they assert known types. The provider should wrap the shared OpenAI-compatible provider path like vllm/lmstudio/omlx, default to http://localhost:8080/v1, use default port 8080 for host-based endpoint expansion, support endpoint pools, and construct through the registry in both config-time and service-time native provider paths. Out of scope: utilization probe implementation, VCR cassette infrastructure, sticky routing, and shared lease backend.",
+    "acceptance": "1. go test ./internal/provider/registry ./internal/config ./... -run 'Registry|ProviderType|llama|NormalizeServiceProviderType' passes. 2. registry.Types includes llama-server and its factory returns a non-nil provider. 3. Loading config with type: llama-server and no base_url resolves default http://localhost:8080/v1 and creates a default endpoint. 4. Host/endpoint expansion for type: llama-server uses port 8080. 5. No existing provider type behavior changes.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:provider",
+      "kind:feature"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:55:19Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:08:21.891359546Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T010357-4c4308c0\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":6664109,\"output_tokens\":24360,\"total_tokens\":6688469,\"cost_usd\":0,\"duration_ms\":263389,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:08:22.013949404Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=6688469 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:08:24.11347594Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=46e249b71ddd93508ba079f8b0715a27414f0640\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:13:33-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=37127\noutput_bytes=0\nelapsed_ms=8274",
+          "created_at": "2026-05-06T01:08:33.365549134Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=46e249b71ddd93508ba079f8b0715a27414f0640\nbase_rev=d43300b10f5622811c8aa2cfdd004b68dea27475",
+          "created_at": "2026-05-06T01:08:33.495677863Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:22:16.254246153Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T012049-ba499dfa\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1069345,\"output_tokens\":7538,\"total_tokens\":1076883,\"cost_usd\":0,\"duration_ms\":85566,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:22:16.392305838Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1076883 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:22:21.637703606Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=68f64ba047fde55ecf423e2a8c0011453090e6a0\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:27:31-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=274596\noutput_bytes=0\nelapsed_ms=8343",
+          "created_at": "2026-05-06T01:22:31.292365413Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=68f64ba047fde55ecf423e2a8c0011453090e6a0\nbase_rev=fced38e9f9f865791916f04abf6279b4476fbbf7",
+          "created_at": "2026-05-06T01:22:31.430559473Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:47:23.008829132Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T014610-08fbe95e\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":756176,\"output_tokens\":6238,\"total_tokens\":762414,\"cost_usd\":0,\"duration_ms\":71621,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:47:23.103952324Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=762414 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:47:24.978253938Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=8d30450fbe7cba19fca6d8b1fe0ca06258fc3635\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:52:34-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=19574\noutput_bytes=0\nelapsed_ms=8252",
+          "created_at": "2026-05-06T01:47:34.299079827Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=8d30450fbe7cba19fca6d8b1fe0ca06258fc3635\nbase_rev=096a1181ff1f2583dabc405861362c05a93c4c32",
+          "created_at": "2026-05-06T01:47:34.405572388Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:51:56.939069331Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T015045-4b00c165\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1084448,\"output_tokens\":6348,\"total_tokens\":1090796,\"cost_usd\":0,\"duration_ms\":70388,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:51:57.066623754Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1090796 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:51:59.293890961Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=3db672115840d89c7e6f1b9272cdf9ff8f4edbd4\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:57:08-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=19546\noutput_bytes=0\nelapsed_ms=8175",
+          "created_at": "2026-05-06T01:52:08.626701994Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=3db672115840d89c7e6f1b9272cdf9ff8f4edbd4\nbase_rev=35ea5eb6e77f02f96ad5c073102f12fd746a32f5",
+          "created_at": "2026-05-06T01:52:08.759799831Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T01:55:19.197362598Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T015519-b7c42122",
+    "prompt": ".ddx/executions/20260506T015519-b7c42122/prompt.md",
+    "manifest": ".ddx/executions/20260506T015519-b7c42122/manifest.json",
+    "result": ".ddx/executions/20260506T015519-b7c42122/result.json",
+    "checks": ".ddx/executions/20260506T015519-b7c42122/checks.json",
+    "usage": ".ddx/executions/20260506T015519-b7c42122/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ed832d22-20260506T015519-b7c42122"
+  },
+  "prompt_sha": "6807e0f5c670d1a6120b82fc9ec49f942096e223bb4a3c4c8883f62989e36d0b"
+}

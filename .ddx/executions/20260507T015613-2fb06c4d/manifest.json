@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260507T015613-2fb06c4d",
+  "bead_id": "fizeau-9ff62c35",
+  "base_rev": "08627b23ff05de9604c603b94c01548261b06417",
+  "created_at": "2026-05-07T01:56:15.532933118Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9ff62c35",
+    "title": "Replace medium TerminalBench profiles with fiz wrapper lanes for all harnesses",
+    "description": "The medium TerminalBench comparison should compare targets by changing fiz routing pins, not by switching Harbor installed agents. The official lanes are fiz-wrapped Claude Sonnet 4.6, fiz-wrapped Codex GPT 5.4 mini, fiz-wrapped pi GPT 5.4 mini, fiz-wrapped opencode GPT 5.4 mini, fiz via OpenRouter Sonnet 4.6, and fiz via OpenRouter GPT 5.4 mini. Raw Harbor Claude/Codex/pi/opencode lanes may remain as diagnostics outside this official script, but they must not be part of the main comparison path.\n\nIn-scope files:\n- scripts/benchmark/run_medium_model_terminalbench_comparison.sh\n- benchmark profile or manifest files used by that script\n- focused shell/profile tests or dry-run checks\n- docs referenced directly by the script if needed\n\nOut-of-scope:\n- FizeauAgent implementation\n- CLI/service harness pin support\n- result aggregation logic\n\nImplementation notes:\n- The official script should invoke Harbor with only the `fiz` installed agent/harness.\n- Use lane labels from the spec: `fiz-harness-claude-sonnet-4-6`, `fiz-harness-codex-gpt-5-4-mini`, `fiz-harness-pi-gpt-5-4-mini`, `fiz-harness-opencode-gpt-5-4-mini`, `fiz-openrouter-claude-sonnet-4-6`, and `fiz-openrouter-gpt-5-4-mini`.\n- Default local TerminalBench task image behavior to native builds with `HARBOR_FORCE_BUILD=1` unless explicitly overridden.",
+    "acceptance": "1. A dry-run/test proves the official medium comparison script passes only the fiz Harbor adapter/installed-agent to Harbor.\n2. The generated profile matrix contains exactly the six official lane labels listed in the spec for the medium frontier comparison.\n3. The script defaults `HARBOR_FORCE_BUILD=1` for local native task-image builds while allowing an explicit user override.\n4. `bash -n scripts/benchmark/run_medium_model_terminalbench_comparison.sh` passes.\n5. Any profile-generation tests for scripts/benchmark pass.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:benchmark",
+      "area:profiles",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:56:13Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:56:13.716929735Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:56:13.909994798Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T015613-2fb06c4d",
+    "prompt": ".ddx/executions/20260507T015613-2fb06c4d/prompt.md",
+    "manifest": ".ddx/executions/20260507T015613-2fb06c4d/manifest.json",
+    "result": ".ddx/executions/20260507T015613-2fb06c4d/result.json",
+    "checks": ".ddx/executions/20260507T015613-2fb06c4d/checks.json",
+    "usage": ".ddx/executions/20260507T015613-2fb06c4d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-9ff62c35-20260507T015613-2fb06c4d"
+  },
+  "prompt_sha": "3d8def3f3e5e9025b5c8e1ead56d75a71f26dd3babbe816ef9c2db116b4f6013"
+}

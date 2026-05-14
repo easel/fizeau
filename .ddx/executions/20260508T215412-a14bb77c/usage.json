@@ -1,0 +1,9 @@
+{
+  "attempt_id": "20260508T215412-a14bb77c",
+  "harness": "fiz",
+  "provider": "sindri-club-3090",
+  "model": "qwen3.6-27b-autoround",
+  "tokens": 23589,
+  "input_tokens": 23426,
+  "output_tokens": 163
+}

@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T004142-073872b6",
+  "bead_id": "fizeau-a807dc97",
+  "base_rev": "b12d03c0553cbf97a8992f2369ec996d032e4d9a",
+  "created_at": "2026-05-06T00:41:43.321065436Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a807dc97",
+    "title": "Ratify sticky utilization routing specs",
+    "description": "Update and verify the routing design documents for sticky utilization-aware local endpoint routing. In-scope files: docs/helix/01-frame/features/FEAT-004-model-routing.md, docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md, docs/routing/best-provider.md, docs/routing/profiles.md, and CONTRACT-003 only if public route evidence fields are introduced. Required behavior: same sticky key reuses a local endpoint; new sticky keys spread by least load; stale provider utilization falls back to Fizeau leases; fuzzy provider-native model matching remains documented. Out of scope: provider implementation and route engine code.",
+    "acceptance": "1. rg -n 'sticky route key|Endpoint utilization|AC-FEAT-004-16|AC-FEAT-004-17|AC-FEAT-004-18' docs/helix/01-frame/features/FEAT-004-model-routing.md succeeds. 2. rg -n 'sticky local endpoint assignment|vllm:num_requests_running|llama-server' docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md succeeds. 3. rg -n 'fuzzy-match|AC-FEAT-004-14' docs/helix/01-frame/features/FEAT-004-model-routing.md succeeds. 4. ddx doc stale exits successfully or reports no stale routing docs caused by this change.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:docs",
+      "kind:design"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T00:41:42Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T00:41:42.699344792Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T004142-073872b6",
+    "prompt": ".ddx/executions/20260506T004142-073872b6/prompt.md",
+    "manifest": ".ddx/executions/20260506T004142-073872b6/manifest.json",
+    "result": ".ddx/executions/20260506T004142-073872b6/result.json",
+    "checks": ".ddx/executions/20260506T004142-073872b6/checks.json",
+    "usage": ".ddx/executions/20260506T004142-073872b6/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-a807dc97-20260506T004142-073872b6"
+  },
+  "prompt_sha": "93ba788ffc87e1ac01a056e97e4815050e59c595be27ad10712bd8dde7551818"
+}

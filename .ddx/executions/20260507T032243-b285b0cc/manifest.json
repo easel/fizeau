@@ -1,0 +1,168 @@
+{
+  "attempt_id": "20260507T032243-b285b0cc",
+  "bead_id": "fizeau-ef2d4427",
+  "base_rev": "06cc1e1d1e5effd18d0ad00cec4aafa86d12b550",
+  "created_at": "2026-05-07T03:22:44.442221336Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ef2d4427",
+    "title": "Document the reproducible TerminalBench medium comparison command",
+    "description": "After the fiz-wrapper comparison path is implemented, users should have one documented command for the less-than-full TerminalBench comparison and should not need to coordinate five environment variables by hand. The documentation must explain what the command runs, which lanes are official, which artifacts it writes, and how invalid cells are interpreted. The official harness comparison includes Claude, Codex, pi, and opencode through fiz, plus direct provider lanes through fiz.\n\nIn-scope files:\n- docs/ benchmark or research documentation for TerminalBench comparison\n- script help output or README text if the script has a help mode\n- links from the new spec to the reproducibility doc if useful\n\nOut-of-scope:\n- implementing script behavior\n- running the final canary matrix\n- changing task subset selection\n\nImplementation notes:\n- Document a single entrypoint command for canary and the wider subset.\n- Include the six official lane names and the fact that all run through FizeauAgent.\n- Include output artifact locations and how to read invalid quota/auth/setup/provider classifications.",
+    "acceptance": "1. A documentation page or script help section shows the single command to start the Claude/Codex/pi/opencode/OpenRouter fiz comparison.\n2. The documentation lists the six official lanes and states that raw Harbor Claude/Codex/pi/opencode adapters are diagnostics only.\n3. The documentation describes output artifacts, invalid classifications, and denominator handling.\n4. `rg \"fiz-harness-claude-sonnet-4-6|fiz-harness-codex-gpt-5-4-mini|fiz-harness-pi-gpt-5-4-mini|fiz-harness-opencode-gpt-5-4-mini|fiz-openrouter-claude-sonnet-4-6|fiz-openrouter-gpt-5-4-mini\" docs scripts/benchmark` finds the documented lane names.\n5. `go test ./cmd/bench` passes if reporting docs were generated from or coupled to Go code; otherwise note why no Go command changed.",
+    "parent": "fizeau-ed924ab3",
+    "labels": [
+      "area:docs",
+      "area:benchmark",
+      "kind:docs",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T03:22:43Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:08:04.270468772Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:10:22.495199176Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T030804-ca5e375b\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1662336,\"output_tokens\":11536,\"total_tokens\":1673872,\"cost_usd\":0,\"duration_ms\":136041,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:10:22.611561648Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1673872 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T030804-ca5e375b\",\"bead_id\":\"fizeau-ef2d4427\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:10:26.279755034Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:10:26.491525916Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=68964de93866260b20590d613a0f54fc212e5c31\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=9820\noutput_bytes=374\nelapsed_ms=44691",
+          "created_at": "2026-05-07T03:11:43.754274734Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe merged docs and script help meet all stated ACs: they document the single canary/wide entrypoint, the six official FizeauAgent lanes, diagnostic-only raw adapters, artifact paths, and invalid-cell denominator handling. No Go reporting code changed, so AC5 is not applicable.\nresult_rev=68964de93866260b20590d613a0f54fc212e5c31\nbase_rev=5726a7ebfc36e1b2c70b149626430801e3e38d36",
+          "created_at": "2026-05-07T03:11:43.931722441Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:13:24.854705076Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-07T03:15:11.339274487Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260507T031325-080b1c2c\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":848934,\"output_tokens\":7218,\"total_tokens\":856152,\"cost_usd\":0,\"duration_ms\":104137,\"exit_code\":0}",
+          "created_at": "2026-05-07T03:15:11.45026659Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=856152 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260507T031325-080b1c2c\",\"bead_id\":\"fizeau-ef2d4427\",\"rejected_route_pins\":null,\"requested_tier\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"heuristic\",\"smart_justification\":\"\"}",
+          "created_at": "2026-05-07T03:15:15.134166916Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx agent execute-loop",
+          "summary": "source=heuristic tier=cheap model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-07T03:15:15.34630163Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: unparseable\nattempt_count=1\nresult_rev=6935d83bc60ed3c8fb3879490cfc00b15330af25\n\nreviewer output: unparseable JSON verdict: approve verdict without per-AC evidence\nharness=codex\nmodel=gpt-5.4\ninput_bytes=9820\noutput_bytes=359\nelapsed_ms=42406",
+          "created_at": "2026-05-07T03:17:06.552138912Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: unparseable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-close review: review-error: unparseable\nThe bead’s documentation requirements are satisfied: the README documents the single entrypoint command, the six official `fiz-*` lanes, diagnostic-only raw Harbor adapters, artifact locations, and invalid-cell denominator handling. No `cmd/bench` code changed.\nresult_rev=6935d83bc60ed3c8fb3879490cfc00b15330af25\nbase_rev=9116e310b5fe48a2ecd34d2b98a00b9e785acfcc",
+          "created_at": "2026-05-07T03:17:06.656425896Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T03:22:43.444060327Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T03:22:43.6565055Z",
+      "spec-id": "terminalbench-fiz-wrapper-comparison-2026-05-06"
+    }
+  },
+  "governing": [
+    {
+      "id": "terminalbench-fiz-wrapper-comparison-2026-05-06",
+      "path": "docs/helix/02-design/terminalbench-fiz-wrapper-comparison-2026-05-06.md",
+      "title": "TerminalBench Fiz-Wrapper Comparison"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260507T032243-b285b0cc",
+    "prompt": ".ddx/executions/20260507T032243-b285b0cc/prompt.md",
+    "manifest": ".ddx/executions/20260507T032243-b285b0cc/manifest.json",
+    "result": ".ddx/executions/20260507T032243-b285b0cc/result.json",
+    "checks": ".ddx/executions/20260507T032243-b285b0cc/checks.json",
+    "usage": ".ddx/executions/20260507T032243-b285b0cc/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-ef2d4427-20260507T032243-b285b0cc"
+  },
+  "prompt_sha": "7f5b0a7225189270ee121f00c7a72891ec9c360a0cb4ae173c23daaddacdac0b"
+}

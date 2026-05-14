@@ -1,0 +1,86 @@
+{
+  "attempt_id": "20260506T011857-8b2b1b55",
+  "bead_id": "fizeau-dc6d5f1f",
+  "base_rev": "b562ed7f062edbcd509242a4ffc2dc28f5f85325",
+  "created_at": "2026-05-06T01:18:57.808000047Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dc6d5f1f",
+    "title": "Design shared lease backend for multi-machine routing",
+    "description": "Design the multi-machine extension for sticky route leases. In-scope files: FEAT-004/ADR-005 follow-up text or a new design note under docs/helix/02-design, plus beads for concrete backend implementation if selected. Required design: explain why server metrics alone are advisory and racy; define shared lease records with sticky key, provider, endpoint, model, owner, expiry, and refresh semantics; define atomic acquire/refresh/release behavior; choose or defer a backend such as Redis or Postgres; document failure behavior when the lease backend is unavailable. Out of scope: implementing Redis/Postgres backend in this bead.",
+    "acceptance": "1. rg -n 'shared lease|multi-machine|server metrics alone|atomic' docs/helix/01-frame/features/FEAT-004-model-routing.md docs/helix/02-design/adr/ADR-005-smart-routing-replaces-model-routes.md docs/helix/02-design || true shows a coherent design note. 2. The design states that metrics are advisory and shared leases are required for cross-process stickiness. 3. Follow-up implementation beads exist if a concrete shared backend is selected. 4. ddx doc stale exits successfully or reports no stale routing docs caused by this design.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:routing",
+      "kind:design"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:18:57Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"actual_power\":8}",
+          "created_at": "2026-05-06T01:02:13.968879147Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260506T010020-783b11f0\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":1054837,\"output_tokens\":10427,\"total_tokens\":1065264,\"cost_usd\":0,\"duration_ms\":112608,\"exit_code\":0}",
+          "created_at": "2026-05-06T01:02:14.070963561Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=1065264 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"gpt-5.4-mini\",\"resolved_provider\":\"codex\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-05-06T01:02:15.919561612Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "failure_class=review-error: transport\nattempt_count=1\nresult_rev=a2c16887a78fc734118f3da02742b3290b1cbd00\n\nreviewer: review-error: transport: agent: execute: no viable provider right now: claude quota-exhausted (retry after 2026-05-05T21:07:25-04:00)\nharness=claude\nmodel=claude-opus-4-6\ninput_bytes=22689\noutput_bytes=0\nelapsed_ms=8353",
+          "created_at": "2026-05-06T01:02:25.155335156Z",
+          "kind": "review-error",
+          "source": "ddx agent execute-loop",
+          "summary": "review-error: transport"
+        },
+        {
+          "actor": "erik",
+          "body": "success\nresult_rev=a2c16887a78fc734118f3da02742b3290b1cbd00\nbase_rev=e781d3a7f627313f2813c2d850cac54275f97e9e",
+          "created_at": "2026-05-06T01:02:25.254062904Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "success"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-06T01:18:57.158800312Z",
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog, Power-Based Routing, and Provider Configuration"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T011857-8b2b1b55",
+    "prompt": ".ddx/executions/20260506T011857-8b2b1b55/prompt.md",
+    "manifest": ".ddx/executions/20260506T011857-8b2b1b55/manifest.json",
+    "result": ".ddx/executions/20260506T011857-8b2b1b55/result.json",
+    "checks": ".ddx/executions/20260506T011857-8b2b1b55/checks.json",
+    "usage": ".ddx/executions/20260506T011857-8b2b1b55/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dc6d5f1f-20260506T011857-8b2b1b55"
+  },
+  "prompt_sha": "75bd39af812d788c3791a011b48cc1410886da0a12913a632948ebb84b1f93c7"
+}

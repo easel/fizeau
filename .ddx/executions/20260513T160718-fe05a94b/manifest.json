@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260513T160718-fe05a94b",
+  "bead_id": "fizeau-f0a71a4c",
+  "base_rev": "4e66c278bd716714bc3b3a64693e4279a24e2b28",
+  "created_at": "2026-05-13T16:07:20.13637252Z",
+  "requested": {
+    "harness": "codex",
+    "model": "gpt-5.4-mini",
+    "prompt": "synthesized",
+    "min_power": 8
+  },
+  "bead": {
+    "id": "fizeau-f0a71a4c",
+    "title": "evolve: specify metered routing opt-in",
+    "description": "\u003ccontext-digest\u003eAmend routing specs after DDx autorouting selected a pay-per-token Opus route under policy=default. Relevant artifacts: FEAT-004, ADR-009, ADR-011, SD-005, CONTRACT-003, docs/routing. Desired contract: pay-per-token default-deny for unpinned autorouting; exact pins can consider metered providers; policy requirements beat pins; power bounds remain soft scoring inputs; cheapest-qualified ranking must be defined against policy power fit and capability gates.\u003c/context-digest\u003e\nThread metered routing opt-in and model-selection algorithm through affected governing artifacts.",
+    "acceptance": "Affected routing specs consistently define metered default-deny opt-in, unpinned semantics, soft power scoring, and cheapest-qualified model selection; review pass reports no unresolved contradictions",
+    "labels": [
+      "helix",
+      "kind:planning",
+      "action:evolve"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-13T15:58:29Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "2683682",
+      "closing_commit_sha": "f673a3b9b0ff997b9436a6182e93021fd6eae5cf",
+      "events_attachment": "fizeau-f0a71a4c/events.jsonl",
+      "execute-loop-heartbeat-at": "2026-05-13T15:58:29.485340981Z",
+      "schema_version": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260513T160718-fe05a94b",
+    "prompt": ".ddx/executions/20260513T160718-fe05a94b/prompt.md",
+    "manifest": ".ddx/executions/20260513T160718-fe05a94b/manifest.json",
+    "result": ".ddx/executions/20260513T160718-fe05a94b/result.json",
+    "checks": ".ddx/executions/20260513T160718-fe05a94b/checks.json",
+    "usage": ".ddx/executions/20260513T160718-fe05a94b/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-f0a71a4c-20260513T160718-fe05a94b"
+  },
+  "prompt_sha": "105a801614949bdd68713cfdedbc440443ec74716ec997b610affd4712486d6c"
+}

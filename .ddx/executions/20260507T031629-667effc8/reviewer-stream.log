@@ -1,0 +1,14 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The sticky/saturation behavior and focused test slice check out, but the unknown-signal policy is still neutral-zero in code, so a candidate with missing utilization/performance can still outrank a known lightly loaded peer. That misses AC2.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "Unknown utilization/performance are not actually penalized or otherwise prevented from winning by accident: `unknownUtilizationPenalty` and `unknownPerformancePenalty` are both `0.0`, and missing signals only subtract those zero constants. The new test proves only a stronger case where the known candidate also gets explicit perf bonuses; it does not cover the AC case where known healthy evidence should still beat unknown evidence.",
+      "location": "internal/routing/score.go:14"
+    }
+  ]
+}
+```

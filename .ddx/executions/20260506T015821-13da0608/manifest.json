@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260506T015821-13da0608",
+  "bead_id": "fizeau-1a8614fe",
+  "base_rev": "2b7c64ea2dfcaa9744159d0bce33d0211206cbfd",
+  "created_at": "2026-05-06T01:58:22.075190322Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1a8614fe",
+    "title": "Record llama-server utilization cassettes",
+    "description": "Add llama.cpp llama-server real-server cassette coverage. In-scope files: internal/provider/llamaserver tests and committed testdata/cassettes, plus any small server bootstrap helper used only by record-mode tests. Record mode must install or pull llama-server, obtain or generate a trivial CPU GGUF model suitable for local test execution, start llama-server on a free local port with --metrics, /slots enabled, and --parallel 1, wait for /v1/models readiness, record /v1/models, /metrics, /slots, minimal /v1/chat/completions, and /metrics plus /slots while a request is in flight. Replay mode must be the default CI path and parse cassette data only. Out of scope: vLLM cassettes, route scoring, sticky leases, and hand-written HTTP mocks.",
+    "acceptance": "1. go test ./internal/provider/llamaserver ./... -run 'Llama.*Cassette|Llama.*Utilization' passes in replay mode using committed cassettes. 2. FIZEAU_RECORD_PROVIDER_CASSETTES=1 go test ./internal/provider/llamaserver -run 'Record' installs or starts llama-server itself and refreshes cassettes without requiring a manually pre-started server. 3. Cassettes include real /v1/models, /metrics, /slots, minimal chat, and busy-slot evidence. 4. Replay parsing extracts llamacpp:requests_processing, llamacpp:requests_deferred, llamacpp:kv_cache_usage_ratio, and slot is_processing occupancy. 5. No hand-written endpoint mocks define the provider contract.",
+    "parent": "fizeau-c58969b6",
+    "labels": [
+      "area:provider",
+      "kind:test"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-06T01:58:20Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "557006",
+      "execute-loop-heartbeat-at": "2026-05-06T01:58:20.968478661Z",
+      "spec-id": "FEAT-003"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260506T015821-13da0608",
+    "prompt": ".ddx/executions/20260506T015821-13da0608/prompt.md",
+    "manifest": ".ddx/executions/20260506T015821-13da0608/manifest.json",
+    "result": ".ddx/executions/20260506T015821-13da0608/result.json",
+    "checks": ".ddx/executions/20260506T015821-13da0608/checks.json",
+    "usage": ".ddx/executions/20260506T015821-13da0608/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-1a8614fe-20260506T015821-13da0608"
+  },
+  "prompt_sha": "f60d1402d3d6bdd5623ebf3501aad53bdb1992bfd3bf2925402c46539a16f958"
+}

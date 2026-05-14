@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260414T004804-8b4da583",
+  "bead_id": "agent-ecc79bf0",
+  "base_rev": "254acd32ec86d4d4723a20395c4c4a9452f53384",
+  "created_at": "2026-04-14T00:48:04.473194768Z",
+  "requested": {
+    "harness": "agent",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-ecc79bf0",
+    "title": "review: telemetry and streaming conformance (AR-2026-04-12)",
+    "description": "Review area: OTel telemetry, streaming conformance, and CONTRACT-001 compliance as of v0.3.1.\n\nNo delta from AR-2026-04-10 in this area. Telemetry and streaming conformance were ALIGNED in the prior review.\n\nVerify no new drift from v0.3.1: ErrReasoningOverflow/Stall paths emit correct span error semantics when aborted.",
+    "acceptance": "Gap classified; verify error spans on reasoning-overflow/stall paths are CONTRACT-001 conformant",
+    "parent": "agent-0065014c",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:lib"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-14T00:48:00Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "801843"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260414T004804-8b4da583",
+    "prompt": ".ddx/executions/20260414T004804-8b4da583/prompt.md",
+    "manifest": ".ddx/executions/20260414T004804-8b4da583/manifest.json",
+    "result": ".ddx/executions/20260414T004804-8b4da583/result.json",
+    "worktree": ".ddx/.execute-bead-wt-agent-ecc79bf0-20260414T004804-8b4da583"
+  }
+}

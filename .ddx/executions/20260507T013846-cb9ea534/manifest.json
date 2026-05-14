@@ -1,0 +1,49 @@
+{
+  "attempt_id": "20260507T013846-cb9ea534",
+  "bead_id": "fizeau-d5e91885",
+  "base_rev": "91249187bb8981278bc58eb6a84cfe2205895680",
+  "created_at": "2026-05-07T01:38:48.429304536Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d5e91885",
+    "title": "Implement versioned FHI formula and claim generator",
+    "description": "After records exist in the benchmark evidence ledger, Fizeau needs a versioned FHI derivation and claim generator that can produce defensible statements like local oMLX Qwen is 6 FHI points behind Opus, or fiz-native is 0.7 TerminalBench points below Claude Code on the same model/subset. This slice owns report derivation from ledger records, not importers.\n\nIn-scope files:\n- cmd/bench fhi or evidence claim subcommands\n- FHI formula/config file under scripts/benchmark or docs/research as appropriate\n- tests with small ledger fixtures covering local-vs-frontier, harness-vs-harness, and insufficient-coverage refusal\n\nOut-of-scope:\n- changing benchmark runners\n- importing new evidence sources\n- changing catalog model power generation directly\n\nImplementation notes:\n- FHI formula must be versioned, list included benchmarks/weights, evidence window, exclusion rules, invalid-run denominator handling, and confidence/coverage notes.\n- Claim generator must refuse or confidence-penalize comparisons when benchmark coverage, formula version, evidence window, scorer, or denominator rules differ.\n- Support benchmark-specific deltas and cross-benchmark FHI rankings separately.",
+    "acceptance": "1. A ledger fixture produces a TerminalBench-specific delta claim with pinned model/provider/benchmark/subset/scorer/reps and source artifact hashes.\n2. A ledger fixture produces a local-vs-frontier FHI claim including Fizeau version, local runtime version, quantization, hardware, provider endpoint, formula version, included benchmarks, and delta.\n3. A fixture with mismatched benchmark coverage causes the claim generator to refuse the comparison or emit an explicit confidence penalty.\n4. Output includes invalid-run counts/classes and denominator handling.\n5. `go test ./cmd/bench` passes.",
+    "parent": "fizeau-89e1e403",
+    "labels": [
+      "area:benchmark",
+      "area:fhi",
+      "kind:task",
+      "phase:build"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-07T01:38:46Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "3497639",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: missing-harness\"}",
+          "created_at": "2026-05-07T01:38:46.151847097Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-07T01:38:46.499350153Z",
+      "spec-id": "SD-012"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260507T013846-cb9ea534",
+    "prompt": ".ddx/executions/20260507T013846-cb9ea534/prompt.md",
+    "manifest": ".ddx/executions/20260507T013846-cb9ea534/manifest.json",
+    "result": ".ddx/executions/20260507T013846-cb9ea534/result.json",
+    "checks": ".ddx/executions/20260507T013846-cb9ea534/checks.json",
+    "usage": ".ddx/executions/20260507T013846-cb9ea534/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-fizeau-d5e91885-20260507T013846-cb9ea534"
+  },
+  "prompt_sha": "107cb00cec903f70912156cc2791cde90288b94672ce9344775d73c41a637779"
+}

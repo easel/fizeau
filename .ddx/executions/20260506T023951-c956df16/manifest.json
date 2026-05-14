@@ -1,0 +1,60 @@
+{
+  "harness": "claude",
+  "model": "claude-opus-4-6",
+  "base_rev": "48619d20432cc4db7ce96e0fdaa3bdf94bcfd855",
+  "result_rev": "a209ac29e82119c4a94e1a11c8d4c22312a2a254",
+  "verdict": "BLOCK",
+  "bead_id": "fizeau-dc17420e",
+  "execution_dir": ".ddx/executions/20260506T023951-c956df16",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 2789,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 392,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "docs/helix/01-frame/features/FEAT-003-providers.md",
+          "internal/provider/rapidmlx/testdata/cassettes/rapidmlx_utilization.yaml",
+          "internal/provider/rapidmlx/utilization_probe.go",
+          "internal/provider/rapidmlx/utilization_probe_test.go",
+          "internal/provider/utilization/utilization.go"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-004",
+        "bytes_included": 11876,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-004-plugin-packaging.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 39126,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 56080,
+    "output_bytes": 0,
+    "elapsed_ms": 8312,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}

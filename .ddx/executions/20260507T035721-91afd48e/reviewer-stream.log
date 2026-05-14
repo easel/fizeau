@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "The CLI JSON surfaces were extended, but the persisted routing artifact still omits part of the required evidence and the requested golden fixture coverage for vLLM/Rapid-MLX/oMLX was not added.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "AC3 is incomplete: the persisted `routing_decision` artifact still drops candidate context evidence. `ServiceRoutingDecisionCandidate` carries server/utilization/components, but not `context_length` or `context_source`, so session logs do not record the same selected-route evidence exposed by `route-status --json`.",
+      "location": "service_events.go:213"
+    },
+    {
+      "severity": "block",
+      "summary": "AC4 is not met. The added coverage only asserts one synthetic vLLM utilization sample and CLI field presence; there is no new golden/fixture-backed surfaced-evidence test covering vLLM, Rapid-MLX, and oMLX output shapes together.",
+      "location": "service_models_test.go:361"
+    }
+  ]
+}
+```

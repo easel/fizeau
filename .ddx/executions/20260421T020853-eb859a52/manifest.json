@@ -1,0 +1,184 @@
+{
+  "attempt_id": "20260421T020853-eb859a52",
+  "bead_id": "agent-949a5ba4",
+  "base_rev": "7d9a61253533611a31544f264ba1acc14a7b4667",
+  "created_at": "2026-04-21T02:08:53.916141652Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-949a5ba4",
+    "title": "harness-pty: build direct PTY probe substrate",
+    "description": "Build the narrow direct PTY substrate selected by ADR-002 and ADR-004 for short-lived background metadata probes and cassette evidence. The first production use is: start a harness briefly, drive the minimum TUI flow needed for quota/status/model/reasoning facts, capture rendered VT state and raw events for cassette/debug output, and exit cleanly. This is not a terminal manager and not a tmux wrapper. Normal prompt execution remains on harness-native batch modes unless a future design promotes PTY interactive execution as a fallback. In-scope package boundaries are internal/pty/session for process and PTY lifecycle, internal/pty/terminal for VT/ANSI byte-to-frame derivation and snapshots, and a narrow internal/pty/cassette-facing event stream consumed by follow-up cassette work. Packages below internal/pty must not import internal/harnesses or contain Claude/Codex quota, model, reasoning, or harness policy.",
+    "acceptance": "1. The implementation cites ADR-002, ADR-004, SPIKE-001, SPIKE-002, and the harness-golden TUI-only checklist before introducing internal/pty code.\n2. No tmux adapter, tmux shell-out, tmux import, tmux socket/session management, or tmux-backed capability path is introduced.\n3. internal/pty/session exposes a narrow API for Start(command,args,workdir,env,size), SendBytes/SendKey, Resize, output streaming, Wait, Close, Kill, timeout, cancellation, process-group cleanup, and exit status.\n4. internal/pty/terminal wraps a real VT/ANSI emulator backend behind an internal interface; regex ANSI stripping is not accepted as the screen model.\n5. internal/pty/terminal exposes deterministic snapshots of current rendered VT state: screen text/cells, cursor metadata, terminal size, frame timestamp/seq, and enough raw-byte offset context to debug parser failures.\n6. The substrate emits timed raw output chunks, timed input events, resize/signal events, and derived frame events in the shape needed by internal/pty/cassette, without owning cassette persistence in this bead.\n7. No package below internal/pty imports internal/harnesses or contains Claude/Codex-specific slash commands, quota, model, reasoning, token usage, or harness policy.\n8. Unit and fake-session tests cover startup failure, normal exit, EOF, timeout/cancel, large and multiline input, control keys, resize events, output byte capture, frame derivation, cursor movement, screen clear, style policy, partial escape sequences, Unicode/wide characters, volatile normalization hooks, and deterministic fake-clock behavior.\n9. Host PTY smoke tests cover ordinary Unix commands such as sh, cat, stty size, and sleep for stdin/stdout, exit status, sizing, cancellation, and cleanup on Linux and macOS; unsupported host OSes report an explicit platform gap instead of passing silently.\n10. Windows is not claimed as supported by this bead; any Windows support requires a separate OS-specific adapter and fixture bead.\n11. go test ./... passes.",
+    "parent": "agent-e5367528",
+    "labels": [
+      "area:harness",
+      "area:service",
+      "kind:implementation",
+      "phase:build"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "tier=standard harness=agent model=qwen3.5-27b probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:00:16.92426682Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness=gemini model= probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:00:17.04218085Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"harness\":\"gemini\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-21T02:00:17.081694484Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "escalation exhausted: pre-execute-bead checkpoint: staging changes: exit status 1\ntier=smart\nprobe_result=ok",
+          "created_at": "2026-04-21T02:00:17.154005926Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=standard harness=agent model=qwen3.5-27b probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:01:19.071311917Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness=gemini model= probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:01:19.199816853Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"standard\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"harness\":\"gemini\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-21T02:01:19.239048154Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=2 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "escalation exhausted: pre-execute-bead checkpoint: staging changes: exit status 1\ntier=smart\nprobe_result=ok",
+          "created_at": "2026-04-21T02:01:19.315266216Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=cheap harness=agent model=qwen3.5-27b probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:03:11.143717523Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-21T02:03:11.181742742Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=smart harness=gemini model= probe=ok\npre-execute-bead checkpoint: staging changes: exit status 1",
+          "created_at": "2026-04-21T02:03:11.315957589Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"cheap\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"harness\":\"gemini\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-21T02:03:11.356608389Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=3 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "escalation exhausted: pre-execute-bead checkpoint: staging changes: exit status 1\ntier=smart\nprobe_result=ok",
+          "created_at": "2026-04-21T02:03:11.429602412Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-21T02:06:44.045084832Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "erik",
+          "body": "tier=cheap harness=agent model=qwen3.5-27b probe=ok\nagent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout",
+          "created_at": "2026-04-21T02:06:44.091756668Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"cheap\",\"harness\":\"agent\",\"model\":\"qwen3.5-27b\",\"status\":\"execution_failed\",\"cost_usd\":0,\"duration_ms\":165051}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-21T02:06:44.133443758Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=1 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "erik",
+          "body": "infrastructure failure (deferred): agent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout\ntier=cheap\nprobe_result=ok\nresult_rev=0594523142ca389aed68d53c7e972c7f81846cea\nbase_rev=0594523142ca389aed68d53c7e972c7f81846cea\nretry_after=2026-04-21T08:06:44Z",
+          "created_at": "2026-04-21T02:06:44.244854415Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"gemini\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-21T02:07:35.432587481Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=gemini"
+        }
+      ],
+      "execute-loop-last-detail": "infrastructure failure (deferred): agent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout",
+      "execute-loop-last-status": "execution_failed",
+      "execute-loop-retry-after": "2026-04-21T08:06:44Z",
+      "spec-id": "CONTRACT-003"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260421T020853-eb859a52",
+    "prompt": ".ddx/executions/20260421T020853-eb859a52/prompt.md",
+    "manifest": ".ddx/executions/20260421T020853-eb859a52/manifest.json",
+    "result": ".ddx/executions/20260421T020853-eb859a52/result.json",
+    "checks": ".ddx/executions/20260421T020853-eb859a52/checks.json",
+    "usage": ".ddx/executions/20260421T020853-eb859a52/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-949a5ba4-20260421T020853-eb859a52"
+  }
+}

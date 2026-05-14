@@ -1,0 +1,80 @@
+status: proposed
+reason: bead misfiled — target source files do not exist in this repository
+
+## Summary
+
+This bead (fizeau-af9d5f1c) is filed in the fizeau bead queue, but the changes it
+prescribes belong to the DDx CLI repository (github.com/DocumentDrivenDX/ddx),
+not to fizeau (github.com/easel/fizeau). An operator must move/refile the bead
+into the DDx repo's queue, or explicitly redirect it to patch the vendored skill
+snapshot under `.agents/skills/cli/` here in fizeau.
+
+## Evidence
+
+1. This worktree's `go.mod` declares `module github.com/easel/fizeau`. There is
+   no top-level `cli/` directory:
+
+       $ ls cli
+       ls: cannot access 'cli': No such file or directory
+
+2. The bead names `cli/internal/agent/execute_bead_land.go:701` and
+   `cli/internal/agent/execute_bead_status.go`. Neither path exists at the
+   repository root. The only copies present in this repo are read-only
+   skill-bundle mirrors:
+
+       ./.agents/skills/cli/internal/agent/execute_bead_land.go
+       ./.agents/skills/cli/internal/agent/execute_bead_status.go
+       ./.claude/skills/cli/internal/agent/execute_bead_land.go
+       ./.claude/skills/cli/internal/agent/execute_bead_status.go
+
+   These are vendored snapshots of the DDx CLI source distributed with the
+   DDx skills package; their `go.mod` says
+   `module github.com/DocumentDrivenDX/ddx`. They were last touched by
+   commit `d49a2428 chore: checkpoint pre-execute-bead 20260508T205324-8992c1f5`,
+   which is a generic checkpoint rather than feature work — consistent with
+   them being a refresh-from-upstream artifact, not a maintenance target.
+
+3. The acceptance criteria assume the DDx repo layout:
+
+       AC1/AC2: `cd cli && go test -run … ./internal/agent/...`
+       AC3:     `cd cli && go test ./internal/agent/...`
+
+   `cd cli` is not satisfiable here. The closest analogue
+   (`cd .agents/skills/cli && go test ./internal/agent/...`) builds, but it
+   tests vendored upstream code that fizeau does not run — fizeau invokes
+   the `ddx` binary from PATH. Patching the vendored snapshot would not
+   alter the behavior of the installed `ddx` binary that triggers the bug.
+
+4. Patching the vendored snapshot would also be undone the next time the
+   fizeau repo refreshes its skills bundle from upstream DDx, so any local
+   change there is non-durable by design.
+
+5. The bug itself is real and well-diagnosed (fizeau's `.gitignore` does
+   contain `.ddx/executions/`, confirmed at line 28 of `.gitignore`). It is
+   simply that fizeau is the *consumer* exposed by the bug, while the *fix
+   site* is upstream DDx.
+
+## What an operator needs to do
+
+Either:
+
+- **(preferred)** Recreate this bead in the DDx CLI repository's bead queue
+  with the same title/description/AC, then close fizeau-af9d5f1c with a
+  pointer to the relocated bead; or
+
+- **(only if intentional)** Amend the bead description and AC to specify
+  patching `.agents/skills/cli/internal/agent/execute_bead_land.go` and
+  `.agents/skills/cli/internal/agent/execute_bead_status.go` here, replace
+  `cd cli` with `cd .agents/skills/cli` in the AC, and acknowledge in the
+  bead that the patch will be overwritten on the next skills refresh from
+  upstream and therefore needs to be mirrored upstream regardless.
+
+Without one of these operator decisions, an agent has no scope-legal way
+to satisfy this bead in the fizeau worktree.
+
+## Why `proposed` and not `open`
+
+The blocker is not retryable by re-running an agent: the source files the
+bead prescribes are not in this repository, and that condition will not
+change between attempts. A higher-power model would reach the same dead
+end. Only an operator can refile or rescope the bead.

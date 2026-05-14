@@ -1,0 +1,49 @@
+{
+  "attempt_id": "20260508T205324-8992c1f5",
+  "bead_id": "fizeau-b633cbb3",
+  "base_rev": "d49a24281c22249df02c5bc58ac04353612da05a",
+  "created_at": "2026-05-08T20:53:31.080025523Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b633cbb3",
+    "title": "routing: rename Profile→Policy + soft min/max + drop ModelRef in internal/routing",
+    "description": "PROBLEM\n  internal/routing engine carries legacy Profile field naming, treats MinPower/MaxPower as hard candidate filters, threads a ModelRef field the v0.11 surface no longer uses, and resolves catalog refs through Inputs.CatalogResolver callbacks the service layer no longer needs. ErrNoLiveProvider.StartingTier is a field-name bug — it always held the policy name.\n\nROOT CAUSE\n  Engine predates the v0.11 routing-surface redesign. \"Profile\" was the canonical routing input, \"model-ref\" was a kitchen-sink string accepting policies/targets/aliases, and power bounds were enforced as exclusion gates rather than scoring signals.\n\nDESIGN INTENT (v0.11)\n  - \"Policy\" is the single canonical word for the named routing-intent bundle. No aliases.\n  - ModelRef removed; callers pass concrete req.Model when pinning, otherwise rely on req.Policy.\n  - MinPower/MaxPower preserved on the request but become asymmetric scoring weights, NOT filters. Undershoot 5x worse than overshoot: power_score = -5*max(0, min_power - cand.power) - 1*max(0, cand.power - max_power).\n  - New per-policy bool req.AllowLocal controls whether local-billing candidates are included. Smart's allow_local=false produces fail-closed when subscription is dry (no candidates → ErrNoLiveProvider).\n  - require[] is a list of hard-constraint predicates applied as candidate filter. v0.11 ships with one: \"no_remote\" (cand.DeploymentClass == \"local\").\n  - Pin-pin conflicts (harness×model, harness×provider, provider×model) fail with ErrUnsatisfiablePin BEFORE scoring.\n\nCURRENT STATE WITH FILE:LINE\n  - internal/routing/engine.go:16-34 Request struct: Profile, ModelRef, MinPower/MaxPower fields\n  - internal/routing/engine.go:284-308 ErrNoLiveProvider.StartingTier (field-name bug)\n  - internal/routing/engine.go:305 ProfileEscalationLadder\n  - internal/routing/engine.go:1175-1209 ModelRef-driven catalog resolution branch\n  - internal/routing/engine.go:1229-1257 EscalateProfileAware\n  - internal/routing/errors.go:11-15,46-98 errProfilePinConflict, errNoProfileCandidate sentinels\n  - internal/routing/score.go:28,36,58-101 scorePolicy switch on profile name strings\n  - internal/routing/gating.go pin-collision predicates\n\nPROPOSED FIX\n  1. Rename Request.Profile → Request.Policy. Add Request.AllowLocal bool, Request.Require []string. Drop Request.ModelRef.\n  2. Add asymmetric soft-power scoring in score.go (formula above).\n  3. Add pin-pin compatibility predicate in gating.go. Apply Require[] predicates as candidate filter. Only \"no_remote\" defined in v0.11.\n  4. Delete Inputs.CatalogResolver and Inputs.CatalogCandidatesResolver fields. Drop the ModelRef branch in resolveModel (engine.go:1175-1209).\n  5. errors.go: replace ErrProfilePinConflict, ErrNoProfileCandidate with single ErrPolicyRequirementUnsatisfied{Policy, Requirement, AttemptedPin string, Rejected int}. Add ErrUnknownPolicy{Policy string}, ErrUnsatisfiablePin{Pin, Reason string}.\n  6. Rename ErrNoLiveProvider.StartingTier → StartingPolicy. Rename ProfileEscalationLadder → PolicyEscalationLadder; values [\"cheap\", \"default\", \"smart\"].\n  7. Rename EscalateProfileAware → EscalatePolicyAware. Internal helpers: missingProfileCapability → missingPolicyCapability; explicitProfileConstraint → explicitPolicyConstraint; harnessViolatesProfileConstraint, modelPinViolatesProfileConstraint similarly.\n  8. score.go switch cases canonicalized: \"cheap\" / \"default\" / \"smart\". Format strings \"profile=%s\" → \"policy=%s\".\n\nNON-SCOPE\n  - Public service surface (service*.go) — Phase 4.\n  - Catalog manifest schema — Phase 2.\n  - CLI flags — Phase 6.\n  - DDx coordination — Phase 9.\n\nPARENT + DEPS\n  Leads phase chain. Phase 2 depends on this.\n  9. ErrNoLiveProvider enhancement: in addition to renaming StartingTier→StartingPolicy, add RejectedCandidates []CandidateRejection field. CandidateRejection carries {Provider, Harness, Model string, Reason string} where Reason is a typed enum-string (\"quota_exhausted\", \"unhealthy\", \"model_unavailable\", \"harness_unhealthy\", \"policy_filtered\"). Update ErrNoLiveProvider.Error() to surface rejection counts when len(RejectedCandidates) \u003e 0:\n     - empty rejected list: \"no candidates match policy %q (power %d-%d, allow_local=%v); check policy fit and provider configuration\"\n     - non-empty: \"policy %q has %d candidate(s) matching power %d-%d but all rejected: %d quota-exhausted, %d unhealthy, %d unavailable\"\n     This addresses the operator-visible error language gap raised by fizeau-0d15ab58 (DDx pre-claim readiness): today `no live provider supports prompt of 0 tokens at tier \u003e= smart` collapses two distinct operator scenarios (no smart route exists vs all smart routes are quota-dry); after this change the message tells the operator which bucket they're in.",
+    "acceptance": "1. internal/routing/policy_test.go::TestPolicyRequireNoRemoteFiltersRemoteCandidates passes (req.Require=[\"no_remote\"] with mixed local+remote candidate set returns only local).\n2. internal/routing/policy_test.go::TestPolicyRequireBlocksRemotePinConflict passes (req.Require=[\"no_remote\"] + req.Provider=\"openrouter\" returns ErrPolicyRequirementUnsatisfied{Policy, Requirement:\"no_remote\", AttemptedPin:\"openrouter\"}).\n3. internal/routing/score_power_test.go::TestSoftPowerScoring_Power9BeatsPower7WhenHealthy passes.\n4. internal/routing/score_power_test.go::TestSoftPowerScoring_AsymmetricUndershootHeavier passes (power-7 candidate beats power-11 candidate when both healthy and equal cost given req.MinPower=8/MaxPower=10 — verifies 5:1 undershoot:overshoot ratio).\n5. internal/routing/gating_test.go::TestPinPinConflictHarnessIncompatibleWithModel passes (Harness=claude+Model=qwen3.6 returns ErrUnsatisfiablePin{Pin:\"harness=claude+model=qwen3.6\", Reason}).\n6. internal/routing/score_subscription_test.go::TestSubscriptionPreferenceFavorsHighestHeadroom passes (verifies existing subscription-quota wiring populates the scorer).\n7. internal/routing/policy_test.go::TestAllowLocalFalseExcludesLocalCandidates passes (req.AllowLocal=false drops all DeploymentClass==local candidates from the pool).\n8. grep -rn \"Profile\\b\" internal/routing/*.go (excluding _test.go) returns zero matches outside go-stdlib `errors.Is(target error)` patterns.\n9. grep -rn \"ModelRef\" internal/routing/ returns zero matches.\n10. grep -rn \"CatalogResolver\\|CatalogCandidatesResolver\" internal/routing/ returns zero matches.\n11. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./internal/routing/... -count=1 green.\n12. lefthook run pre-commit passes.\n13. internal/routing/errors_test.go::TestErrNoLiveProviderDistinguishesEmptyVsAllUnhealthy passes — given 3 candidates that match policy \"smart\" power range but all return quota_exhausted health status, ErrNoLiveProvider.Error() includes substring \"3 candidate(s)\" and \"quota-exhausted\"; given zero matching candidates (empty pool after policy filter), ErrNoLiveProvider.Error() includes substring \"no candidates match policy\" and \"power 9-10\".\n14. internal/routing/engine.go ErrNoLiveProvider struct has fields: StartingPolicy string, RejectedCandidates []CandidateRejection. CandidateRejection type defined with Provider, Harness, Model, Reason fields.",
+    "labels": [
+      "area:routing",
+      "kind:rename",
+      "kind:redesign",
+      "phase:1",
+      "breaking",
+      "spec-id:ADR-009"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-08T20:44:31Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1943220",
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"rationale\":\"\",\"score\":0,\"suggested_fixes\":null,\"waivers_applied\":null,\"warning\":\"lint hook: canceled: context canceled\"}",
+          "created_at": "2026-05-08T20:53:22.965024539Z",
+          "kind": "bead-quality.lint",
+          "source": "ddx agent execute-loop",
+          "summary": "warning score=0"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-05-08T20:44:31.040933687Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260508T205324-8992c1f5",
+    "prompt": ".ddx/executions/20260508T205324-8992c1f5/prompt.md",
+    "manifest": ".ddx/executions/20260508T205324-8992c1f5/manifest.json",
+    "result": ".ddx/executions/20260508T205324-8992c1f5/result.json",
+    "checks": ".ddx/executions/20260508T205324-8992c1f5/checks.json",
+    "usage": ".ddx/executions/20260508T205324-8992c1f5/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-b633cbb3-20260508T205324-8992c1f5"
+  },
+  "prompt_sha": "a7051e9a3212e22e08ec19769e1e18300bbe0991f5221845ef3285fa96238e96"
+}

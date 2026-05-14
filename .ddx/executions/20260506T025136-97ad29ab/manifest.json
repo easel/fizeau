@@ -1,0 +1,56 @@
+{
+  "harness": "claude",
+  "model": "claude-opus-4-6",
+  "base_rev": "2a64018538c2ff338adda63a2a8738d4beb0cea8",
+  "result_rev": "24d941043455725ce7d0f67b4b86698ae70d4821",
+  "verdict": "BLOCK",
+  "bead_id": "fizeau-ffc8a964",
+  "execution_dir": ".ddx/executions/20260506T025136-97ad29ab",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1640,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 84,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "service_route_leases_test.go"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "governing:FEAT-004",
+        "bytes_included": 11876,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "benchmark-results/beadbench/run-20260423T021643Z/helix-build-selector-readiness__codex-gpt54__r1/verify-worktree/docs/helix/01-frame/features/FEAT-004-plugin-packaging.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 2563,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 18060,
+    "output_bytes": 0,
+    "elapsed_ms": 8264,
+    "harness": "claude",
+    "model": "claude-opus-4-6"
+  }
+}
