@@ -206,9 +206,14 @@ unregister_inflight() {
   mv "${json_path}.tmp" "${json_path}"
 }
 
-# interrupt_inflight_cells is called during signal handling to mark in-flight
-# cells as interrupted and clean them up from the JSON file.
+# interrupt_inflight_cells is called during signal handling. For each in-flight cell:
+#   1. SIGTERM the cell's process group
+#   2. docker stop containers matching the cell's label (--time=30s grace)
+#   3. Wait up to grace_seconds for containers to stop
+#   4. Force-kill any stragglers with docker kill
+# Also removes the cell from in-flight.json.
 interrupt_inflight_cells() {
+  local grace_seconds="${BENCH_TERM_GRACE_SECONDS:-30}"
   local json_path
   json_path="$(in_flight_json_path)"
   [[ -f "${json_path}" ]] || return 0
@@ -217,25 +222,48 @@ interrupt_inflight_cells() {
   cells="$(jq -r '.cells[] | @json' "${json_path}")" || return 0
 
   local cell_id cell_dir pid
+  local cell_count=0
+  local cells_to_kill=()
+
   while IFS= read -r cell_json; do
     [[ -z "${cell_json}" ]] && continue
     cell_id="$(jq -r '.cell_id' <<<"${cell_json}")"
     cell_dir="$(jq -r '.cell_dir' <<<"${cell_json}")"
     pid="$(jq -r '.pid' <<<"${cell_json}")"
 
-    # Try to kill the cell's process group
+    [[ -n "${cell_id}" ]] || continue
+    cells_to_kill+=("${cell_id}:${pid}")
+    cell_count=$((cell_count + 1))
+
+    # SIGTERM the cell's process group (try both negative PID for process group and regular PID)
     if [[ -n "${pid}" ]] && (( pid > 0 )); then
       kill -TERM -"${pid}" >/dev/null 2>&1 || kill -TERM "${pid}" >/dev/null 2>&1 || true
     fi
-
-    # Try to docker stop any harbor-runner containers in this cell
-    if [[ -d "${cell_dir}" ]]; then
-      # The container ID is typically embedded in result.json or we can search by cell_dir
-      # For now, we attempt a generic docker stop on containers that might be for this cell
-      docker ps -q --filter "label=fizeau-cell=${cell_id}" 2>/dev/null \
-        | xargs -r docker stop >/dev/null 2>&1 || true
-    fi
   done <<<"${cells}"
+
+  # If there are containers to stop, do so with a grace period
+  if [[ ${cell_count} -gt 0 ]]; then
+    for cell_spec in "${cells_to_kill[@]}"; do
+      cell_id="${cell_spec%:*}"
+      docker ps -q --filter "label=fizeau-cell=${cell_id}" 2>/dev/null \
+        | xargs -r docker stop --time=30 >/dev/null 2>&1 || true
+    done
+
+    # Wait a bit for containers to actually stop
+    sleep 2
+
+    # Force-kill any remaining containers that didn't stop
+    for cell_spec in "${cells_to_kill[@]}"; do
+      cell_id="${cell_spec%:*}"
+      docker ps -q --filter "label=fizeau-cell=${cell_id}" 2>/dev/null \
+        | xargs -r docker kill >/dev/null 2>&1 || true
+    done
+  fi
+
+  # Clear in-flight entries (they should have trap handlers that do this too, but be explicit)
+  : >"${json_path}.tmp"
+  printf '{"cells":[]}\n' >"${json_path}.tmp"
+  mv "${json_path}.tmp" "${json_path}"
 }
 
 usage() {
