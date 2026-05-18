@@ -1,0 +1,446 @@
+{
+  "attempt_id": "20260518T122024-d342855b",
+  "bead_id": "fizeau-11e9c095",
+  "base_rev": "0ddf21974b80d4292844bf780e740e345e1af64d",
+  "created_at": "2026-05-18T12:20:36.374106883Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-11e9c095",
+    "title": "bench-pr-A: bash runner + shell adapters + harbor-runner image + --preset benchmark fix",
+    "description": "First and largest piece of the bench runner rewrite. Replaces cmd/bench/matrix.go with\na bash runner; ports the matrix-side Python harness_adapters/ to shell harness-adapters/;\nwraps Harbor invocation in a Docker container so the host stops needing Python.\n\nCONTEXT: today's runner is `fiz-bench matrix` (Go, cmd/bench/matrix.go ~2232 LOC). It\nputs repo root on host PYTHONPATH (cmd/bench/matrix.go:1105) so Harbor can import\nscripts.benchmark.harbor_adapters.*. That makes host Python required. We're moving\nHarbor and its plugins into a fizeau-harbor-runner Docker image so the host only needs\nbash + Node + Docker. The new runner is at scripts/benchmark/benchmark (no extension).\n\nSCOPE — runner (scripts/benchmark/benchmark, new bash script):\n  - Arg parsing + dispatch: ./benchmark \u003csubcommand\u003e ... with subcommands\n      profiles | bench-sets | task-executors | harness-adapters | validate |\n      preflight | (no subcommand = run mode)\n  - Run mode flags: --profile P[,P2,...] --bench-set B[,B2,...] [--plan]\n      [--force-rerun] [--retry-invalid] [--reps N] [--jobs N] [--max-cost-usd X]\n      [--out DIR]\n  - Read profile/bench-set/concurrency-group YAML with `yq -o=json`.\n  - Matrix expansion: profile × task × rep -\u003e ordered cell list. Resolve `tasks_from:`\n    references (path relative to bench-set file) AND inline `tasks:` lists. PR C will\n    finalize the schema; for PR A's smoke tests, default `task_executor` to `harbor`\n    when `framework == terminal-bench`.\n  - Resume default: if cell_dir/report.json exists with terminal final_status -\u003e skip.\n    --force-rerun ignores. --retry-invalid reruns cells with non-empty invalid_class OR\n    orphan cell-state.json.\n  - Per-cell loop: write cell-state.json sentinel; invoke\n    harness-adapters/\u003cname\u003e command \u003c profile.json -\u003e command-spec.json; compose\n    task-spec; invoke task-executors/\u003cname\u003e \u003c task-spec.json (writes\n    cell_dir/result.json); compose report.json; delete cell-state.json.\n  - Concurrency: flock per concurrency-group at\n    \\${FIZEAU_BENCH_STATE_DIR:-\\${XDG_CACHE_HOME:-\\$HOME/.cache}/fizeau-benchmark}/locks/\u003cgroup\u003e.lock;\n    setsid for each cell process group; background-job pool capped by --jobs.\n  - Signal handling: trap SIGINT/SIGTERM. Stop accepting new cells. SIGTERM each\n    in-flight cell's process group and `docker stop` each in-flight harbor-runner\n    container. Wait 30s, then SIGKILL. Write final_status=interrupted to in-flight\n    cells (process_outcome=killed, no metrics). Exit non-zero.\n  - Concurrent-cells state file at\n    \\${FIZEAU_BENCH_STATE_DIR}/\u003chostname\u003e/in-flight.json. Runner appends its cell at\n    start under flock, reads current count, writes into cell, removes at close.\n    Prune stale entries (PID dead) at next read.\n  - Budget: compute cost_usd_at_run_time per cell from profile.pricing × token streams\n    at close. Accumulate into \u003cout\u003e/budget.json. Halt before next cell when cap hit.\n    Skipped cells get final_status=budget_halted placeholder with process_outcome=\n    setup_failed and a 'note' field.\n  - Per-cell retry: bounded exponential backoff for transient errors (connection\n    refused, 5xx, EOF parse). Write attempt_of: link in the new cell; back-write\n    superseded_by: into the prior cell (the one allowed mutation of a closed cell).\n\nSCOPE — harbor-runner Docker image:\n  - scripts/benchmark/Dockerfile.harbor-runner:\n      FROM python:3.12-slim\n      RUN pip install --no-cache-dir harbor-bench==\u003cpinned-version\u003e\n      COPY scripts/benchmark/harbor_adapters/ /app/harbor_adapters/\n      COPY scripts/benchmark/harbor_agent.py /app/harbor_agent.py\n      ENV PYTHONPATH=/app\n      WORKDIR /app\n      ENTRYPOINT [\\\"harbor\\\"]\n  - scripts/benchmark/build-harbor-runner.sh: docker build with image-content-sha\n    label computed from sha256 of harbor_adapters/ + harbor_agent.py +\n    Dockerfile.harbor-runner. ./benchmark preflight triggers rebuild if cached image\n    label doesn't match current sha.\n  - Pre-PR-A spike (5 min): confirm `pip install harbor-bench==\u003cpinned\u003e` works. If\n    Harbor is git-only, use `pip install git+https://github.com/laude-institute/...`.\n\nSCOPE — shell adapters (8 harness-adapters + 1 task-executor):\n  - scripts/benchmark/task-executors/harbor: bash wrapper around\n      docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\\\\n        -v \\\"\\$cell_dir:/output\\\" -v \\\"\\$tasks_dir:/tasks:ro\\\" \\\\\n        -e FIZEAU_API_KEY -e FIZEAU_BASE_URL -e FIZEAU_MODEL ... \\\\\n        fizeau-harbor-runner:latest run \\\\\n        --agent-import-path \\\"\\$harbor_plugin\\\" --task-id \\\"\\$task_id\\\" --output /output ...\n    Reads task-spec.json from stdin (see CONTRACT.md). Writes cell_dir/result.json.\n    Captures task_executor_version + harbor_runner_image_digest once per ./benchmark\n    invocation into \u003cout\u003e/sweep.json; runner copies into each cell.\n  - scripts/benchmark/harness-adapters/{fiz, claude, codex, opencode, pi, cost-probe,\n    noop, dumb-script}: bash ports of scripts/benchmark/harness_adapters/*.py. Each\n    is executable with two subcommands and a '# SUMMARY:' header line.\n      \u003cname\u003e install \u003cagent-artifact-path\u003e -\u003e install-spec.json on stdout with\n        {install_command, artifact_source, binary_path, harbor_plugin} where\n        harbor_plugin names the Python class Harbor loads (e.g.\n        'scripts.benchmark.harbor_adapters.fiz:FizeauAgent').\n      \u003cname\u003e command (reads profile JSON on stdin) -\u003e command-spec.json on stdout\n        with {command, env, secret_env_keys}.\n    The current Python adapters at scripts/benchmark/harness_adapters/{fiz,opencode,\n    pi,cost_probe,noop,dumb_script}.py are the reference for what each emits.\n    For claude/codex: today they're invoked via cmd/bench/matrix.go:1015-1025\n    passing --agent-import-path; the shell adapters emit the equivalent install-spec.\n  - scripts/benchmark/runtime-probe.sh: case-on profile.metadata.runtime, curl + jq\n    against each runtime's HTTP endpoint, emit model_server JSON (name, version,\n    commit, endpoint) for the cell schema. Handles backends: lucebox, llamacpp, vllm,\n    omlx, ds4, rapid-mlx (one case arm each).\n  - scripts/benchmark/task-executors/CONTRACT.md and harness-adapters/CONTRACT.md\n    document the JSON shapes and the '# SUMMARY:' header convention.\n\nSCOPE — agent leak fix (Go change):\n  - internal/serviceimpl/execute_native.go:265 today reads:\n      PlanningMode: req.PlanningMode || req.ToolPreset == \\\"benchmark\\\",\n    Delete the `|| req.ToolPreset == \\\"benchmark\\\"` clause.\n  - Add field `sampling.planning_mode: bool` (default false) to profile YAML schema.\n    harness-adapters/fiz reads it and adds `--plan` to the command when true.\n  - Pre-PR-A spike: `rg -l 'preset.*benchmark|FIZEAU_PRESET' scripts/benchmark/profiles/`\n    to find profiles relying on the preset; add `sampling.planning_mode: true` to each.\n\nSCOPE — Go runner deactivation:\n  - Modify cmd/bench/main.go to short-circuit execution subcommands (matrix, sweep,\n    run, plan) with a one-line redirect 'use ./benchmark — see scripts/benchmark/README.md'\n    and exit 2. Listing subcommands (profiles, bench-sets) stay functional until PR F.\n\nSCOPE — parity fixture capture (must happen BEFORE deactivation merges):\n  - Before opening PR A's deactivation commit: run the Go runner against canary\n    (sindri-lucebox + tb-2-1-canary, 3 reps). Commit 3 representative cell reports\n    to scripts/benchmark/testdata/parity/go-runner/.\n  - During PR A: run the bash runner against the same canary. Commit cells to\n    scripts/benchmark/testdata/parity/bash-runner/.\n  - scripts/benchmark/testdata/parity/diff.sh: bash + jq tool that reports field\n    divergence outside an allowlist (cell-id, timestamps, paths, NEW fields like\n    harbor_runner_image_digest/model_server.commit/etc.).\n\nOUT OF SCOPE (file separate beads):\n  - cell-report.schema.json (PR B)\n  - tasks_from / task_executor bench-set schema (PR C)\n  - Node collector (PR D)\n  - Node importers (PR E)\n  - deleting cmd/bench (PR F)\n  - docs (PR G)\n\nROLLBACK: If interrupted, leave no half-owned state. cell-state.json sentinels\nwritten by partial runs are fine — they're the recovery anchor. The runner script\nitself is one file; partial commits get reverted.\n\nACCEPTANCE — all of these commands pass on a clean checkout:\n  1. ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary\n     prints the matrix, creates NO files, builds NO Docker images.\n  2. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary\n     runs the canary and produces cells under bench/results/fiz-tools-v1/cells/.\n     Each cell has report.json with embedded profile, command, env_redacted, fiz.txt,\n     fiz.err, session/.\n  3. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary\n     --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted.\n  4. scripts/benchmark/testdata/parity/diff.sh against committed go-runner fixtures\n     is clean per allowlist.\n  5. SIGTERM to a mid-sweep ./benchmark: in-flight cells marked final_status=\n     interrupted, harbor-runner containers stopped via docker stop, runner exits\n     non-zero. Verify with: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary\n     \u0026 sleep 5; kill -TERM \\$! ; wait; jq .final_status bench/results/.../report.json\n  6. fiz-bench matrix exits 2 with redirect message:\n     fiz-bench matrix 2\u003e\u00261 | grep -q 'use ./benchmark'; test \\$? -eq 0\n  7. grep -n 'ToolPreset == \\\"benchmark\\\"' internal/serviceimpl/execute_native.go\n     returns nothing.",
+    "acceptance": "All 7 commands in the description's ACCEPTANCE block pass.",
+    "parent": "fizeau-163efede",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-17T01:55:27.865399022Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-omlx\",\"attempt_id\":\"20260517T015505-fb8c806d\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"hard\",\"rejected_route_pins\":null,\"requested_power_class\":\"smart\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-17T01:55:28.185489943Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=hard powerClass=smart model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"model\":\"Qwen3.6-27B-MLX-8bit\",\"provider\":\"grendel-omlx\",\"reason\":\"ladder exhausted at power 5\"}",
+          "created_at": "2026-05-17T01:55:28.27147178Z",
+          "kind": "execution-escalation-aborted",
+          "source": "ddx work",
+          "summary": "escalation aborted: ladder exhausted at power 5 provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-omlx\"}",
+          "created_at": "2026-05-17T01:55:28.31671409Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1235/v1/chat/completions\": dial tcp 100.97.179.68:1235: i/o timeout\npowerClass=smart\nresult_rev=82e6456eb3f36c02d62f4f72213277958a05cb89\nbase_rev=82e6456eb3f36c02d62f4f72213277958a05cb89\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-17T01:55:28.334738023Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"opus\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T02:05:39.698997924Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=opus"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T020117-8321163f\",\"harness\":\"claude\",\"model\":\"opus\",\"input_tokens\":1,\"output_tokens\":44,\"total_tokens\":45,\"cost_usd\":0,\"duration_ms\":250226,\"exit_code\":-1}",
+          "created_at": "2026-05-17T02:05:39.775625316Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=45 model=opus"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"sindri-club-3090\",\"resolved_model\":\"qwen3.6-27b-autoround\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-17T03:50:47.307136439Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=sindri-club-3090 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T020540-3b6c0559\",\"harness\":\"fiz\",\"provider\":\"sindri-club-3090\",\"model\":\"qwen3.6-27b-autoround\",\"input_tokens\":136371,\"output_tokens\":1444,\"total_tokens\":137815,\"cost_usd\":0,\"duration_ms\":6289918,\"exit_code\":1}",
+          "created_at": "2026-05-17T03:50:47.349658579Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=137815 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"opus\",\"fallback_chain\":[],\"requested_min_power\":6}",
+          "created_at": "2026-05-17T03:52:26.772281575Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=opus"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T035047-ba655e16\",\"harness\":\"claude\",\"model\":\"opus\",\"input_tokens\":12,\"output_tokens\":4525,\"total_tokens\":4537,\"cost_usd\":0.42319775,\"duration_ms\":86075,\"exit_code\":0}",
+          "created_at": "2026-05-17T03:52:26.826809021Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=4537 cost_usd=0.4232 model=opus"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"opus\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260517T035047-ba655e16\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T03:52:27.441794405Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=opus harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=open\nreason=Already decomposed into 9 child beads (A1–A9); cannot be implemented directly until children complete. Bead fizeau-11e9c095 has a 9567-byte description spanning unrelated subsystems (bash runner core, Docker image build, 9 shell adapters, runtime probe, Go agent-leak fix, profile migration, parity fixture capture + diff tool, Go runner deactivation). Execute-bead Step 0 requires split-first for descriptions over 8000 bytes, and the parent's own notes record that this split was done in a prior execution. Children (all open, all Parent=fizeau-11e9c095): fizeau-4cb07023  A1: harbor-runner Docker image + sha-labeled build script fizeau-53a360a1  A2: shell harness-adapters + harbor task-executor + CONTRACT.md + runtime-probe.sh fizeau-fe87a3ac  A3: bash runner skeleton + listing subcommands + --plan mode (satisfies parent AC1) fizeau-a2fd070b  A4: bash runner execution loop + harbor invocation + report.json + sweep.json + per-cell retry (satisfies parent AC2) fizeau-86f89221  A5: bash runner concurrency-group flock + SIGTERM/SIGINT handling + in-flight.json (satisfies parent AC5) fizeau-25209a13  A6: bash runner budget enforcement + budget.json + budget_halted placeholder (satisfies parent AC3) fizeau-9c53ac4e  A7: agent-leak fix in execute_native.go + sampling.planning_mode field + profile migration (satisfies parent AC7) fizeau-4cb31dc5  A8: parity fixture capture + diff.sh (satisfies parent AC4) fizeau-f7c4e686  A9: deactivate Go runner execution subcommands with redirect (satisfies parent AC6) Inter-child deps (from parent notes): A3 \u003c- A1, A2 A4 \u003c- A3 A5, A6, A8 \u003c- A4 A8 \u003c- A5, A6 A7 \u003c- A2 A9 \u003c- A4, A8 Re-attempting implementation on this parent would either duplicate work the children will do, or violate Step 0's split-first rule and the depth-2 decomposition cap (this parent is already at depth 1; the children are depth 2 — no further splitting is permitted on this branch). This parent should be closed by the orchestrator once all 9 children close green, not executed directly. Until then it is blocked on those children.\nsuggested_action=decompose into executable follow-up work or retry with a stronger agent",
+          "created_at": "2026-05-17T03:52:27.559049491Z",
+          "kind": "no_changes_autonomous_retry",
+          "source": "ddx work",
+          "summary": "no_changes_autonomous_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: blocked\nreason: Already decomposed into 9 child beads (A1–A9); cannot be implemented directly until children complete.\n\nBead fizeau-11e9c095 has a 9567-byte description spanning unrelated subsystems\n(bash runner core, Docker image build, 9 shell adapters, runtime probe, Go agent-leak\nfix, profile migration, parity fixture capture + diff tool, Go runner deactivation).\nExecute-bead Step 0 requires split-first for descriptions over 8000 bytes, and the\nparent's own notes record that this split was done in a prior execution.\n\nChildren (all open, all Parent=fizeau-11e9c095):\n  fizeau-4cb07023  A1: harbor-runner Docker image + sha-labeled build script\n  fizeau-53a360a1  A2: shell harness-adapters + harbor task-executor + CONTRACT.md + runtime-probe.sh\n  fizeau-fe87a3ac  A3: bash runner skeleton + listing subcommands + --plan mode (satisfies parent AC1)\n  fizeau-a2fd070b  A4: bash runner execution loop + harbor invocation + report.json + sweep.json + per-cell retry (satisfies parent AC2)\n  fizeau-86f89221  A5: bash runner concurrency-group flock + SIGTERM/SIGINT handling + in-flight.json (satisfies parent AC5)\n  fizeau-25209a13  A6: bash runner budget enforcement + budget.json + budget_halted placeholder (satisfies parent AC3)\n  fizeau-9c53ac4e  A7: agent-leak fix in execute_native.go + sampling.planning_mode field + profile migration (satisfies parent AC7)\n  fizeau-4cb31dc5  A8: parity fixture capture + diff.sh (satisfies parent AC4)\n  fizeau-f7c4e686  A9: deactivate Go runner execution subcommands with redirect (satisfies parent AC6)\n\nInter-child deps (from parent notes):\n  A3 \u003c- A1, A2\n  A4 \u003c- A3\n  A5, A6, A8 \u003c- A4\n  A8 \u003c- A5, A6\n  A7 \u003c- A2\n  A9 \u003c- A4, A8\n\nRe-attempting implementation on this parent would either duplicate work the children\nwill do, or violate Step 0's split-first rule and the depth-2 decomposition cap (this\nparent is already at depth 1; the children are depth 2 — no further splitting is\npermitted on this branch).\n\nThis parent should be closed by the orchestrator once all 9 children close green,\nnot executed directly. Until then it is blocked on those children.\nresult_rev=89234c9dfd09ac23685c815ac369e38eba2a3ec6\nbase_rev=89234c9dfd09ac23685c815ac369e38eba2a3ec6\nretry_after=2026-05-17T03:57:27Z\noutcome_reason=no_changes",
+          "created_at": "2026-05-17T03:52:27.695196378Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"description size exceeds 8000-byte split-first threshold: This bead has a 9567-byte description spanning unrelated subsystems (bash runner core, Docker image build, 9 shell adapters, runtime probe, Go agent-leak fix, profile migration, parity fixture capture + diff tool, Go runner deactivation). It has already been decomposed into 9 child beads (A1-A9, all open) with documented inter-child dependencies. Step 0's split-first rule for descriptions over 8000 bytes applies, and the parent is at depth 1 with children at depth 2 (decomposition cap reached). The parent should be closed by the orchestrator once all 9 children close green, not executed directly.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-17T03:59:53.831745774Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-17T04:00:12.298552568Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"grendel\",\"attempt_id\":\"20260517T035957-0dddc7cc\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"hard\",\"rejected_route_pins\":null,\"requested_power_class\":\"smart\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-17T04:00:12.634268248Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=hard powerClass=smart model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"model\":\"qwen3.5-27b\",\"provider\":\"grendel\",\"reason\":\"ladder exhausted at power 5\"}",
+          "created_at": "2026-05-17T04:00:12.69717666Z",
+          "kind": "execution-escalation-aborted",
+          "source": "ddx work",
+          "summary": "escalation aborted: ladder exhausted at power 5 provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel\"}",
+          "created_at": "2026-05-17T04:00:12.759346698Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel model=qwen3.5-27b connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout\npowerClass=smart\nresult_rev=b887598ab47a93a46f8e584877cddb2739befc44\nbase_rev=b887598ab47a93a46f8e584877cddb2739befc44\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-17T04:00:12.791368548Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"scope is atomic and single-pr sized: Bead spans bash runner core, Docker image, 9 shell adapters, runtime probe, Go agent-leak fix, profile migration, parity fixture capture + diff tool, and Go runner deactivation in a single 9.5KB description. Prior no_changes attempt confirms it was already decomposed into 9 child beads (A1–A9) with explicit inter-child deps; orchestrator should close this parent via children, not execute directly. Re-attempting here duplicates child work and violates split-first guidance.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-17T04:05:04.986051404Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-17T04:05:25.942826034Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-omlx\",\"attempt_id\":\"20260517T040510-1dd073da\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"hard\",\"rejected_route_pins\":null,\"requested_power_class\":\"smart\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-17T04:05:26.252508766Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=hard powerClass=smart model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"model\":\"Qwen3.6-27B-MLX-8bit\",\"provider\":\"grendel-omlx\",\"reason\":\"ladder exhausted at power 5\"}",
+          "created_at": "2026-05-17T04:05:26.331053104Z",
+          "kind": "execution-escalation-aborted",
+          "source": "ddx work",
+          "summary": "escalation aborted: ladder exhausted at power 5 provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-omlx\"}",
+          "created_at": "2026-05-17T04:05:26.421239458Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1235/v1/chat/completions\": dial tcp 100.97.179.68:1235: i/o timeout\npowerClass=smart\nresult_rev=6d07d8e1306659ef963a39de6ad7c4dd355dcf71\nbase_rev=6d07d8e1306659ef963a39de6ad7c4dd355dcf71\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-17T04:05:26.447912528Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"accepted_fingerprint\":\"\",\"accepted_prompt_fingerprint\":\"\",\"actor\":\"erik\",\"from_status\":\"proposed\",\"operator_required\":true,\"prompt_fingerprint\":\"37d35f165a058160819663f43909c4541689d85ff0caa9576ab2b0c531e625c2\",\"reason\":\"provider connectivity failure is retryable route evidence; reopening for autonomous fallback\",\"source\":\"ddx work\",\"to_status\":\"open\"}",
+          "created_at": "2026-05-17T18:10:07.947140133Z",
+          "kind": "triaged",
+          "source": "ddx work",
+          "summary": "operator accepted proposed bead"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"reopen_for_autonomous_retry\",\"reason\":\"provider_connectivity\"}",
+          "created_at": "2026-05-17T18:10:07.909490657Z",
+          "kind": "provider_connectivity.auto_reopen",
+          "source": "ddx work",
+          "summary": "reopened provider-connectivity operator-attention bead for autonomous retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"ambiguous_scope: This bead has already been decomposed into 9 child beads (A1–A9) in a prior attempt. The prior_attempts[2] entry explicitly notes the split was done, children are enumerated with inter-dependencies, and states: 'This parent should be closed by the orchestrator once all 9 children close green, not executed directly.' Re-attempting the parent would duplicate child work or violate depth-2 decomposition constraints. The bead cannot be executed until children complete.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-17T18:10:41.842343965Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/Users/erik/Projects/fizeau/.git/index.lock': File exists.\\n\\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\",\"harness\":\"\",\"model\":\"\",\"reason\":\"lock_contention\"}",
+          "created_at": "2026-05-17T18:11:05.638991052Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "lock_contention"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T18:11:05.687850937Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/Users/erik/Projects/fizeau/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\noutcome_reason=lock_contention",
+          "created_at": "2026-05-17T18:11:05.773897174Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T18:13:25.98978107Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T181241-15ca35ba\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":37,\"output_tokens\":2985,\"total_tokens\":3022,\"cost_usd\":0.0665068,\"duration_ms\":40505,\"exit_code\":0}",
+          "created_at": "2026-05-17T18:13:26.036536581Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=3022 cost_usd=0.0665 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260517T181241-15ca35ba\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T18:13:26.728139927Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T18:15:13.71778533Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T181414-047b23d3\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":72,\"output_tokens\":3941,\"total_tokens\":4013,\"cost_usd\":0.10266285,\"duration_ms\":56235,\"exit_code\":0}",
+          "created_at": "2026-05-17T18:15:13.757913845Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=4013 cost_usd=0.1027 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260517T181414-047b23d3\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T18:15:14.275386887Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"Implement the first bounded slice of the parent bead.\",\"coverage\":\"covered by child 1: bench-pr-A: bash runner + shell adapters + harbor-runner image + --prese: part 1\"},{\"parent_ac\":\"Implement the remaining bounded slice of the parent bead.\",\"coverage\":\"covered by child 2: bench-pr-A: bash runner + shell adapters + harbor-runner image + --prese: part 2\"}],\"child_ids\":[\"fizeau-bfdd6a77\",\"fizeau-39cb7a50\"],\"rationale\":\"deterministic fallback split after agent decomposer returned invalid output\"}",
+          "created_at": "2026-05-17T18:13:26.80387042Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-bfdd6a77, fizeau-39cb7a50"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"Implement the first bounded slice of the parent bead.\",\"coverage\":\"covered by child 1: bench-pr-A: bash runner + shell adapters + harbor-runner image + --prese: part 1\"},{\"parent_ac\":\"Implement the remaining bounded slice of the parent bead.\",\"coverage\":\"covered by child 2: bench-pr-A: bash runner + shell adapters + harbor-runner image + --prese: part 2\"}],\"child_ids\":[\"fizeau-f918d980\",\"fizeau-56e8e84b\"],\"rationale\":\"deterministic fallback split after agent decomposer returned dispatch error: lifecycle dispatch: project root mutation rejected\"}",
+          "created_at": "2026-05-17T18:15:14.345092133Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-f918d980, fizeau-56e8e84b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T19:52:24.133072308Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T195128-c2f6a1fd\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":58,\"output_tokens\":3550,\"total_tokens\":3608,\"cost_usd\":0.08824710000000001,\"duration_ms\":52155,\"exit_code\":0}",
+          "created_at": "2026-05-17T19:52:24.208350896Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=3608 cost_usd=0.0882 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260517T195128-c2f6a1fd\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T19:52:24.954558494Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"1. ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary prints the matrix, creates NO files, builds NO Docker images.\",\"coverage\":\"child A2 AC1 TestBenchmarkPlanNoSideEffects\"},{\"parent_ac\":\"2. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary runs the canary and produces cells under bench/results/fiz-tools-v1/cells/. Each cell has report.json with embedded profile, command, env_redacted, fiz.txt, fiz.err, session/.\",\"coverage\":\"child A2 AC3 TestBenchmarkCanaryReports; child A1 AC2 TestShellHarnessAdaptersInstallAndCommandContract; child A1 AC3 TestHarborTaskExecutorContractAndMetadata\"},{\"parent_ac\":\"3. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted.\",\"coverage\":\"child A3 AC3 TestBenchmarkBudgetHalt\"},{\"parent_ac\":\"4. scripts/benchmark/testdata/parity/diff.sh against committed go-runner fixtures is clean per allowlist.\",\"coverage\":\"child A4 AC1 TestGoRunnerParityFixturesCapturedBeforeDeactivation; child A4 AC2 TestBashRunnerParityFixturesCaptured; child A4 AC3 TestParityDiffAllowlistClean\"},{\"parent_ac\":\"5. SIGTERM to a mid-sweep ./benchmark marks in-flight cells interrupted, stops harbor-runner containers via docker stop, exits non-zero, and verifies final_status with jq.\",\"coverage\":\"child A3 AC4 TestBenchmarkSignalInterruptionStopsContainers\"},{\"parent_ac\":\"6. fiz-bench matrix exits 2 with redirect message matching 'use ./benchmark'.\",\"coverage\":\"child A4 AC4 TestGoRunnerExecutionSubcommandsRedirect\"},{\"parent_ac\":\"7. grep -n 'ToolPreset == \\\"benchmark\\\"' internal/serviceimpl/execute_native.go returns nothing.\",\"coverage\":\"child A1 AC5 TestBenchmarkPresetPlanningModeMigration\"}],\"child_ids\":[\"fizeau-a4844364\",\"fizeau-452d44ad\",\"fizeau-96f34a70\",\"fizeau-087e690e\"],\"rationale\":\"Split into 4 children because PR A has four separable execution surfaces: adapter and Harbor runtime foundation, runner core behavior, runner operational controls, and parity/deactivation. This preserves all parent non-scope items, the governing artifact label, dependency ID fizeau-163efede, and every verification requirement while reducing the prior 9-child fragmentation into child beads that are independently testable with named Test* symbols plus go test and lefthook gates.\"}",
+          "created_at": "2026-05-17T19:52:25.057736386Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-a4844364, fizeau-452d44ad, fizeau-96f34a70, fizeau-087e690e"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T20:28:22.839839845Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T202741-1ceb8f24\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":23,\"output_tokens\":2451,\"total_tokens\":2474,\"cost_usd\":0.051823499999999995,\"duration_ms\":37913,\"exit_code\":0}",
+          "created_at": "2026-05-17T20:28:22.894013297Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2474 cost_usd=0.0518 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260517T202741-1ceb8f24\",\"bead_id\":\"fizeau-11e9c095\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T20:28:23.583265425Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"AC1: ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary prints matrix, creates NO files, builds NO Docker images.\",\"coverage\":\"A2 AC1 (TestRunnerPlanModeIsHermetic / test_runner.sh::test_plan_mode_no_side_effects)\"},{\"parent_ac\":\"AC2: ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary produces cells with report.json containing embedded profile, command, env_redacted, fiz.txt, fiz.err, session/.\",\"coverage\":\"A2 AC2 (TestRunnerProducesCanaryCells / test_runner.sh::test_full_run_canary); supporting A2 ACs 3-7 cover resume/retry/sweep/listing\"},{\"parent_ac\":\"AC3: --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted.\",\"coverage\":\"A3 AC6 (test_runner_budget.sh::test_max_cost_usd_produces_budget_halted) plus A3 AC7 budget.json accumulation\"},{\"parent_ac\":\"AC4: testdata/parity/diff.sh against committed go-runner fixtures is clean per allowlist.\",\"coverage\":\"A4 AC3 (TestParityDiffIsClean / test_parity.sh::test_diff_clean_against_go_baseline); A4 ACs 1-2 establish fixtures, ACs 4-6 validate diff behavior\"},{\"parent_ac\":\"AC5: SIGTERM to mid-sweep run marks in-flight cells final_status=interrupted, docker-stops harbor-runner containers, exits non-zero.\",\"coverage\":\"A3 AC2 (test_runner_signals.sh::test_sigterm_marks_interrupted_and_stops_containers) and A3 AC3 (SIGINT variant)\"},{\"parent_ac\":\"AC6: fiz-bench matrix exits 2 with redirect 'use ./benchmark'.\",\"coverage\":\"A3 AC1 (TestBenchMainRedirectsExecutionSubcommands) and A3 AC8 (shell grep variant)\"},{\"parent_ac\":\"AC7: grep -n 'ToolPreset == \\\"benchmark\\\"' internal/serviceimpl/execute_native.go returns nothing.\",\"coverage\":\"A1 AC1 (TestExecuteNativeRemovesBenchmarkPresetPlanning) and A1 AC2 (grep check)\"}],\"child_ids\":[\"fizeau-328c544b\",\"fizeau-b4b89163\",\"fizeau-8a5e74f0\",\"fizeau-856b7957\"],\"rationale\":\"Split into 4 children grouped by execution layer and dependency. A1 delivers the substrate (harbor-runner image, shell adapters, runtime-probe, CONTRACT.md, agent-leak fix in execute_native.go) needed before any bash-runner work can invoke harbor. A2 builds the runner skeleton, listing subcommands, --plan, and the per-cell execution loop including report.json — satisfying parent AC1 and AC2 in one coherent layer. A3 layers the three runtime concerns (concurrency-group flock, SIGTERM/SIGINT + in-flight.json, budget cap + budget.json) plus Go-runner deactivation — these share signal/state plumbing and gate AC3/AC5/AC6 together. A4 is the parity capture+diff harness, isolated because its before/after fixture timing differs from the code-delivery layers and its sole purpose is AC4. Dependencies: A2 ← A1; A3 ← A2; A4 ← A2,A3. All parent NON-SCOPE items (PRs B-G) preserved verbatim in each child. Every parent AC maps to a named Test* / bash-test function in exactly one child.\"}",
+          "created_at": "2026-05-17T20:28:23.655313818Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-328c544b, fizeau-b4b89163, fizeau-8a5e74f0, fizeau-856b7957"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-17T04:05:26Z",
+          "count": 2,
+          "model": "Qwen3.6-27B-MLX-8bit",
+          "provider": "grendel-omlx",
+          "reason": "provider_connectivity"
+        },
+        {
+          "actual_power": 5,
+          "at": "2026-05-17T04:00:12Z",
+          "count": 1,
+          "model": "qwen3.5-27b",
+          "provider": "grendel",
+          "reason": "provider_connectivity"
+        }
+      ],
+      "work-last-detail": "Already decomposed into 9 child beads (A1–A9); cannot be implemented directly until children complete. Bead fizeau-11e9c095 has a 9567-byte description spanning unrelated subsystems (bash runner core, Docker image build, 9 shell adapters, runtime probe, Go agent-leak fix, profile migration, parity fixture capture + diff tool, Go runner deactivation). Execute-bead Step 0 requires split-first for descriptions over 8000 bytes, and the parent's own notes record that this split was done in a prior execution. Children (all open, all Parent=fizeau-11e9c095): fizeau-4cb07023  A1: harbor-runner Docker image + sha-labeled build script fizeau-53a360a1  A2: shell harness-adapters + harbor task-executor + CONTRACT.md + runtime-probe.sh fizeau-fe87a3ac  A3: bash runner skeleton + listing subcommands + --plan mode (satisfies parent AC1) fizeau-a2fd070b  A4: bash runner execution loop + harbor invocation + report.json + sweep.json + per-cell retry (satisfies parent AC2) fizeau-86f89221  A5: bash runner concurrency-group flock + SIGTERM/SIGINT handling + in-flight.json (satisfies parent AC5) fizeau-25209a13  A6: bash runner budget enforcement + budget.json + budget_halted placeholder (satisfies parent AC3) fizeau-9c53ac4e  A7: agent-leak fix in execute_native.go + sampling.planning_mode field + profile migration (satisfies parent AC7) fizeau-4cb31dc5  A8: parity fixture capture + diff.sh (satisfies parent AC4) fizeau-f7c4e686  A9: deactivate Go runner execution subcommands with redirect (satisfies parent AC6) Inter-child deps (from parent notes): A3 \u003c- A1, A2 A4 \u003c- A3 A5, A6, A8 \u003c- A4 A8 \u003c- A5, A6 A7 \u003c- A2 A9 \u003c- A4, A8 Re-attempting implementation on this parent would either duplicate work the children will do, or violate Step 0's split-first rule and the depth-2 decomposition cap (this parent is already at depth 1; the children are depth 2 — no further splitting is permitted on this branch). This parent should be closed by the orchestrator once all 9 children close green, not executed directly. Until then it is blocked on those children.",
+      "work-last-status": "no_changes_autonomous_retry",
+      "work-no-changes-count": 5,
+      "work-retry-after": "2026-05-17T03:57:27Z",
+      "work-smart-retry": true,
+      "work-smart-retry-reason": "Already decomposed into 9 child beads (A1–A9); cannot be implemented directly until children complete. Bead fizeau-11e9c095 has a 9567-byte description spanning unrelated subsystems (bash runner core, Docker image build, 9 shell adapters, runtime probe, Go agent-leak fix, profile migration, parity fixture capture + diff tool, Go runner deactivation). Execute-bead Step 0 requires split-first for descriptions over 8000 bytes, and the parent's own notes record that this split was done in a prior execution. Children (all open, all Parent=fizeau-11e9c095): fizeau-4cb07023  A1: harbor-runner Docker image + sha-labeled build script fizeau-53a360a1  A2: shell harness-adapters + harbor task-executor + CONTRACT.md + runtime-probe.sh fizeau-fe87a3ac  A3: bash runner skeleton + listing subcommands + --plan mode (satisfies parent AC1) fizeau-a2fd070b  A4: bash runner execution loop + harbor invocation + report.json + sweep.json + per-cell retry (satisfies parent AC2) fizeau-86f89221  A5: bash runner concurrency-group flock + SIGTERM/SIGINT handling + in-flight.json (satisfies parent AC5) fizeau-25209a13  A6: bash runner budget enforcement + budget.json + budget_halted placeholder (satisfies parent AC3) fizeau-9c53ac4e  A7: agent-leak fix in execute_native.go + sampling.planning_mode field + profile migration (satisfies parent AC7) fizeau-4cb31dc5  A8: parity fixture capture + diff.sh (satisfies parent AC4) fizeau-f7c4e686  A9: deactivate Go runner execution subcommands with redirect (satisfies parent AC6) Inter-child deps (from parent notes): A3 \u003c- A1, A2 A4 \u003c- A3 A5, A6, A8 \u003c- A4 A8 \u003c- A5, A6 A7 \u003c- A2 A9 \u003c- A4, A8 Re-attempting implementation on this parent would either duplicate work the children will do, or violate Step 0's split-first rule and the depth-2 decomposition cap (this parent is already at depth 1; the children are depth 2 — no further splitting is permitted on this branch). This parent should be closed by the orchestrator once all 9 children close green, not executed directly. Until then it is blocked on those children.",
+      "work-smart-retry-suggested-action": "decompose into executable follow-up work or retry with a stronger agent",
+      "work-suggested-action": "decompose into executable follow-up work or retry with a stronger agent"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T122024-d342855b",
+    "prompt": ".ddx/executions/20260518T122024-d342855b/prompt.md",
+    "manifest": ".ddx/executions/20260518T122024-d342855b/manifest.json",
+    "result": ".ddx/executions/20260518T122024-d342855b/result.json",
+    "checks": ".ddx/executions/20260518T122024-d342855b/checks.json",
+    "usage": ".ddx/executions/20260518T122024-d342855b/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-11e9c095-20260518T122024-d342855b"
+  },
+  "prompt_sha": "40b9b2acb7bb1410bab2c8370437821df41a4ffec64c00236d29067dc45c7220"
+}

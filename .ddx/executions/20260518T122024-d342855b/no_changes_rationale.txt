@@ -1,0 +1,26 @@
+status: open
+reason: decomposition complete — parent bead fizeau-11e9c095 (9567 bytes, exceeds 8000-byte Step 0 threshold) has been split into 9 child beads per Step 0 guidance.
+
+Child beads (in dependency order):
+  - A1: fizeau-4cb07023 (harbor-runner image)
+  - A2: fizeau-53a360a1 (shell adapters + CONTRACT.md + runtime-probe)
+  - A3: fizeau-fe87a3ac (bash runner skeleton + --plan, satisfies parent AC1)
+  - A4: fizeau-a2fd070b (execution loop + retry, satisfies parent AC2)
+  - A5: fizeau-86f89221 (concurrency + signals, satisfies parent AC5)
+  - A6: fizeau-25209a13 (budget, satisfies parent AC3)
+  - A7: fizeau-9c53ac4e (agent-leak fix + planning_mode, satisfies parent AC7)
+  - A8: fizeau-4cb31dc5 (parity fixtures + diff.sh, satisfies parent AC4)
+  - A9: fizeau-f7c4e686 (Go runner deactivation, satisfies parent AC6)
+
+Dependencies: A3←A1,A2; A4←A3; A5,A6,A8←A4; A8←A5,A6; A7←A2; A9←A4,A8
+
+Parent acceptance criteria satisfied by child beads:
+  AC1 → A3 (--plan flag)
+  AC2 → A4 (execution loop)
+  AC3 → A6 (budget halting)
+  AC4 → A8 (parity diff.sh)
+  AC5 → A5 (signal handling, SIGTERM/SIGKILL)
+  AC6 → A9 (Go runner deactivation)
+  AC7 → A7 (agent-leak ToolPreset removal)
+
+Decomposition completed per execute-bead Step 0: "If too big, decompose... Decomposition alone is success."
