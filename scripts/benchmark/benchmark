@@ -52,7 +52,9 @@ export SCRIPT_DIR \
   BENCH_RETRY_MAX_ATTEMPTS \
   BENCH_RETRY_BACKOFF_BASE \
   FIZEAU_BENCH_STATE_DIR \
-  BENCH_TERM_GRACE_SECONDS
+  BENCH_TERM_GRACE_SECONDS \
+  BENCH_TASK_EXECUTOR_OVERRIDE \
+  BENCH_TASKS_DIR
 
 die() { printf 'benchmark: %s\n' "$*" >&2; exit 1; }
 warn() { printf 'benchmark: %s\n' "$*" >&2; }
