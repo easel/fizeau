@@ -31,6 +31,7 @@ main() {
   echo ""
 
   run_test "${SCRIPT_DIR}/test_runner.sh"
+  run_test "${SCRIPT_DIR}/test_runner_budget.sh"
   run_test "${SCRIPT_DIR}/test_runner_concurrency.sh"
   run_test "${SCRIPT_DIR}/test_harness_adapters.sh"
   run_test "${SCRIPT_DIR}/test_harbor_image.sh"
