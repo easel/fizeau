@@ -1,0 +1,2 @@
+status: blocked
+reason: Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).
