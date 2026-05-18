@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 )
 
-var ansiPattern = regexp.MustCompile(`\x1b(?:\[[0-9;?]*[a-zA-Z]|[^[])`)
-
+// stripANSI is delegated to the anthropic package.
 func stripANSI(s string) string {
-	return ansiPattern.ReplaceAllString(s, "")
+	return anthropic.StripANSI(s)
 }
 
 // ReadClaudeQuotaViaTmux starts claude in a detached tmux session, sends /usage,
@@ -188,15 +188,9 @@ func parseClaudeUsageOutput(text string) ([]harnesses.QuotaWindow, *harnesses.Ac
 	return windows, acct
 }
 
+// normalizeClaudePlanType is delegated to the anthropic package.
 func normalizeClaudePlanType(plan string) string {
-	plan = strings.TrimSpace(plan)
-	if plan == "" {
-		return ""
-	}
-	if strings.HasPrefix(strings.ToLower(plan), "claude ") {
-		return plan
-	}
-	return "Claude " + plan
+	return anthropic.NormalizeClaudePlanType(plan)
 }
 
 // extractResetsText strips the "Resets" prefix from a line.
