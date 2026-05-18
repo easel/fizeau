@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260518T135848-8ada41d0",
+  "bead_id": "fizeau-f262961f",
+  "base_rev": "d98033f45e66f763bb4eac87786eba91707d6849",
+  "created_at": "2026-05-18T13:58:50.380069874Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f262961f",
+    "title": "repo-structure: file extraction slices 2-5 beads when slice 1 lands (per plan-2026-05-15-root-facade-extraction-inventory)",
+    "description": "AR-2026-05-17-repo finding. plan-2026-05-15-root-facade-extraction-inventory.md orders five extraction slices. Slice 1 (mixed facade splits) is in progress / accepted by the allowlist; slices 2-5 (serviceimpl, transcript/session, routehealth/quota/quality, root cleanup) have no per-slice beads yet. When slice 1 completes, file the slice-2 bead; chain slices 3-5 behind it. This bead is the reminder, not the work.\n\nSource review: fizeau-90b85c8b.",
+    "acceptance": "When the worker picks this up: confirm slice 1 has landed (the allowlist test should still pass and the slice-1 files should be in their new packages), then file slices 2 through 5 as separate beads with deps slice-2 -\u003e slice-3 -\u003e slice-4 -\u003e slice-5 and an ADR-008 spec-id on each. Close this reminder bead with notes pointing to the new bead IDs.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:planning",
+      "area:repo-structure",
+      "spec:ADR-008",
+      "discovered-from:fizeau-90b85c8b"
+    ],
+    "metadata": {
+      "spec-id": "ADR-008",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:27:06Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-008",
+      "path": "docs/helix/02-design/adr/ADR-008-service-package-and-transcript-boundaries.md",
+      "title": "ADR-008: Service Package and Transcript Boundaries"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T135848-8ada41d0",
+    "prompt": ".ddx/executions/20260518T135848-8ada41d0/prompt.md",
+    "manifest": ".ddx/executions/20260518T135848-8ada41d0/manifest.json",
+    "result": ".ddx/executions/20260518T135848-8ada41d0/result.json",
+    "checks": ".ddx/executions/20260518T135848-8ada41d0/checks.json",
+    "usage": ".ddx/executions/20260518T135848-8ada41d0/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-f262961f-20260518T135848-8ada41d0"
+  },
+  "prompt_sha": "a3ba8329744779323a9a796e1b17463c5a3005a30de43db41744103f72f977a6"
+}
