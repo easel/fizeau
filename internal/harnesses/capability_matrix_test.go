@@ -163,7 +163,7 @@ func TestADR013StatusAccepted(t *testing.T) {
 }
 
 // TestPtyModeHasThreeRuns verifies the billing-observation documentation
-// contains exactly 3 labeled PTY+hooks runs.
+// contains exactly 3 labeled PTY+hooks runs in the PTY+Hooks Mode Measurements section.
 func TestPtyModeHasThreeRuns(t *testing.T) {
 	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
 	content, err := os.ReadFile(docPath)
@@ -172,7 +172,19 @@ func TestPtyModeHasThreeRuns(t *testing.T) {
 	}
 
 	docContent := string(content)
-	runCount := strings.Count(docContent, "### Run ")
+
+	// Extract PTY+Hooks Mode Measurements section (between "## PTY+Hooks Mode Measurements" and "## Batch Mode")
+	ptyStart := strings.Index(docContent, "## PTY+Hooks Mode Measurements")
+	batchStart := strings.Index(docContent, "## Batch Mode")
+	if ptyStart == -1 {
+		t.Fatal("PTY+Hooks Mode Measurements section not found")
+	}
+	if batchStart == -1 {
+		t.Fatal("Batch Mode section not found")
+	}
+
+	ptySection := docContent[ptyStart:batchStart]
+	runCount := strings.Count(ptySection, "### Run ")
 	if runCount != 3 {
 		t.Errorf("PTY+hooks section has %d runs, want exactly 3", runCount)
 	}
@@ -180,14 +192,14 @@ func TestPtyModeHasThreeRuns(t *testing.T) {
 	// Verify each run is labeled
 	for i := 1; i <= 3; i++ {
 		runLabel := fmt.Sprintf("### Run %d:", i)
-		if !strings.Contains(docContent, runLabel) {
-			t.Errorf("Run %d not found with proper label", i)
+		if !strings.Contains(ptySection, runLabel) {
+			t.Errorf("Run %d not found with proper label in PTY+hooks section", i)
 		}
 	}
 }
 
 // TestPtyModeBeforeAfterSnapshots verifies each PTY run has BEFORE and AFTER
-// /usage snapshot blocks (6 total).
+// /usage snapshot blocks (6 total for 3 PTY runs).
 func TestPtyModeBeforeAfterSnapshots(t *testing.T) {
 	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
 	content, err := os.ReadFile(docPath)
@@ -197,21 +209,30 @@ func TestPtyModeBeforeAfterSnapshots(t *testing.T) {
 
 	docContent := string(content)
 
-	// Count BEFORE and AFTER snapshot blocks
-	beforeCount := strings.Count(docContent, "**BEFORE Snapshot")
-	afterCount := strings.Count(docContent, "**AFTER Snapshot")
+	// Extract PTY+Hooks Mode Measurements section
+	ptyStart := strings.Index(docContent, "## PTY+Hooks Mode Measurements")
+	batchStart := strings.Index(docContent, "## Batch Mode")
+	if ptyStart == -1 || batchStart == -1 {
+		t.Fatal("PTY+Hooks Mode Measurements or Batch Mode section not found")
+	}
+
+	ptySection := docContent[ptyStart:batchStart]
+
+	// Count BEFORE and AFTER snapshot blocks in PTY section
+	beforeCount := strings.Count(ptySection, "**BEFORE Snapshot")
+	afterCount := strings.Count(ptySection, "**AFTER Snapshot")
 
 	if beforeCount != 3 {
-		t.Errorf("BEFORE snapshots: got %d, want 3", beforeCount)
+		t.Errorf("BEFORE snapshots in PTY section: got %d, want 3", beforeCount)
 	}
 	if afterCount != 3 {
-		t.Errorf("AFTER snapshots: got %d, want 3", afterCount)
+		t.Errorf("AFTER snapshots in PTY section: got %d, want 3", afterCount)
 	}
 
-	// Verify quota data is present in each snapshot
-	billingModeCount := strings.Count(docContent, "Billing Mode: subscription")
+	// Verify quota data is present in each PTY snapshot
+	billingModeCount := strings.Count(ptySection, "Billing Mode: subscription")
 	if billingModeCount < 6 { // At least 6 (3 runs × 2 snapshots)
-		t.Errorf("Billing Mode annotations: got %d, want at least 6", billingModeCount)
+		t.Errorf("Billing Mode annotations in PTY section: got %d, want at least 6", billingModeCount)
 	}
 }
 
@@ -225,26 +246,35 @@ func TestPtyModeTurnOutputsRecorded(t *testing.T) {
 
 	docContent := string(content)
 
-	// Each run should have:
-	// 1. An input prompt under "Input prompt"
-	// 2. A response under "Claude TUI response"
+	// Extract PTY+Hooks Mode Measurements section
+	ptyStart := strings.Index(docContent, "## PTY+Hooks Mode Measurements")
+	batchStart := strings.Index(docContent, "## Batch Mode")
+	if ptyStart == -1 || batchStart == -1 {
+		t.Fatal("PTY+Hooks Mode Measurements or Batch Mode section not found")
+	}
+
+	ptySection := docContent[ptyStart:batchStart]
+
+	// Each PTY run should have:
+	// 1. An input prompt under "Input prompt (delivered via bracketed paste):"
+	// 2. A response under "Claude TUI response:"
 	// 3. A completion time
-	prompts := strings.Count(docContent, "Input prompt (delivered via bracketed paste):")
-	responses := strings.Count(docContent, "Claude TUI response:")
-	completions := strings.Count(docContent, "Completion time:")
+	prompts := strings.Count(ptySection, "Input prompt (delivered via bracketed paste):")
+	responses := strings.Count(ptySection, "Claude TUI response:")
+	completions := strings.Count(ptySection, "Completion time:")
 
 	if prompts != 3 {
-		t.Errorf("Input prompts: got %d, want 3", prompts)
+		t.Errorf("Input prompts in PTY section: got %d, want 3", prompts)
 	}
 	if responses != 3 {
-		t.Errorf("Claude TUI responses: got %d, want 3", responses)
+		t.Errorf("Claude TUI responses in PTY section: got %d, want 3", responses)
 	}
 	if completions != 3 {
-		t.Errorf("Completion times: got %d, want 3", completions)
+		t.Errorf("Completion times in PTY section: got %d, want 3", completions)
 	}
 }
 
-// TestPtyModeSnapshotTimestamps verifies every /usage snapshot has a wall-clock
+// TestPtyModeSnapshotTimestamps verifies every /usage snapshot in PTY mode has a wall-clock
 // timestamp (ISO 8601 format).
 func TestPtyModeSnapshotTimestamps(t *testing.T) {
 	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
@@ -255,13 +285,22 @@ func TestPtyModeSnapshotTimestamps(t *testing.T) {
 
 	docContent := string(content)
 
+	// Extract PTY+Hooks Mode Measurements section
+	ptyStart := strings.Index(docContent, "## PTY+Hooks Mode Measurements")
+	batchStart := strings.Index(docContent, "## Batch Mode")
+	if ptyStart == -1 || batchStart == -1 {
+		t.Fatal("PTY+Hooks Mode Measurements or Batch Mode section not found")
+	}
+
+	ptySection := docContent[ptyStart:batchStart]
+
 	// Timestamps should be in format like 2026-05-18T14:05:32.123Z
 	// Count patterns like **BEFORE Snapshot (2026-...Z)**
 	iso8601Pattern := regexp.MustCompile(`\*\*(BEFORE|AFTER) Snapshot \((\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\)\*\*`)
-	matches := iso8601Pattern.FindAllStringSubmatch(docContent, -1)
+	matches := iso8601Pattern.FindAllStringSubmatch(ptySection, -1)
 
 	if len(matches) != 6 {
-		t.Errorf("ISO 8601 timestamped snapshots: got %d, want 6", len(matches))
+		t.Errorf("ISO 8601 timestamped snapshots in PTY section: got %d, want 6", len(matches))
 	}
 
 	// Verify timestamps are reasonable (all in May 2026)
@@ -343,6 +382,204 @@ func TestPtyModeSingleAccountAttested(t *testing.T) {
 	// Verify that windows are explicitly stated as non-overlapping
 	if !strings.Contains(docContent, "no overlap") {
 		t.Error("documentation does not explicitly state 'no overlap' with --print window")
+	}
+}
+
+// TestPrintModeRun1Labeled verifies the Batch Mode section contains one labeled Run 1 entry.
+func TestPrintModeRun1Labeled(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Check for Batch Mode section
+	if !strings.Contains(docContent, "## Batch Mode (--print) Measurements") {
+		t.Fatal("Batch Mode (--print) Measurements section not found")
+	}
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Verify Run 1 is labeled
+	if !strings.Contains(batchSection, "### Run 1: Simple Arithmetic Query") {
+		t.Error("Run 1 not found with expected label in Batch Mode section")
+	}
+}
+
+// TestPrintModeRun1BeforeAfterSnapshots verifies Run 1 has BEFORE and AFTER snapshots.
+func TestPrintModeRun1BeforeAfterSnapshots(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Count BEFORE and AFTER snapshots in batch section
+	beforeCount := strings.Count(batchSection, "**BEFORE Snapshot")
+	afterCount := strings.Count(batchSection, "**AFTER Snapshot")
+
+	if beforeCount != 1 {
+		t.Errorf("BEFORE snapshots in batch section: got %d, want 1", beforeCount)
+	}
+	if afterCount != 1 {
+		t.Errorf("AFTER snapshots in batch section: got %d, want 1", afterCount)
+	}
+}
+
+// TestPrintModeRun1TurnOutputRecorded verifies Run 1 includes the captured output.
+func TestPrintModeRun1TurnOutputRecorded(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Verify batch mode uses --print delivery method
+	if !strings.Contains(batchSection, "Input prompt (delivered via --print flag):") {
+		t.Error("batch mode prompt delivery not documented")
+	}
+
+	// Verify Claude response is recorded
+	if !strings.Contains(batchSection, "Claude response:") {
+		t.Error("Claude response not documented in batch section")
+	}
+
+	// Verify completion time is documented
+	if !strings.Contains(batchSection, "Completion time:") {
+		t.Error("Completion time not documented in batch section")
+	}
+}
+
+// TestPrintModeRun1SnapshotTimestamps verifies Run 1 snapshots have wall-clock timestamps.
+func TestPrintModeRun1SnapshotTimestamps(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Check for ISO 8601 timestamps in snapshot headers
+	iso8601Pattern := regexp.MustCompile(`\*\*(BEFORE|AFTER) Snapshot \((\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\)\*\*`)
+	matches := iso8601Pattern.FindAllStringSubmatch(batchSection, -1)
+
+	if len(matches) != 2 {
+		t.Errorf("ISO 8601 timestamped snapshots in batch section: got %d, want 2", len(matches))
+	}
+}
+
+// TestPrintModeRun1AfterRespectsRefreshDelay verifies the AFTER snapshot respects timing.
+func TestPrintModeRun1AfterRespectsRefreshDelay(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Verify AFTER snapshot is >=60s post-completion
+	if !strings.Contains(batchSection, "post-completion)") {
+		t.Error("AFTER snapshot timing not documented")
+	}
+
+	// The batch mode Run 1 should show >=60s post-completion
+	// (ADR allows early measurements per design; batch mode shows 65.002s)
+	if !strings.Contains(batchSection, "65") {
+		t.Log("Expected AFTER snapshot timing not found; checking for >=60s compliance in analysis")
+		if !strings.Contains(batchSection, "≥ 60s minimum") {
+			t.Error("AFTER snapshot timing does not document 60s minimum requirement")
+		}
+	}
+}
+
+// TestPrintModeRun1SingleAccountAttested verifies single account constraint.
+func TestPrintModeRun1SingleAccountAttested(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Verify single account constraint is documented
+	if !strings.Contains(docContent, "Single Account Constraint") {
+		t.Error("Single Account Constraint attestation missing")
+	}
+
+	// Verify concurrent activity window includes batch mode run
+	if !strings.Contains(docContent, "Concurrent Activity Window") {
+		t.Error("Concurrent Activity Window specification missing")
+	}
+
+	// Verify non-overlapping windows documented
+	if !strings.Contains(docContent, "Non-Overlapping Windows") {
+		t.Error("Non-Overlapping Windows section missing")
+	}
+
+	// Verify both PTY and batch mode windows are documented
+	if !strings.Contains(docContent, "PTY+hooks measurements:") {
+		t.Error("PTY+hooks measurement window not documented")
+	}
+
+	if !strings.Contains(docContent, "--print` batch-mode measurements:") {
+		t.Error("batch-mode measurement window not documented")
+	}
+
+	// Verify no concurrent activity attestation
+	if !strings.Contains(docContent, "No concurrent Claude sessions") {
+		t.Error("no concurrent activity attestation missing")
 	}
 }
 

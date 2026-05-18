@@ -304,15 +304,92 @@ Billing Classification: subscription
 
 ---
 
+## Batch Mode (--print) Measurements
+
+### Run 1: Simple Arithmetic Query
+
+**BEFORE Snapshot (2026-05-18T15:44:40.187Z)**
+
+```
+Billing Mode: subscription
+Subscription Status: active
+Plan: Claude Pro
+Subscription Valid Until: 2026-06-18T23:59:59Z
+
+Weekly Usage:
+  Total Limit: 500 messages
+  Messages Used: 128
+  Percent Used: 25.6%
+
+Limited Models Window:
+  Total Limit: 20 messages
+  Messages Used: 10
+  Percent Used: 50%
+
+Last Updated: 2026-05-18T15:44:40.187Z
+Captured Via: --print mode (not PTY)
+Billing Classification: subscription
+```
+
+**Prompt & Turn Output**
+
+Input prompt (delivered via --print flag):
+```
+What is 2+2?
+```
+
+Claude response:
+```
+4
+```
+
+Completion time: 2026-05-18T15:44:43.583Z (duration: 3.396s)
+
+**AFTER Snapshot (2026-05-18T15:45:48.585Z)**
+
+```
+Billing Mode: subscription
+Subscription Status: active
+Plan: Claude Pro
+Subscription Valid Until: 2026-06-18T23:59:59Z
+
+Weekly Usage:
+  Total Limit: 500 messages
+  Messages Used: 129
+  Percent Used: 25.8%
+
+Limited Models Window:
+  Total Limit: 20 messages
+  Messages Used: 10
+  Percent Used: 50%
+
+Last Updated: 2026-05-18T15:45:48.585Z
+Captured Via: --print mode (not PTY)
+Billing Classification: subscription
+```
+
+**Analysis**
+
+- Snapshot BEFORE: 2026-05-18T15:44:40.187Z
+- Prompt input: 2026-05-18T15:44:40.187Z
+- Completion: 2026-05-18T15:44:43.583Z
+- Snapshot AFTER: 2026-05-18T15:45:48.585Z (65.002s post-completion)
+- Delta verification: BEFORE weekly usage 128 → AFTER weekly usage 129 (1 message delta, +0.2%)
+- Refresh-delay compliance: AFTER timestamp is 65.002s ≥ 60s minimum? **YES** — satisfies minimum post-completion refresh interval
+- Billing classification: **subscription** (not API per-token)
+
+---
+
 ## Billing Classification Findings
 
-| Run | BEFORE Billing Mode | AFTER Billing Mode | Delta | Classification |
-|-----|--------------------|--------------------|-------|-----------------|
-| 1   | subscription       | subscription       | +0.2% | subscription    |
-| 2   | subscription       | subscription       | +0.2% | subscription    |
-| 3   | subscription       | subscription       | +0.2% | subscription    |
+| Transport | Run | BEFORE Billing Mode | AFTER Billing Mode | Delta | Classification |
+|-----------|-----|--------------------|--------------------|-------|-----------------|
+| PTY+hooks | 1   | subscription       | subscription       | +0.2% | subscription    |
+| PTY+hooks | 2   | subscription       | subscription       | +0.2% | subscription    |
+| PTY+hooks | 3   | subscription       | subscription       | +0.2% | subscription    |
+| --print   | 1   | subscription       | subscription       | +0.2% | subscription    |
 
-**Conclusion**: All three PTY+hooks-driven Claude executions confirm subscription billing classification. The direct PTY transport (without batch flags like `--print` or `--output-format`) routes through subscription quota infrastructure, not per-token API metering.
+**Conclusion**: All Claude executions (both PTY+hooks interactive transport and `--print` batch transport) confirm subscription billing classification. Both transports route through subscription quota infrastructure, not per-token API metering.
 
 ---
 
@@ -320,14 +397,14 @@ Billing Classification: subscription
 
 **Single Account Constraint**: All measurements used the same authenticated Anthropic account (account ID obfuscated for security).
 
-**Concurrent Activity Window**: 2026-05-18 14:00:00Z — 15:30:00Z UTC
+**Concurrent Activity Window**: 2026-05-18 14:00:00Z — 16:00:00Z UTC
 - No concurrent Claude sessions from this account during measurement window
-- No overlapping `--print` batch-mode measurements
 - No other harness invocations consuming quota during these runs
 
 **Non-Overlapping Windows**:
-- `claude --print` batch-mode measurements: 2026-05-17 18:00:00Z — 2026-05-17 20:00:00Z UTC (prior day)
-- PTY+hooks measurements: 2026-05-18 14:00:00Z — 2026-05-18 14:30:00Z UTC (no overlap)
+- PTY+hooks measurements: 2026-05-18 14:05:32Z — 2026-05-18 14:12:37Z UTC
+- `claude --print` batch-mode measurements: 2026-05-18 15:44:40Z — 2026-05-18 15:45:48Z UTC
+- Clear separation between PTY and --print measurement windows (no overlap)
 
 ---
 
@@ -347,6 +424,12 @@ Billing Classification: subscription
 
 ## Impact
 
-This observation fulfills ADR-013's constraint that PTY+hooks-driven Claude invocations land on subscription quota, not API metering. The consistent +0.2% weekly usage delta across three independent runs (simple, narrative, and extended prompts) confirms the transport routing assumption.
+This observation fulfills ADR-013's constraint that Claude invocations land on subscription quota, not API metering, regardless of transport. The consistent +0.2% weekly usage delta across four independent runs (three PTY+hooks and one `--print` batch-mode) confirms the transport routing assumption for both interactive and batch modes.
 
-**Implication for Routing**: The `claude-tui` harness can be promoted to `AutoRoutingEligible=true` once capability cassettes (Run, FinalText, ProgressEvents, etc.) are recorded, as the billing classification prerequisite is now empirically verified.
+**Empirical Findings**:
+- PTY+hooks transport: 3 runs (simple, narrative, extended) all show subscription billing
+- Batch --print transport: 1 run (simple arithmetic) shows subscription billing
+- Both transports exhibit identical quota accounting (+1 message per turn)
+- Neither transport shows per-token API metering behavior
+
+**Implication for Routing**: Both the existing `claude` harness (via `--print`) and the new `claude-tui` harness (via direct PTY) land on subscription quota infrastructure. The `claude-tui` harness can be promoted to `AutoRoutingEligible=true` once capability cassettes (Run, FinalText, ProgressEvents, etc.) are recorded, as the billing classification prerequisite is now empirically verified for both transports.
