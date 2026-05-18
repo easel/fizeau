@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260518T041246-2899a2cb",
+  "bead_id": "fizeau-2b192ca5",
+  "base_rev": "ab7da55e24ec2a0c31953f8997e5eb790d11226e",
+  "created_at": "2026-05-18T04:12:49.241185441Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2b192ca5",
+    "title": "bench-pr-A3c: --max-cost-usd budget enforcement + budget.json + budget_halted placeholder",
+    "description": "PROBLEM: A2 produces reports with profile.pricing but does not tally cost, so sweeps cannot be cost-capped. There is no typed placeholder for cells skipped due to budget exhaustion.\n\nROOT CAUSE:\n  - scripts/benchmark/benchmark (A2): no aggregation pass between cells; pricing data sits in report.json unused.\n  - No \u003cout\u003e/budget.json convention exists.\n\nPROPOSED FIX:\n  1. --max-cost-usd FLOAT flag (default unset = unlimited).\n  2. At each cell close: compute cost_usd_at_run_time = profile.pricing × token streams from report.json; append {cell_id,cost_usd} to \u003cout\u003e/budget.json by_cell; update total_usd.\n  3. Track per-cell max_estimated_next_cost (rolling max of completed cells, fallback to a small floor if none completed).\n  4. Before scheduling next cell: if total_usd + max_estimated_next_cost \u003e --max-cost-usd, halt scheduling.\n  5. Each unscheduled remaining cell gets a placeholder report.json with final_status=\"budget_halted\", process_outcome=\"setup_failed\", note=\"budget cap reached\".\n  6. budget.json fields strictly typed (numbers, not strings).\n\nNON-SCOPE (preserved from parent):\n  - cell-report.schema.json (PR B); bench-set schema (PR C)\n  - Node collector/importers (PR D/E); deleting cmd/bench (PR F); docs (PR G)\n  - Harbor image, shell adapters, agent-leak fix (A1)\n  - Bash runner core, --plan, report.json composition (A2)\n  - Parity fixtures + diff.sh (A4)\n  - flock / --jobs / in-flight.json (A3a)\n  - Signal handling and docker cleanup (A3b)\n  - cmd/bench redirect (A3d)\n\nGOVERNING: plan-2026-05-15-benchmark-runner-simplification. Depends on A2.\n\nACCEPTANCE:\n  1. test_runner_budget.sh::test_max_cost_usd_produces_budget_halted — `./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01`; at least one cell exists with final_status==\"budget_halted\", process_outcome==\"setup_failed\", note populated. \u003cout\u003e/budget.json total_usd ≤ 0.01 + last_completed_cell_cost.\n  2. test_runner_budget.sh::test_budget_json_accumulates — budget.json by_cell sum equals total_usd; field types validated as numeric.\n  3. test_runner_budget.sh::test_no_cap_no_halt — without --max-cost-usd, no cells are budget_halted regardless of cost.\n\nGATES: `go test ./...` green; `lefthook run pre-commit` green; `bash scripts/benchmark/test/run.sh`.",
+    "acceptance": "All 3 ACs pass; satisfies parent AC3; go test + lefthook gates green.",
+    "parent": "fizeau-8a5e74f0",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "subpart:A3c"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:49Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T041246-2899a2cb",
+    "prompt": ".ddx/executions/20260518T041246-2899a2cb/prompt.md",
+    "manifest": ".ddx/executions/20260518T041246-2899a2cb/manifest.json",
+    "result": ".ddx/executions/20260518T041246-2899a2cb/result.json",
+    "checks": ".ddx/executions/20260518T041246-2899a2cb/checks.json",
+    "usage": ".ddx/executions/20260518T041246-2899a2cb/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-2b192ca5-20260518T041246-2899a2cb"
+  },
+  "prompt_sha": "102dae8272f2c8b03d29141974c8a0b94302ce2277221c369a0b6de83f1c79ef"
+}
