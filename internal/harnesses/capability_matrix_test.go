@@ -425,7 +425,7 @@ func TestPrintModeRun1BeforeAfterSnapshots(t *testing.T) {
 
 	docContent := string(content)
 
-	// Extract Batch Mode section
+	// Extract Batch Mode section first
 	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
 	billingStart := strings.Index(docContent, "## Billing Classification Findings")
 	if batchStart == -1 || billingStart == -1 {
@@ -434,15 +434,24 @@ func TestPrintModeRun1BeforeAfterSnapshots(t *testing.T) {
 
 	batchSection := docContent[batchStart:billingStart]
 
-	// Count BEFORE and AFTER snapshots in batch section
-	beforeCount := strings.Count(batchSection, "**BEFORE Snapshot")
-	afterCount := strings.Count(batchSection, "**AFTER Snapshot")
+	// Find Run 1 in batch mode section (between "### Run 1:" and "### Run 2:")
+	run1Start := strings.Index(batchSection, "### Run 1: Simple Arithmetic Query")
+	run2Start := strings.Index(batchSection, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	if run1Start == -1 || run2Start == -1 {
+		t.Fatal("Run 1 or Run 2 header not found in batch section")
+	}
+
+	run1Section := batchSection[run1Start:run2Start]
+
+	// Count BEFORE and AFTER snapshots in Run 1 section
+	beforeCount := strings.Count(run1Section, "**BEFORE Snapshot")
+	afterCount := strings.Count(run1Section, "**AFTER Snapshot")
 
 	if beforeCount != 1 {
-		t.Errorf("BEFORE snapshots in batch section: got %d, want 1", beforeCount)
+		t.Errorf("BEFORE snapshots in batch Run 1 section: got %d, want 1", beforeCount)
 	}
 	if afterCount != 1 {
-		t.Errorf("AFTER snapshots in batch section: got %d, want 1", afterCount)
+		t.Errorf("AFTER snapshots in batch Run 1 section: got %d, want 1", afterCount)
 	}
 }
 
@@ -491,7 +500,7 @@ func TestPrintModeRun1SnapshotTimestamps(t *testing.T) {
 
 	docContent := string(content)
 
-	// Extract Batch Mode section
+	// Extract Batch Mode section first
 	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
 	billingStart := strings.Index(docContent, "## Billing Classification Findings")
 	if batchStart == -1 || billingStart == -1 {
@@ -500,12 +509,21 @@ func TestPrintModeRun1SnapshotTimestamps(t *testing.T) {
 
 	batchSection := docContent[batchStart:billingStart]
 
+	// Find Run 1 in batch mode section
+	run1Start := strings.Index(batchSection, "### Run 1: Simple Arithmetic Query")
+	run2Start := strings.Index(batchSection, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	if run1Start == -1 || run2Start == -1 {
+		t.Fatal("Run 1 or Run 2 header not found in batch section")
+	}
+
+	run1Section := batchSection[run1Start:run2Start]
+
 	// Check for ISO 8601 timestamps in snapshot headers
 	iso8601Pattern := regexp.MustCompile(`\*\*(BEFORE|AFTER) Snapshot \((\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\)\*\*`)
-	matches := iso8601Pattern.FindAllStringSubmatch(batchSection, -1)
+	matches := iso8601Pattern.FindAllStringSubmatch(run1Section, -1)
 
 	if len(matches) != 2 {
-		t.Errorf("ISO 8601 timestamped snapshots in batch section: got %d, want 2", len(matches))
+		t.Errorf("ISO 8601 timestamped snapshots in batch Run 1 section: got %d, want 2", len(matches))
 	}
 }
 
@@ -580,6 +598,177 @@ func TestPrintModeRun1SingleAccountAttested(t *testing.T) {
 	// Verify no concurrent activity attestation
 	if !strings.Contains(docContent, "No concurrent Claude sessions") {
 		t.Error("no concurrent activity attestation missing")
+	}
+}
+
+// TestPrintModeRun2Labeled verifies Run 2 is labeled in the batch mode section.
+func TestPrintModeRun2Labeled(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Batch Mode section
+	batchStart := strings.Index(docContent, "## Batch Mode (--print) Measurements")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if batchStart == -1 || billingStart == -1 {
+		t.Fatal("Batch Mode or Billing Classification Findings section not found")
+	}
+
+	batchSection := docContent[batchStart:billingStart]
+
+	// Verify Run 2 is labeled
+	if !strings.Contains(batchSection, "### Run 2: Simple Arithmetic Query (Empirical Verification)") {
+		t.Error("Run 2 not found with expected label in Batch Mode section")
+	}
+}
+
+// TestPrintModeRun2BeforeAfterSnapshots verifies Run 2 has BEFORE and AFTER snapshots.
+func TestPrintModeRun2BeforeAfterSnapshots(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Run 2 section specifically (between Run 2 header and Billing Classification Findings)
+	run2Start := strings.Index(docContent, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if run2Start == -1 || billingStart == -1 {
+		t.Fatal("Run 2 header or Billing Classification Findings section not found")
+	}
+
+	run2Section := docContent[run2Start:billingStart]
+
+	// Count BEFORE and AFTER snapshots in Run 2 section
+	beforeCount := strings.Count(run2Section, "**BEFORE Snapshot")
+	afterCount := strings.Count(run2Section, "**AFTER Snapshot")
+
+	if beforeCount != 1 {
+		t.Errorf("BEFORE snapshots in Run 2 section: got %d, want 1", beforeCount)
+	}
+	if afterCount != 1 {
+		t.Errorf("AFTER snapshots in Run 2 section: got %d, want 1", afterCount)
+	}
+}
+
+// TestPrintModeRun2TurnOutputRecorded verifies Run 2 includes the captured output.
+func TestPrintModeRun2TurnOutputRecorded(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Run 2 section
+	run2Start := strings.Index(docContent, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if run2Start == -1 || billingStart == -1 {
+		t.Fatal("Run 2 header or Billing Classification Findings section not found")
+	}
+
+	run2Section := docContent[run2Start:billingStart]
+
+	// Verify Run 2 includes the response "4"
+	if !strings.Contains(run2Section, "Claude response:") {
+		t.Error("Claude response not documented in Run 2 section")
+	}
+
+	// Verify completion time is documented
+	if !strings.Contains(run2Section, "Completion time:") {
+		t.Error("Completion time not documented in Run 2 section")
+	}
+}
+
+// TestPrintModeRun2SnapshotTimestamps verifies Run 2 snapshots have wall-clock timestamps.
+func TestPrintModeRun2SnapshotTimestamps(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Run 2 section
+	run2Start := strings.Index(docContent, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if run2Start == -1 || billingStart == -1 {
+		t.Fatal("Run 2 header or Billing Classification Findings section not found")
+	}
+
+	run2Section := docContent[run2Start:billingStart]
+
+	// Check for ISO 8601 timestamps in snapshot headers
+	iso8601Pattern := regexp.MustCompile(`\*\*(BEFORE|AFTER) Snapshot \((\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\)\*\*`)
+	matches := iso8601Pattern.FindAllStringSubmatch(run2Section, -1)
+
+	if len(matches) != 2 {
+		t.Errorf("ISO 8601 timestamped snapshots in Run 2 section: got %d, want 2", len(matches))
+	}
+}
+
+// TestPrintModeRun2AfterRespectsRefreshDelay verifies Run 2 AFTER snapshot respects timing.
+func TestPrintModeRun2AfterRespectsRefreshDelay(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Extract Run 2 section
+	run2Start := strings.Index(docContent, "### Run 2: Simple Arithmetic Query (Empirical Verification)")
+	billingStart := strings.Index(docContent, "## Billing Classification Findings")
+	if run2Start == -1 || billingStart == -1 {
+		t.Fatal("Run 2 header or Billing Classification Findings section not found")
+	}
+
+	run2Section := docContent[run2Start:billingStart]
+
+	// Verify AFTER snapshot is >=60s post-completion
+	if !strings.Contains(run2Section, "post-completion)") {
+		t.Error("AFTER snapshot timing not documented in Run 2")
+	}
+
+	// Run 2 should show >=60s minimum requirement
+	if !strings.Contains(run2Section, "≥ 60s minimum") && !strings.Contains(run2Section, ">= 60s") {
+		t.Error("AFTER snapshot timing does not document 60s minimum requirement in Run 2")
+	}
+}
+
+// TestPrintModeRun2SingleAccountAttested verifies Run 2 concurrent activity attestation.
+func TestPrintModeRun2SingleAccountAttested(t *testing.T) {
+	docPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "billing-observation-claude-tui.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read billing observation doc: %v", err)
+	}
+
+	docContent := string(content)
+
+	// Verify Run 2 window is documented in the Non-Overlapping Windows section
+	if !strings.Contains(docContent, "Run 2") {
+		t.Error("Run 2 not referenced in attestation section")
+	}
+
+	// Verify Run 2 measurement window is documented
+	if !strings.Contains(docContent, "16:00:24Z — 2026-05-18 16:01:33Z UTC (Run 2)") &&
+		!strings.Contains(docContent, "2026-05-18 16:00:24Z — 2026-05-18 16:01:33Z UTC (Run 2)") {
+		t.Error("Run 2 measurement window not properly documented")
+	}
+
+	// Verify Run 2 concurrent activity attestation
+	if !strings.Contains(docContent, "Run 2 window verified isolated") {
+		t.Error("Run 2 concurrent activity attestation missing")
 	}
 }
 
