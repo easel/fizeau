@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260518T042816-89525c84",
+  "bead_id": "fizeau-5b2a8950",
+  "base_rev": "f2ba23d82b59e7c3552e336214d51366501050a2",
+  "created_at": "2026-05-18T04:28:20.357641723Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5b2a8950",
+    "title": "Review self-update-installer",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:self-update-installer"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:19Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T042816-89525c84",
+    "prompt": ".ddx/executions/20260518T042816-89525c84/prompt.md",
+    "manifest": ".ddx/executions/20260518T042816-89525c84/manifest.json",
+    "result": ".ddx/executions/20260518T042816-89525c84/result.json",
+    "checks": ".ddx/executions/20260518T042816-89525c84/checks.json",
+    "usage": ".ddx/executions/20260518T042816-89525c84/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-5b2a8950-20260518T042816-89525c84"
+  },
+  "prompt_sha": "7f738ce652979771c11957802577f43f98262d46d0b3bb4cb122718421e951ce"
+}
