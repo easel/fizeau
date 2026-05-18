@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260518T044119-a5b06126",
+  "bead_id": "fizeau-90b85c8b",
+  "base_rev": "8430a7d6d404abd34e73ec693c06cf1fc1a0b535",
+  "created_at": "2026-05-18T04:41:22.279662231Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-90b85c8b",
+    "title": "Review repo-structure-facade",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:repo-structure-facade"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:55Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T044119-a5b06126",
+    "prompt": ".ddx/executions/20260518T044119-a5b06126/prompt.md",
+    "manifest": ".ddx/executions/20260518T044119-a5b06126/manifest.json",
+    "result": ".ddx/executions/20260518T044119-a5b06126/result.json",
+    "checks": ".ddx/executions/20260518T044119-a5b06126/checks.json",
+    "usage": ".ddx/executions/20260518T044119-a5b06126/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-90b85c8b-20260518T044119-a5b06126"
+  },
+  "prompt_sha": "a2f12e849bf91e1c0cbfe647e3fa94de447371d0a65d628dc58aaffa2c750e65"
+}

@@ -1,0 +1,1 @@
+verification_command: bash -c 'set -e; go test ./... -run TestRootFacadeSourceAllowlist -count=1 && go test ./agentcli -run Boundary -count=1 && echo "repo-structure-facade review verified: allowlist locked, boundary tests green"'

@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260518T044225-17e43866",
+  "bead_id": "fizeau-a1b61f00",
+  "base_rev": "7e5dfff957c6e73f804dae30be6591e971737893",
+  "created_at": "2026-05-18T04:42:27.980942352Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a1b61f00",
+    "title": "Review concerns-drift",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:concerns-drift"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:57Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T044225-17e43866",
+    "prompt": ".ddx/executions/20260518T044225-17e43866/prompt.md",
+    "manifest": ".ddx/executions/20260518T044225-17e43866/manifest.json",
+    "result": ".ddx/executions/20260518T044225-17e43866/result.json",
+    "checks": ".ddx/executions/20260518T044225-17e43866/checks.json",
+    "usage": ".ddx/executions/20260518T044225-17e43866/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-a1b61f00-20260518T044225-17e43866"
+  },
+  "prompt_sha": "ed86ddf2ad7203505ca773b4703c9da23d487563cfafbb13d34768280c7d2e99"
+}
