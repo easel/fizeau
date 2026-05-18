@@ -85,3 +85,20 @@ sleep 5
 	_, statErr := os.Stat(filepath.Join(cassetteDir, cassette.ManifestFile))
 	require.True(t, errors.Is(statErr, os.ErrNotExist), "empty model output should not promote a cassette")
 }
+
+func TestReadCodexModelDiscoveryFromModelSurfaceCassette(t *testing.T) {
+	snapshot, err := ReadCodexModelDiscoveryFromCassette("testdata/model_surface")
+	require.NoError(t, err)
+	require.NotEmpty(t, snapshot.Models, "cassette must contain at least one model")
+	require.NotEmpty(t, snapshot.ReasoningLevels, "cassette must contain reasoning levels")
+	require.Equal(t, "pty", snapshot.Source)
+	require.NotEmpty(t, snapshot.FreshnessWindow)
+
+	reader, err := cassette.Open("testdata/model_surface")
+	require.NoError(t, err)
+	rec := reader.Discovery()
+	require.NotNil(t, rec)
+	require.Equal(t, "ok", rec.Status)
+	require.NotEmpty(t, rec.Models)
+	require.NotEmpty(t, rec.ReasoningLevels)
+}

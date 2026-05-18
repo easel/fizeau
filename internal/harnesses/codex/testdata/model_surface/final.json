@@ -1,0 +1,18 @@
+{
+  "seq": 5,
+  "t_ms": 4450,
+  "exit": {
+    "Code": -1,
+    "Signal": "terminated",
+    "Exited": false,
+    "Signaled": true,
+    "Err": null
+  },
+  "duration_ms": 4480,
+  "metadata": {
+    "frames": 129,
+    "harness": "codex",
+    "raw_bytes": 34859
+  },
+  "final_text": "ururation\u003e/modeuration\u003e           uration\u003e                 uration\u003euration\u003euration\u003euration\u003e                              uration\u003euration\u003e\nation\u003e\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  gpt-5.5 xhigh\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n                                          uration\u003e$WORKTREE\n                       uration\u003e ·\n\n\n\n\n\n\n\n\n\n\n"
+}

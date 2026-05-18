@@ -1,0 +1,29 @@
+{
+  "status": "redacted",
+  "rules": [
+    "animation-counter",
+    "api-token",
+    "bearer-token",
+    "elapsed-duration",
+    "email",
+    "home-path",
+    "local-time",
+    "pid",
+    "rfc3339",
+    "socket-file",
+    "transient-file",
+    "uuid",
+    "worktree-path"
+  ],
+  "hit_counts": {
+    "elapsed-duration": 1515
+  },
+  "env_allowlist": [
+    "TERM",
+    "LANG",
+    "LC_ALL"
+  ],
+  "intentionally_preserved": [
+    "quota-status-text"
+  ]
+}

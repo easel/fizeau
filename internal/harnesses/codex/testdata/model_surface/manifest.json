@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "codex-quota",
+  "content_digest": {
+    "sha256": "893f04efc60d6ed85f79f7e31e4ec10d24e36dac5d9efddf0cba3735cc30281f"
+  },
+  "harness": {
+    "name": "codex",
+    "binary_version": "codex-cli 0.130.0"
+  },
+  "command": {
+    "argv": [
+      "codex",
+      "--no-alt-screen"
+    ],
+    "workdir_policy": "caller",
+    "env_allowlist": [
+      "TERM",
+      "LANG",
+      "LC_ALL"
+    ],
+    "timeout_ms": 45000
+  },
+  "terminal": {
+    "initial_rows": 50,
+    "initial_cols": 220,
+    "locale": "C.UTF-8",
+    "term": "xterm-256color",
+    "pty_mode": {
+      "outer": "creack/pty"
+    },
+    "emulator": {
+      "name": "vt10x",
+      "version": "v0.0.0-20220301184237-5011da428d02"
+    }
+  },
+  "timing": {
+    "resolution_ms": 50,
+    "clock_policy": "monotonic-elapsed",
+    "replay_default": "collapsed"
+  },
+  "provenance": {
+    "os": "linux",
+    "arch": "arm64",
+    "recorded_at": "2026-05-18T08:05:11Z",
+    "recorder_version": "quota-pty-v1"
+  }
+}
