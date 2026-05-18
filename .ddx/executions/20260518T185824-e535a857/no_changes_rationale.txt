@@ -1,0 +1,2 @@
+status: blocked
+reason: repository-wide `go test ./...` is failing in unrelated baseline tests (`service_aliveness`, `agentcli`, `cmd/bench`, `occompat`), so the required green gate cannot be proven in this worktree.
