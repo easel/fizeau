@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260518T042127-f5f9a5dc",
+  "bead_id": "fizeau-0ee8d176",
+  "base_rev": "6524091a27fc843602c6457ffab71eca14658e0b",
+  "created_at": "2026-05-18T04:21:31.43962319Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-0ee8d176",
+    "title": "bench-pr-A3d: deactivate Go-runner cmd/bench execution subcommands (redirect to ./benchmark)",
+    "description": "PROBLEM: cmd/bench/main.go still dispatches matrix|sweep|run|plan to the Go runner. Coexistence with the bash runner invites drift in profile resolution, pricing math, and report shape.\n\nROOT CAUSE:\n  - cmd/bench/main.go: subcommand dispatch routes matrix/sweep/run/plan into Python-coupled Go code that was the reason for the rewrite.\n\nPROPOSED FIX:\n  1. Replace matrix|sweep|run|plan subcommand bodies with a stderr message instructing use of ./scripts/benchmark/benchmark; exit 2.\n  2. Preserve read-only listing subcommands (profiles, bench-sets) functional until PR F.\n  3. No changes to flag-parsing for the listing subcommands.\n\nNON-SCOPE (preserved from parent):\n  - cell-report.schema.json (PR B); bench-set schema (PR C)\n  - Node collector/importers (PR D/E); deleting cmd/bench entirely (PR F); docs (PR G)\n  - Harbor image, shell adapters, agent-leak fix (A1)\n  - Bash runner core, --plan, report.json composition (A2)\n  - Parity fixtures + diff.sh (A4)\n  - flock / --jobs / in-flight.json (A3a)\n  - Signal handling and docker cleanup (A3b)\n  - Cost cap / budget.json (A3c)\n\nGOVERNING: plan-2026-05-15-benchmark-runner-simplification. Independent of A2/A3a/A3b/A3c.\n\nACCEPTANCE:\n  1. TestBenchMainRedirectsExecutionSubcommands (cmd/bench/main_test.go) — exec `go run ./cmd/bench matrix`; expect exit code 2 and stderr containing `use ./benchmark`. Repeat for sweep, run, plan. `go test ./cmd/bench/... -run TestBenchMainRedirectsExecutionSubcommands`.\n  2. TestBenchMainListingSubcommandsStillWork (cmd/bench/main_test.go) — `go run ./cmd/bench profiles` and `go run ./cmd/bench bench-sets` exit 0 and produce non-empty stdout.\n  3. Shell variant: `fiz-bench matrix 2\u003e\u00261 | grep -q 'use ./benchmark'` returns 0.\n\nGATES: `go test ./...` green; `lefthook run pre-commit` green.",
+    "acceptance": "All 3 ACs pass; satisfies parent AC1, AC6, AC8; go test + lefthook gates green.",
+    "parent": "fizeau-8a5e74f0",
+    "labels": [
+      "area:bench",
+      "kind:refactor",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "subpart:A3d"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:51Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T042127-f5f9a5dc",
+    "prompt": ".ddx/executions/20260518T042127-f5f9a5dc/prompt.md",
+    "manifest": ".ddx/executions/20260518T042127-f5f9a5dc/manifest.json",
+    "result": ".ddx/executions/20260518T042127-f5f9a5dc/result.json",
+    "checks": ".ddx/executions/20260518T042127-f5f9a5dc/checks.json",
+    "usage": ".ddx/executions/20260518T042127-f5f9a5dc/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-0ee8d176-20260518T042127-f5f9a5dc"
+  },
+  "prompt_sha": "dfda3eac9811710217441c2172cd150c2b1423d34e776e435ce590b1d19186b2"
+}
