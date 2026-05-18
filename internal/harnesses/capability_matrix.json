@@ -152,6 +152,89 @@
       ]
     },
     {
+      "name": "claude-tui",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude-tui::TestClaudeTuiInterfaceConformance",
+              "evidence_id": "harness-interface-conformance-claude-tui-1"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude-tui::TestClaudeTuiInterfaceConformance",
+              "evidence_id": "quota-harness-conformance-claude-tui-1"
+            }
+          ]
+        },
+        {
+          "name": "AccountHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude-tui::TestClaudeTuiInterfaceConformance",
+              "evidence_id": "account-harness-conformance-claude-tui-1"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude-tui::TestClaudeTuiInterfaceConformance",
+              "evidence_id": "model-discovery-harness-conformance-claude-tui-1"
+            }
+          ]
+        },
+        {
+          "name": "BillingModeObservation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "cassette",
+              "id": "testdata/harness-cassettes/claude-tui/billing-observation/manifest.json",
+              "evidence_id": "billing-observation-subscription-mode-claude-tui"
+            }
+          ]
+        },
+        {
+          "name": "SupportedLimitIDs emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "claudetui.(*Harness).SupportedLimitIDs",
+              "evidence_id": "supported-limit-ids-method-claude-tui-1"
+            }
+          ]
+        },
+        {
+          "name": "SupportedAliases emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "claudetui.(*Harness).SupportedAliases",
+              "evidence_id": "supported-aliases-method-claude-tui-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "gemini",
       "type": "subprocess",
       "capabilities": [

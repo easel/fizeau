@@ -1,0 +1,2 @@
+{"seq": 1, "t_ms": 100, "screen": {"rows": 50, "cols": 220, "content": "❯ /usage"}}
+{"seq": 2, "t_ms": 150, "screen": {"rows": 50, "cols": 220, "content": "❯ /usage\n💳 Claude Subscription\nStatus: Active\nPlan: Claude Pro\nSubscription Expires: 2026-06-18\nWeekly Usage: 125 messages / 500 allowed (25%)\nLimited models: 10 messages / 20 allowed (50%)\nUsage resets on 2026-05-22"}}

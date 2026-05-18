@@ -1,0 +1,2 @@
+{"seq": 1, "t_ms": 0, "type": "routing", "routing": {"harness": "claude-tui", "provider": "anthropic", "model": "claude-3-5-sonnet-20241022"}}
+{"seq": 2, "t_ms": 150, "type": "final", "final": {"status": "success", "exit_code": 0, "duration_ms": 150}}

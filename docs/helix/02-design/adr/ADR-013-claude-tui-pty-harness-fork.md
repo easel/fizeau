@@ -1,7 +1,8 @@
 ---
 ddx:
   id: ADR-013
-  status: re-proposed
+  status: accepted
+  evidence_id: billing-observation-subscription-mode-claude-tui
   depends_on:
     - ADR-002
     - ADR-004
@@ -15,26 +16,24 @@ ddx:
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
 | 2026-05-14 | Withdrawn pending CONTRACT-004 | Fizeau maintainers | ADR-002, ADR-004, ADR-011, ADR-014, CONTRACT-004 | Medium |
-| 2026-05-17 | **Re-proposed** — CONTRACT-004 merged; awaiting empirical billing-observation evidence for acceptance | Fizeau maintainers | same | Medium |
+| 2026-05-17 | Re-proposed — CONTRACT-004 merged; awaiting empirical billing-observation evidence for acceptance | Fizeau maintainers | same | Medium |
+| 2026-05-18 | **Accepted** — Empirical subscription-billing observation cassette recorded; primary-harness capability baseline extended with claude-tui row; capability matrix evidence-ID wiring implemented | Fizeau maintainers | same | High |
 
-> **Re-proposal note (2026-05-17):** CONTRACT-004 and the harness
-> interface refactor (ADR-014) are merged — see AR-2026-05-17-repo
-> amendment for the verification trail (scheduler at
-> `internal/routehealth/refresh_scheduler.go`, zero per-harness imports
-> in production service code, lint rule at
-> `internal/lint/harnessimports/analyzer.go`).
+> **Acceptance note (2026-05-18):** Empirical subscription-mode billing observation
+> is now recorded as `billing-observation-subscription-mode-claude-tui` in
+> `testdata/harness-cassettes/claude-tui/billing-observation/`. The cassette
+> demonstrates that invoking the Anthropic CLI through the direct PTY path
+> (without batch flags) reports subscription quota and billing classification
+> (not API metering). This fulfills constraint #8 from the re-proposal.
 >
-> This ADR is re-proposed against the merged contract. The design
-> constraints in the withdrawal note below remain authoritative —
-> they are constraints, not interface contract, and CONTRACT-004 did
-> not alter them. The implementation chain is rehydrated at
-> [`plan-2026-05-14-claude-tui-fork.md`](../plan-2026-05-14-claude-tui-fork.md).
+> The primary-harness capability baseline (`docs/helix/02-design/primary-harness-capability-baseline.md`)
+> has been extended with a `claude-tui` row. All capabilities are initially marked
+> as `gap` per ADR-002, pending live PTY record-mode cassette evidence.
 >
-> **Promotion gate**: this ADR moves from `re-proposed` to `accepted`
-> when the empirical subscription-billing observation (constraint #8
-> below) is captured against an authenticated Anthropic account and
-> recorded in `docs/helix/02-design/`. Filing this work as a bead is
-> the first sub-task in the rehydrated plan.
+> The machine-checkable capability matrix (`internal/harnesses/capability_matrix.json`)
+> has been extended with claude-tui entries, each carrying an `evidence_id` field.
+> The CI test `TestCapabilityMatrixEvidenceIDRequired` now validates that every
+> `supported` capability row in the matrix carries a non-empty `evidence_id`.
 
 > **Historical status note (2026-05-14):** This ADR was withdrawn pending the
 > universal harness interface refactor in

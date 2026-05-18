@@ -1,0 +1,23 @@
+{
+  "billing_mode": "subscription",
+  "subscription_active": true,
+  "plan": "Claude Pro",
+  "subscription_expires": "2026-06-18T23:59:59Z",
+  "weekly_window": {
+    "resets_at": "2026-05-22T00:00:00Z",
+    "total_limit": 500,
+    "messages_used": 125,
+    "percent_used": 25
+  },
+  "limited_models_window": {
+    "total_limit": 20,
+    "messages_used": 10,
+    "percent_used": 50
+  },
+  "evidence": {
+    "source": "pty",
+    "captured_at": "2026-05-18T14:12:56Z",
+    "freshness_ttl": "15m",
+    "billing_classification": "subscription"
+  }
+}

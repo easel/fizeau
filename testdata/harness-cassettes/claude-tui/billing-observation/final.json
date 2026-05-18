@@ -1,0 +1,19 @@
+{
+  "status": "success",
+  "exit_code": 0,
+  "signal": null,
+  "duration_ms": 150,
+  "final_text": "💳 Claude Subscription\nStatus: Active\nPlan: Claude Pro\nSubscription Expires: 2026-06-18\nWeekly Usage: 125 messages / 500 allowed (25%)\nLimited models: 10 messages / 20 allowed (50%)\nUsage resets on 2026-05-22",
+  "usage": null,
+  "cost_usd": null,
+  "routing_actual": {
+    "harness": "claude-tui",
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022"
+  },
+  "metadata": {
+    "command": ["/usage"],
+    "workdir": "/tmp/test-workdir",
+    "permission_mode": "safe"
+  }
+}

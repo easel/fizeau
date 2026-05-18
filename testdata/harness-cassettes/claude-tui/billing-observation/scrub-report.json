@@ -1,0 +1,10 @@
+{
+  "redaction_rules_applied": [
+    "home_path_rewriting",
+    "worktree_path_rewriting",
+    "env_allowlist"
+  ],
+  "environment_values_removed": ["HOME", "LOGNAME"],
+  "secret_pattern_hits": 0,
+  "fields_intentionally_preserved": ["usage_data", "billing_mode"]
+}

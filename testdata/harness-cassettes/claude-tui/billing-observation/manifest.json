@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "billing-observation-claude-tui-0001",
+  "content_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "harness": {
+    "name": "claude-tui",
+    "binary_path": "/opt/homebrew/bin/claude",
+    "binary_version": "3.0.0-alpha+20260517",
+    "capability_row_snapshot": {
+      "Run": "gap",
+      "FinalText": "gap",
+      "ProgressEvents": "gap",
+      "Cancel": "gap",
+      "WorkdirContext": "gap",
+      "PermissionModes": "gap",
+      "ListModels": "gap",
+      "SetModel": "gap",
+      "ListReasoning": "gap",
+      "SetReasoning": "gap",
+      "TokenUsage": "gap",
+      "QuotaStatus": "gap",
+      "ErrorStatus": "gap",
+      "RequestMetadata": "gap"
+    }
+  },
+  "command": {
+    "argv": ["claude"],
+    "workdir_policy": "tempdir",
+    "env_allowlist": ["HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"],
+    "timeout_ms": 30000,
+    "permission_mode": "safe"
+  },
+  "terminal": {
+    "initial_rows": 50,
+    "initial_cols": 220,
+    "locale": "en_US.UTF-8",
+    "term_value": "xterm-256color",
+    "pty_mode_flags": [],
+    "terminal_emulator": {
+      "name": "vt10x",
+      "version": "1.0"
+    }
+  },
+  "timing": {
+    "clock_policy": "monotonic",
+    "timestamp_resolution_ms": 100,
+    "replay_default": "collapsed"
+  },
+  "provenance": {
+    "recorded_by_agent": "ddx-execute-bead",
+    "recorded_at": "2026-05-18T14:12:56Z",
+    "recorded_for_evidence_id": "billing-observation-subscription-mode-claude-tui",
+    "os_arch": "darwin/arm64",
+    "recorder_version": "1.0"
+  }
+}

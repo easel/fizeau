@@ -16,6 +16,7 @@ import (
 
 	"github.com/easel/fizeau/internal/harnesses"
 	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
+	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
 )
@@ -38,8 +39,9 @@ type Capability struct {
 }
 
 type Evidence struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	EvidenceID string `json:"evidence_id,omitempty"`
 }
 
 func TestHarnessCapabilityMatrixLoads(t *testing.T) {
@@ -49,6 +51,112 @@ func TestHarnessCapabilityMatrixLoads(t *testing.T) {
 	}
 	if len(matrix.Harnesses) < 3 {
 		t.Fatalf("capability matrix has %d harnesses, want at least 3", len(matrix.Harnesses))
+	}
+}
+
+func TestCapabilityMatrixEvidenceIDRequired(t *testing.T) {
+	matrix := loadCapabilityMatrix(t)
+
+	for _, harness := range matrix.Harnesses {
+		if harness.Name == "claude-tui" {
+			t.Run(harness.Name, func(t *testing.T) {
+				for _, cap := range harness.Capabilities {
+					if cap.Status != "supported" {
+						continue
+					}
+
+					if len(cap.Evidence) == 0 {
+						t.Errorf("capability %q declared supported but has no evidence", cap.Name)
+						continue
+					}
+
+					for _, ev := range cap.Evidence {
+						if ev.EvidenceID == "" {
+							t.Errorf("capability %q evidence (type=%s, id=%s) missing evidence_id field", cap.Name, ev.Type, ev.ID)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPrimaryHarnessCapabilityBaselineHasClaudeTuiRow(t *testing.T) {
+	baselineFile := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "primary-harness-capability-baseline.md")
+	content, err := os.ReadFile(baselineFile)
+	if err != nil {
+		t.Fatalf("failed to read baseline: %v", err)
+	}
+
+	if !strings.Contains(string(content), "| claude-tui |") {
+		t.Error("primary-harness-capability-baseline.md missing claude-tui row")
+	}
+}
+
+func TestClaudeTuiBillingObservationEvidenceCassette(t *testing.T) {
+	cassettePath := filepath.Join(findRepoRoot(t), "testdata", "harness-cassettes", "claude-tui", "billing-observation", "manifest.json")
+	data, err := os.ReadFile(cassettePath)
+	if err != nil {
+		t.Fatalf("billing observation cassette not found: %v", err)
+	}
+
+	var manifest struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("failed to unmarshal cassette manifest: %v", err)
+	}
+
+	if manifest.ID != "billing-observation-claude-tui-0001" {
+		t.Errorf("cassette ID mismatch: got %q, want billing-observation-claude-tui-0001", manifest.ID)
+	}
+}
+
+func TestClaudeTuiRowsPromotedOnlyWithEvidence(t *testing.T) {
+	matrix := loadCapabilityMatrix(t)
+
+	for _, harness := range matrix.Harnesses {
+		if harness.Name != "claude-tui" {
+			continue
+		}
+
+		for _, cap := range harness.Capabilities {
+			if cap.Status != "supported" {
+				continue
+			}
+
+			if len(cap.Evidence) == 0 {
+				t.Errorf("claude-tui.%s marked supported with no evidence", cap.Name)
+				continue
+			}
+
+			for _, ev := range cap.Evidence {
+				if ev.Type == "cassette" {
+					cassettePath := filepath.Join(findRepoRoot(t), ev.ID)
+					if _, err := os.Stat(cassettePath); err != nil {
+						t.Errorf("evidence cassette not found: %s", cassettePath)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestADR013StatusAccepted(t *testing.T) {
+	adrPath := filepath.Join(findRepoRoot(t), "docs", "helix", "02-design", "adr", "ADR-013-claude-tui-pty-harness-fork.md")
+	content, err := os.ReadFile(adrPath)
+	if err != nil {
+		t.Fatalf("failed to read ADR-013: %v", err)
+	}
+
+	adrContent := string(content)
+
+	if !strings.Contains(adrContent, "status: accepted") {
+		t.Error("ADR-013 frontmatter status is not 'accepted'")
+	}
+
+	if !strings.Contains(adrContent, "evidence_id: billing-observation-subscription-mode-claude-tui") {
+		t.Error("ADR-013 frontmatter missing billing-observation evidence_id")
 	}
 }
 
@@ -357,6 +465,15 @@ func validateMethodExists(t *testing.T, harnessName, methodID string) {
 				break
 			}
 		}
+	case "claude-tui":
+		runner := &claudetuiharness.Harness{}
+		rt := reflect.TypeOf(runner)
+		for i := 0; i < rt.NumMethod(); i++ {
+			if strings.Contains(methodID, rt.Method(i).Name) {
+				found = true
+				break
+			}
+		}
 	}
 
 	if !found {
@@ -381,5 +498,24 @@ func validateSupportedSets(t *testing.T, harnessName string, runner harnesses.Ha
 		if alias == "" {
 			t.Errorf("%s.SupportedAliases() contains empty string", harnessName)
 		}
+	}
+}
+
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	cwd, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatalf("get absolute path: %v", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(cwd, "go.mod")); err == nil {
+			return cwd
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			t.Fatal("could not find go.mod in any parent directory")
+		}
+		cwd = parent
 	}
 }
