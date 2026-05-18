@@ -7,6 +7,7 @@ import (
 
 	"github.com/easel/fizeau/internal/harnesses"
 	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
+	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
@@ -40,6 +41,8 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 		}
 	case "claude":
 		runSubprocess(ctx, cb, &claudeharness.Runner{})
+	case "claude-tui":
+		runSubprocess(ctx, cb, &claudetuiharness.Harness{})
 	case "codex":
 		runSubprocess(ctx, cb, &codexharness.Runner{})
 	case "gemini":

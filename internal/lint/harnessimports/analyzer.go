@@ -15,6 +15,7 @@ const contractMessage = "CONTRACT-004 invariant #1"
 
 var forbiddenImports = []string{
 	"github.com/easel/fizeau/internal/harnesses/claude",
+	"github.com/easel/fizeau/internal/harnesses/claude-tui",
 	"github.com/easel/fizeau/internal/harnesses/codex",
 	"github.com/easel/fizeau/internal/harnesses/gemini",
 	"github.com/easel/fizeau/internal/harnesses/opencode",
