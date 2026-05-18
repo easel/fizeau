@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260518T120317-615a6d49",
+  "bead_id": "fizeau-2a26ee41",
+  "base_rev": "6d5dabb65cf1c97ead61505ed2efd56ddff3f0f9",
+  "created_at": "2026-05-18T12:03:33.022533568Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2a26ee41",
+    "title": "claude-tui/step1: extract internal/harnesses/anthropic/ neutral shared-helper package",
+    "description": "Plan step 1. Provide a neutral package both harnesses depend on without creating a claude \u003c-\u003e claude-tui import edge. The harness interface refactor unexported the per-harness snapshot types; anthropic/ holds the shared shapes claude-tui needs to consume the same underlying quota cache.\n\nMOVES (from internal/harnesses/claude/ to internal/harnesses/anthropic/):\n- IsClaudeQuotaExhaustedMessage + MarkClaudeQuotaExhaustedFromMessage + quota-message corpus -\u003e anthropic/quota_messages.go.\n- AccountInfo plan-classification helpers (if any are claude-specific; likely none).\n- Model-name normalization helpers shared with the catalog -\u003e anthropic/models.go.\n- A neutral snapshot mirror struct (sufficient for claude-tui's QuotaHarness.QuotaStatus to project) -\u003e anthropic/quota_snapshot.go.\n\nUpdates internal/harnesses/claude/ imports to consume from anthropic/. Existing claude tests must continue to pass with no behavior change.",
+    "acceptance": "1) internal/harnesses/anthropic/ exists with quota_messages.go, models.go (if any moves), and quota_snapshot.go.\n2) internal/harnesses/claude/ no longer owns the moved symbols; it imports from anthropic. The claude harness package compiles without claude-tui present.\n3) internal/harnesses/anthropic/ itself does NOT import internal/harnesses/claude, internal/harnesses/claude-tui, or any other harness package. Cycle prevention verified by a goimports/list test.\n4) No new public surface beyond the four CONTRACT-004 interfaces appears outside the anthropic package; the harnessimports lint rule passes.\n5) Regression guard: every existing test under internal/harnesses/claude/ stays green with no behavior change (assertion: same test names pass with identical outputs).\n6) Table tests for the quota-message corpus moved into anthropic/quota_messages_test.go: classifier identifies known-exhausted-message strings and rejects negative cases.\n7) go test ./internal/harnesses/... -count=1 green; go test ./... -count=1 green; lefthook run pre-commit green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:refactor",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "spec:CONTRACT-004"
+    ],
+    "metadata": {
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T120317-615a6d49",
+    "prompt": ".ddx/executions/20260518T120317-615a6d49/prompt.md",
+    "manifest": ".ddx/executions/20260518T120317-615a6d49/manifest.json",
+    "result": ".ddx/executions/20260518T120317-615a6d49/result.json",
+    "checks": ".ddx/executions/20260518T120317-615a6d49/checks.json",
+    "usage": ".ddx/executions/20260518T120317-615a6d49/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-2a26ee41-20260518T120317-615a6d49"
+  },
+  "prompt_sha": "36fbfb777a2261b352093de99bab76c08342342f62e9d636c8ca3a6341eeeacb"
+}
