@@ -1,0 +1,36 @@
+{
+  "bead_id": "fizeau-86f2bac0",
+  "attempt_id": "20260518T020600-9072e2da",
+  "base_rev": "6ff365d3a07fb2b304ee7cf168bca9357daeeafd",
+  "result_rev": "73bf066fe18c899473e4233b1e738aacb8b8a769",
+  "implementation_rev": "9814de54c621c8cefe972a75f7e71c3b989a7797",
+  "landed_rev": "73bf066fe18c899473e4233b1e738aacb8b8a769",
+  "landed_branch": "master",
+  "outcome": "merged",
+  "status": "success",
+  "detail": "merged onto current tip",
+  "orchestrator_status": "success",
+  "reason": "merged onto current tip",
+  "candidate_ref": "refs/ddx/iterations/20260518T020600-9072e2da/0",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260518T020600-9072e2da",
+      "result_rev": "9814de54c621c8cefe972a75f7e71c3b989a7797",
+      "implementer_route": {},
+      "review_result": {},
+      "final_decision": "success"
+    }
+  ],
+  "session_id": "eb-b0f6bae5",
+  "duration_ms": 7860393,
+  "exit_code": 0,
+  "project_root": "/Users/erik/Projects/fizeau",
+  "execution_dir": ".ddx/executions/20260518T020600-9072e2da",
+  "prompt_file": ".ddx/executions/20260518T020600-9072e2da/prompt.md",
+  "manifest_file": ".ddx/executions/20260518T020600-9072e2da/manifest.json",
+  "result_file": ".ddx/executions/20260518T020600-9072e2da/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-18T02:06:03.339042837Z",
+  "finished_at": "2026-05-18T04:17:03.732962947Z"
+}
