@@ -885,7 +885,7 @@ cmd_preflight() {
 # coverage; --retry-invalid surfaces invalid_class != "" or orphan state.
 is_terminal_status() {
   case "$1" in
-    completed|pass|fail|timeout|invalid|completed_no_grade) return 0 ;;
+    completed|pass|fail|timeout|invalid|completed_no_grade|transient_exhausted|interrupted|budget_halted) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -1390,7 +1390,7 @@ run_one_cell() {
     invalid_class="$(jq -r '.invalid_class // ""' <<<"${result_json}")"
   else
     final_status="transient_exhausted"
-    invalid_class="$(jq -r '.invalid_class // "transient_exhausted"' <<<"${result_json}")"
+    invalid_class=""
   fi
 
   [[ -f "${cell_dir}/fiz.txt" ]] || : >"${cell_dir}/fiz.txt"

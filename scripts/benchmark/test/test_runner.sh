@@ -365,16 +365,16 @@ EOF
   exit_code=$?
   set -e
 
-  # Count cells created - should be exactly 1 (no retries for non-transient)
+  # Count cells created - should be exactly 3 (1 per task, no retries for non-transient)
   local cell_count=0
   shopt -s nullglob
-  for cell_dir in "${out}"/cells/*/*/; do
+  for cell_dir in "${out}"/cells/*/*/*/; do
     ((cell_count++))
   done
   shopt -u nullglob
 
-  if [[ ${cell_count} -ne 1 ]]; then
-    fail "${test_name}: expected exactly 1 cell (no retry), got ${cell_count}"
+  if [[ ${cell_count} -ne 3 ]]; then
+    fail "${test_name}: expected exactly 3 cells (1 per task, no retry), got ${cell_count}"
     return 1
   fi
 
@@ -696,7 +696,7 @@ test_retry_invalid_reruns_only_invalid() {
   local first_cell="" second_cell=""
   shopt -s nullglob
   local idx=0
-  for cell_dir in "${out}"/cells/*/*/; do
+  for cell_dir in "${out}"/cells/*/*/*/; do
     if [[ $idx -eq 0 ]]; then
       first_cell="${cell_dir}"
     elif [[ $idx -eq 1 ]]; then
