@@ -1,0 +1,57 @@
+{
+  "attempt_id": "20260518T105801-82e3ca57",
+  "bead_id": "fizeau-36ba3eec",
+  "base_rev": "dd91be2c3394e1451cd5bff03f2ff3c923056fd1",
+  "created_at": "2026-05-18T10:58:46.268580996Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-36ba3eec",
+    "title": "claude-tui: capability baseline row, evidence IDs, and ADR-013 promotion gate",
+    "description": "PROBLEM: Without empirical billing-observation evidence and machine-checkable capability evidence IDs, ADR-013 cannot be promoted from re-proposed to accepted, and the primary capability baseline lacks a claude-tui row. CI currently does not fail when a supported capability row lacks an evidence ID, so promotion is unenforced.\n\nROOT CAUSE:\n- docs/.../primary-harness-capability-baseline.md has no claude-tui row, so per-ADR-002 promotion cannot occur.\n- The machine-checkable capability matrix (fizeau-3b1fb0f4) has no evidence-ID column wiring for claude-tui rows.\n- ADR-013 explicitly conditions its promotion on empirical evidence that subscription billing is observed off the CLI session, not API metering; no such cassette is recorded yet.\n- CI has no check that fails when a row marked supported lacks an evidence ID, so silent promotion is possible.\n\nPROPOSED FIX:\n1. Add a claude-tui row to docs/.../primary-harness-capability-baseline.md initially marked unverified for all capabilities introduced by children #2 and #3.\n2. Record a live billing-observation cassette under testdata/ that demonstrates subscription-mode billing is read off the CLI session (not via API metering); cite cassette ID.\n3. Extend the machine-checkable capability matrix tooling (cross-ref fizeau-3b1fb0f4) so each supported claude-tui row carries an evidence_id field; add CI assertion that fails when a row marked supported has no evidence_id.\n4. Promote only those rows whose evidence cassettes exist; leave the rest unverified.\n5. Flip ADR-013 frontmatter status from re-proposed to accepted and record the billing-observation evidence ID inline.\n\nNON-SCOPE:\n- Adding new harness capabilities beyond those already evidenced by children #2 and #3.\n- Reworking the capability matrix schema (only adding the evidence_id wiring and CI gate).\n- Promoting any capability row that lacks a current cassette.\n- Generalizing the evidence_id gate to other harnesses in this bead (scoped to claude-tui rows).\n\nDepends on children #1, #2, #3. Governing artifacts: ADR-002 (capability promotion), ADR-013 (promotion gate), fizeau-3b1fb0f4 (machine-checkable matrix), CONTRACT-004.",
+    "acceptance": "1) TestPrimaryHarnessCapabilityBaselineHasClaudeTuiRow asserts the markdown file contains a claude-tui row with at least one entry per ADR-002 row schema.\n2) TestClaudeTuiBillingObservationEvidenceCassette asserts the recorded billing-observation cassette is loadable, parses to a subscription-mode billing signal, and is referenced from ADR-013 frontmatter by its evidence ID.\n3) TestCapabilityMatrixEvidenceIDRequired asserts the matrix CI gate fails when any claude-tui row marked supported has an empty evidence_id, and passes when all supported rows cite a present cassette.\n4) TestClaudeTuiRowsPromotedOnlyWithEvidence asserts every row currently marked supported for claude-tui resolves to a present cassette file on disk.\n5) TestADR013StatusAccepted asserts the ADR-013 frontmatter status field equals \"accepted\" and references the billing-observation evidence ID from AC2.\n6) go test ./... -count=1 is green.\n7) lefthook run pre-commit is green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "spec:ADR-002",
+      "gate:adr-promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T10:57:53.669161216Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T104703-793fd170\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":338,\"output_tokens\":20914,\"total_tokens\":21252,\"cost_usd\":0.6926597999999999,\"duration_ms\":646667,\"exit_code\":-1}",
+          "created_at": "2026-05-18T10:57:53.855523165Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=21252 cost_usd=0.6927 model=haiku"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T105801-82e3ca57",
+    "prompt": ".ddx/executions/20260518T105801-82e3ca57/prompt.md",
+    "manifest": ".ddx/executions/20260518T105801-82e3ca57/manifest.json",
+    "result": ".ddx/executions/20260518T105801-82e3ca57/result.json",
+    "checks": ".ddx/executions/20260518T105801-82e3ca57/checks.json",
+    "usage": ".ddx/executions/20260518T105801-82e3ca57/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-36ba3eec-20260518T105801-82e3ca57"
+  },
+  "prompt_sha": "5b863ff576e625ee26a7cbe6177d19aba1c408cd006002aa5470d00a32cccae7"
+}
