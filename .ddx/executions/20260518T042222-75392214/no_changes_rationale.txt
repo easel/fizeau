@@ -1,0 +1,2 @@
+status: proposed
+reason: Review findings documented in execution metadata. Agent-loop functional area review confirms two gaps from AR-2026-05-17-repo: (1) AC-FEAT-001-09 pivot semantics unimplemented, tracked in fizeau-d52a3568; (2) EventPlanningTurn undocumented, tracked in fizeau-b064ffc0. See review-findings.md for detailed analysis and verification commands. Both executing issues are ready to work.

@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260518T042222-75392214",
+  "bead_id": "fizeau-584abce2",
+  "base_rev": "668bc515d0a387886bc64c11a960e6c87f891fc4",
+  "created_at": "2026-05-18T04:22:25.299173734Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-584abce2",
+    "title": "Review agent-loop",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:agent-loop"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"empty acceptance criteria block implementation: Acceptance criteria are empty, and the review scope is undefined. 'Review agent-loop' could mean code review, design review, functional-area review, or security review—the description hints at functional-area review but provides no details on what that entails or what the reviewer should validate. No reference to code/PR/branch or quality gates.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-18T04:22:14.914686193Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        }
+      ],
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:53Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T042222-75392214",
+    "prompt": ".ddx/executions/20260518T042222-75392214/prompt.md",
+    "manifest": ".ddx/executions/20260518T042222-75392214/manifest.json",
+    "result": ".ddx/executions/20260518T042222-75392214/result.json",
+    "checks": ".ddx/executions/20260518T042222-75392214/checks.json",
+    "usage": ".ddx/executions/20260518T042222-75392214/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-584abce2-20260518T042222-75392214"
+  },
+  "prompt_sha": "46324f47b792c02d5c587f1e70f1847e911032d86b59df2435897e34504c3f19"
+}
