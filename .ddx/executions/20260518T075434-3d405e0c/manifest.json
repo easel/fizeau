@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260518T075434-3d405e0c",
+  "bead_id": "fizeau-89eca738",
+  "base_rev": "8a8a7525bb34d337283b383ad795b43520b7c520",
+  "created_at": "2026-05-18T07:54:37.085103547Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-89eca738",
+    "title": "harness: discovery is the only source of truth — live PTY at runtime; cassettes are test-only",
+    "description": "Principle: at runtime, harness-exposed models come from the live TUI only. If the harness can't tell us what it exposes (codex /model, claude /model, gemini --list-models, opencode/pi equivalents), the harness is broken — surface the error, do not substitute.\n\nCassettes (testdata/model_surface/) are test fixtures only — used by unit tests to exercise the parser/reader without a live binary. They are NOT a runtime data source and NOT a fallback when live discovery fails.\n\nWhat to remove from runtime paths:\n- defaultCodexModelDiscovery() at internal/harnesses/codex/model_discovery.go:20\n- defaultClaudeModelDiscovery() at internal/harnesses/claude/model_discovery.go:27\n- defaultGeminiModelDiscovery() at internal/harnesses/gemini/model_discovery.go:20\n- HarnessConfig.Models hardcoded literals at internal/harnesses/registry.go:21,52,72,101,131\n- Any DefaultModelSnapshot() implementation that reads from a cassette in production code paths\n\nRuntime replacement contract: DefaultModelSnapshot() (or the v0.11 equivalent) MUST drive the live TUI via the existing ReadXModelDiscoveryViaPTY helpers. The result is cached per ADR-012 (per-source on-disk cache, TTL-bounded). On PTY failure or timeout: return error; service consumers surface model-unknown / harness-broken.\n\nCassettes still exist — they serve ReadXModelDiscoveryFromCassette which is exercised only from unit tests and from harness_integration drift detection in CI.",
+    "acceptance": "1) grep -rn 'defaultCodexModelDiscovery\\|defaultClaudeModelDiscovery\\|defaultGeminiModelDiscovery' internal/harnesses/ --include=*.go returns zero hits in production (non _test.go) files.\n2) HarnessConfig.Models field is removed from internal/harnesses/registry.go and all five hardcoded literals at lines 21,52,72,101,131 are gone.\n3) Each harness's runtime ModelDiscoveryHarness.DefaultModelSnapshot() calls a live PTY discovery helper (ReadXModelDiscoveryViaPTY) with a sensible timeout; never reads a cassette in production code paths; never returns a fabricated list.\n4) Live discovery results are cached per ADR-012 with a documented TTL.\n5) On live PTY failure or absent binary: harness returns a sentinel error; service surfaces it (model list empty + error event) rather than silently substituting.\n6) Cassettes survive under testdata/model_surface/ but are referenced only by *_test.go and harness_integration-tagged drift tests.\n7) go test ./... -count=1 green.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:refactor",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "discovered-from:fizeau-d60b1694",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T075434-3d405e0c",
+    "prompt": ".ddx/executions/20260518T075434-3d405e0c/prompt.md",
+    "manifest": ".ddx/executions/20260518T075434-3d405e0c/manifest.json",
+    "result": ".ddx/executions/20260518T075434-3d405e0c/result.json",
+    "checks": ".ddx/executions/20260518T075434-3d405e0c/checks.json",
+    "usage": ".ddx/executions/20260518T075434-3d405e0c/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-89eca738-20260518T075434-3d405e0c"
+  },
+  "prompt_sha": "a9ca5c59a497c2ebf0810ba82370413b720b97039e226f28643f151c3c53ae4c"
+}
