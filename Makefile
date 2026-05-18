@@ -1,4 +1,4 @@
-.PHONY: build build-ci install-quality-tools test test-no-race test-race lint lint-go contract004-import-lint vet fmt fmt-check gosec govulncheck ci-checks ci adapter-pytest check clean coverage coverage-ratchet coverage-bump coverage-history catalog-dist rename-noise-check demos-capture demos-capture-docker demos-capture-subcommands demos-docker-build demos-regen docs-cli docs-embedding docs-tools docs-adrs benchmark-data benchmark-workbench-smoke website-serve capture-machine-info probe-reasoning
+.PHONY: build build-ci install-quality-tools test test-no-race test-race test-install-sh lint lint-go contract004-import-lint vet fmt fmt-check gosec govulncheck ci-checks ci adapter-pytest check clean coverage coverage-ratchet coverage-bump coverage-history catalog-dist rename-noise-check demos-capture demos-capture-docker demos-capture-subcommands demos-docker-build demos-regen docs-cli docs-embedding docs-tools docs-adrs benchmark-data benchmark-workbench-smoke website-serve capture-machine-info probe-reasoning
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -103,6 +103,9 @@ test-e2e:
 
 test-fuzz:
 	go test -fuzz=. -fuzztime=30s ./...
+
+test-install-sh:
+	bash tests/install_sh_acceptance.sh
 
 contract004-import-lint:
 	go test ./internal/lint/...

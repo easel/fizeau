@@ -88,3 +88,14 @@ jobs:
 
       - name: Adapter pytest
         run: make adapter-pytest
+
+  install-sh-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install shell test dependencies
+        run: bash tests/install_sh_acceptance.sh
