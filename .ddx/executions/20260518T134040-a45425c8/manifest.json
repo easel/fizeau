@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260518T134040-a45425c8",
+  "bead_id": "fizeau-6d71a41f",
+  "base_rev": "869a891d956c97a6bf5c525f6221124b531cbcff",
+  "created_at": "2026-05-18T13:40:42.084930886Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6d71a41f",
+    "title": "concerns: audit go-std declared linters vs current Makefile/.golangci.yml coverage",
+    "description": "PROBLEM: AR-2026-05-17-repo (fizeau-a1b61f00) flags that .ddx/plugins/helix/workflows/concerns/go-std/practices.md declares a golangci-lint baseline (govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic) while .golangci.yml enables only misspell and the Makefile runs go vet, gosec, govulncheck, go test -race pre-push. Before the open decision (parent: AR Open Decisions §1) can be resolved, the team needs an unambiguous, line-anchored mapping of declared baseline → current coverage → gap.\n\nROOT CAUSE: No artifact in repo enumerates which declared linter is replaced by which Makefile target (or is uncovered). The go-std concern document at .ddx/plugins/helix/workflows/concerns/go-std/practices.md (linter baseline section) does not cross-reference .golangci.yml or Makefile, and the local override in docs/helix/01-frame/concerns.md §go-std is silent on the substitution. The decision in the parent bead is blocked on this mapping.\n\nPROPOSED FIX: Produce a mapping artifact at docs/helix/01-frame/concerns/go-std-lint-audit.md (or as an appendix in docs/helix/01-frame/concerns.md) that lists each declared linter, the Makefile/.golangci.yml mechanism that currently covers it (or 'GAP'), and a one-line rationale citing the tool's documented equivalence. Each cited mechanism must include file:line (Makefile lint/test/security targets; .golangci.yml linters block; practices.md baseline section).\n\nNON-SCOPE: Do not modify .golangci.yml. Do not add an override paragraph to docs/helix/01-frame/concerns.md §go-std. Do not select path A or B — that is the sibling bead. Do not modify .ddx/plugins/helix/workflows/concerns/go-std/practices.md (upstream concern, not in scope per parent).\n\nGOVERNING ARTIFACTS: AR-2026-05-17-repo (fizeau-a1b61f00); .ddx/plugins/helix/workflows/concerns/go-std/practices.md; docs/helix/01-frame/concerns.md; Makefile; .golangci.yml.\n\nDEPENDENCIES: None.\n\nVERIFICATION: Mapping artifact reviewed; every declared linter has a row; every row cites a file:line; pre-push gate green (no code changes expected).",
+    "acceptance": "AC1 (TestGoStdLintAuditCoversAllDeclared): The audit artifact lists exactly the seven declared linters — govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic — in the order declared by .ddx/plugins/helix/workflows/concerns/go-std/practices.md.\nAC2 (TestGoStdLintAuditCitesSources): Each row cites at least one file:line reference (Makefile target, .golangci.yml block, or the literal token 'GAP — no current mechanism').\nAC3 (TestGoStdLintAuditMarksGaps): Rows whose current coverage is not equivalent to the declared linter are explicitly marked 'GAP' with a one-line consequence note (e.g., 'no dead-code detection without staticcheck').\nAC4 (TestGoStdLintAuditEnumeratesExclusions): The audit names any project-accepted exclusions discovered (e.g., generated files, vendored code) with a file:line citation, so the sibling resolution bead can carry them forward verbatim under path A.\nAC5 Gates: `go test ./... -race` passes; `lefthook run pre-push` passes; markdown lint (if configured in lefthook) passes on the new artifact.",
+    "parent": "fizeau-397e9e0d",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:audit",
+      "area:concerns",
+      "spec:go-std",
+      "discovered-from:fizeau-a1b61f00"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T134040-a45425c8",
+    "prompt": ".ddx/executions/20260518T134040-a45425c8/prompt.md",
+    "manifest": ".ddx/executions/20260518T134040-a45425c8/manifest.json",
+    "result": ".ddx/executions/20260518T134040-a45425c8/result.json",
+    "checks": ".ddx/executions/20260518T134040-a45425c8/checks.json",
+    "usage": ".ddx/executions/20260518T134040-a45425c8/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-6d71a41f-20260518T134040-a45425c8"
+  },
+  "prompt_sha": "b0fa70f1b034f3d7e99e2dee50479fb062e1e397cc95c7ae31c2689a64b1dee4"
+}

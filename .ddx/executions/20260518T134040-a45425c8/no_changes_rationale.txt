@@ -1,0 +1,2 @@
+status: open
+reason: `CGO_ENABLED=1 go test -race ./...` fails in the current tree on pre-existing tests unrelated to the docs-only audit artifact, so AC5 cannot be proven green yet.
