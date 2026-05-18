@@ -1,0 +1,96 @@
+{
+  "attempt_id": "20260518T145935-d642b262",
+  "bead_id": "fizeau-e633cd36",
+  "base_rev": "387ba8f0144f0452c49a87047390e9d003975129",
+  "created_at": "2026-05-18T14:59:37.153606317Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e633cd36",
+    "title": "providers/llamaserver: nest enable_thinking inside chat_template_kwargs envelope",
+    "description": "PROBLEM: ADR-010 amendment (2026-05-11) §8'-9' requires llamaserver to send `enable_thinking` inside a `chat_template_kwargs` envelope, matching upstream llama.cpp expectations. Current code emits `enable_thinking` at the top level of the request body, which llama.cpp ignores.\n\nROOT CAUSE: internal/provider/llamaserver request-body builder (locate via `grep -rn 'enable_thinking' internal/provider/llamaserver`) sets `enable_thinking` as a sibling of model/messages instead of nesting it under `chat_template_kwargs`.\n\nPROPOSED FIX: In the llamaserver request-body construction path, replace the top-level `enable_thinking` field with a `chat_template_kwargs` object whose `enable_thinking` member carries the boolean. Remove the obsolete top-level field. Add an assertion test `TestLlamaserver_EnableThinking_WireBody` that marshals a request with thinking enabled and asserts (a) `chat_template_kwargs.enable_thinking == true`, (b) no top-level `enable_thinking` key exists.\n\nNON-SCOPE: ThinkingWireFormatOpenAIEffort enum addition (separate child); reasoning-token telemetry fallback (separate child); changes to llamaserver auth, streaming, or error mapping; refactors to shared request-body helpers beyond the minimal change.\n\nGoverning artifacts: ADR-010 amendment 2026-05-11 §8'-9'; AR-2026-05-17-repo; source review fizeau-8e37e536.\n\nVERIFICATION: `go test ./internal/provider/llamaserver/... ./... -count=1` green; lefthook hooks pass.\n\nAC:\n1) llamaserver request body emits `chat_template_kwargs.enable_thinking`; no top-level `enable_thinking` key remains.\n2) Test `TestLlamaserver_EnableThinking_WireBody` asserts both the presence of the nested key and absence of the top-level key.\n3) Test `TestLlamaserver_EnableThinking_Disabled` asserts the envelope is omitted (or `enable_thinking:false` nested) when thinking is disabled, matching ADR-010 §9'.\n4) `go test ./... -count=1` passes.\n5) lefthook hooks pass.",
+    "acceptance": "1) llamaserver request body nests enable_thinking inside chat_template_kwargs.\n2) TestLlamaserver_EnableThinking_WireBody asserts nested-present and top-level-absent.\n3) TestLlamaserver_EnableThinking_Disabled covers the disabled path per ADR-010 §9'.\n4) go test ./... -count=1 green.\n5) lefthook pre-commit and pre-push pass.",
+    "parent": "fizeau-a5d07641",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:fix",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:12:16.268636124Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T125941-187a3e51\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":10,\"output_tokens\":317,\"total_tokens\":327,\"cost_usd\":1.0061696500000004,\"duration_ms\":752203,\"exit_code\":0}",
+          "created_at": "2026-05-18T13:12:16.356742016Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=327 cost_usd=1.0062 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T13:12:36.755060466Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-rapid-mlx\",\"attempt_id\":\"20260518T131217-0408a123\",\"bead_id\":\"fizeau-e633cd36\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T13:12:37.102436419Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=mlx-community/Qwen3.6-27B-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"harness\":\"fiz\",\"model\":\"mlx-community/Qwen3.6-27B-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-rapid-mlx\"}",
+          "created_at": "2026-05-18T13:12:37.254408338Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:8000/v1/chat/completions\": dial tcp 100.97.179.68:8000: i/o timeout\npowerClass=standard\nresult_rev=aa9c5ba3a8b0f0ada5156d9229c21682103cd1f7\nbase_rev=aa9c5ba3a8b0f0ada5156d9229c21682103cd1f7\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T13:12:37.292598797Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T13:12:37Z",
+          "count": 1,
+          "model": "mlx-community/Qwen3.6-27B-8bit",
+          "provider": "grendel-rapid-mlx",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T145935-d642b262",
+    "prompt": ".ddx/executions/20260518T145935-d642b262/prompt.md",
+    "manifest": ".ddx/executions/20260518T145935-d642b262/manifest.json",
+    "result": ".ddx/executions/20260518T145935-d642b262/result.json",
+    "checks": ".ddx/executions/20260518T145935-d642b262/checks.json",
+    "usage": ".ddx/executions/20260518T145935-d642b262/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e633cd36-20260518T145935-d642b262"
+  },
+  "prompt_sha": "ca5378514afcca5bf84cc65bf2ef9646cd21ed8be570167f2319ef8b8e59f6a6"
+}

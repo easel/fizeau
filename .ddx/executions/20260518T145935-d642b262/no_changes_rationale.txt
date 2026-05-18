@@ -1,0 +1,2 @@
+status: blocked
+reason: repo-wide baseline failures unrelated to internal/provider/llamaserver prevent `go test ./... -count=1` and the pre-push gate from passing in this environment.
