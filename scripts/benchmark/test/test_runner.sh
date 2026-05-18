@@ -696,7 +696,7 @@ test_retry_invalid_reruns_only_invalid() {
   local first_cell="" second_cell=""
   shopt -s nullglob
   local idx=0
-  for cell_dir in "${out}"/cells/*/*/; do
+  for cell_dir in "${out}"/cells/*/*/*/; do
     if [[ $idx -eq 0 ]]; then
       first_cell="${cell_dir}"
     elif [[ $idx -eq 1 ]]; then
