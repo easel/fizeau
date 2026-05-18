@@ -1,0 +1,54 @@
+{
+  "attempt_id": "20260518T074859-3e45581c",
+  "bead_id": "fizeau-a1b61f00",
+  "base_rev": "7f0fe7dc901c8418f01e4a9e17654b1634ce9319",
+  "created_at": "2026-05-18T07:49:09.673380817Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a1b61f00",
+    "title": "Review concerns-drift",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:concerns-drift"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T04:43:45.731768231Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T044225-17e43866\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":93,\"output_tokens\":4479,\"total_tokens\":4572,\"cost_usd\":0.1174072,\"duration_ms\":77648,\"exit_code\":0}",
+          "created_at": "2026-05-18T04:43:45.774505384Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=4572 cost_usd=0.1174 model=haiku"
+        }
+      ],
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:57Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T074859-3e45581c",
+    "prompt": ".ddx/executions/20260518T074859-3e45581c/prompt.md",
+    "manifest": ".ddx/executions/20260518T074859-3e45581c/manifest.json",
+    "result": ".ddx/executions/20260518T074859-3e45581c/result.json",
+    "checks": ".ddx/executions/20260518T074859-3e45581c/checks.json",
+    "usage": ".ddx/executions/20260518T074859-3e45581c/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-a1b61f00-20260518T074859-3e45581c"
+  },
+  "prompt_sha": "c07d2967f28bd113bd30de2c56ba5d556beec892f2e14b62a998e1e5f4289474"
+}
