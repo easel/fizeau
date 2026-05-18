@@ -1,0 +1,70 @@
+{
+  "attempt_id": "20260518T151446-9dcfaebd",
+  "bead_id": "fizeau-df3147ef",
+  "base_rev": "eb34714a3e266f5115af532cdf4bad7c7001bb1a",
+  "created_at": "2026-05-18T15:14:48.544081619Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-df3147ef",
+    "title": "providers: reasoning-token telemetry fallback from message.reasoning_content",
+    "description": "PROBLEM: ADR-010 amendment (2026-05-11) §10' requires reasoning-token counts to be recovered from `message.reasoning_content` when the upstream usage block omits a reasoning-token field. Today the telemetry path reads only `usage.reasoning_tokens` (or equivalent), so providers that surface reasoning text but not a usage count report zero reasoning tokens, breaking budget accounting.\n\nROOT CAUSE: provider response/usage extraction code (locate via `grep -rn 'reasoning_tokens\\|ReasoningTokens' internal/provider`) lacks a fallback branch that tokenizes or counts `message.reasoning_content` when the usage block lacks the count.\n\nPROPOSED FIX: In the shared usage-extraction helper (or per-provider extractor if no shared helper exists), add a fallback: when `usage.reasoning_tokens` is absent or zero AND `message.reasoning_content` is non-empty, derive the reasoning-token count via the project's existing token-counting utility (same one used for prompt/completion tokens). Record the source (`usage` vs `content-fallback`) in any existing telemetry metadata field if one exists; otherwise no metadata change. Add focused unit test `TestReasoningTokens_FallbackFromContent` covering: (a) usage present → uses usage, (b) usage absent + content present → uses content count, (c) both absent → zero.\n\nNON-SCOPE: ThinkingWireFormatOpenAIEffort enum (separate child); llamaserver chat_template_kwargs envelope (separate child); changes to the tokenizer itself; new telemetry sinks or metric names; cross-provider reconciliation beyond the documented fallback.\n\nGoverning artifacts: ADR-010 amendment 2026-05-11 §10'; AR-2026-05-17-repo; source review fizeau-8e37e536.\n\nVERIFICATION: `go test ./internal/provider/... ./... -count=1` green; lefthook hooks pass.\n\nAC:\n1) Reasoning-token extractor falls back to counting `message.reasoning_content` when usage omits the count.\n2) Test `TestReasoningTokens_FallbackFromContent` covers usage-present, content-fallback, and both-absent cases.\n3) When both usage and content are present, usage wins (asserted in the test).\n4) `go test ./... -count=1` passes.\n5) lefthook pre-commit and pre-push pass.",
+    "acceptance": "1) Reasoning-token extractor implements message.reasoning_content fallback when usage omits the count.\n2) TestReasoningTokens_FallbackFromContent covers usage-present, content-fallback, both-absent.\n3) usage-present beats content-fallback (asserted).\n4) go test ./... -count=1 green.\n5) lefthook pre-commit and pre-push pass.",
+    "parent": "fizeau-a5d07641",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:19:54.333053234Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T131321-1cdc4012\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":390408,\"exit_code\":143}",
+          "created_at": "2026-05-18T13:19:54.43244456Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-df3147ef\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:20:04.621663479Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-482990429.lock' write error. Out of diskspace: exit status 128\noutcome_reason=quota",
+          "created_at": "2026-05-18T13:20:04.726165127Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T151446-9dcfaebd",
+    "prompt": ".ddx/executions/20260518T151446-9dcfaebd/prompt.md",
+    "manifest": ".ddx/executions/20260518T151446-9dcfaebd/manifest.json",
+    "result": ".ddx/executions/20260518T151446-9dcfaebd/result.json",
+    "checks": ".ddx/executions/20260518T151446-9dcfaebd/checks.json",
+    "usage": ".ddx/executions/20260518T151446-9dcfaebd/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-df3147ef-20260518T151446-9dcfaebd"
+  },
+  "prompt_sha": "4305839a749a1aab7197a82829d88cc66f261a49471dcd776e2e49e15452fae8"
+}
