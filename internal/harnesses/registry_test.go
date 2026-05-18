@@ -46,7 +46,7 @@ func TestRegistryDefaultBaseArgs(t *testing.T) {
 func TestRegistryNamesPreferenceOrder(t *testing.T) {
 	r := NewRegistry()
 	names := r.Names()
-	require.Len(t, names, 13)
+	require.Len(t, names, 14)
 	assert.Equal(t, "codex", names[0])
 	assert.Equal(t, "claude", names[1])
 	assert.Equal(t, "opencode", names[2])
@@ -54,6 +54,7 @@ func TestRegistryNamesPreferenceOrder(t *testing.T) {
 	assert.Equal(t, "vllm", names[9])
 	assert.Equal(t, "gemini", names[10])
 	assert.Contains(t, names, "virtual")
+	assert.Contains(t, names, "claude-tui")
 }
 
 func TestRegistryDiscoverEmbeddedAlwaysAvailable(t *testing.T) {
