@@ -212,7 +212,7 @@ func readCodexAccountSnapshot(now time.Time) harnesses.AccountSnapshot {
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls
 // the live PTY discovery helper with a sensible timeout; on failure,
 // returns a snapshot with empty Models and error detail.
-func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
+func (r *Runner) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
 	timeout := 10 * time.Second
 	var opts []QuotaPTYOption
 	if r.Binary != "" {
@@ -220,13 +220,12 @@ func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
 	}
 	snapshot, err := ReadCodexModelDiscoveryViaPTY(timeout, opts...)
 	if err != nil {
-		return harnesses.ModelDiscoverySnapshot{
-			CapturedAt: time.Now().UTC(),
-			Source:     "pty-error",
-			Detail:     fmt.Sprintf("live PTY discovery failed: %v", err),
-		}
+		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("model discovery PTY: %w", err)
 	}
-	return snapshot
+	if len(snapshot.Models) == 0 {
+		return harnesses.ModelDiscoverySnapshot{}, harnesses.ErrModelDiscoveryEvidenceMissing
+	}
+	return snapshot, nil
 }
 
 // ResolveModelAlias implements harnesses.ModelDiscoveryHarness. Returns

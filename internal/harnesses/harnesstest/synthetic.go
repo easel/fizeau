@@ -280,8 +280,11 @@ func (s *SyntheticModelDiscoveryHarness) Execute(ctx context.Context, req harnes
 }
 
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.
-func (s *SyntheticModelDiscoveryHarness) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
-	return s.snapshot
+func (s *SyntheticModelDiscoveryHarness) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
+	if len(s.snapshot.Models) == 0 {
+		return harnesses.ModelDiscoverySnapshot{}, harnesses.ErrModelDiscoveryEvidenceMissing
+	}
+	return s.snapshot, nil
 }
 
 // ResolveModelAlias implements harnesses.ModelDiscoveryHarness.

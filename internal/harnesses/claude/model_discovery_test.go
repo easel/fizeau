@@ -63,7 +63,7 @@ func TestReadClaudeModelDiscoveryViaPTYRecordsDiscovery(t *testing.T) {
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
 printf '❯ '
 IFS= read line
-printf '/model\r\nSelect model\r\n> Sonnet 4.6\r\n  Opus 4.7\r\n  claude-sonnet-4-6\r\n❯ '
+printf '/model\r\nSelect model\r\n> Sonnet 4.6\r\n  Opus 4.7\r\n  claude-sonnet-4-6\r\n--effort <level> - reasoning level (low, medium, high, xhigh, max)\r\n❯ '
 sleep 1
 `), 0o700))
 	cassetteDir := filepath.Join(dir, "cassette")

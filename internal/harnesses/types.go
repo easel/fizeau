@@ -395,6 +395,11 @@ type AccountSnapshot struct {
 // snapshot has no matching concrete model.
 var ErrAliasNotResolvable = errors.New("model alias not resolvable from snapshot")
 
+// ErrModelDiscoveryEvidenceMissing is returned by ModelDiscoveryHarness.DefaultModelSnapshot
+// when live evidence cannot be obtained (PTY failure, parse failure, etc.) and
+// no static fallback is available per the no-static-fallback principle.
+var ErrModelDiscoveryEvidenceMissing = errors.New("model discovery evidence missing")
+
 // QuotaHarness is implemented by harnesses that own a subscription or
 // quota window. See CONTRACT-004 for the full normative contract.
 type QuotaHarness interface {
@@ -461,8 +466,10 @@ type ModelDiscoveryHarness interface {
 
 	// DefaultModelSnapshot returns the harness's seed/fallback
 	// discovery snapshot. Used to bootstrap the catalog before the
-	// first live refresh lands. Stable for the harness; cheap.
-	DefaultModelSnapshot() ModelDiscoverySnapshot
+	// first live refresh lands. Per the no-static-fallback principle,
+	// returns ErrModelDiscoveryEvidenceMissing when live evidence cannot
+	// be obtained; never returns a cached or literal fallback.
+	DefaultModelSnapshot() (ModelDiscoverySnapshot, error)
 
 	// ResolveModelAlias maps a family-style requested model to a
 	// concrete model ID using the provided discovery snapshot.

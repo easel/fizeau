@@ -56,7 +56,9 @@ func TestClaudeTuiInterfaceConformance(t *testing.T) {
 		t.Errorf("RefreshAccount returned %v, want ErrNotYetImplemented", err)
 	}
 	_ = h.AccountFreshness()
-	_ = h.DefaultModelSnapshot()
+	// DefaultModelSnapshot() is allowed to either succeed (if live PTY is available)
+	// or fail with ErrModelDiscoveryEvidenceMissing (no live PTY). Both are valid.
+	_, _ = h.DefaultModelSnapshot()
 	if _, err := h.ResolveModelAlias("", harnesses.ModelDiscoverySnapshot{}); err != harnesses.ErrAliasNotResolvable {
 		t.Errorf("ResolveModelAlias returned %v, want ErrAliasNotResolvable", err)
 	}
@@ -325,6 +327,161 @@ func TestDispatcherCallsClaudeTui(t *testing.T) {
 	}
 	if _, ok := calledWithHarness.(*claudetui.Harness); !ok {
 		t.Errorf("dispatcher called with %T, want *claudetui.Harness", calledWithHarness)
+	}
+}
+
+// TestClaudeTuiDefaultModelSnapshotLiveContent asserts that the snapshot
+// parsing logic correctly extracts models from CLI output.
+// Note: This test verifies parsing behavior; live PTY testing requires
+// cassette replay which is deferred to higher-level integration tests.
+func TestClaudeTuiDefaultModelSnapshotLiveContent(t *testing.T) {
+	// Sample output similar to what claude /model produces
+	sampleOutput := `
+Available Models:
+  claude-opus-4 (Latest Opus)
+  claude-sonnet-4.1 (Latest Sonnet)
+  claude-haiku-3 (Latest Haiku)
+  claude-3-opus (Opus)
+  claude-3-sonnet (Sonnet)
+
+Aliases:
+  sonnet, opus, haiku
+`
+
+	// Test parsing of valid model output
+	models := claudetui.ParseClaudeTuiModels(sampleOutput)
+	if len(models) == 0 {
+		t.Error("parseClaudeTuiModels: got empty, want non-empty model list")
+	}
+	// Check that common models are extracted
+	hasOpus := false
+	hasSonnet := false
+	hasHaiku := false
+	for _, m := range models {
+		if strings.Contains(strings.ToLower(m), "opus") {
+			hasOpus = true
+		}
+		if strings.Contains(strings.ToLower(m), "sonnet") {
+			hasSonnet = true
+		}
+		if strings.Contains(strings.ToLower(m), "haiku") {
+			hasHaiku = true
+		}
+	}
+	if !hasOpus || !hasSonnet || !hasHaiku {
+		t.Errorf("parseClaudeTuiModels: missing expected model families in %v", models)
+	}
+}
+
+// TestClaudeTuiDefaultModelSnapshotMissingEvidence asserts that parsing
+// handles empty or invalid input correctly.
+func TestClaudeTuiDefaultModelSnapshotMissingEvidence(t *testing.T) {
+	// Test with empty text (no models found)
+	models := claudetui.ParseClaudeTuiModels("")
+	if len(models) != 0 {
+		t.Errorf("ParseClaudeTuiModels empty: got %v, want empty on blank input", models)
+	}
+
+	// Test with text containing no model patterns
+	models = claudetui.ParseClaudeTuiModels("some random text without any model names")
+	if len(models) != 0 {
+		t.Errorf("ParseClaudeTuiModels unmatchable: got %v, want empty on unmatchable input", models)
+	}
+}
+
+// TestClaudeTuiNoStaticSnapshotFallback runs an AST scan over the
+// internal/harnesses/claude-tui package and asserts there is no composite
+// literal of harnesses.ModelDiscoverySnapshot in non-test files.
+func TestClaudeTuiNoStaticSnapshotFallback(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	pkgPath := filepath.Join(repoRoot, "internal", "harnesses", "claude-tui")
+
+	fset := token.NewFileSet()
+	err := filepath.WalkDir(pkgPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip test files
+		if strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			if compLit, ok := n.(*ast.CompositeLit); ok {
+				// Check if this is a ModelDiscoverySnapshot literal
+				if sel, ok := compLit.Type.(*ast.SelectorExpr); ok {
+					if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "harnesses" {
+						if sel.Sel.Name == "ModelDiscoverySnapshot" {
+							t.Errorf("%s:%d: composite literal of harnesses.ModelDiscoverySnapshot forbidden in production code (violates no-static-fallback principle)",
+								path, fset.Position(compLit.Pos()).Line)
+						}
+					}
+				}
+			}
+			return true
+		})
+
+		return nil
+	})
+	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("walk %s: %v", pkgPath, err)
+	}
+}
+
+// TestClaudeTuiNoCassetteInProductionCode asserts that no non-test file
+// under internal/harnesses/claude-tui references testdata/ paths.
+func TestClaudeTuiNoCassetteInProductionCode(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	pkgPath := filepath.Join(repoRoot, "internal", "harnesses", "claude-tui")
+
+	fset := token.NewFileSet()
+	err := filepath.WalkDir(pkgPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip test files
+		if strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				// Remove quotes from string literal
+				val := strings.Trim(lit.Value, `"`)
+				if strings.Contains(val, "testdata") {
+					t.Errorf("%s:%d: string literal references testdata/ path %q forbidden in production code",
+						path, fset.Position(lit.Pos()).Line, val)
+				}
+			}
+			return true
+		})
+
+		return nil
+	})
+	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+		t.Fatalf("walk %s: %v", pkgPath, err)
 	}
 }
 

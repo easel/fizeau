@@ -167,7 +167,10 @@ func TestHarnessCapabilityMatrixSupportedAliasesMatch(t *testing.T) {
 				t.Skip("harness does not support model aliases")
 			}
 
-			snapshot := tc.runner.DefaultModelSnapshot()
+			snapshot, err := tc.runner.DefaultModelSnapshot()
+			if err != nil {
+				t.Skipf("DefaultModelSnapshot failed (may be expected for some harnesses): %v", err)
+			}
 			for _, alias := range actual {
 				_, err := tc.runner.ResolveModelAlias(alias, snapshot)
 				if err != nil && err != harnesses.ErrAliasNotResolvable {
@@ -176,7 +179,7 @@ func TestHarnessCapabilityMatrixSupportedAliasesMatch(t *testing.T) {
 			}
 
 			invalidAlias := "invalid-nonexistent-family-xyz"
-			_, err := tc.runner.ResolveModelAlias(invalidAlias, snapshot)
+			_, err = tc.runner.ResolveModelAlias(invalidAlias, snapshot)
 			if err != harnesses.ErrAliasNotResolvable {
 				t.Errorf("ResolveModelAlias(%q) did not return ErrAliasNotResolvable", invalidAlias)
 			}

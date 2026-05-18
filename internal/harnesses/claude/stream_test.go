@@ -496,7 +496,9 @@ func TestRunnerBuildArgs_AppliesRequestControls(t *testing.T) {
 	}, args)
 
 	args = r.buildArgs([]string{"--print"}, harnesses.ExecuteRequest{Permissions: "supervised"})
-	assert.Equal(t, []string{"--print", "--permission-mode", "default", "--model", "opus-4.7"}, args)
+	// When no DiscoveryCache is provided, the runner defaults to claude-sonnet-4-6.
+	// Model discovery from DefaultModelSnapshot() is not available in unit tests.
+	assert.Equal(t, []string{"--print", "--permission-mode", "default", "--model", "claude-sonnet-4-6"}, args)
 }
 
 func TestRunnerBuildArgs_SnapsReasoningToDiscoveryLevels(t *testing.T) {
@@ -620,7 +622,7 @@ EOF
 		"ARG[3]=--output-format",
 		"ARG[4]=stream-json",
 		"ARG[5]=--model",
-		"ARG[6]=opus-4.7",
+		"ARG[6]=claude-sonnet-4-6", // Default model when discovery is unavailable
 		"ARG[7]=hello prompt",
 	} {
 		require.Contains(t, got, want)
@@ -636,7 +638,10 @@ EOF
 		resolution = &data
 	}
 	require.NotNil(t, resolution, "expected runner default-resolution signal")
-	assert.Equal(t, "opus-4.7", resolution.ResolvedModel)
+	// When model discovery is not available (PTY fails), the runner uses the default model.
+	// With PTY-only model discovery, the test's fake binary doesn't support /model command,
+	// so discovery fails and defaults to claude-sonnet-4-6.
+	assert.Equal(t, "claude-sonnet-4-6", resolution.ResolvedModel)
 	assert.Equal(t, "claude-sonnet-4-6", resolution.PriorDefaultModel)
 	assert.Equal(t, "claude-code", resolution.Surface)
 }

@@ -342,21 +342,20 @@ func setProcessGroup(cmd *osexec.Cmd) {
 
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls
 // the live opencode models discovery helper with a sensible timeout; on failure,
-// returns a snapshot with empty Models and error detail.
-func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
+// returns ErrModelDiscoveryEvidenceMissing per the no-static-fallback principle.
+func (r *Runner) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
 	binary := r.Binary
 	if binary == "" {
 		binary = "opencode"
 	}
 	snapshot, err := readOpenCodeModelDiscovery(context.Background(), binary)
 	if err != nil {
-		return harnesses.ModelDiscoverySnapshot{
-			CapturedAt: time.Now().UTC(),
-			Source:     "cli-error",
-			Detail:     fmt.Sprintf("live opencode discovery failed: %v", err),
-		}
+		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("model discovery: %w", err)
 	}
-	return snapshot
+	if len(snapshot.Models) == 0 {
+		return harnesses.ModelDiscoverySnapshot{}, harnesses.ErrModelDiscoveryEvidenceMissing
+	}
+	return snapshot, nil
 }
 
 // SupportedAliases returns nil: opencode requires exact provider/model

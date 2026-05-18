@@ -274,14 +274,24 @@ func RunModelDiscoveryHarnessConformance(t *testing.T, h harnesses.ModelDiscover
 
 	RunHarnessConformance(t, h)
 
-	t.Run("DefaultModelSnapshotNonEmpty", func(t *testing.T) {
-		snap := h.DefaultModelSnapshot()
-		if len(snap.Models) == 0 && snap.Detail == "" {
-			t.Errorf("DefaultModelSnapshot().Models is empty with no error detail; at runtime, empty models must indicate discovery failure")
+	t.Run("DefaultModelSnapshotValidReturn", func(t *testing.T) {
+		snap, err := h.DefaultModelSnapshot()
+		// Either a valid snapshot with models or an error is acceptable.
+		// The no-static-fallback principle requires that discovery failures
+		// be reported as errors, never as empty snapshots.
+		if err == nil && len(snap.Models) == 0 {
+			t.Errorf("DefaultModelSnapshot returned empty models with nil error; per no-static-fallback principle, failure must return error")
 		}
 	})
 
-	snapshot := h.DefaultModelSnapshot()
+	snapshot, err := h.DefaultModelSnapshot()
+	if err != nil {
+		// If discovery failed, skip alias resolution tests.
+		t.Run("AliasResolutionSkipped", func(t *testing.T) {
+			t.Skipf("DefaultModelSnapshot failed: %v (may be expected for some harnesses)", err)
+		})
+		return
+	}
 	aliases := h.SupportedAliases()
 
 	t.Run("SupportedAliasesStable", func(t *testing.T) {
