@@ -1,0 +1,98 @@
+{
+  "attempt_id": "20260518T141256-d0a0da4f",
+  "bead_id": "fizeau-36ba3eec",
+  "base_rev": "1fad72a693f0e8706b05fca689b179a273aa5333",
+  "created_at": "2026-05-18T14:12:57.943727536Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-36ba3eec",
+    "title": "claude-tui: capability baseline row, evidence IDs, and ADR-013 promotion gate",
+    "description": "PROBLEM: Without empirical billing-observation evidence and machine-checkable capability evidence IDs, ADR-013 cannot be promoted from re-proposed to accepted, and the primary capability baseline lacks a claude-tui row. CI currently does not fail when a supported capability row lacks an evidence ID, so promotion is unenforced.\n\nROOT CAUSE:\n- docs/.../primary-harness-capability-baseline.md has no claude-tui row, so per-ADR-002 promotion cannot occur.\n- The machine-checkable capability matrix (fizeau-3b1fb0f4) has no evidence-ID column wiring for claude-tui rows.\n- ADR-013 explicitly conditions its promotion on empirical evidence that subscription billing is observed off the CLI session, not API metering; no such cassette is recorded yet.\n- CI has no check that fails when a row marked supported lacks an evidence ID, so silent promotion is possible.\n\nPROPOSED FIX:\n1. Add a claude-tui row to docs/.../primary-harness-capability-baseline.md initially marked unverified for all capabilities introduced by children #2 and #3.\n2. Record a live billing-observation cassette under testdata/ that demonstrates subscription-mode billing is read off the CLI session (not via API metering); cite cassette ID.\n3. Extend the machine-checkable capability matrix tooling (cross-ref fizeau-3b1fb0f4) so each supported claude-tui row carries an evidence_id field; add CI assertion that fails when a row marked supported has no evidence_id.\n4. Promote only those rows whose evidence cassettes exist; leave the rest unverified.\n5. Flip ADR-013 frontmatter status from re-proposed to accepted and record the billing-observation evidence ID inline.\n\nNON-SCOPE:\n- Adding new harness capabilities beyond those already evidenced by children #2 and #3.\n- Reworking the capability matrix schema (only adding the evidence_id wiring and CI gate).\n- Promoting any capability row that lacks a current cassette.\n- Generalizing the evidence_id gate to other harnesses in this bead (scoped to claude-tui rows).\n\nDepends on children #1, #2, #3. Governing artifacts: ADR-002 (capability promotion), ADR-013 (promotion gate), fizeau-3b1fb0f4 (machine-checkable matrix), CONTRACT-004.",
+    "acceptance": "1) TestPrimaryHarnessCapabilityBaselineHasClaudeTuiRow asserts the markdown file contains a claude-tui row with at least one entry per ADR-002 row schema.\n2) TestClaudeTuiBillingObservationEvidenceCassette asserts the recorded billing-observation cassette is loadable, parses to a subscription-mode billing signal, and is referenced from ADR-013 frontmatter by its evidence ID.\n3) TestCapabilityMatrixEvidenceIDRequired asserts the matrix CI gate fails when any claude-tui row marked supported has an empty evidence_id, and passes when all supported rows cite a present cassette.\n4) TestClaudeTuiRowsPromotedOnlyWithEvidence asserts every row currently marked supported for claude-tui resolves to a present cassette file on disk.\n5) TestADR013StatusAccepted asserts the ADR-013 frontmatter status field equals \"accepted\" and references the billing-observation evidence ID from AC2.\n6) go test ./... -count=1 is green.\n7) lefthook run pre-commit is green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "spec:ADR-002",
+      "gate:adr-promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T10:57:53.669161216Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T104703-793fd170\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":338,\"output_tokens\":20914,\"total_tokens\":21252,\"cost_usd\":0.6926597999999999,\"duration_ms\":646667,\"exit_code\":-1}",
+          "created_at": "2026-05-18T10:57:53.855523165Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=21252 cost_usd=0.6927 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T10:59:02.837215841Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-rapid-mlx\",\"attempt_id\":\"20260518T105801-82e3ca57\",\"bead_id\":\"fizeau-36ba3eec\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T10:59:03.228910575Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=mlx-community/Qwen3.6-27B-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"harness\":\"fiz\",\"model\":\"mlx-community/Qwen3.6-27B-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-rapid-mlx\"}",
+          "created_at": "2026-05-18T10:59:03.398499101Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:8000/v1/chat/completions\": dial tcp 100.97.179.68:8000: i/o timeout\npowerClass=standard\nresult_rev=dd91be2c3394e1451cd5bff03f2ff3c923056fd1\nbase_rev=dd91be2c3394e1451cd5bff03f2ff3c923056fd1\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T10:59:03.442290261Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T10:59:03Z",
+          "count": 1,
+          "model": "mlx-community/Qwen3.6-27B-8bit",
+          "provider": "grendel-rapid-mlx",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T141256-d0a0da4f",
+    "prompt": ".ddx/executions/20260518T141256-d0a0da4f/prompt.md",
+    "manifest": ".ddx/executions/20260518T141256-d0a0da4f/manifest.json",
+    "result": ".ddx/executions/20260518T141256-d0a0da4f/result.json",
+    "checks": ".ddx/executions/20260518T141256-d0a0da4f/checks.json",
+    "usage": ".ddx/executions/20260518T141256-d0a0da4f/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-36ba3eec-20260518T141256-d0a0da4f"
+  },
+  "prompt_sha": "ba5763278299fee8f9238d8dd8d98afdc8eb65ba19784c69157672340ad6222e"
+}
