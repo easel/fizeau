@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260518T080734-22307082",
+  "bead_id": "fizeau-6f1ca52f",
+  "base_rev": "58390a872d67bbdcbb9ddb2a97d42f46dfd04cf0",
+  "created_at": "2026-05-18T08:07:37.768918789Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6f1ca52f",
+    "title": "harness/claude: record model_surface cassette (no-static-fallback prerequisite)",
+    "description": "Record an authenticated TUI cassette at internal/harnesses/claude/testdata/model_surface/ by driving the claude CLI's /model command (or equivalent) and parsing the model list.",
+    "acceptance": "1) internal/harnesses/claude/testdata/model_surface/ exists per ADR-002 schema v1.\n2) The cassette reader returns a non-empty Models slice covering the current claude CLI exposure (haiku/sonnet/opus families).\n3) Focused unit test asserts cassette parse + non-empty.\n4) go test ./internal/harnesses/claude/... -count=1 green.",
+    "parent": "fizeau-89eca738",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "harness:claude",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T080734-22307082",
+    "prompt": ".ddx/executions/20260518T080734-22307082/prompt.md",
+    "manifest": ".ddx/executions/20260518T080734-22307082/manifest.json",
+    "result": ".ddx/executions/20260518T080734-22307082/result.json",
+    "checks": ".ddx/executions/20260518T080734-22307082/checks.json",
+    "usage": ".ddx/executions/20260518T080734-22307082/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-6f1ca52f-20260518T080734-22307082"
+  },
+  "prompt_sha": "2dd1ccef874f19f376423f3ab7668e4c40812237721657ec21536c975ed1f767"
+}
