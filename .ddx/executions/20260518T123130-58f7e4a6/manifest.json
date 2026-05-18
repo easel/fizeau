@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260518T123130-58f7e4a6",
+  "bead_id": "fizeau-cdbfcf6d",
+  "base_rev": "f52a468a8b0f545815ea8fd2b710d393b1111913",
+  "created_at": "2026-05-18T12:31:33.453187832Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-cdbfcf6d",
+    "title": "providers: land ADR-010 introspection adapters for OpenRouter, Ollama, vLLM, rapid-mlx",
+    "description": "AR-2026-05-17-repo finding. ADR-010 §6' makes introspection adapters a first-class concept; §5' prescribes L1 live -\u003e L2 catalog -\u003e L3 static-fallback. Today internal/provider/{ds4,llamaserver,lucebox}/introspection.go cover 3/7 providers. Missing: OpenRouter (model metadata + upstream params), Ollama, vLLM, rapid-mlx. Until adapters land, the reasoning-wire authority chain only fully works for ds4/llamaserver/lucebox; other providers fall through to catalog-only or static fallback.\n\nSource review: fizeau-8e37e536.",
+    "acceptance": "1) internal/provider/openrouter/, internal/provider/ollama/, internal/provider/vllm/, internal/provider/rapidmlx/ each ship an introspection.go that implements the ADR-010 §6' adapter contract.\n2) Each adapter has at least one unit test that round-trips a recorded probe response.\n3) go test ./internal/provider/... -count=1 green.",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "spec-id": "ADR-010",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:59Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-010",
+      "path": "docs/helix/02-design/adr/ADR-010-reasoning-wire-form-from-catalog.md",
+      "title": "ADR-010: Reasoning Wire Form Belongs in the Model Catalog"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T123130-58f7e4a6",
+    "prompt": ".ddx/executions/20260518T123130-58f7e4a6/prompt.md",
+    "manifest": ".ddx/executions/20260518T123130-58f7e4a6/manifest.json",
+    "result": ".ddx/executions/20260518T123130-58f7e4a6/result.json",
+    "checks": ".ddx/executions/20260518T123130-58f7e4a6/checks.json",
+    "usage": ".ddx/executions/20260518T123130-58f7e4a6/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-cdbfcf6d-20260518T123130-58f7e4a6"
+  },
+  "prompt_sha": "15aa447278f1525d6a50619958f408a23840583d1f92619b9faf8cf75e3c62d9"
+}
