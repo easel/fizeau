@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260518T043558-45059395",
+  "bead_id": "fizeau-d60b1694",
+  "base_rev": "322928b51af6f514b7950d3a508afecef3fd8a1f",
+  "created_at": "2026-05-18T04:36:01.98261811Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d60b1694",
+    "title": "Review harness-infrastructure",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:harness-infrastructure"
+    ],
+    "metadata": {
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:23Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T043558-45059395",
+    "prompt": ".ddx/executions/20260518T043558-45059395/prompt.md",
+    "manifest": ".ddx/executions/20260518T043558-45059395/manifest.json",
+    "result": ".ddx/executions/20260518T043558-45059395/result.json",
+    "checks": ".ddx/executions/20260518T043558-45059395/checks.json",
+    "usage": ".ddx/executions/20260518T043558-45059395/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-d60b1694-20260518T043558-45059395"
+  },
+  "prompt_sha": "9d421bdea54a4ec1959d07370d41103a672730feb3c933217bba51bb1614b9c9"
+}
