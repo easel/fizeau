@@ -1,0 +1,64 @@
+{
+  "attempt_id": "20260518T113738-90acfd05",
+  "bead_id": "fizeau-2cf09191",
+  "base_rev": "42c92929b1910332434b67352d2a594619d39b54",
+  "created_at": "2026-05-18T11:38:05.862837564Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-2cf09191",
+    "title": "claude-tui: ModelDiscoveryHarness live PTY snapshot with no-static-fallback enforcement",
+    "description": "PROBLEM: ModelDiscoveryHarness.DefaultModelSnapshot() for claude-tui must be derived from live PTY observation of the Anthropic CLI. The no-static-fallback principle (fizeau-89eca738) forbids any Go-literal ModelSnapshot fallback in production code; on PTY failure the method must return ErrModelDiscoveryEvidenceMissing, never a baked snapshot.\n\nROOT CAUSE:\n- Other harnesses currently embed Go-literal snapshots as a convenience; reusing that pattern in claude-tui would violate fizeau-89eca738.\n- The ModelDiscoveryHarness contract requires a fresh, CLI-derived snapshot, not a constant.\n- Without an AST/static check, future contributors could silently reintroduce a literal snapshot fallback.\n- Cassettes under testdata/ are valid for test fixtures only; loading them from production code paths would also violate the principle.\n\nPROPOSED FIX:\n1. Implement claudetui.Harness.DefaultModelSnapshot(): spawn a /model (or equivalent) PTY query against the live CLI, parse the output via internal/harnesses/anthropic helpers, return a harnesses.ModelSnapshot.\n2. On PTY error, unparseable output, or empty result, return a sentinel ErrModelDiscoveryEvidenceMissing. Do not fall back to any literal.\n3. Restrict cassette usage to *_test.go files; production source must not reference testdata/ paths.\n4. Add a build-time or test-time static analyzer that scans the claudetui package AST for any composite literal of type ModelSnapshot (or its fields) outside *_test.go and fails the build if found.\n\nNON-SCOPE:\n- Turn execution, AccountHarness, QuotaHarness (child #2).\n- Capability baseline rows, evidence IDs, ADR-013 promotion (child #4).\n- Changing the existing claude harness's snapshot strategy.\n- Generalizing the no-static-fallback analyzer to other harnesses (scoped to claudetui in this bead).\n\nDepends on child #1. Governing artifacts: fizeau-89eca738 (no-static-fallback principle), ADR-013, CONTRACT-004.",
+    "acceptance": "1) TestClaudeTuiDefaultModelSnapshotLive asserts that, replaying a successful PTY interaction cassette in a test fixture, DefaultModelSnapshot() returns a non-empty harnesses.ModelSnapshot parsed via internal/harnesses/anthropic helpers.\n2) TestClaudeTuiDefaultModelSnapshotMissingEvidence asserts that on simulated PTY failure or unparseable output, DefaultModelSnapshot() returns ErrModelDiscoveryEvidenceMissing and no partial snapshot.\n3) TestClaudeTuiNoStaticSnapshotFallback runs a static AST scan over the internal/harnesses/claude-tui package (excluding *_test.go) and asserts there is no composite literal of harnesses.ModelSnapshot.\n4) TestClaudeTuiNoCassetteInProductionCode asserts no non-test file under internal/harnesses/claude-tui references testdata/ paths.\n5) go test ./... -count=1 is green.\n6) lefthook run pre-commit is green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "principle:no-static-fallback",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"child dependency clarity: The bead has clear acceptance criteria, non-scope boundaries, and governing artifacts, but external dependencies are vaguely specified. The PTY command ('what is /model exactly?'), the output format, the existence/location of internal/harnesses/anthropic helpers, and the static analyzer tool choice are all underspecified. The referenced 'child #1' dependency is mentioned but not defined. The task is executable with investigation but would benefit from clarification to avoid wrong assumptions about the CLI contract.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-18T11:31:18.764741279Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T11:37:24.58452312Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T113126-4fd22b81\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":347060,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:37:24.703798341Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T113738-90acfd05",
+    "prompt": ".ddx/executions/20260518T113738-90acfd05/prompt.md",
+    "manifest": ".ddx/executions/20260518T113738-90acfd05/manifest.json",
+    "result": ".ddx/executions/20260518T113738-90acfd05/result.json",
+    "checks": ".ddx/executions/20260518T113738-90acfd05/checks.json",
+    "usage": ".ddx/executions/20260518T113738-90acfd05/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-2cf09191-20260518T113738-90acfd05"
+  },
+  "prompt_sha": "51ee1ec8b9f0777a75266bf56ce7724bb92b0e666e7b9719ec263ee99e53aa15"
+}
