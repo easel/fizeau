@@ -1,0 +1,105 @@
+{
+  "attempt_id": "20260518T144234-fd4f2b65",
+  "bead_id": "fizeau-48a861f2",
+  "base_rev": "911691fa08d8e081bcb2cb2f7f87517da32a0719",
+  "created_at": "2026-05-18T14:42:36.375492944Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-48a861f2",
+    "title": "claude-tui/gate: capture /usage deltas for PTY+hooks mode (3 runs)",
+    "description": "PROBLEM: ADR-013's economic premise asserts PTY+hooks-driven Claude consumes subscription quota. No empirical /usage deltas have been captured for PTY mode, so the subscription-consumption claim is unverified.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md has an empty 'PTY+hooks mode measurements' placeholder; no /usage snapshots exist for this mode.\n\nPROPOSED FIX: Using the same model, prompt, account, and refresh-delay defined in the methodology doc (and the same authenticated account used for --print measurements), drive Claude via the PTY+hooks harness three times. For each run capture: /usage snapshot BEFORE, full turn output, /usage snapshot AFTER (\u003e=60s post-completion). Append all 6 /usage snapshots + 3 turn outputs to the 'PTY+hooks mode measurements' section of docs/helix/02-design/billing-observation-claude-tui.md. Record wall-clock timestamps. Ensure no overlap with the --print measurement window.\n\nNON-SCOPE: --print measurements, delta computation, verdict determination, ADR-013 disposition, methodology authoring.\n\nAC:\n1) TestPtyModeHasThreeRuns: doc's PTY+hooks section contains exactly 3 labeled runs.\n2) TestPtyModeBeforeAfterSnapshots: each PTY run has BEFORE and AFTER /usage snapshot blocks (6 total).\n3) TestPtyModeTurnOutputsRecorded: each PTY run has captured turn output.\n4) TestPtyModeSnapshotTimestamps: every snapshot has a wall-clock timestamp.\n5) TestPtyModeAfterRespectsRefreshDelay: each AFTER snapshot timestamp is \u003e= completion-time + documented refresh-delay safety margin.\n6) TestPtyModeSingleAccountAttested: doc attests no concurrent claude activity from same account during the PTY window AND windows do not overlap --print window.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestPtyModeHasThreeRuns\n2) TestPtyModeBeforeAfterSnapshots\n3) TestPtyModeTurnOutputsRecorded\n4) TestPtyModeSnapshotTimestamps\n5) TestPtyModeAfterRespectsRefreshDelay\n6) TestPtyModeSingleAccountAttested\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-a45dafe6",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T11:58:34.608866387Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T115651-8149e425\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":84801,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:58:34.769416604Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"vidar\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T11:59:20.286868172Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=vidar model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"vidar\",\"attempt_id\":\"20260518T115837-337b789f\",\"bead_id\":\"fizeau-48a861f2\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T11:59:20.551129226Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://vidar:1235/v1/chat/completions\\\": dial tcp 100.108.162.80:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://vidar:1235/v1/chat/completions\\\": dial tcp 100.108.162.80:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"vidar\"}",
+          "created_at": "2026-05-18T11:59:20.693022415Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=vidar model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://vidar:1235/v1/chat/completions\": dial tcp 100.108.162.80:1235: i/o timeout\npowerClass=standard\nresult_rev=997c9baa8a73f55b9832b536b862f522cb8a74b8\nbase_rev=997c9baa8a73f55b9832b536b862f522cb8a74b8\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T11:59:20.734305356Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness check timed out after 5m0s (fizeau-48a861f2)\",\"fingerprint\":\"3de07a18c763b3c48ab0477e8e46aa75d36519a2ac4f977ef55c0e706e89d78e\",\"policy_mode\":\"warn-only\",\"reason\":\"timeout\",\"rule_id\":\"pre_claim_intake.timeout\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-18T14:42:25.871395767Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "timeout"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T11:59:20Z",
+          "count": 1,
+          "model": "Qwen3.6-27B-MLX-8bit",
+          "provider": "vidar",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T144234-fd4f2b65",
+    "prompt": ".ddx/executions/20260518T144234-fd4f2b65/prompt.md",
+    "manifest": ".ddx/executions/20260518T144234-fd4f2b65/manifest.json",
+    "result": ".ddx/executions/20260518T144234-fd4f2b65/result.json",
+    "checks": ".ddx/executions/20260518T144234-fd4f2b65/checks.json",
+    "usage": ".ddx/executions/20260518T144234-fd4f2b65/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-48a861f2-20260518T144234-fd4f2b65"
+  },
+  "prompt_sha": "56d5c2f415116c291e0b087cae58b5b3a431f2ca60531a53f0fb9dbee121cfa5"
+}
