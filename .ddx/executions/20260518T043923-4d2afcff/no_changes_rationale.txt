@@ -1,0 +1,2 @@
+status: proposed
+reason: Functional-area review for self-update-installer is complete. Gap analysis documented in AR-2026-05-17-repo.md (lines 125, 174) identifies missing shell-level integration tests for install.sh. Execution issue fizeau-e0dabfc9 filed to address the gap. No code changes needed in this review bead itself; review findings are captured in alignment-review artifact.
