@@ -495,6 +495,425 @@ EOF
   pass "${test_name}"
 }
 
+# test_full_run_canary: A2b AC1
+# Verify full run creates cells with proper report.json structure
+test_full_run_canary() {
+  local test_name="test_full_run_canary"
+  local tmpdir out exit_code
+
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '${tmpdir}'" RETURN
+
+  out="${tmpdir}/bench/results/fiz-tools-v1"
+
+  # Create minimal tasks directory
+  mkdir -p "${tmpdir}/tasks/test-task"
+  echo '{}' >"${tmpdir}/tasks/test-task/data.json"
+
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 >/dev/null 2>&1
+  exit_code=$?
+  set -e
+
+  # Should complete (even if some cells fail due to missing Docker/API)
+  if [[ ${exit_code} -gt 1 ]]; then
+    fail "${test_name}: unexpected exit code ${exit_code}"
+    return 1
+  fi
+
+  # Check that cells directory exists
+  if [[ ! -d "${out}/cells" ]]; then
+    fail "${test_name}: cells directory not created"
+    return 1
+  fi
+
+  # Check for at least one report.json
+  local report_count=0
+  local found_valid_report=0
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    ((report_count++))
+    # Verify report.json structure
+    if jq -e '.profile and .command and .env_redacted and .artifacts and .final_status' \
+       "${report}" >/dev/null 2>&1; then
+      ((found_valid_report++))
+    fi
+  done
+  shopt -u nullglob
+
+  if [[ ${report_count} -eq 0 ]]; then
+    fail "${test_name}: no report.json files created"
+    return 1
+  fi
+
+  if [[ ${found_valid_report} -eq 0 ]]; then
+    fail "${test_name}: no valid report.json files (missing expected fields)"
+    return 1
+  fi
+
+  # Verify artifacts exist (fiz.txt, fiz.err, session/)
+  shopt -s nullglob
+  for cell_dir in "${out}"/cells/*/*/*/; do
+    [[ -f "${cell_dir}/fiz.txt" ]] || { fail "${test_name}: missing fiz.txt in ${cell_dir}"; return 1; }
+    [[ -f "${cell_dir}/fiz.err" ]] || { fail "${test_name}: missing fiz.err in ${cell_dir}"; return 1; }
+    [[ -d "${cell_dir}/session" ]] || { fail "${test_name}: missing session/ in ${cell_dir}"; return 1; }
+  done
+  shopt -u nullglob
+
+  pass "${test_name}"
+}
+
+# test_resume_skips_terminal_cells: A2b AC2
+# Verify resume skips terminal cells without --force-rerun, reruns with --force-rerun
+test_resume_skips_terminal_cells() {
+  local test_name="test_resume_skips_terminal_cells"
+  local tmpdir out
+
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '${tmpdir}'" RETURN
+
+  out="${tmpdir}/bench/results"
+  mkdir -p "${tmpdir}/tasks/test-task"
+  echo '{}' >"${tmpdir}/tasks/test-task/data.json"
+
+  # First run: create cells
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 >/dev/null 2>&1
+  set -e
+
+  # Record initial mtimes
+  local initial_mtimes=()
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    initial_mtimes+=("$(stat -c %Y "${report}" 2>/dev/null || stat -f %m "${report}" 2>/dev/null)")
+  done
+  shopt -u nullglob
+
+  if [[ ${#initial_mtimes[@]} -eq 0 ]]; then
+    fail "${test_name}: no cells created on first run"
+    return 1
+  fi
+
+  # Sleep to ensure mtimes would differ if files were rewritten
+  sleep 1
+
+  # Second run: resume without --force-rerun (should skip)
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 >/dev/null 2>&1
+  set -e
+
+  # Check that mtimes are unchanged (resume skipped)
+  local resume_mtimes=()
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    resume_mtimes+=("$(stat -c %Y "${report}" 2>/dev/null || stat -f %m "${report}" 2>/dev/null)")
+  done
+  shopt -u nullglob
+
+  if [[ "${initial_mtimes[0]}" != "${resume_mtimes[0]}" ]]; then
+    fail "${test_name}: cells were rerun on resume (should skip terminal cells)"
+    return 1
+  fi
+
+  # Sleep again
+  sleep 1
+
+  # Third run: with --force-rerun (should rerun all)
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 --force-rerun >/dev/null 2>&1
+  set -e
+
+  # Check that mtimes advanced (cells were rerun)
+  local force_mtimes=()
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    force_mtimes+=("$(stat -c %Y "${report}" 2>/dev/null || stat -f %m "${report}" 2>/dev/null)")
+  done
+  shopt -u nullglob
+
+  if [[ "${force_mtimes[0]}" == "${resume_mtimes[0]}" ]]; then
+    fail "${test_name}: cells were not rerun with --force-rerun"
+    return 1
+  fi
+
+  pass "${test_name}"
+}
+
+# test_retry_invalid_reruns_only_invalid: A2b AC3
+# Verify --retry-invalid only reruns cells with invalid_class or orphan cell-state.json
+test_retry_invalid_reruns_only_invalid() {
+  local test_name="test_retry_invalid_reruns_only_invalid"
+  local tmpdir out
+
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '${tmpdir}'" RETURN
+
+  out="${tmpdir}/bench/results"
+  mkdir -p "${tmpdir}/tasks/test-task"
+  echo '{}' >"${tmpdir}/tasks/test-task/data.json"
+
+  # First run: create cells
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 2 >/dev/null 2>&1
+  set -e
+
+  # Find two cells and mark one as invalid
+  local first_cell="" second_cell=""
+  shopt -s nullglob
+  local idx=0
+  for cell_dir in "${out}"/cells/*/*/; do
+    if [[ $idx -eq 0 ]]; then
+      first_cell="${cell_dir}"
+    elif [[ $idx -eq 1 ]]; then
+      second_cell="${cell_dir}"
+      break
+    fi
+    ((idx++))
+  done
+  shopt -u nullglob
+
+  if [[ -z "${first_cell}" ]] || [[ -z "${second_cell}" ]]; then
+    fail "${test_name}: could not find 2 cells to test with"
+    return 1
+  fi
+
+  # Mark first cell as invalid
+  if [[ -f "${first_cell}/report.json" ]]; then
+    jq '.invalid_class = "test_invalid"' "${first_cell}/report.json" \
+      >"${first_cell}/report.json.tmp"
+    mv "${first_cell}/report.json.tmp" "${first_cell}/report.json"
+  fi
+
+  # Record mtimes before retry
+  local first_mtime="$(stat -c %Y "${first_cell}/report.json" 2>/dev/null || stat -f %m "${first_cell}/report.json" 2>/dev/null)"
+  local second_mtime="$(stat -c %Y "${second_cell}/report.json" 2>/dev/null || stat -f %m "${second_cell}/report.json" 2>/dev/null)"
+
+  sleep 1
+
+  # Run with --retry-invalid
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 2 --retry-invalid >/dev/null 2>&1
+  set -e
+
+  # Check mtimes: first should advance (rerun), second should not (skipped)
+  local first_new_mtime="$(stat -c %Y "${first_cell}/report.json" 2>/dev/null || stat -f %m "${first_cell}/report.json" 2>/dev/null || echo 0)"
+  local second_new_mtime="$(stat -c %Y "${second_cell}/report.json" 2>/dev/null || stat -f %m "${second_cell}/report.json" 2>/dev/null || echo 0)"
+
+  if [[ "${first_mtime}" == "${first_new_mtime}" ]]; then
+    fail "${test_name}: invalid cell was not rerun"
+    return 1
+  fi
+
+  if [[ "${second_mtime}" != "${second_new_mtime}" ]]; then
+    fail "${test_name}: valid cell was rerun (should have been skipped)"
+    return 1
+  fi
+
+  pass "${test_name}"
+}
+
+# test_sweep_json_captures_image_digest: A2b AC4
+# Verify sweep.json captures harbor_runner_image_digest and each cell includes it
+test_sweep_json_captures_image_digest() {
+  local test_name="test_sweep_json_captures_image_digest"
+  local tmpdir out
+
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '${tmpdir}'" RETURN
+
+  out="${tmpdir}/bench/results"
+  mkdir -p "${tmpdir}/tasks/test-task"
+  echo '{}' >"${tmpdir}/tasks/test-task/data.json"
+
+  # Get expected digest
+  local expected_digest
+  expected_digest="$(docker image inspect --format '{{.Id}}' fizeau-harbor-runner:latest 2>/dev/null || echo 'docker-unavailable')"
+
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${HARNESS_ADAPTERS_DIR}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${PROFILES_DIR}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile codex-native-gpt-5-4-mini --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 >/dev/null 2>&1
+  set -e
+
+  # Check sweep.json exists
+  if [[ ! -f "${out}/sweep.json" ]]; then
+    fail "${test_name}: sweep.json not created"
+    return 1
+  fi
+
+  # Verify sweep.json has required fields
+  if ! jq -e '.harbor_runner_image_digest and .task_executor_version and .started_at' \
+       "${out}/sweep.json" >/dev/null 2>&1; then
+    fail "${test_name}: sweep.json missing required fields"
+    return 1
+  fi
+
+  local sweep_digest task_executor_version
+  sweep_digest="$(jq -r '.harbor_runner_image_digest // ""' "${out}/sweep.json")"
+  task_executor_version="$(jq -r '.task_executor_version // ""' "${out}/sweep.json")"
+
+  if [[ -z "${sweep_digest}" ]]; then
+    fail "${test_name}: harbor_runner_image_digest is empty"
+    return 1
+  fi
+
+  if [[ -z "${task_executor_version}" ]]; then
+    fail "${test_name}: task_executor_version is empty"
+    return 1
+  fi
+
+  # Verify each cell's report.json has the same values
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    local cell_digest cell_te_ver
+    cell_digest="$(jq -r '.harbor_runner_image_digest // ""' "${report}")"
+    cell_te_ver="$(jq -r '.task_executor_version // ""' "${report}")"
+
+    if [[ "${cell_digest}" != "${sweep_digest}" ]]; then
+      fail "${test_name}: cell digest (${cell_digest}) differs from sweep.json (${sweep_digest})"
+      return 1
+    fi
+
+    if [[ "${cell_te_ver}" != "${task_executor_version}" ]]; then
+      fail "${test_name}: cell task_executor_version differs from sweep.json"
+      return 1
+    fi
+  done
+  shopt -u nullglob
+
+  pass "${test_name}"
+}
+
+# test_env_redacted_masks_secret_keys: A2b AC5
+# Verify secret_env_keys are redacted in env_redacted
+test_env_redacted_masks_secret_keys() {
+  local test_name="test_env_redacted_masks_secret_keys"
+  local tmpdir out profile_file
+
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf '${tmpdir}'" RETURN
+
+  # Create a test profile with secret_env_keys
+  profile_file="${tmpdir}/test-profile.yaml"
+  cat >"${profile_file}" <<'EOF'
+id: test-secret-profile
+harness: none
+surface: fiz_provider_native
+concurrency_group: default
+provider:
+  type: openrouter
+  model: test/model
+  base_url: https://test.example.com
+  api_key_env: TEST_API_KEY
+sampling:
+  temperature: 0.0
+limits:
+  max_output_tokens: 100
+metadata:
+  runtime: test
+EOF
+
+  # Create a test harness adapter that returns secret keys
+  local adapter_dir="${tmpdir}/adapters"
+  mkdir -p "${adapter_dir}"
+  cat >"${adapter_dir}/test" <<'EOF'
+#!/bin/bash
+if [[ "$2" == "install" ]]; then
+  jq -n '{install_command:"echo test", artifact_source:"test", binary_path:"/test", harbor_plugin:"test"}'
+else
+  jq -n '{
+    command:["echo","test"],
+    env:{TEST_API_KEY:"secret123", OTHER_VAR:"public456"},
+    secret_env_keys:["TEST_API_KEY"]
+  }'
+fi
+EOF
+  chmod +x "${adapter_dir}/test"
+
+  out="${tmpdir}/bench/results"
+  mkdir -p "${tmpdir}/tasks/test-task"
+  echo '{}' >"${tmpdir}/tasks/test-task/data.json"
+
+  set +e
+  BENCH_TASKS_DIR="${tmpdir}/tasks" \
+  HARNESS_ADAPTERS_DIR="${adapter_dir}" \
+  TASK_EXECUTORS_DIR="${TASK_EXECUTORS_DIR}" \
+  PROFILES_DIR="${tmpdir}" \
+  BENCH_SETS_DIR="${BENCH_SETS_DIR}" \
+  cd "${SCRIPT_DIR}" && \
+  ./benchmark --profile test-secret-profile --bench-set tb-2-1-canary --out "${out}" \
+    --reps 1 >/dev/null 2>&1
+  set -e
+
+  # Find a report.json and check env_redacted
+  shopt -s nullglob
+  for report in "${out}"/cells/*/*/*/report.json; do
+    local test_api_key other_var
+    test_api_key="$(jq -r '.env_redacted.TEST_API_KEY // ""' "${report}")"
+    other_var="$(jq -r '.env_redacted.OTHER_VAR // ""' "${report}")"
+
+    if [[ "${test_api_key}" != "***REDACTED***" && "${test_api_key}" != "***" ]]; then
+      fail "${test_name}: TEST_API_KEY not redacted (value: ${test_api_key})"
+      return 1
+    fi
+
+    if [[ "${other_var}" != "public456" ]]; then
+      fail "${test_name}: OTHER_VAR was redacted or altered (value: ${other_var})"
+      return 1
+    fi
+  done
+  shopt -u nullglob
+
+  pass "${test_name}"
+}
+
 main() {
   echo "Running benchmark runner tests (A2a acceptance criteria)..."
   echo ""
@@ -504,6 +923,16 @@ main() {
   test_matrix_expansion_ordering
   test_preflight_builds_when_label_stale
   test_validate_reports_yaml_errors
+
+  echo ""
+  echo "Running benchmark runner tests (A2b execution loop + resume/retry)..."
+  echo ""
+
+  test_full_run_canary
+  test_resume_skips_terminal_cells
+  test_retry_invalid_reruns_only_invalid
+  test_sweep_json_captures_image_digest
+  test_env_redacted_masks_secret_keys
 
   echo ""
   echo "Running benchmark runner tests (A2c per-cell retry)..."
