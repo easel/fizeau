@@ -1,0 +1,15 @@
+**
+!.ddx/
+!.ddx/attempt-runner.Dockerfile
+!go.mod
+!go.sum
+!cli/
+!cli/go.mod
+!website/
+!website/go.mod
+!website/go.sum
+!package.json
+!package-lock.json
+!scripts/
+!scripts/website/
+!scripts/website/requirements.txt
