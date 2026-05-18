@@ -1390,7 +1390,7 @@ run_one_cell() {
     invalid_class="$(jq -r '.invalid_class // ""' <<<"${result_json}")"
   else
     final_status="transient_exhausted"
-    invalid_class="$(jq -r '.invalid_class // "transient_exhausted"' <<<"${result_json}")"
+    invalid_class=""
   fi
 
   [[ -f "${cell_dir}/fiz.txt" ]] || : >"${cell_dir}/fiz.txt"
