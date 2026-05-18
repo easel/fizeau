@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260518T080333-aa381233",
+  "bead_id": "fizeau-0f3b7ab5",
+  "base_rev": "7e339674547487539c0bd6b741bfaf08e23570ec",
+  "created_at": "2026-05-18T08:03:38.948497034Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-0f3b7ab5",
+    "title": "harness/codex: record model_surface cassette (no-static-fallback prerequisite)",
+    "description": "Record an authenticated TUI cassette at internal/harnesses/codex/testdata/model_surface/ by running ReadCodexModelDiscoveryViaPTY against a current codex CLI. Resulting cassette must include gpt-5.4-nano (or whatever the live TUI exposes) and the current reasoning levels.",
+    "acceptance": "1) internal/harnesses/codex/testdata/model_surface/ exists with cassette manifest + frames.jsonl + service-events.jsonl per ADR-002 schema v1.\n2) ReadCodexModelDiscoveryFromCassette(\"internal/harnesses/codex/testdata/model_surface\") returns a non-empty snapshot whose Models slice contains the current live set including gpt-5.4-nano if the live CLI exposes it.\n3) A focused unit test asserts the cassette parses and yields non-empty Models.\n4) go test ./internal/harnesses/codex/... -count=1 green.",
+    "parent": "fizeau-89eca738",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "harness:codex",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"ambiguous_scope: Bead describes a cohesive, well-defined task (record cassette, validate output, add tests) with clear acceptance criteria. However, success depends on multiple unvalidated assumptions: that cassette recording infrastructure (ReadCodexModelDiscoveryViaPTY, ReadCodexModelDiscoveryFromCassette) exists; that ADR-002 schema v1 is accessible and clearly defined; that codex CLI is available and usable in test context; that authentication mechanism is established; and that test dependencies (gpt-5.4-nano availability, schema format) are stable. The label 'no-static-fallback prerequisite' suggests blocking or dependency on fizeau-89eca738, but relationship is unclear. Execution is possible if these assumptions hold, but risks silent failures or blockers if they don't.\",\"fingerprint\":\"4a4c61c4c495026c402b5fc3d74cf2535cc4223730d9e55d287891592f499c0c\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-18T08:03:25.030714676Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        }
+      ],
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T080333-aa381233",
+    "prompt": ".ddx/executions/20260518T080333-aa381233/prompt.md",
+    "manifest": ".ddx/executions/20260518T080333-aa381233/manifest.json",
+    "result": ".ddx/executions/20260518T080333-aa381233/result.json",
+    "checks": ".ddx/executions/20260518T080333-aa381233/checks.json",
+    "usage": ".ddx/executions/20260518T080333-aa381233/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-0f3b7ab5-20260518T080333-aa381233"
+  },
+  "prompt_sha": "0bd0653f108ecd4d40e1c70fd334e573101c121b8cc3698836d537abbeeff529"
+}
