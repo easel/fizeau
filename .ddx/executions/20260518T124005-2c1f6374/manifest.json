@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260518T124005-2c1f6374",
+  "bead_id": "fizeau-775574b1",
+  "base_rev": "c7d7b4f42ab53567ab60819bab5f4951844c4d44",
+  "created_at": "2026-05-18T12:40:08.012982072Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-775574b1",
+    "title": "providers/config: add ThinkingWireFormatOpenAIEffort wire-format value",
+    "description": "PROBLEM: ADR-010 amendment (2026-05-11) §5'-7' requires a distinct wire-format value that serializes thinking control via the OpenAI 'effort' shape (reasoning_effort string), but no such constant exists. Providers that should round-trip to OpenAI-effort wire form currently have no enum to select against.\n\nROOT CAUSE: internal/config thinking-wire-format enum (the file declaring the existing ThinkingWireFormat* constants — locate via `grep -rn 'ThinkingWireFormat' internal/config`) defines the prior wire-format set but omits the OpenAIEffort variant called for in ADR-010 §5'.\n\nPROPOSED FIX: (a) Add `ThinkingWireFormatOpenAIEffort` to the wire-format enum alongside existing constants. (b) Implement its serializer/marshaler so the on-wire body is the OpenAI reasoning-effort shape (e.g. {\"reasoning_effort\":\"low|medium|high\"}). (c) Wire it into the wire-format String()/Parse() round-trip if those helpers exist. (d) Add a focused unit test `TestThinkingWireFormatOpenAIEffort_Serialize` asserting the produced JSON matches the OpenAI effort shape exactly.\n\nNON-SCOPE: llamaserver chat_template_kwargs envelope (separate child); reasoning-token telemetry fallback (separate child); changes to provider selection logic beyond enum registration; any new provider integrations; provider-side effort→thinking translation policy beyond what ADR-010 §5'-7' specifies.\n\nGoverning artifacts: ADR-010 amendment 2026-05-11 §5'-7'; AR-2026-05-17-repo; source review fizeau-8e37e536.\n\nVERIFICATION: `go test ./internal/config/... ./... -count=1` green; lefthook pre-commit and pre-push hooks pass.\n\nAC:\n1) `ThinkingWireFormatOpenAIEffort` constant exists in the thinking-wire-format enum and is exported.\n2) Test `TestThinkingWireFormatOpenAIEffort_Serialize` asserts the wire body uses the OpenAI `reasoning_effort` key.\n3) Test `TestThinkingWireFormat_RoundTrip` (or extension thereof) covers OpenAIEffort in any existing String/Parse round-trip helper.\n4) `go test ./... -count=1` passes.\n5) lefthook hooks pass.",
+    "acceptance": "1) ThinkingWireFormatOpenAIEffort is defined in the wire-format enum package and exported.\n2) TestThinkingWireFormatOpenAIEffort_Serialize asserts JSON body uses OpenAI reasoning_effort shape.\n3) TestThinkingWireFormat_RoundTrip covers OpenAIEffort if a round-trip helper exists; otherwise N/A noted in PR.\n4) go test ./... -count=1 green.\n5) lefthook pre-commit and pre-push pass.",
+    "parent": "fizeau-a5d07641",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T124005-2c1f6374",
+    "prompt": ".ddx/executions/20260518T124005-2c1f6374/prompt.md",
+    "manifest": ".ddx/executions/20260518T124005-2c1f6374/manifest.json",
+    "result": ".ddx/executions/20260518T124005-2c1f6374/result.json",
+    "checks": ".ddx/executions/20260518T124005-2c1f6374/checks.json",
+    "usage": ".ddx/executions/20260518T124005-2c1f6374/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-775574b1-20260518T124005-2c1f6374"
+  },
+  "prompt_sha": "85a154bdd649197d73482798310c074edc1f8a880c110b368208486269319202"
+}
