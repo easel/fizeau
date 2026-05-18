@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260518T114253-39b50617",
+  "bead_id": "fizeau-e3b9b921",
+  "base_rev": "a76977ac10bbde8b3fd335c8e865f9bf4df20570",
+  "created_at": "2026-05-18T11:43:02.803316488Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e3b9b921",
+    "title": "claude-tui/gate: billing-observation doc skeleton, methodology, decision rule",
+    "description": "PROBLEM: ADR-013 constraint #8 requires empirical billing evidence, but no methodology document exists to anchor the experiment. Without an upfront written method (model, prompt, account, single-account constraint, decision rule) the later measurements cannot be evaluated against a pre-registered standard.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md does not exist (file absent). ADR-013 at docs/helix/01-frame/adrs/ADR-013-*.md is in 're-proposed' status pending this evidence and cannot be promoted without a written method.\n\nPROPOSED FIX: Create docs/helix/02-design/billing-observation-claude-tui.md with sections: Model (recommend claude-sonnet-4-6 or claude-opus-4-7), Prompt (non-trivial coding task expected to produce 500-2000 output tokens, quoted verbatim), claude --version output, Operator Account Plan (Pro/Max/etc), Single-Account Constraint (no other claude-driven activity from same account during measurement window), /usage Refresh Delay note (with documented safety margin \u003e=60s), and Decision Rule mapping {subscription-confirmed, subscription-rejected, subscription-ambiguous} verdicts to the delta patterns defined in parent AC#7. Leave empty placeholder tables for --print and PTY+hooks measurement data to be filled by sibling beads.\n\nNON-SCOPE: Running the prompt, capturing /usage snapshots, computing deltas, writing verdict, modifying ADR-013, closing parent bead. Code changes outside docs/.\n\nAC:\n1) TestBillingObservationDocExists: docs/helix/02-design/billing-observation-claude-tui.md is present in tree.\n2) TestDocContainsModelPromptVersionAccount: doc contains the exact model id, the verbatim prompt, `claude --version` output, and operator account plan.\n3) TestDocContainsSingleAccountConstraint: doc has a 'Single-Account Constraint' section forbidding concurrent claude activity from the same account during the window.\n4) TestDocContainsRefreshDelayNote: doc documents /usage refresh-delay and the chosen post-completion wait (\u003e=60s).\n5) TestDocContainsDecisionRule: doc defines the verdict decision rule covering all three outcomes from parent AC#7.\n6) TestDocHasEmptyMeasurementPlaceholders: doc has labeled empty placeholders for --print and PTY+hooks data sections.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestBillingObservationDocExists\n2) TestDocContainsModelPromptVersionAccount\n3) TestDocContainsSingleAccountConstraint\n4) TestDocContainsRefreshDelayNote\n5) TestDocContainsDecisionRule\n6) TestDocHasEmptyMeasurementPlaceholders\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-a45dafe6",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T114253-39b50617",
+    "prompt": ".ddx/executions/20260518T114253-39b50617/prompt.md",
+    "manifest": ".ddx/executions/20260518T114253-39b50617/manifest.json",
+    "result": ".ddx/executions/20260518T114253-39b50617/result.json",
+    "checks": ".ddx/executions/20260518T114253-39b50617/checks.json",
+    "usage": ".ddx/executions/20260518T114253-39b50617/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e3b9b921-20260518T114253-39b50617"
+  },
+  "prompt_sha": "5476742ad042c93d3ecaa5d130393d6a6a7199c99ddb9eb28cec0341454cc448"
+}
