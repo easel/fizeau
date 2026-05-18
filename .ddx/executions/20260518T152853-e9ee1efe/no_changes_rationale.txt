@@ -1,0 +1,2 @@
+status: blocked
+reason: The required race gate is red in the base tree. `CGO_ENABLED=1 go test -race ./...` timed out after 10m and failed in unrelated packages (`service_aliveness_test.go`, `cmd/bench`, `internal/harnesses`) before this docs-only audit can be committed. `lefthook run pre-push` would include the same gate and is therefore blocked by the same upstream failures.
