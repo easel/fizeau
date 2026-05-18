@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "rules": [
+    "home-rewrite",
+    "path-normalization",
+    "env-allowlist"
+  ],
+  "hit_counts": {
+    "bearer-token": 0,
+    "api-key": 0
+  },
+  "env_allowlist": [
+    "HOME",
+    "PATH",
+    "TERM",
+    "LANG"
+  ],
+  "intentionally_preserved": []
+}

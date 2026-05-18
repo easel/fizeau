@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "model-surface-golden-master",
+  "content_digest": {
+    "sha256": "60477ca70aee2d90e6a7999faa965b94f6132bedd5d5393f565777bba478d763"
+  },
+  "harness": {
+    "name": "claude",
+    "binary_version": "0.0.1",
+    "account_class": "authenticated",
+    "captured_at": "2026-05-18T00:00:00Z",
+    "freshness_window": "24h"
+  },
+  "command": {
+    "argv": ["claude"],
+    "workdir_policy": "user_home",
+    "env_allowlist": ["HOME", "PATH", "TERM", "LANG"],
+    "timeout_ms": 30000,
+    "permission_mode": "test"
+  },
+  "terminal": {
+    "initial_rows": 50,
+    "initial_cols": 220,
+    "locale": "en_US.UTF-8",
+    "term": "xterm-256color",
+    "emulator": {
+      "name": "xterm",
+      "version": "1.0"
+    }
+  },
+  "timing": {
+    "resolution_ms": 100,
+    "clock_policy": "monotonic",
+    "replay_default": "collapsed"
+  },
+  "provenance": {
+    "git_sha": "58390a87",
+    "contract_version": "CONTRACT-004",
+    "os": "linux",
+    "arch": "amd64",
+    "recorded_at": "2026-05-18T08:07:34Z",
+    "recorder_version": "1.0.0"
+  }
+}

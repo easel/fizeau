@@ -1,0 +1,3 @@
+{"seq":7,"t_ms":600,"size":{"rows":50,"cols":220},"text":["❯ "],"cursor":{"row":0,"col":2},"raw_start":0,"raw_end":3,"parser_offset":3}
+{"seq":8,"t_ms":700,"size":{"rows":50,"cols":220},"text":["❯ /model","Select model","> Sonnet 4.6 (claude-sonnet-4-6)","  Opus 4.7 (claude-opus-4-7)","  Haiku 5.5 (claude-haiku-5-5)"],"cursor":{"row":4,"col":2},"raw_start":3,"raw_end":83,"parser_offset":83}
+{"seq":9,"t_ms":800,"size":{"rows":50,"cols":220},"text":["❯ /model","Select model","> Sonnet 4.6 (claude-sonnet-4-6)","  Opus 4.7 (claude-opus-4-7)","  Haiku 5.5 (claude-haiku-5-5)","❯ "],"cursor":{"row":5,"col":2},"raw_start":83,"raw_end":127,"parser_offset":127}
