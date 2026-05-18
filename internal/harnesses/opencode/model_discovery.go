@@ -16,6 +16,16 @@ const openCodeModelDiscoveryFreshnessWindow = 24 * time.Hour
 
 var opencodeModelLinePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[^\s]+$`)
 
+// testOpenCodeModelDiscovery returns a minimal discovery snapshot for testing.
+// It is not used in production code paths.
+func testOpenCodeModelDiscovery() harnesses.ModelDiscoverySnapshot {
+	return harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"minimal", "low", "medium", "high", "max"},
+		FreshnessWindow: openCodeModelDiscoveryFreshnessWindow.String(),
+	}
+}
+
 // openCodeModelCost captures the per-million-token prices printed by
 // `opencode models --verbose`.
 type openCodeModelCost struct {
@@ -41,17 +51,6 @@ type openCodeModelEvidence struct {
 	ToolCall     bool               `json:"tool_call"`
 	Attachment   bool               `json:"attachment"`
 	Variants     []string           `json:"variants,omitempty"`
-}
-
-func defaultOpenCodeModelDiscovery() harnesses.ModelDiscoverySnapshot {
-	return harnesses.ModelDiscoverySnapshot{
-		CapturedAt:      time.Now().UTC(),
-		Models:          []string{"opencode/gpt-5.4", "opencode/claude-sonnet-4-6"},
-		ReasoningLevels: []string{"minimal", "low", "medium", "high", "max"},
-		Source:          "compatibility-table:opencode-cli",
-		FreshnessWindow: openCodeModelDiscoveryFreshnessWindow.String(),
-		Detail:          "opencode models lists provider/model IDs; opencode models --verbose includes per-model costs and variants; opencode run --help documents -m/--model and --variant",
-	}
 }
 
 func readOpenCodeModelDiscovery(ctx context.Context, binary string, args ...string) (harnesses.ModelDiscoverySnapshot, error) {
@@ -96,7 +95,11 @@ func readOpenCodeVerboseModelEvidence(ctx context.Context, binary string, args .
 }
 
 func opencodeDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {
-	snapshot := defaultOpenCodeModelDiscovery()
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"minimal", "low", "medium", "high", "max"},
+		FreshnessWindow: openCodeModelDiscoveryFreshnessWindow.String(),
+	}
 	if source != "" {
 		snapshot.Source = source
 	}

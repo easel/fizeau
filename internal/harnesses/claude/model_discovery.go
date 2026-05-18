@@ -24,17 +24,6 @@ var (
 	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
 
-func defaultClaudeModelDiscovery() harnesses.ModelDiscoverySnapshot {
-	return harnesses.ModelDiscoverySnapshot{
-		CapturedAt:      time.Now().UTC(),
-		Models:          []string{"sonnet", "sonnet-4.6", "opus", "opus-4.7", "claude-sonnet-4-6"},
-		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
-		Source:          "cli-help:claude",
-		FreshnessWindow: ClaudeModelDiscoveryFreshnessWindow.String(),
-		Detail:          "claude --help documents --model aliases/full IDs and --effort levels; authenticated PTY /model evidence refreshes family alias versions",
-	}
-}
-
 func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
 	cfg := quotaPTYOptions{binary: "claude"}
 	for _, opt := range opts {
@@ -113,12 +102,25 @@ func readClaudeReasoningFromHelp(ctx context.Context, binary string, args ...str
 	return levels, nil
 }
 
+// testClaudeModelDiscovery returns a minimal discovery snapshot for testing.
+// It is not used in production code paths.
+func testClaudeModelDiscovery() harnesses.ModelDiscoverySnapshot {
+	return harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
+		FreshnessWindow: ClaudeModelDiscoveryFreshnessWindow.String(),
+	}
+}
+
 func claudeModelDiscoveryComplete(text string) bool {
 	return len(parseClaudeModels(text)) > 0
 }
 
 func claudeDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {
-	snapshot := defaultClaudeModelDiscovery()
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		FreshnessWindow: ClaudeModelDiscoveryFreshnessWindow.String(),
+	}
 	if source != "" {
 		snapshot.Source = source
 	}

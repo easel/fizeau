@@ -340,11 +340,23 @@ func setProcessGroup(cmd *osexec.Cmd) {
 	setProcessGroupAttr(cmd.SysProcAttr)
 }
 
-// DefaultModelSnapshot returns the compatibility-table fallback used when
-// live opencode CLI model discovery is unavailable. Implements
-// harnesses.ModelDiscoveryHarness.
+// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls
+// the live opencode models discovery helper with a sensible timeout; on failure,
+// returns a snapshot with empty Models and error detail.
 func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
-	return defaultOpenCodeModelDiscovery()
+	binary := r.Binary
+	if binary == "" {
+		binary = "opencode"
+	}
+	snapshot, err := readOpenCodeModelDiscovery(context.Background(), binary)
+	if err != nil {
+		return harnesses.ModelDiscoverySnapshot{
+			CapturedAt: time.Now().UTC(),
+			Source:     "cli-error",
+			Detail:     fmt.Sprintf("live opencode discovery failed: %v", err),
+		}
+	}
+	return snapshot
 }
 
 // SupportedAliases returns nil: opencode requires exact provider/model

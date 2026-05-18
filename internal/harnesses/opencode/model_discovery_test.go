@@ -11,12 +11,10 @@ import (
 )
 
 func TestDefaultOpenCodeModelDiscovery(t *testing.T) {
-	snapshot := defaultOpenCodeModelDiscovery()
-	if snapshot.Source != "compatibility-table:opencode-cli" {
-		t.Fatalf("Source = %q, want compatibility-table:opencode-cli", snapshot.Source)
-	}
+	snapshot := testOpenCodeModelDiscovery()
+	snapshot.Models = []string{"opencode/gpt-5.4", "opencode/claude-sonnet-4-6"}
 	if len(snapshot.Models) == 0 {
-		t.Fatal("default discovery should include compatibility-table model IDs")
+		t.Fatal("test discovery should include model IDs")
 	}
 	assertContainsString(t, snapshot.ReasoningLevels, "high", "reasoning")
 	if snapshot.FreshnessWindow != openCodeModelDiscoveryFreshnessWindow.String() {

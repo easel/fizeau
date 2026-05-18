@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -208,9 +209,24 @@ func readCodexAccountSnapshot(now time.Time) harnesses.AccountSnapshot {
 	return snap
 }
 
-// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.
+// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls
+// the live PTY discovery helper with a sensible timeout; on failure,
+// returns a snapshot with empty Models and error detail.
 func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
-	return defaultCodexModelDiscovery()
+	timeout := 10 * time.Second
+	var opts []QuotaPTYOption
+	if r.Binary != "" {
+		opts = append(opts, WithQuotaPTYCommand(r.Binary))
+	}
+	snapshot, err := ReadCodexModelDiscoveryViaPTY(timeout, opts...)
+	if err != nil {
+		return harnesses.ModelDiscoverySnapshot{
+			CapturedAt: time.Now().UTC(),
+			Source:     "pty-error",
+			Detail:     fmt.Sprintf("live PTY discovery failed: %v", err),
+		}
+	}
+	return snapshot
 }
 
 // ResolveModelAlias implements harnesses.ModelDiscoveryHarness. Returns

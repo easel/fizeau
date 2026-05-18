@@ -27,7 +27,7 @@ func TestParseClaudeModelsFromTUIVersionLabels(t *testing.T) {
 }
 
 func TestResolveClaudeFamilyAliasUsesLatestDiscoveredVersion(t *testing.T) {
-	snapshot := defaultClaudeModelDiscovery()
+	snapshot := testClaudeModelDiscovery()
 	snapshot.Models = []string{"opus", "opus-4.6", "opus-4.10", "opus-4.7", "sonnet-4.6"}
 
 	require.Equal(t, "opus-4.10", resolveClaudeFamilyAlias("opus", snapshot))

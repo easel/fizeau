@@ -115,12 +115,12 @@ func ProviderTypeUsesFixedBilling(providerType string) bool {
 }
 
 func SubprocessHarnessModelIDs(name string, cfg harnesses.HarnessConfig) []string {
-	models := append([]string(nil), cfg.Models...)
 	mdh, ok := builtin.New(name).(harnesses.ModelDiscoveryHarness)
 	if !ok {
-		return models
+		return nil
 	}
 	snapshot := mdh.DefaultModelSnapshot()
+	var models []string
 	models = AppendUniqueModelIDs(models, snapshot.Models...)
 	for _, family := range mdh.SupportedAliases() {
 		resolved, err := mdh.ResolveModelAlias(family, snapshot)

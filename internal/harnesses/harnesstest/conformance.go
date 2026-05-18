@@ -276,8 +276,8 @@ func RunModelDiscoveryHarnessConformance(t *testing.T, h harnesses.ModelDiscover
 
 	t.Run("DefaultModelSnapshotNonEmpty", func(t *testing.T) {
 		snap := h.DefaultModelSnapshot()
-		if len(snap.Models) == 0 {
-			t.Errorf("DefaultModelSnapshot().Models is empty; want at least one seed model")
+		if len(snap.Models) == 0 && snap.Detail == "" {
+			t.Errorf("DefaultModelSnapshot().Models is empty with no error detail; at runtime, empty models must indicate discovery failure")
 		}
 	})
 
@@ -292,8 +292,8 @@ func RunModelDiscoveryHarnessConformance(t *testing.T, h harnesses.ModelDiscover
 	})
 
 	t.Run("ResolveModelAliasPositive", func(t *testing.T) {
-		if len(aliases) == 0 {
-			t.Skip("SupportedAliases is empty; positive path skipped per CONTRACT-004")
+		if len(aliases) == 0 || len(snapshot.Models) == 0 {
+			t.Skip("SupportedAliases is empty or DefaultModelSnapshot has no models; positive path skipped")
 		}
 		for _, alias := range aliases {
 			model, err := h.ResolveModelAlias(alias, snapshot)

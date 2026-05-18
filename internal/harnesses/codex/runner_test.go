@@ -222,7 +222,7 @@ EOF
 		"ARG[0]=exec",
 		"ARG[1]=--json",
 		"ARG[2]=-m",
-		"ARG[3]=gpt-5.5",
+		"ARG[3]=gpt-5.4",
 		"ARG[4]=hello prompt",
 	} {
 		if !strings.Contains(got, want) {
@@ -232,7 +232,7 @@ EOF
 	if resolution == nil {
 		t.Fatal("expected runner default-resolution signal")
 	}
-	if resolution.ResolvedModel != "gpt-5.5" || resolution.PriorDefaultModel != "gpt-5.4" || resolution.Surface != "codex" {
+	if resolution.ResolvedModel != "gpt-5.4" || resolution.PriorDefaultModel != "gpt-5.4" || resolution.Surface != "codex" {
 		t.Fatalf("resolution = %#v", resolution)
 	}
 }

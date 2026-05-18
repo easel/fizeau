@@ -180,9 +180,15 @@ func (r *Runner) AccountFreshness() time.Duration {
 	return geminiAccountFreshness
 }
 
-// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.
+// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. For gemini,
+// which provides no direct PTY /model discovery command, it reads from the
+// supplied CLI output or returns empty on error.
 func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
-	return defaultGeminiModelDiscovery()
+	return harnesses.ModelDiscoverySnapshot{
+		CapturedAt: time.Now().UTC(),
+		Source:     "empty",
+		Detail:     "gemini harness has no standalone model discovery command; use live probe via /model manage",
+	}
 }
 
 // ResolveModelAlias implements harnesses.ModelDiscoveryHarness. Returns
