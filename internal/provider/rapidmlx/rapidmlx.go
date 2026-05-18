@@ -28,8 +28,9 @@ func init() {
 				Reasoning:    in.Reasoning,
 			})
 		},
-		DefaultBaseURL: DefaultBaseURL,
-		DefaultPort:    8000,
+		DefaultBaseURL:  DefaultBaseURL,
+		DefaultPort:     8000,
+		IntrospectionFn: Introspect,
 	})
 }
 

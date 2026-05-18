@@ -1,0 +1,23 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "qwen/qwen2.5-7b-instruct",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "vllm",
+      "root": "qwen/qwen2.5-7b-instruct",
+      "parent": null,
+      "permission": []
+    },
+    {
+      "id": "meta-llama/Llama-2-7b",
+      "object": "model",
+      "created": 1700000001,
+      "owned_by": "vllm",
+      "root": "meta-llama/Llama-2-7b",
+      "parent": null,
+      "permission": []
+    }
+  ]
+}

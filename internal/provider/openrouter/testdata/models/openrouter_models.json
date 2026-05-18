@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "id": "openai/gpt-4-turbo-preview",
+      "name": "OpenAI GPT-4 Turbo",
+      "description": "OpenAI's most advanced model",
+      "pricing": {
+        "prompt": "0.01",
+        "completion": "0.03"
+      },
+      "context_length": 128000,
+      "architecture_tokenizer": "cl100k_base",
+      "supported_parameters": [
+        "messages",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stream"
+      ]
+    },
+    {
+      "id": "qwen/qwen-3.6-27b",
+      "name": "Qwen 3.6 27B",
+      "description": "Alibaba Qwen 3.6 27B model",
+      "pricing": {
+        "prompt": "0.005",
+        "completion": "0.015"
+      },
+      "context_length": 128000,
+      "architecture_tokenizer": "cl100k_base",
+      "supported_parameters": [
+        "messages",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stream"
+      ]
+    }
+  ]
+}

@@ -35,7 +35,8 @@ func init() {
 				QuotaSignalObserver: in.QuotaSignalObserver,
 			})
 		},
-		DefaultBaseURL: DefaultBaseURL,
+		DefaultBaseURL:  DefaultBaseURL,
+		IntrospectionFn: Introspect,
 	})
 }
 

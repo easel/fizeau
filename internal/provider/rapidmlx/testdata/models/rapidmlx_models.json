@@ -1,0 +1,19 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "mlx-community/Qwen2.5-7B-Instruct-4bit",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "rapid-mlx",
+      "permission": []
+    },
+    {
+      "id": "mlx-community/Llama-2-7b-chat-mlx",
+      "object": "model",
+      "created": 1700000001,
+      "owned_by": "rapid-mlx",
+      "permission": []
+    }
+  ]
+}

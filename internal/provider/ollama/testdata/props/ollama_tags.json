@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "name": "llama2:7b",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "size": 3826087936,
+      "digest": "6f62caaeefbadffa2b5b1b39d7c66c3a7c7d8b9e"
+    },
+    {
+      "name": "neural-chat:7b",
+      "modified_at": "2024-01-02T00:00:00Z",
+      "size": 4018013184,
+      "digest": "9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c"
+    }
+  ]
+}
