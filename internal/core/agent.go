@@ -38,6 +38,10 @@ const (
 	RoleTool      Role = "tool"
 )
 
+// DefaultToolCallLoopPivotMessage is the default message injected when the agent
+// detects identical tool calls and has pivot budget available.
+const DefaultToolCallLoopPivotMessage = `You have been repeating the same action. Try a different approach, strategy, or set of parameters.`
+
 // TokenUsage tracks input and output token counts for the internal loop API.
 type TokenUsage struct {
 	Input      int `json:"input"`
@@ -217,6 +221,10 @@ const (
 	// Request.PlanningMode is enabled. Data: "plan" (string), "usage"
 	// (TokenUsage), "model" (string).
 	EventPlanningTurn EventType = "planning.turn"
+	// EventToolCallLoopPivot fires when the agent detects an identical tool-call
+	// loop and has pivot budget available. Data: "pivot_count" (int), "pivot_limit" (int),
+	// "fingerprint" (string).
+	EventToolCallLoopPivot EventType = "tool_call_loop.pivot"
 )
 
 // Event is a structured event emitted during a internal agent loop.
@@ -422,6 +430,19 @@ type Request struct {
 	// recent turn's known cost — a conservative-enough estimate for the gate
 	// without requiring per-model burn-rate modeling.
 	CostCapUSD float64
+
+	// ToolCallLoopPivotLimit is the maximum number of times the agent may pivot
+	// when detecting identical tool calls. When zero (default), the loop exhibits
+	// legacy behavior: abort immediately with ErrToolCallLoop. When > 0, the loop
+	// instead emits EventToolCallLoopPivot and injects ToolCallLoopPivotMessage
+	// as a user message to redirect the agent, repeating up to this limit.
+	// Per AC-FEAT-001-09, once the pivot count reaches this limit, the loop
+	// exits with ErrToolCallLoop.
+	ToolCallLoopPivotLimit int
+
+	// ToolCallLoopPivotMessage is the user message injected when pivoting.
+	// If empty, DefaultToolCallLoopPivotMessage is used.
+	ToolCallLoopPivotMessage string
 }
 
 // Result is the outcome of a internal agent loop.
@@ -487,6 +508,12 @@ type Result struct {
 	// from Request.CostCapUSD. Zero means no cap was configured. Surfaced so
 	// callers can render "cost: $X / cap $Y" without re-threading the request.
 	CostCapUSD float64 `json:"cost_cap_usd,omitempty"`
+
+	// ToolCallLoopPivots is the count of times the agent pivoted when detecting
+	// identical tool calls. Zero means the loop never hit the detection threshold,
+	// or the configuration disabled pivoting. Per AC-FEAT-001-09, when this count
+	// reaches Request.ToolCallLoopPivotLimit, the loop exits with ErrToolCallLoop.
+	ToolCallLoopPivots int `json:"tool_call_loop_pivots,omitempty"`
 }
 
 // CompactionResult holds the output of a internal compaction pass.

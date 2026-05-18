@@ -143,6 +143,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 	const toolCallLoopLimit = 5
 	var lastToolCallFingerprint string
 	consecutiveToolCallCount := 0
+	toolCallLoopPivotCount := 0
 
 	// Per-run cost cap state (FEAT-005 §26-29 / AC-FEAT-005-07). Zero or
 	// negative req.CostCapUSD disables the gate. lastTurnKnownCostUSD is the
@@ -892,7 +893,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			return result, compErr
 		}
 
-		// Detect identical consecutive tool-call turns and abort.
+		// Detect identical consecutive tool-call turns and handle via pivot or abort.
 		fp := toolCallFingerprint(resp.ToolCalls)
 		if fp == lastToolCallFingerprint {
 			consecutiveToolCallCount++
@@ -901,7 +902,53 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			lastToolCallFingerprint = fp
 		}
 		if consecutiveToolCallCount >= toolCallLoopLimit {
-			slog.Warn("tool-call loop: identical calls repeated, aborting", "count", consecutiveToolCallCount, "limit", toolCallLoopLimit)
+			// Check if we should pivot or abort.
+			if req.ToolCallLoopPivotLimit == 0 {
+				// Legacy behavior: abort immediately.
+				slog.Warn("tool-call loop: identical calls repeated, aborting", "count", consecutiveToolCallCount, "limit", toolCallLoopLimit)
+				result.Status = StatusError
+				result.Error = ErrToolCallLoop
+				result.Duration = time.Since(start)
+				snapshotMessages()
+				emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
+				return result, ErrToolCallLoop
+			}
+
+			// Pivot logic: check if we have pivot budget.
+			if toolCallLoopPivotCount < req.ToolCallLoopPivotLimit {
+				// Emit pivot event.
+				toolCallLoopPivotCount++
+				result.ToolCallLoopPivots = toolCallLoopPivotCount
+				emitCallback(req.Callback, Event{
+					SessionID: sessionID,
+					Seq:       seq,
+					Type:      EventToolCallLoopPivot,
+					Timestamp: time.Now().UTC(),
+					Data: mustMarshal(map[string]any{
+						"pivot_count": toolCallLoopPivotCount,
+						"pivot_limit": req.ToolCallLoopPivotLimit,
+						"fingerprint": fp,
+					}),
+				})
+				seq++
+
+				// Inject pivot message.
+				pivotMsg := req.ToolCallLoopPivotMessage
+				if pivotMsg == "" {
+					pivotMsg = DefaultToolCallLoopPivotMessage
+				}
+				messages = append(messages, Message{Role: RoleUser, Content: pivotMsg})
+
+				// Reset the loop detector.
+				consecutiveToolCallCount = 0
+				lastToolCallFingerprint = ""
+
+				slog.Warn("tool-call loop: pivoting", "pivot_count", toolCallLoopPivotCount, "pivot_limit", req.ToolCallLoopPivotLimit)
+				continue
+			}
+
+			// Pivot budget exhausted: abort.
+			slog.Warn("tool-call loop: pivot budget exhausted, aborting", "pivot_count", toolCallLoopPivotCount, "pivot_limit", req.ToolCallLoopPivotLimit)
 			result.Status = StatusError
 			result.Error = ErrToolCallLoop
 			result.Duration = time.Since(start)
