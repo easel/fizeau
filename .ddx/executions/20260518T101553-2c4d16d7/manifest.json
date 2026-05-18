@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260518T101553-2c4d16d7",
+  "bead_id": "fizeau-dff2598f",
+  "base_rev": "8d252296c355f5743388109da60cd7c2acfbd9a4",
+  "created_at": "2026-05-18T10:15:57.734108984Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dff2598f",
+    "title": "claude-tui: scaffold package, extract anthropic neutral helpers, wire dispatcher",
+    "description": "PROBLEM: No claude-tui harness package exists. CONTRACT-004 mandates a neutral shared package (internal/harnesses/anthropic/) that both claude and claude-tui import, with neither importing the other; the dispatcher must recognize the new harness with zero other service-side changes.\n\nROOT CAUSE:\n- internal/harnesses/claude/ currently owns shared Anthropic-CLI helpers (ModelSnapshot types, billing-observation primitives, output parsers) that claude-tui will need; CONTRACT-004 forbids claude-tui from importing claude or vice versa.\n- internal/serviceimpl/execute_dispatch.go has no case for harness=\"claude-tui\".\n- internal/build/harnessimports lint rule has no awareness of the new package and would not catch a future service*.go leak.\n- Harness registry has no claude-tui entry, so even a stub would not be discoverable.\n\nPROPOSED FIX:\n1. Create internal/harnesses/anthropic/ neutral package. Move shared types (ModelSnapshot, billing-observation primitives, CLI output parsers) out of internal/harnesses/claude/ into anthropic/. Update claude/ imports. Forbid anthropic/ from importing either claude or claude-tui.\n2. Create internal/harnesses/claude-tui/ skeleton package: type Harness struct with stub methods returning a sentinel ErrNotYetImplemented; assert at compile time it satisfies harnesses.Harness, harnesses.QuotaHarness, harnesses.AccountHarness, harnesses.ModelDiscoveryHarness via var _ T = (*Harness)(nil).\n3. Register claude-tui in the harness registry with empty BaseArgs, empty PermissionArgs, empty ModelFlag, empty ReasoningFlag, empty WorkDirFlag, IsSubscription=true, AutoRoutingEligible=false.\n4. Add the claude-tui case to internal/serviceimpl/execute_dispatch.go; touch no other service-side file.\n5. Update internal/build/harnessimports to include claude-tui in its allow-list rules.\n\nNON-SCOPE:\n- Real PTY-driven turn execution and intermediate ProgressEvents (child #2).\n- Live ModelDiscoveryHarness snapshot and no-static-fallback enforcement (child #3).\n- Capability baseline rows, evidence IDs, ADR-013 promotion (child #4).\n- Service-side changes beyond the single dispatcher case.\n- Modifying existing claude harness behavior beyond import path updates.\n- Cross-importing claude\u003c-\u003eclaude-tui (forbidden by CONTRACT-004).\n\nGoverning artifacts: ADR-013, CONTRACT-004, AR-2026-05-17-repo, plan-2026-05-14-harness-interface-refactor.",
+    "acceptance": "1) TestClaudeTuiInterfaceConformance asserts (*claudetui.Harness)(nil) satisfies harnesses.Harness, harnesses.QuotaHarness, harnesses.AccountHarness, and harnesses.ModelDiscoveryHarness via compile-time var _ assertions.\n2) TestAnthropicNeutralPackageBoundary uses a static import check to assert internal/harnesses/claude does not import internal/harnesses/claude-tui, claude-tui does not import claude, both import internal/harnesses/anthropic, and anthropic imports neither.\n3) TestDispatcherRecognizesClaudeTui asserts internal/serviceimpl/execute_dispatch.go routes harness=\"claude-tui\" to the claude-tui constructor and that diff against main shows no other service-side file changed.\n4) TestHarnessImportsLintClaudeTui asserts internal/build/harnessimports passes and that no service*.go file imports internal/harnesses/claude-tui beyond the runner-constructor seam.\n5) TestClaudeTuiRegistryEntry asserts the registry returns BaseArgs=nil/empty, PermissionArgs=nil/empty, ModelFlag=\"\", ReasoningFlag=\"\", WorkDirFlag=\"\", IsSubscription=true, AutoRoutingEligible=false.\n6) go test ./... -count=1 is green.\n7) lefthook run pre-commit is green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:CONTRACT-004"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T101553-2c4d16d7",
+    "prompt": ".ddx/executions/20260518T101553-2c4d16d7/prompt.md",
+    "manifest": ".ddx/executions/20260518T101553-2c4d16d7/manifest.json",
+    "result": ".ddx/executions/20260518T101553-2c4d16d7/result.json",
+    "checks": ".ddx/executions/20260518T101553-2c4d16d7/checks.json",
+    "usage": ".ddx/executions/20260518T101553-2c4d16d7/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dff2598f-20260518T101553-2c4d16d7"
+  },
+  "prompt_sha": "687aeb087630c306e3bd713469bb49e28ea8901af9d2a3680814fcf14a776829"
+}
