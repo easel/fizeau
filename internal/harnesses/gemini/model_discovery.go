@@ -17,21 +17,22 @@ var (
 	geminiMajorPattern        = regexp.MustCompile(`^gemini-[0-9]+(?:[.-][0-9]+)?$`)
 )
 
-func defaultGeminiModelDiscovery() harnesses.ModelDiscoverySnapshot {
+// testGeminiModelDiscovery returns a minimal discovery snapshot for testing.
+// It is not used in production code paths.
+func testGeminiModelDiscovery() harnesses.ModelDiscoverySnapshot {
 	return harnesses.ModelDiscoverySnapshot{
 		CapturedAt:      time.Now().UTC(),
-		Models:          []string{"gemini", "gemini-2.5", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"},
-		ReasoningLevels: nil,
-		Source:          "bundled:gemini-cli",
 		FreshnessWindow: GeminiModelDiscoveryFreshnessWindow.String(),
-		Detail:          "Gemini CLI model IDs are extracted from supplied CLI/API or bundled model-surface output; the harness exposes no stable per-request reasoning control",
 	}
 }
 
 // ModelDiscoveryFromText extracts Gemini model IDs from caller-provided CLI
 // output without assuming a current default model list.
 func ModelDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {
-	snapshot := defaultGeminiModelDiscovery()
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		FreshnessWindow: GeminiModelDiscoveryFreshnessWindow.String(),
+	}
 	if source == "" {
 		source = "cli-output:gemini"
 	}

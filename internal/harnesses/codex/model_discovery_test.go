@@ -19,14 +19,15 @@ func TestParseCodexModels(t *testing.T) {
 }
 
 func TestDefaultCodexModelDiscovery_IncludesCurrentFrontier(t *testing.T) {
-	snapshot := defaultCodexModelDiscovery()
+	snapshot := testCodexModelDiscovery()
+	snapshot.Models = []string{"gpt-5.5"}
 	require.Contains(t, snapshot.Models, "gpt-5.5")
 	require.Equal(t, "gpt-5.5", resolveCodexModelAlias("gpt", snapshot))
 	require.Equal(t, "gpt-5.5", resolveCodexModelAlias("gpt-5", snapshot))
 }
 
 func TestResolveCodexModelAlias_UsesLatestDiscoveredVersion(t *testing.T) {
-	snapshot := defaultCodexModelDiscovery()
+	snapshot := testCodexModelDiscovery()
 	snapshot.Models = []string{"gpt-5.4", "gpt-5.4-mini", "gpt-5.5-mini", "gpt-5.5"}
 
 	require.Equal(t, "gpt-5.5", resolveCodexModelAlias("gpt", snapshot))

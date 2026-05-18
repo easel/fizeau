@@ -12,7 +12,6 @@ type HarnessConfig struct {
 	PermissionArgs      map[string][]string // extra args keyed by permission level: "safe", "supervised", "unrestricted"
 	PromptMode          string              // "arg" (final arg), "stdin" (pipe)
 	DefaultModel        string              // built-in model choice when no config override exists
-	Models              []string            // known valid models for this harness
 	ReasoningLevels     []string            // supported reasoning levels in preference order
 	MaxReasoningTokens  int                 // numeric reasoning budget max; 0 = unsupported/unknown
 	ModelFlag           string              // flag for model override (e.g. "-m", "--model"), empty if unsupported

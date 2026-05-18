@@ -17,8 +17,7 @@ var builtinHarnesses = map[string]HarnessConfig{
 			"unrestricted": {"--dangerously-bypass-approvals-and-sandbox"},
 		},
 		PromptMode:          "arg",
-		DefaultModel:        "gpt-5.5",
-		Models:              []string{"gpt", "gpt-5", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"}, // refreshed by Codex PTY model-discovery cassettes
+		DefaultModel:        "gpt-5.4",
 		ReasoningLevels:     []string{"low", "medium", "high", "xhigh", "max"},
 		ModelFlag:           "-m",
 		WorkDirFlag:         "-C",
@@ -48,8 +47,7 @@ var builtinHarnesses = map[string]HarnessConfig{
 			"unrestricted": {"--permission-mode", "bypassPermissions", "--dangerously-skip-permissions"},
 		},
 		PromptMode:          "arg",
-		DefaultModel:        "opus-4.7",
-		Models:              []string{"sonnet", "sonnet-4.6", "opus", "opus-4.7", "claude-sonnet-4-6"}, // from claude --help plus PTY /model discovery
+		DefaultModel:        "claude-sonnet-4-6",
 		ReasoningLevels:     []string{"low", "medium", "high", "xhigh", "max"},
 		ModelFlag:           "--model",
 		WorkDirFlag:         "",
@@ -69,7 +67,6 @@ var builtinHarnesses = map[string]HarnessConfig{
 		BaseArgs:     []string{"--output-format", "stream-json"},
 		PromptMode:   "arg",
 		DefaultModel: "gemini-2.5-flash",
-		Models:       []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"},
 		PermissionArgs: map[string][]string{
 			"safe":         {"--approval-mode", "plan"},
 			"supervised":   {"--approval-mode", "default"},
@@ -98,7 +95,6 @@ var builtinHarnesses = map[string]HarnessConfig{
 		},
 		PromptMode:      "arg",
 		DefaultModel:    "opencode/gpt-5.4",
-		Models:          []string{"opencode/gpt-5.4", "opencode/claude-sonnet-4-6"},
 		ReasoningLevels: []string{"minimal", "low", "medium", "high", "max"},
 		ModelFlag:       "-m",
 		WorkDirFlag:     "--dir",
@@ -128,7 +124,6 @@ var builtinHarnesses = map[string]HarnessConfig{
 		BaseArgs:        []string{"--mode", "json", "--print"},
 		PromptMode:      "arg",
 		DefaultModel:    "gemini-2.5-flash",
-		Models:          []string{"gemini-2.5-flash", "gemini-2.5-pro"},
 		ModelFlag:       "--model",
 		ReasoningFlag:   "--thinking",
 		ReasoningLevels: []string{"minimal", "low", "medium", "high", "xhigh"},

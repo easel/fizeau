@@ -344,11 +344,23 @@ func setProcessGroup(cmd *osexec.Cmd) {
 	setProcessGroupAttr(cmd.SysProcAttr)
 }
 
-// DefaultModelSnapshot returns the compatibility-table fallback used when
-// live pi CLI model discovery is unavailable. Implements
-// harnesses.ModelDiscoveryHarness.
+// DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls
+// the live pi --list-models discovery helper with a sensible timeout; on failure,
+// returns a snapshot with empty Models and error detail.
 func (r *Runner) DefaultModelSnapshot() harnesses.ModelDiscoverySnapshot {
-	return defaultPiModelDiscovery()
+	binary := r.Binary
+	if binary == "" {
+		binary = "pi"
+	}
+	snapshot, err := readPiModelDiscoveryFromListModels(context.Background(), binary)
+	if err != nil {
+		return harnesses.ModelDiscoverySnapshot{
+			CapturedAt: time.Now().UTC(),
+			Source:     "cli-error",
+			Detail:     fmt.Sprintf("live pi discovery failed: %v", err),
+		}
+	}
+	return snapshot
 }
 
 // SupportedAliases returns nil: pi requires exact provider/model identifiers

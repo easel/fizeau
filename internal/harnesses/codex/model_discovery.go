@@ -17,17 +17,6 @@ const CodexModelDiscoveryFreshnessWindow = 24 * time.Hour
 
 var codexModelPattern = regexp.MustCompile(`\bgpt-[A-Za-z0-9][A-Za-z0-9._-]*\b`)
 
-func defaultCodexModelDiscovery() harnesses.ModelDiscoverySnapshot {
-	return harnesses.ModelDiscoverySnapshot{
-		CapturedAt:      time.Now().UTC(),
-		Models:          []string{"gpt", "gpt-5", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"},
-		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
-		Source:          "compatibility-table:codex-cli",
-		FreshnessWindow: CodexModelDiscoveryFreshnessWindow.String(),
-		Detail:          "codex CLI exposes exact model pins with -m/--model; model IDs are refreshed by authenticated PTY record tests",
-	}
-}
-
 func ReadCodexModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
 	cfg := quotaPTYOptions{binary: "codex", args: []string{"--no-alt-screen"}}
 	for _, opt := range opts {
@@ -88,12 +77,26 @@ func ReadCodexModelDiscoveryFromCassette(dir string) (harnesses.ModelDiscoverySn
 	return snapshot, nil
 }
 
+// testCodexModelDiscovery returns a minimal discovery snapshot for testing.
+// It is not used in production code paths.
+func testCodexModelDiscovery() harnesses.ModelDiscoverySnapshot {
+	return harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
+		FreshnessWindow: CodexModelDiscoveryFreshnessWindow.String(),
+	}
+}
+
 func codexModelDiscoveryComplete(text string) bool {
 	return len(parseCodexModels(text)) > 0
 }
 
 func codexDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {
-	snapshot := defaultCodexModelDiscovery()
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
+		FreshnessWindow: CodexModelDiscoveryFreshnessWindow.String(),
+	}
 	if source != "" {
 		snapshot.Source = source
 	}

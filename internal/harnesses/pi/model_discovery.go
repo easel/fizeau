@@ -14,19 +14,6 @@ const piModelDiscoveryFreshnessWindow = 24 * time.Hour
 
 var piDefaultModelPattern = regexp.MustCompile(`(?i)--model\s+<id>.*\(default:\s*([^)]+)\)`)
 
-// defaultPiModelDiscovery returns the compatibility-table fallback used when
-// live pi CLI model discovery is unavailable.
-func defaultPiModelDiscovery() harnesses.ModelDiscoverySnapshot {
-	return harnesses.ModelDiscoverySnapshot{
-		CapturedAt:      time.Now().UTC(),
-		Models:          []string{"gemini-2.5-flash"},
-		ReasoningLevels: []string{"off", "minimal", "low", "medium", "high", "xhigh"},
-		Source:          "compatibility-table:pi-cli",
-		FreshnessWindow: piModelDiscoveryFreshnessWindow.String(),
-		Detail:          "pi --help documents --model, --list-models, and --thinking levels; --list-models can refresh the concrete model table without invoking a model",
-	}
-}
-
 // readPiModelDiscoveryFromHelp captures the stable pi --help surface. Help
 // exposes the default model and thinking levels without requiring credentials.
 func readPiModelDiscoveryFromHelp(ctx context.Context, binary string, args ...string) (harnesses.ModelDiscoverySnapshot, error) {
@@ -66,10 +53,14 @@ func readPiModelDiscoveryFromListModels(ctx context.Context, binary string, args
 	if len(models) == 0 {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("pi list models did not expose any models")
 	}
-	snapshot := defaultPiModelDiscovery()
-	snapshot.Models = models
-	snapshot.Source = "cli:list-models"
-	snapshot.Detail = "pi --list-models returned a concrete provider/model table; thinking levels come from the documented --thinking CLI surface"
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		Models:          models,
+		Source:          "cli:list-models",
+		ReasoningLevels: []string{"off", "minimal", "low", "medium", "high", "xhigh"},
+		FreshnessWindow: piModelDiscoveryFreshnessWindow.String(),
+		Detail:          "pi --list-models returned a concrete provider/model table; thinking levels come from the documented --thinking CLI surface",
+	}
 	return snapshot, nil
 }
 
@@ -102,15 +93,23 @@ func readPiModelDiscoveryFromListModelsForProviders(ctx context.Context, binary 
 	if len(models) == 0 {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("pi list models did not expose any models for providers %v", providers)
 	}
-	snapshot := defaultPiModelDiscovery()
-	snapshot.Models = models
-	snapshot.Source = "cli:list-models:providers"
-	snapshot.Detail = "pi --list-models filtered to configured providers; thinking levels come from the documented --thinking CLI surface"
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		Models:          models,
+		Source:          "cli:list-models:providers",
+		ReasoningLevels: []string{"off", "minimal", "low", "medium", "high", "xhigh"},
+		FreshnessWindow: piModelDiscoveryFreshnessWindow.String(),
+		Detail:          "pi --list-models filtered to configured providers; thinking levels come from the documented --thinking CLI surface",
+	}
 	return snapshot, nil
 }
 
 func piDiscoveryFromHelp(text, source string) harnesses.ModelDiscoverySnapshot {
-	snapshot := defaultPiModelDiscovery()
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		ReasoningLevels: []string{"off", "minimal", "low", "medium", "high", "xhigh"},
+		FreshnessWindow: piModelDiscoveryFreshnessWindow.String(),
+	}
 	if source != "" {
 		snapshot.Source = source
 	}

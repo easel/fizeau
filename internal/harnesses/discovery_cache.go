@@ -80,23 +80,7 @@ func CachedModelDiscoverySnapshot(harnessName, source string) (ModelDiscoverySna
 }
 
 func LoadEmbeddedModelDiscoverySnapshot(harnessName, source string) (ModelDiscoverySnapshot, error) {
-	cfg, ok := NewRegistry().Get(harnessName)
-	if !ok {
-		return ModelDiscoverySnapshot{}, fmt.Errorf("unknown harness %q", harnessName)
-	}
-	if len(cfg.Models) == 0 {
-		return ModelDiscoverySnapshot{}, fmt.Errorf("harness %q has no embedded model discovery snapshot", harnessName)
-	}
-	if source == "" {
-		source = EmbeddedDiscoverySource
-	}
-	return ModelDiscoverySnapshot{
-		CapturedAt:      time.Now().UTC(),
-		Models:          append([]string(nil), cfg.Models...),
-		ReasoningLevels: append([]string(nil), cfg.ReasoningLevels...),
-		Source:          source,
-		Detail:          "embedded registry snapshot refreshed by model-discovery cassette tests",
-	}, nil
+	return ModelDiscoverySnapshot{}, fmt.Errorf("embedded model discovery is not supported; harness discovery is live-only via PTY")
 }
 
 type RunnerModelResolution struct {

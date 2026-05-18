@@ -395,7 +395,7 @@ func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, p
 		// concrete model validation in that case.
 		return provider != ""
 	default:
-		return len(cfg.Models) == 0
+		return false
 	}
 }
 
