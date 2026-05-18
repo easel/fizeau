@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260518T115837-337b789f",
+  "bead_id": "fizeau-48a861f2",
+  "base_rev": "997c9baa8a73f55b9832b536b862f522cb8a74b8",
+  "created_at": "2026-05-18T11:59:03.239905306Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-48a861f2",
+    "title": "claude-tui/gate: capture /usage deltas for PTY+hooks mode (3 runs)",
+    "description": "PROBLEM: ADR-013's economic premise asserts PTY+hooks-driven Claude consumes subscription quota. No empirical /usage deltas have been captured for PTY mode, so the subscription-consumption claim is unverified.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md has an empty 'PTY+hooks mode measurements' placeholder; no /usage snapshots exist for this mode.\n\nPROPOSED FIX: Using the same model, prompt, account, and refresh-delay defined in the methodology doc (and the same authenticated account used for --print measurements), drive Claude via the PTY+hooks harness three times. For each run capture: /usage snapshot BEFORE, full turn output, /usage snapshot AFTER (\u003e=60s post-completion). Append all 6 /usage snapshots + 3 turn outputs to the 'PTY+hooks mode measurements' section of docs/helix/02-design/billing-observation-claude-tui.md. Record wall-clock timestamps. Ensure no overlap with the --print measurement window.\n\nNON-SCOPE: --print measurements, delta computation, verdict determination, ADR-013 disposition, methodology authoring.\n\nAC:\n1) TestPtyModeHasThreeRuns: doc's PTY+hooks section contains exactly 3 labeled runs.\n2) TestPtyModeBeforeAfterSnapshots: each PTY run has BEFORE and AFTER /usage snapshot blocks (6 total).\n3) TestPtyModeTurnOutputsRecorded: each PTY run has captured turn output.\n4) TestPtyModeSnapshotTimestamps: every snapshot has a wall-clock timestamp.\n5) TestPtyModeAfterRespectsRefreshDelay: each AFTER snapshot timestamp is \u003e= completion-time + documented refresh-delay safety margin.\n6) TestPtyModeSingleAccountAttested: doc attests no concurrent claude activity from same account during the PTY window AND windows do not overlap --print window.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestPtyModeHasThreeRuns\n2) TestPtyModeBeforeAfterSnapshots\n3) TestPtyModeTurnOutputsRecorded\n4) TestPtyModeSnapshotTimestamps\n5) TestPtyModeAfterRespectsRefreshDelay\n6) TestPtyModeSingleAccountAttested\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-a45dafe6",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T11:58:34.608866387Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T115651-8149e425\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":84801,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:58:34.769416604Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T115837-337b789f",
+    "prompt": ".ddx/executions/20260518T115837-337b789f/prompt.md",
+    "manifest": ".ddx/executions/20260518T115837-337b789f/manifest.json",
+    "result": ".ddx/executions/20260518T115837-337b789f/result.json",
+    "checks": ".ddx/executions/20260518T115837-337b789f/checks.json",
+    "usage": ".ddx/executions/20260518T115837-337b789f/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-48a861f2-20260518T115837-337b789f"
+  },
+  "prompt_sha": "94dbdb5e0975634080a14e363e6e648d6c07ae709dace5a566fb2e089e72cf32"
+}
