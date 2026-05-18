@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260518T133224-a7b6b50a",
+  "bead_id": "fizeau-e0dabfc9",
+  "base_rev": "381e1e1792e26c3cd534c86fc7597b6b1261b7a0",
+  "created_at": "2026-05-18T13:32:25.826298468Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e0dabfc9",
+    "title": "installer: add CI-runnable shell integration test for install.sh (rc-file idempotency, PATH update, retry)",
+    "description": "AR-2026-05-17-repo finding. FEAT-007 AC-04/05/06 mention shell-based acceptance tests, but only Go unit tests for the update binary exist. Add a CI-runnable shell harness that exercises install.sh against a clean PATH and asserts: artifact selection per platform/arch, idempotent PATH update (bash/zsh/fish), and safe re-run.\n\nSource review: fizeau-5b2a8950.",
+    "acceptance": "1) A scripts/install/test-install.sh (or equivalent under tests/) runs install.sh against an isolated HOME and FIZEAU_INSTALL_DIR.\n2) Assertions cover: binary lands at FIZEAU_INSTALL_DIR, rc-file mutation is idempotent across bash/zsh/fish, re-run does not duplicate PATH entries.\n3) The script runs in CI on linux+darwin matrices (or is invoked from an existing workflow).",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:installer",
+      "spec:FEAT-007",
+      "discovered-from:fizeau-5b2a8950"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-007",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:12Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-007",
+      "path": "docs/helix/01-frame/features/FEAT-007-self-update-and-installer.md",
+      "title": "Feature Specification: FEAT-007 — Self-Update and Installer"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T133224-a7b6b50a",
+    "prompt": ".ddx/executions/20260518T133224-a7b6b50a/prompt.md",
+    "manifest": ".ddx/executions/20260518T133224-a7b6b50a/manifest.json",
+    "result": ".ddx/executions/20260518T133224-a7b6b50a/result.json",
+    "checks": ".ddx/executions/20260518T133224-a7b6b50a/checks.json",
+    "usage": ".ddx/executions/20260518T133224-a7b6b50a/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-e0dabfc9-20260518T133224-a7b6b50a"
+  },
+  "prompt_sha": "dd5248bf735d814724366d660b34ecd3c747ac4a4b0fe9a0aacfc82a85676fe9"
+}
