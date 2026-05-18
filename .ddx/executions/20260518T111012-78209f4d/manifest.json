@@ -1,0 +1,168 @@
+{
+  "attempt_id": "20260518T111012-78209f4d",
+  "bead_id": "fizeau-8a5e74f0",
+  "base_rev": "5019ffe6a4f8876d0104eb124f81fcfbaf7f8814",
+  "created_at": "2026-05-18T11:11:00.585626321Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-8a5e74f0",
+    "title": "bench-pr-A3: concurrency-group flock + SIGTERM/SIGINT + in-flight.json + budget enforcement + Go-runner deactivation",
+    "description": "PROBLEM: Three runtime concerns must layer onto the A2 bash runner: (a) per-concurrency-group serialization so a host doesn't double-book exclusive runtimes; (b) graceful interruption that doesn't orphan harbor-runner Docker containers; (c) cost cap with a typed placeholder when hit. Also: the legacy Go runner at cmd/bench must redirect users to ./benchmark so duplicate execution paths don't coexist.\n\nROOT CAUSE:\n  - No flock primitive in A2 — concurrent sweeps on the same host race on exclusive GPU/runtime resources.\n  - A2's per-cell loop does not trap signals; SIGTERM to the runner leaks `docker run` children with no chance to mark cells.\n  - A2 has no cost tally; profiles with a `pricing` block produce reports but no enforcement.\n  - cmd/bench/main.go still routes `matrix|sweep|run|plan` into the Go runner whose Python coupling was the reason for the rewrite. Coexistence invites drift.\n\nPROPOSED FIX:\n  1. Concurrency-group flock: per cell, `flock $FIZEAU_BENCH_STATE_DIR/locks/\u003cgroup\u003e.lock` around the cell process. State dir defaults to ${XDG_CACHE_HOME:-$HOME/.cache}/fizeau-benchmark; overridable via FIZEAU_BENCH_STATE_DIR.\n  2. --jobs N background-job pool with bash job control + wait -n; bounded by N (default 1).\n  3. setsid per cell process group so docker children belong to a killable group.\n  4. Signal handling: `trap _on_signal SIGINT SIGTERM`. On signal: stop accepting new cells; for each in-flight cell, SIGTERM its process group AND `docker stop` any harbor-runner container tagged with the cell-id label; wait up to 30s; SIGKILL stragglers. Write final_status=interrupted (process_outcome=killed, no metrics) into each in-flight cell. Exit non-zero.\n  5. in-flight.json at $FIZEAU_BENCH_STATE_DIR/\u003chostname\u003e/in-flight.json. Under flock: append {cell_id,pid,started_at} at cell start; remove at close. On read, prune entries whose PID is dead.\n  6. Budget: at cell close, compute cost_usd_at_run_time = profile.pricing × token streams from report.json. Accumulate into \u003cout\u003e/budget.json {total_usd, by_cell:[{cell_id,cost_usd}]}. Before scheduling next cell, if total_usd + max_estimated_next_cost \u003e --max-cost-usd, halt. Skipped cells written as placeholder reports with final_status=budget_halted, process_outcome=setup_failed, note=\"budget cap reached\".\n  7. cmd/bench/main.go: replace `matrix|sweep|run|plan` subcommand bodies with a one-line redirect to ./scripts/benchmark/benchmark and exit 2. Listing subcommands (profiles, bench-sets) remain functional until PR F.\n\nNON-SCOPE (preserved from parent):\n  - cell-report.schema.json (PR B); bench-set schema (PR C)\n  - Node collector/importers (PR D/E); deleting cmd/bench (PR F); docs (PR G)\n  - Harbor image, shell adapters, agent-leak fix (A1)\n  - Bash runner core, --plan, report.json composition (A2)\n  - Parity fixtures + diff.sh (A4)\n\nGOVERNING: plan-2026-05-15-benchmark-runner-simplification. Depends on A2 (runner skeleton).\n\nACCEPTANCE:\n  1. TestBenchMainRedirectsExecutionSubcommands (cmd/bench/main_test.go): exec `go run ./cmd/bench matrix`; expect exit code 2 and stderr containing `use ./benchmark`. Repeat for sweep, run, plan. `go test ./cmd/bench/... -run TestBenchMainRedirectsExecutionSubcommands`. (Parent AC6.)\n  2. test_runner_signals.sh::test_sigterm_marks_interrupted_and_stops_containers: spawn `./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --jobs 1 \u0026`; sleep 5; `kill -TERM $!`; wait. Assert: runner exit code != 0; in-flight cells' report.json has final_status==\"interrupted\" and process_outcome==\"killed\"; `docker ps -q --filter ancestor=fizeau-harbor-runner` is empty. (Parent AC5.)\n  3. test_runner_signals.sh::test_sigint_same_behavior: same as #2 with SIGINT.\n  4. test_runner_concurrency.sh::test_concurrency_group_flock_serializes: two `./benchmark --profile sindri-lucebox …` invocations sharing a concurrency-group lock; second waits until first releases. Verify by timestamp ordering in cell reports.\n  5. test_runner_concurrency.sh::test_in_flight_json_tracks_cells: during a sweep, $FIZEAU_BENCH_STATE_DIR/\u003chostname\u003e/in-flight.json lists each running cell; entries removed at close; stale-PID entries pruned on next read.\n  6. test_runner_budget.sh::test_max_cost_usd_produces_budget_halted: `./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01`; at least one cell exists with final_status==\"budget_halted\", process_outcome==\"setup_failed\", note field populated. \u003cout\u003e/budget.json total_usd ≤ 0.01 + last_completed_cell_cost. (Parent AC3.)\n  7. test_runner_budget.sh::test_budget_json_accumulates: budget.json by_cell sum equals total_usd; field types validated.\n  8. `fiz-bench matrix 2\u003e\u00261 | grep -q 'use ./benchmark'` returns 0. (Parent AC6 shell variant.)\n\nGATES: `go test ./...` green; `lefthook run pre-commit` green; `bash scripts/benchmark/test/run.sh`.",
+    "acceptance": "All 8 ACs pass; satisfies parent AC3, AC5, AC6; go test + lefthook gates green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "subpart:A3"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-17T20:59:22.771039133Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260517T203908-8dd4e1ef\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":744,\"output_tokens\":29876,\"total_tokens\":30620,\"cost_usd\":1.4145985000000003,\"duration_ms\":1207941,\"exit_code\":0}",
+          "created_at": "2026-05-17T20:59:22.846714157Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=30620 cost_usd=1.4146 model=haiku"
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260517T203908-8dd4e1ef/0\",\"cycle_index\":0,\"attempt_id\":\"20260517T203908-8dd4e1ef\",\"base_rev\":\"61ce40ffa3a37bf193ec8f97913c985fcfdb1b10\",\"result_rev\":\"cec9023d54291e1026302be5fc00ee24c561e648\"}",
+          "created_at": "2026-05-17T20:59:22.896990174Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-17T20:59:46.285509819Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-omlx\",\"attempt_id\":\"20260517T205928-0cab73ef\",\"bead_id\":\"fizeau-8a5e74f0\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-17T20:59:46.638903975Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"model\":\"Qwen3.6-27B-MLX-8bit\",\"provider\":\"grendel-omlx\",\"reason\":\"ladder exhausted at power 5\"}",
+          "created_at": "2026-05-17T20:59:46.711858795Z",
+          "kind": "execution-escalation-aborted",
+          "source": "ddx work",
+          "summary": "escalation aborted: ladder exhausted at power 5 provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-omlx\"}",
+          "created_at": "2026-05-17T20:59:46.795090142Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1235/v1/chat/completions\": dial tcp 100.97.179.68:1235: i/o timeout\npowerClass=standard\nresult_rev=53ba8880b5f9791894e89de6c0d42b8fe3ffbf42\nbase_rev=53ba8880b5f9791894e89de6c0d42b8fe3ffbf42\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-17T20:59:46.827505099Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"AC1 TestBenchMainRedirectsExecutionSubcommands\",\"coverage\":\"A3d AC1\"},{\"parent_ac\":\"AC2 test_sigterm_marks_interrupted_and_stops_containers\",\"coverage\":\"A3b AC1\"},{\"parent_ac\":\"AC3 test_sigint_same_behavior\",\"coverage\":\"A3b AC2\"},{\"parent_ac\":\"AC4 test_concurrency_group_flock_serializes\",\"coverage\":\"A3a AC1\"},{\"parent_ac\":\"AC5 test_in_flight_json_tracks_cells\",\"coverage\":\"A3a AC2\"},{\"parent_ac\":\"AC6 test_max_cost_usd_produces_budget_halted\",\"coverage\":\"A3c AC1\"},{\"parent_ac\":\"AC7 test_budget_json_accumulates\",\"coverage\":\"A3c AC2\"},{\"parent_ac\":\"AC8 fiz-bench matrix shell redirect\",\"coverage\":\"A3d AC3\"}],\"child_ids\":[\"fizeau-c72424e8\",\"fizeau-86f2bac0\",\"fizeau-2b192ca5\",\"fizeau-0ee8d176\"],\"rationale\":\"Split along four orthogonal runtime concerns from the parent's PROPOSED FIX list: (A3a) concurrency primitives — flock, --jobs pool, in-flight.json; (A3b) signal hygiene — trap/setsid/docker label cleanup/interrupted reports; (A3c) cost enforcement — pricing tally, budget.json, budget_halted placeholder; (A3d) Go-runner deactivation — cmd/bench redirect. Each child touches a distinct code surface (lock plumbing vs trap handler vs cost accumulator vs cmd/bench dispatch), can be tested independently with its own scripts/benchmark/test/ harness, and maps cleanly to a subset of the parent ACs. A3b references in-flight.json from A3a but only as a read input, so the two can land in either order with a small fallback (enumerate by jobs table) if A3a lands later. A3d is fully independent of the bash runner and can land first.\"}",
+          "created_at": "2026-05-17T21:01:55.414888695Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-c72424e8, fizeau-86f2bac0, fizeau-2b192ca5, fizeau-0ee8d176"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T10:57:56.840356304Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T104800-f39702e1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":589034,\"exit_code\":-1}",
+          "created_at": "2026-05-18T10:57:56.980596848Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-8a5e74f0\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T10:58:35.911747762Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "tracker lock timeout (max elapsed, lock: /Users/erik/Projects/fizeau/.ddx/.git-tracker.lock, owner pid: 616881)\noutcome_reason=timeout",
+          "created_at": "2026-05-18T10:58:36.08723765Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T11:10:00.53566847Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T110024-76ee409c\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":6,\"total_tokens\":13,\"cost_usd\":0,\"duration_ms\":573068,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:10:00.592457353Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=13 model=haiku"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-17T20:59:46Z",
+          "count": 1,
+          "model": "Qwen3.6-27B-MLX-8bit",
+          "provider": "grendel-omlx",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T111012-78209f4d",
+    "prompt": ".ddx/executions/20260518T111012-78209f4d/prompt.md",
+    "manifest": ".ddx/executions/20260518T111012-78209f4d/manifest.json",
+    "result": ".ddx/executions/20260518T111012-78209f4d/result.json",
+    "checks": ".ddx/executions/20260518T111012-78209f4d/checks.json",
+    "usage": ".ddx/executions/20260518T111012-78209f4d/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-8a5e74f0-20260518T111012-78209f4d"
+  },
+  "prompt_sha": "2f940aa100caa237bb59a0393dfdb074fa8a5cc6df8936c935e2a47b3cc509a2"
+}
