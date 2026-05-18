@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260518T122301-9a67164a",
+  "bead_id": "fizeau-8c1d23af",
+  "base_rev": "f5d5c4976fd7485445430c453a561ea14d89fabe",
+  "created_at": "2026-05-18T12:23:21.781318535Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-8c1d23af",
+    "title": "providers: add unit tests for LookupModelLimits + probeProviderFlavor (FEAT-003 AC-06/AC-07)",
+    "description": "AR-2026-05-17-repo finding. FEAT-003 AC-06/AC-07 require test coverage for LookupModelLimits (LM Studio, omlx, OpenRouter; explicit config overrides) and probeProviderFlavor (explicit -\u003e URL heuristics -\u003e concurrent probes).\n\nToday only integration tests exist at internal/provider/openai/discovery_integration_test.go:107,129 — they require a live LM Studio/omlx instance and don't run by default. The original 2026-04-17 alignment filed agent-4109aea0 for this; that ID predates the fizeau- ID prefix migration and is unreachable, so re-file under the current namespace.\n\nSource review: fizeau-8e37e536.",
+    "acceptance": "1) internal/provider/openai/discovery_test.go (non-integration) contains direct unit tests for LookupModelLimits covering LM Studio, omlx, OpenRouter paths and explicit-config short-circuit, using httptest.Server mocks.\n2) discovery_test.go covers probeProviderFlavor with: explicit-config short-circuit, URL-heuristic path (per-provider), and concurrent-probe race resolution.\n3) go test ./internal/provider/openai/... -run 'LookupModelLimits|ProbeProviderFlavor' -count=1 green without integration tags.",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:providers",
+      "spec:FEAT-003",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-003",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:31Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T122301-9a67164a",
+    "prompt": ".ddx/executions/20260518T122301-9a67164a/prompt.md",
+    "manifest": ".ddx/executions/20260518T122301-9a67164a/manifest.json",
+    "result": ".ddx/executions/20260518T122301-9a67164a/result.json",
+    "checks": ".ddx/executions/20260518T122301-9a67164a/checks.json",
+    "usage": ".ddx/executions/20260518T122301-9a67164a/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-8c1d23af-20260518T122301-9a67164a"
+  },
+  "prompt_sha": "963b55162a19f51fb744540f29dadd84a5e69661b7a7d0555fca34eb30ca3815"
+}
