@@ -1,0 +1,11 @@
+status: blocked
+reason: This bead cannot proceed without completion of three blocking sibling beads:
+  - fizeau-e3b9b921 (billing-observation doc skeleton, methodology, decision rule) — status: open
+  - fizeau-cc0dd5b2 (capture /usage deltas for --print mode) — status: open
+  - fizeau-48a861f2 (capture /usage deltas for PTY+hooks mode) — status: open
+
+The root-cause description assumes docs/helix/02-design/billing-observation-claude-tui.md exists with 12 /usage snapshots + 6 turn outputs + decision rule, but none of these have been created yet. Sibling 1 must complete to provide the methodology doc and decision rule; siblings 2 and 3 must complete to provide the measurement data.
+
+All three siblings currently show status: open in .ddx/beads.jsonl. Until they complete and are merged, this bead has no inputs to process.
+
+External blocker: upstream measurement campaigns (fizeau-cc0dd5b2, fizeau-48a861f2).

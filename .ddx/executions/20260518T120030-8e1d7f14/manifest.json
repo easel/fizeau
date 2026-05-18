@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260518T120030-8e1d7f14",
+  "bead_id": "fizeau-6dc513e2",
+  "base_rev": "c617923f037b94d47efa137c6a468ae0c1a125c4",
+  "created_at": "2026-05-18T12:00:42.561202782Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6dc513e2",
+    "title": "claude-tui/gate: compute deltas, record verdict, dispose ADR-013",
+    "description": "PROBLEM: With raw /usage snapshots captured for both modes, deltas must be computed, a verdict rendered against the pre-registered decision rule, and ADR-013 disposed (accepted / amended-negative / follow-up filed). Without this step the experiment yields no actionable outcome.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md contains 12 snapshots + 6 turn outputs but no computed deltas, no verdict, and no cross-reference to ADR-013. ADR-013 at docs/helix/01-frame/adrs/ADR-013-*.md remains in 're-proposed' status.\n\nPROPOSED FIX: For each mode, compute subscription_window_delta = (after - before) for the subscription window field across all 3 runs (report individual + average) and api_request_count_delta = (after - before) for API metering. Write these into a 'Deltas' subsection of the doc. Apply the decision rule from the methodology section to render exactly one verdict: subscription-confirmed | subscription-rejected | subscription-ambiguous. Then take the verdict-conditional action:\n- subscription-confirmed: flip ADR-013 status field from 're-proposed' to 'accepted' in the same PR; add cross-reference from ADR-013 to billing-observation-claude-tui.md and vice versa.\n- subscription-rejected: amend ADR-013 to record the negative finding; close parent bead fizeau-9b3b85df with a summary; mark sibling sub-beads cancelled.\n- subscription-ambiguous: file a follow-up experiment bead with a refined methodology; close this bead with notes referencing the follow-up id.\n\nNON-SCOPE: Re-running measurements, modifying methodology, capturing additional /usage snapshots.\n\nAC:\n1) TestDeltasComputedPerMode: doc has subscription_window_delta and api_request_count_delta per run (3 each) plus average for both --print and PTY+hooks.\n2) TestVerdictRecorded: doc contains exactly one verdict from {subscription-confirmed, subscription-rejected, subscription-ambiguous} with reasoning tied to the pre-registered decision rule.\n3) TestADRDispositionConfirmed: if verdict == subscription-confirmed, ADR-013 status is 'accepted' and bidirectional cross-reference exists.\n4) TestADRDispositionRejected: if verdict == subscription-rejected, ADR-013 has a 'Negative finding' amendment, parent fizeau-9b3b85df is closed with summary, and sibling sub-beads are marked cancelled.\n5) TestAmbiguousDisposition: if verdict == subscription-ambiguous, a follow-up bead id is recorded in the doc and this bead is closed with notes.\n6) TestExactlyOneDispositionPath: precisely one of AC#3/4/5 conditions is satisfied (matching the recorded verdict).\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestDeltasComputedPerMode\n2) TestVerdictRecorded\n3) TestADRDispositionConfirmed\n4) TestADRDispositionRejected\n5) TestAmbiguousDisposition\n6) TestExactlyOneDispositionPath\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-a45dafe6",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260518T120030-8e1d7f14",
+    "prompt": ".ddx/executions/20260518T120030-8e1d7f14/prompt.md",
+    "manifest": ".ddx/executions/20260518T120030-8e1d7f14/manifest.json",
+    "result": ".ddx/executions/20260518T120030-8e1d7f14/result.json",
+    "checks": ".ddx/executions/20260518T120030-8e1d7f14/checks.json",
+    "usage": ".ddx/executions/20260518T120030-8e1d7f14/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-6dc513e2-20260518T120030-8e1d7f14"
+  },
+  "prompt_sha": "841dd0b5842492315af049161d1a6d1d7c161886600e9e0667af52fbdcc513ff"
+}
