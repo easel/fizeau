@@ -2608,3 +2608,152 @@ func TestRun_CostCapDoesNotFireOnUnknownCost(t *testing.T) {
 	assert.Equal(t, float64(-1), result.CostUSD, "unknown cost stays as -1 sentinel")
 	assert.Equal(t, 3, provider.callCount, "all turns must execute when cost is unknown")
 }
+
+func TestRun_ToolCallLoopPivot_SinglePivotSucceeds(t *testing.T) {
+	// AC-FEAT-001-09: loop hits identical-call detection at turn 5, pivots once,
+	// then recovers with a different call on turn 6.
+	loopCall := ToolCall{
+		ID:        "call-1",
+		Name:      "bash",
+		Arguments: json.RawMessage(`{"command":"go test ./..."}`),
+	}
+	differentCall := ToolCall{
+		ID:        "call-2",
+		Name:      "bash",
+		Arguments: json.RawMessage(`{"command":"go build ./..."}`),
+	}
+	provider := &mockProvider{
+		responses: []Response{
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}}, // 5 identical — triggers pivot
+			{ToolCalls: []ToolCall{differentCall}},
+			{Content: "success"},
+		},
+	}
+	tool := &mockTool{name: "bash", result: "ok"}
+
+	var events []Event
+	eventCb := func(e Event) { events = append(events, e) }
+
+	result, err := Run(context.Background(), Request{
+		Prompt:                   "test task",
+		Provider:                 provider,
+		Tools:                    []Tool{tool},
+		ToolCallLoopPivotLimit:   1,
+		ToolCallLoopPivotMessage: "Try a different approach.",
+		Callback:                 eventCb,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, StatusSuccess, result.Status)
+	assert.Equal(t, 1, result.ToolCallLoopPivots, "should have exactly one pivot")
+	assert.Equal(t, 7, provider.callCount, "should run 5 identical + pivot + different + final = 7 calls")
+
+	// Verify EventToolCallLoopPivot was emitted.
+	var pivotEvent *Event
+	for i := range events {
+		if events[i].Type == EventToolCallLoopPivot {
+			pivotEvent = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, pivotEvent, "EventToolCallLoopPivot should be emitted")
+	var pivotData map[string]any
+	err = json.Unmarshal(pivotEvent.Data, &pivotData)
+	require.NoError(t, err)
+	assert.Equal(t, float64(1), pivotData["pivot_count"], "pivot_count should be 1")
+	assert.Equal(t, float64(1), pivotData["pivot_limit"], "pivot_limit should be 1")
+	assert.NotEmpty(t, pivotData["fingerprint"], "fingerprint should be present")
+
+	// Verify pivot message was injected into conversation.
+	found := false
+	for _, msg := range result.Messages {
+		if msg.Role == RoleUser && strings.Contains(msg.Content, "different approach") {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "pivot message should be injected into conversation")
+}
+
+func TestRun_ToolCallLoopPivot_ExhaustedPivotsAborts(t *testing.T) {
+	// AC-FEAT-001-09: loop pivots once, but identical calls continue,
+	// and we exhaust the pivot budget (limit=1), then abort.
+	loopCall := ToolCall{
+		ID:        "call-1",
+		Name:      "bash",
+		Arguments: json.RawMessage(`{"command":"go test ./..."}`),
+	}
+	provider := &mockProvider{
+		responses: []Response{
+			{ToolCalls: []ToolCall{loopCall}}, // 1
+			{ToolCalls: []ToolCall{loopCall}}, // 2
+			{ToolCalls: []ToolCall{loopCall}}, // 3
+			{ToolCalls: []ToolCall{loopCall}}, // 4
+			{ToolCalls: []ToolCall{loopCall}}, // 5 — trigger pivot (count=1/1)
+			{ToolCalls: []ToolCall{loopCall}}, // 1 (reset counter)
+			{ToolCalls: []ToolCall{loopCall}}, // 2
+			{ToolCalls: []ToolCall{loopCall}}, // 3
+			{ToolCalls: []ToolCall{loopCall}}, // 4
+			{ToolCalls: []ToolCall{loopCall}}, // 5 again — abort (pivot count=1/1 exhausted)
+			{Content: "should not reach"},
+		},
+	}
+	tool := &mockTool{name: "bash", result: "ok"}
+
+	result, err := Run(context.Background(), Request{
+		Prompt:                   "test task",
+		Provider:                 provider,
+		Tools:                    []Tool{tool},
+		ToolCallLoopPivotLimit:   1,
+		ToolCallLoopPivotMessage: "Try a different approach.",
+	})
+	require.ErrorIs(t, err, ErrToolCallLoop)
+	assert.Equal(t, StatusError, result.Status)
+	assert.Equal(t, 1, result.ToolCallLoopPivots, "should have pivoted once")
+	// Should stop at the second detection (turn 10), not continue further.
+	assert.Equal(t, 10, provider.callCount, "should abort after second detection")
+}
+
+func TestRun_ToolCallLoopPivot_ZeroPivotLimitPreservesLegacyAbort(t *testing.T) {
+	// AC-FEAT-001-09(a): ToolCallLoopPivotLimit=0 (default) preserves legacy
+	// abort-only behavior: no pivoting, immediate abort on detection.
+	loopCall := ToolCall{
+		ID:        "call-1",
+		Name:      "bash",
+		Arguments: json.RawMessage(`{"command":"go test ./..."}`),
+	}
+	provider := &mockProvider{
+		responses: []Response{
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{ToolCalls: []ToolCall{loopCall}},
+			{Content: "should not reach"},
+		},
+	}
+	tool := &mockTool{name: "bash", result: "ok"}
+
+	var events []Event
+	eventCb := func(e Event) { events = append(events, e) }
+
+	result, err := Run(context.Background(), Request{
+		Prompt:   "test task",
+		Provider: provider,
+		Tools:    []Tool{tool},
+		// ToolCallLoopPivotLimit explicitly omitted (zero-value), preserving legacy.
+		Callback: eventCb,
+	})
+	require.ErrorIs(t, err, ErrToolCallLoop)
+	assert.Equal(t, StatusError, result.Status)
+	assert.Equal(t, 0, result.ToolCallLoopPivots, "should not have pivoted")
+	assert.Equal(t, 5, provider.callCount, "should abort immediately on 5 identical calls")
+
+	// Verify no EventToolCallLoopPivot was emitted.
+	for _, e := range events {
+		assert.NotEqual(t, EventToolCallLoopPivot, e.Type, "should not emit pivot event in legacy mode")
+	}
+}
