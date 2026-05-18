@@ -1,0 +1,229 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-18T10:15:03Z",
+  "description": "Machine-checkable harness capability matrix with evidence-ID bindings per CONTRACT-004 §Conformance Evidence",
+  "harnesses": [
+    {
+      "name": "claude",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude::TestClaudeRunnerHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude::TestClaudeRunnerQuotaHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "AccountHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude::TestClaudeRunnerAccountHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/claude::TestClaudeRunnerModelDiscoveryHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "SupportedLimitIDs emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "claude.(*Runner).SupportedLimitIDs"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedLimitIDsMatch"
+            }
+          ]
+        },
+        {
+          "name": "SupportedAliases emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "claude.(*Runner).SupportedAliases"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedAliasesMatch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "codex",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/codex::TestCodexRunnerHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/codex::TestCodexRunnerQuotaHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "AccountHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/codex::TestCodexRunnerAccountHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/codex::TestCodexRunnerModelDiscoveryHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "SupportedLimitIDs emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "codex.(*Runner).SupportedLimitIDs"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedLimitIDsMatch"
+            }
+          ]
+        },
+        {
+          "name": "SupportedAliases emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "codex.(*Runner).SupportedAliases"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedAliasesMatch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "gemini",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/gemini::TestGeminiRunnerHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/gemini::TestGeminiRunnerQuotaHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "AccountHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/gemini::TestGeminiRunnerAccountHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/gemini::TestGeminiRunnerModelDiscoveryHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "SupportedLimitIDs emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "gemini.(*Runner).SupportedLimitIDs"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedLimitIDsMatch"
+            }
+          ]
+        },
+        {
+          "name": "SupportedAliases emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "gemini.(*Runner).SupportedAliases"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedAliasesMatch"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
