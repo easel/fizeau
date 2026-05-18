@@ -1,0 +1,47 @@
+{
+  "attempt_id": "20260518T135757-73256818",
+  "bead_id": "fizeau-dee51a91",
+  "base_rev": "333b806a90c38d6f806edb8408513d5be4a6a112",
+  "created_at": "2026-05-18T13:57:58.673652989Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dee51a91",
+    "title": "bench-runner: banner SD-009 and SD-010 with ADR-016 + bash-runner pointer",
+    "description": "AR-2026-05-17-repo finding. SD-009 and SD-010 still title themselves around benchmark mode / harness matrix without flagging the move from fiz-bench (Go) to ./benchmark (bash) orchestration.",
+    "acceptance": "Both SD-009 and SD-010 carry a top-of-document banner referring readers to ADR-016 and plan-2026-05-15-benchmark-runner-simplification.md.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:bench",
+      "spec:SD-009",
+      "discovered-from:fizeau-a15106ab",
+      "governing:plan-2026-05-15-benchmark-runner-simplification"
+    ],
+    "metadata": {
+      "spec-id": "SD-009",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:40Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "SD-009",
+      "path": "docs/helix/02-design/solution-designs/SD-009-benchmark-mode.md",
+      "title": "Solution Design: SD-009 — Fizeau Benchmark Mode and Terminal-Bench Evaluation Plan"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260518T135757-73256818",
+    "prompt": ".ddx/executions/20260518T135757-73256818/prompt.md",
+    "manifest": ".ddx/executions/20260518T135757-73256818/manifest.json",
+    "result": ".ddx/executions/20260518T135757-73256818/result.json",
+    "checks": ".ddx/executions/20260518T135757-73256818/checks.json",
+    "usage": ".ddx/executions/20260518T135757-73256818/usage.json",
+    "worktree": "var/tmp/ddx-exec-wt/.execute-bead-wt-fizeau-dee51a91-20260518T135757-73256818"
+  },
+  "prompt_sha": "9a98e278c0157aad366b9d25fbf3c84620b1d2a2fe3f49d593fb9bc0ea27e36f"
+}
