@@ -1,0 +1,23 @@
+{
+  "bead_id": "fizeau-60ce39cb",
+  "attempt_id": "20260519T140633-bc59debb",
+  "base_rev": "400aa9397d22c2bf782f17336c6448ecc5d668b9",
+  "result_rev": "400aa9397d22c2bf782f17336c6448ecc5d668b9",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "ResolveRoute: no live provider supports prompt of 2380 tokens with tools=false at policy cheap",
+  "session_id": "eb-daf15a7b",
+  "duration_ms": 8306,
+  "exit_code": 1,
+  "error": "ResolveRoute: no live provider supports prompt of 2380 tokens with tools=false at policy cheap",
+  "project_root": "/Users/erik/Projects/fizeau",
+  "failure_mode": "no_viable_provider",
+  "execution_dir": ".ddx/executions/20260519T140633-bc59debb",
+  "prompt_file": ".ddx/executions/20260519T140633-bc59debb/prompt.md",
+  "manifest_file": ".ddx/executions/20260519T140633-bc59debb/manifest.json",
+  "result_file": ".ddx/executions/20260519T140633-bc59debb/result.json",
+  "stderr": "Error: agent exited with code 1\n  error: ResolveRoute: no live provider supports prompt of 2380 tokens with tools=false at policy cheap\nError: agent exited with code 1\n  error: ResolveRoute: no live provider supports prompt of 2380 tokens with tools=false at policy cheap",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-19T14:06:36.98811691Z",
+  "finished_at": "2026-05-19T14:06:45.294373266Z"
+}
