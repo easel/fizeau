@@ -1061,6 +1061,18 @@ func runMatrixHarbor(opts harborRunOpts) (harborRunResult, error) {
 	if multiplier != "" {
 		args = append(args, "--agent-timeout-multiplier", multiplier)
 	}
+	// Cap Harbor's per-run trial concurrency. Each concurrent trial is a full
+	// docker-compose environment (own network + image build); Harbor's default
+	// of 4 in parallel saturates the OrbStack VM badly enough that the
+	// hypervisor stops delivering virtual-timer interrupts to idle vCPUs,
+	// triggering multi-minute RCU stalls that wedge sshd and force an unclean
+	// VM restart. Default to 1 (serial trials); HARBOR_N_CONCURRENT raises it
+	// for hosts that can absorb more churn.
+	nConcurrent := "1"
+	if env := strings.TrimSpace(os.Getenv("HARBOR_N_CONCURRENT")); env != "" {
+		nConcurrent = env
+	}
+	args = append(args, "--n-concurrent", nConcurrent)
 	// Do not pass actual API key values through Harbor --ae args. Harbor
 	// includes those args in process listings and exception logs. The Fizeau
 	// Harbor agent resolves FIZEAU_API_KEY_ENV from the Harbor process
