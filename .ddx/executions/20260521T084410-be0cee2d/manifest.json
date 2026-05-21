@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260521T084410-be0cee2d",
+  "bead_id": "fizeau-a14eba0c",
+  "base_rev": "d0238a0140739f956cd882e141475d6b230a8540",
+  "created_at": "2026-05-21T08:44:17.42706445Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a14eba0c",
+    "title": "claude-tui: implement PTY session pool with /clear-between-turns and orphan reaper",
+    "description": "PROBLEM: ADR-013 §3 requires a session pool keyed by working directory so consecutive turns reuse the same PTY session with /clear issued between them, and any orphaned PTY child processes must be reaped on shutdown.\n\nROOT CAUSE:\n- internal/harnesses/claudetui/harness.go: no session-pool data structure; each turn would spawn a fresh PTY, defeating reuse.\n- internal/pty/: no shutdown reaper that enumerates and terminates leftover child processes when the harness exits.\n\nPROPOSED FIX:\n1. Add a session pool in claudetui.Harness keyed by working directory; on RunTurn, look up an existing session or open a new one via internal/pty/.\n2. Between turns on the same key, write /clear to the session before injecting the new prompt; verify the CLI acknowledged the clear before proceeding.\n3. On harness Shutdown, enumerate live PTY children and reap them within a bounded timeout (SIGTERM then SIGKILL).\n\nNON-SCOPE:\n- The PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- Performance benchmarking and 2x/10ms ratchets (sibling child D).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on child #1 and sibling child A. Governing artifacts: ADR-013 §3, CONTRACT-004, internal/pty/ library.",
+    "acceptance": "1) TestClaudeTuiSessionPoolReusesAndClears asserts /clear is issued between consecutive turns sharing a working directory and that the underlying PTY session is reused (same pid).\n2) TestClaudeTuiOrphanReaper asserts that on harness shutdown any leftover PTY child processes are reaped within a bounded timeout.\n3) go test ./... -count=1 is green.\n4) lefthook run pre-commit is green.",
+    "parent": "fizeau-60ce39cb",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness check timed out after 5m0s (fizeau-a14eba0c)\",\"fingerprint\":\"3de07a18c763b3c48ab0477e8e46aa75d36519a2ac4f977ef55c0e706e89d78e\",\"policy_mode\":\"warn-only\",\"reason\":\"timeout\",\"rule_id\":\"pre_claim_intake.timeout\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-21T04:19:43.361808356Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "timeout"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T084410-be0cee2d",
+    "prompt": ".ddx/executions/20260521T084410-be0cee2d/prompt.md",
+    "manifest": ".ddx/executions/20260521T084410-be0cee2d/manifest.json",
+    "result": ".ddx/executions/20260521T084410-be0cee2d/result.json",
+    "checks": ".ddx/executions/20260521T084410-be0cee2d/checks.json",
+    "usage": ".ddx/executions/20260521T084410-be0cee2d/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-fizeau-a14eba0c-20260521T084410-be0cee2d"
+  },
+  "prompt_sha": "00ccf552c93399a59439b12ee24f9be8d34d7d1cb2040a8c92ad26d1618607ee"
+}
