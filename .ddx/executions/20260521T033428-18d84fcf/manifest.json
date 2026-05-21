@@ -1,0 +1,137 @@
+{
+  "attempt_id": "20260521T033428-18d84fcf",
+  "bead_id": "fizeau-df3147ef",
+  "base_rev": "f40f82f11edc135a2fadd0a2a60bba99ba5b5fa5",
+  "created_at": "2026-05-21T03:34:35.415301583Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-df3147ef",
+    "title": "providers: reasoning-token telemetry fallback from message.reasoning_content",
+    "description": "PROBLEM: ADR-010 amendment (2026-05-11) §10' requires reasoning-token counts to be recovered from `message.reasoning_content` when the upstream usage block omits a reasoning-token field. Today the telemetry path reads only `usage.reasoning_tokens` (or equivalent), so providers that surface reasoning text but not a usage count report zero reasoning tokens, breaking budget accounting.\n\nROOT CAUSE: provider response/usage extraction code (locate via `grep -rn 'reasoning_tokens\\|ReasoningTokens' internal/provider`) lacks a fallback branch that tokenizes or counts `message.reasoning_content` when the usage block lacks the count.\n\nPROPOSED FIX: In the shared usage-extraction helper (or per-provider extractor if no shared helper exists), add a fallback: when `usage.reasoning_tokens` is absent or zero AND `message.reasoning_content` is non-empty, derive the reasoning-token count via the project's existing token-counting utility (same one used for prompt/completion tokens). Record the source (`usage` vs `content-fallback`) in any existing telemetry metadata field if one exists; otherwise no metadata change. Add focused unit test `TestReasoningTokens_FallbackFromContent` covering: (a) usage present → uses usage, (b) usage absent + content present → uses content count, (c) both absent → zero.\n\nNON-SCOPE: ThinkingWireFormatOpenAIEffort enum (separate child); llamaserver chat_template_kwargs envelope (separate child); changes to the tokenizer itself; new telemetry sinks or metric names; cross-provider reconciliation beyond the documented fallback.\n\nGoverning artifacts: ADR-010 amendment 2026-05-11 §10'; AR-2026-05-17-repo; source review fizeau-8e37e536.\n\nVERIFICATION: `go test ./internal/provider/... ./... -count=1` green; lefthook hooks pass.\n\nAC:\n1) Reasoning-token extractor falls back to counting `message.reasoning_content` when usage omits the count.\n2) Test `TestReasoningTokens_FallbackFromContent` covers usage-present, content-fallback, and both-absent cases.\n3) When both usage and content are present, usage wins (asserted in the test).\n4) `go test ./... -count=1` passes.\n5) lefthook pre-commit and pre-push pass.",
+    "acceptance": "1) Reasoning-token extractor implements message.reasoning_content fallback when usage omits the count.\n2) TestReasoningTokens_FallbackFromContent covers usage-present, content-fallback, both-absent.\n3) usage-present beats content-fallback (asserted).\n4) go test ./... -count=1 green.\n5) lefthook pre-commit and pre-push pass.",
+    "parent": "fizeau-a5d07641",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:19:54.333053234Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T131321-1cdc4012\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":390408,\"exit_code\":143}",
+          "created_at": "2026-05-18T13:19:54.43244456Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-df3147ef\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:20:04.621663479Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-482990429.lock' write error. Out of diskspace: exit status 128\noutcome_reason=quota",
+          "created_at": "2026-05-18T13:20:04.726165127Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T15:26:34.966497658Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T151446-9dcfaebd\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":10,\"output_tokens\":8,\"total_tokens\":18,\"cost_usd\":1.354699,\"duration_ms\":706412,\"exit_code\":143}",
+          "created_at": "2026-05-18T15:26:35.017050044Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=18 cost_usd=1.3547 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T15:26:55.043962577Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-omlx\",\"attempt_id\":\"20260518T152635-f90daab2\",\"bead_id\":\"fizeau-df3147ef\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T15:26:55.261143157Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-omlx\"}",
+          "created_at": "2026-05-18T15:26:55.355661642Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1235/v1/chat/completions\": dial tcp 100.97.179.68:1235: i/o timeout\npowerClass=standard\nresult_rev=97c4d4bd446b1e0fdd65be22bf47679ee396d920\nbase_rev=97c4d4bd446b1e0fdd65be22bf47679ee396d920\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T15:26:55.386109874Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-21T03:34:26.680546544Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T15:26:55Z",
+          "count": 1,
+          "model": "Qwen3.6-27B-MLX-8bit",
+          "provider": "grendel-omlx",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T033428-18d84fcf",
+    "prompt": ".ddx/executions/20260521T033428-18d84fcf/prompt.md",
+    "manifest": ".ddx/executions/20260521T033428-18d84fcf/manifest.json",
+    "result": ".ddx/executions/20260521T033428-18d84fcf/result.json",
+    "checks": ".ddx/executions/20260521T033428-18d84fcf/checks.json",
+    "usage": ".ddx/executions/20260521T033428-18d84fcf/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-df3147ef-20260521T033428-18d84fcf"
+  },
+  "prompt_sha": "d12a988debcf4b1b02604d554aab5de393f48edbae71cb5c14b2e37c828037da"
+}
