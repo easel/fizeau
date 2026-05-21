@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260521T092829-f1f92835",
+  "bead_id": "fizeau-9b60fba0",
+  "base_rev": "845eceb87a86626015d9131cc003e65250fc969c",
+  "created_at": "2026-05-21T09:28:34.421194775Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9b60fba0",
+    "title": "tests: make default routing and service gates hermetic and fail-fast",
+    "description": "PROBLEM\nA routine push from /home/erik/Projects/fizeau was blocked by the pre-push hook because the full test gate entered slow/hanging live-provider paths. The hook reached `go test -count=1 ./...` and timed out after 10m in tests including `TestRouter_AllProvidersDead_FailsFast` and `TestCLI_ExecuteUsesServiceContract`. Related tests such as `TestResolveRoute_UnknownLocalHealthDoesNotBlockSubscriptionFallback` and `TestExecute_RouteResolutionUsesCallerContextAndNonblockingLocalHealth` consumed roughly 85s each before the timeout. This makes normal worker audit pushes unreliable and prevents autonomous queue burn-down.\n\nROOT CAUSE\nThe failing path appears to exercise live PTY/provider/aliveness behavior during the default `go test ./...` / pre-push gate instead of using hermetic stubs with bounded contexts. Evidence from the 2026-05-21 pre-push run: timeout in routing/service tests involving all-providers-dead, service contract execution, and nonblocking local health checks.\n\nPROPOSED FIX\nMake the default test and pre-push path hermetic and bounded. Replace live provider/aliveness dependencies in these tests with in-process fakes or explicit short timeouts, and ensure the all-providers-dead case fails fast under `go test ./... -count=1` without depending on local daemon state.\n\nNON-SCOPE\nDo not weaken routing behavior or remove the behavioral assertions. Do not bypass pre-push. Do not move these tests into a manual-only suite unless an equivalent fast hermetic unit/integration check remains in the default gate.",
+    "acceptance": "1. `go test ./... -count=1 -timeout=3m` completes without hanging on live provider or PTY availability.\n2. `TestResolveRoute_UnknownLocalHealthDoesNotBlockSubscriptionFallback` and `TestExecute_RouteResolutionUsesCallerContextAndNonblockingLocalHealth` use bounded fake/local collaborators and complete quickly under the default gate.\n3. `TestRouter_AllProvidersDead_FailsFast` proves the all-dead case returns an error without waiting on live daemon/provider probes.\n4. `TestCLI_ExecuteUsesServiceContract` does not require a live external harness/provider in the default test suite.\n5. `lefthook run pre-push origin https://github.com/DocumentDrivenDX/fizeau` reaches the normal git push path without a Go test timeout.",
+    "labels": [
+      "area:tests",
+      "area:routing",
+      "area:pre-push",
+      "kind:bug",
+      "reliability"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T092829-f1f92835",
+    "prompt": ".ddx/executions/20260521T092829-f1f92835/prompt.md",
+    "manifest": ".ddx/executions/20260521T092829-f1f92835/manifest.json",
+    "result": ".ddx/executions/20260521T092829-f1f92835/result.json",
+    "checks": ".ddx/executions/20260521T092829-f1f92835/checks.json",
+    "usage": ".ddx/executions/20260521T092829-f1f92835/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-fizeau-9b60fba0-20260521T092829-f1f92835"
+  },
+  "prompt_sha": "c21a671bd4e9246d146a8fc754a9a900322a94c15193779bab3dadd633085436"
+}
