@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -425,4 +426,88 @@ func omlxServer(modelID string, maxContext, maxTokens int) *httptest.Server {
 			},
 		})
 	}))
+}
+
+func TestProbeProviderFlavor_ExplicitOverride(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:9999/v1", "custom-provider")
+	assert.Equal(t, "custom-provider", result.ProviderType)
+	assert.Equal(t, 1.0, result.Confidence)
+}
+
+func TestProbeProviderFlavor_PortHeuristic_LMStudio(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:1234/v1", "")
+	assert.Equal(t, "lmstudio", result.ProviderType)
+	assert.Equal(t, 0.9, result.Confidence)
+}
+
+func TestProbeProviderFlavor_PortHeuristic_Omlx(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:1235/v1", "")
+	assert.Equal(t, "omlx", result.ProviderType)
+	assert.Equal(t, 0.9, result.Confidence)
+}
+
+func TestProbeProviderFlavor_PortHeuristic_Ollama(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:11434/v1", "")
+	assert.Equal(t, "ollama", result.ProviderType)
+	assert.Equal(t, 0.9, result.Confidence)
+}
+
+func TestProbeProviderFlavor_PortHeuristic_VLLM(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:8000/v1", "")
+	assert.Equal(t, "vllm", result.ProviderType)
+	assert.Equal(t, 0.9, result.Confidence)
+}
+
+func TestProbeProviderFlavor_PortHeuristic_NoMatch(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:9999/v1", "")
+	assert.Equal(t, "", result.ProviderType)
+	assert.Equal(t, 0.0, result.Confidence)
+}
+
+func TestProbeProviderFlavor_ConcurrentProbe_Omlx(t *testing.T) {
+	srv := omlxServer("test-model", 3000, 1500)
+	defer srv.Close()
+
+	result := probeProviderFlavor(context.Background(), srv.URL+"/v1", "")
+	assert.Equal(t, "omlx", result.ProviderType)
+	assert.InDelta(t, 0.5, result.Confidence, 0.01)
+}
+
+func TestProbeProviderFlavor_ConcurrentProbeRaceResolution(t *testing.T) {
+	srvOmlx := omlxServer("test-model", 3000, 1500)
+	defer srvOmlx.Close()
+
+	result := probeProviderFlavor(context.Background(), srvOmlx.URL+"/v1", "")
+	assert.Equal(t, "omlx", result.ProviderType)
+
+	result2 := probeProviderFlavor(context.Background(), srvOmlx.URL+"/v1", "")
+	assert.Equal(t, result.ProviderType, result2.ProviderType, "concurrent probes should resolve to same provider type")
+}
+
+func TestProbeProviderFlavor_ExplicitOverrideBeatsConcurrentProbe(t *testing.T) {
+	srv := omlxServer("test-model", 3000, 1500)
+	defer srv.Close()
+
+	result := probeProviderFlavor(context.Background(), srv.URL+"/v1", "custom-provider")
+	assert.Equal(t, "custom-provider", result.ProviderType)
+	assert.Equal(t, 1.0, result.Confidence)
+}
+
+func TestProbeProviderFlavor_ContextTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	result := probeProviderFlavor(ctx, srv.URL+"/v1", "")
+	assert.Equal(t, "", result.ProviderType)
+}
+
+func TestProbeProviderFlavor_UnresponsiveServer(t *testing.T) {
+	result := probeProviderFlavor(context.Background(), "http://localhost:54321/v1", "")
+	assert.Equal(t, "", result.ProviderType)
 }

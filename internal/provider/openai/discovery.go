@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/easel/fizeau/internal/modelmatch"
@@ -159,4 +161,147 @@ func NormalizeModelID(requested string, catalog []string) (string, error) {
 	default:
 		return "", fmt.Errorf("ambiguous model %q: matches %v", requested, matches)
 	}
+}
+
+// ProbeProviderFlavorResult holds the result of provider flavor detection.
+type ProbeProviderFlavorResult struct {
+	// ProviderType is the detected provider type (e.g., "lmstudio", "omlx").
+	// Empty if detection failed.
+	ProviderType string
+	// Confidence is a score from 0 to 1 indicating detection confidence.
+	// 1.0 = explicit override, 0.9 = port heuristic match, 0.5 = probe match.
+	Confidence float64
+}
+
+// probeProviderFlavor attempts to detect the provider type from a base URL using:
+// 1. Explicit override (if provided)
+// 2. Port-based heuristics (e.g., :1234 → lmstudio, :1235 → omlx)
+// 3. Concurrent endpoint probes as fallback
+//
+// Returns a result with empty ProviderType if detection fails.
+func probeProviderFlavor(ctx context.Context, baseURL, explicitType string) ProbeProviderFlavorResult {
+	if explicitType != "" {
+		return ProbeProviderFlavorResult{ProviderType: explicitType, Confidence: 1.0}
+	}
+
+	providerType, ok := detectProviderByPort(baseURL)
+	if ok {
+		return ProbeProviderFlavorResult{ProviderType: providerType, Confidence: 0.9}
+	}
+
+	providerType, ok = probeProviderEndpoints(ctx, baseURL)
+	if ok {
+		return ProbeProviderFlavorResult{ProviderType: providerType, Confidence: 0.5}
+	}
+
+	return ProbeProviderFlavorResult{}
+}
+
+// detectProviderByPort infers provider type from the port in a base URL.
+// Returns ("", false) if port cannot be determined or doesn't match a known provider.
+func detectProviderByPort(baseURL string) (string, bool) {
+	u := strings.TrimRight(baseURL, "/")
+	if idx := strings.Index(u, "://"); idx >= 0 {
+		u = u[idx+3:]
+	}
+	if idx := strings.Index(u, "/"); idx >= 0 {
+		u = u[:idx]
+	}
+
+	_, port, err := net.SplitHostPort(u)
+	if err != nil {
+		return "", false
+	}
+
+	switch port {
+	case "1234":
+		return "lmstudio", true
+	case "1235":
+		return "omlx", true
+	case "11434":
+		return "ollama", true
+	case "8000":
+		return "vllm", true
+	}
+	return "", false
+}
+
+// probeProviderEndpoints concurrently probes known provider endpoints to detect
+// the provider type. Returns ("", false) if no provider responds.
+func probeProviderEndpoints(ctx context.Context, baseURL string) (string, bool) {
+	type probeResult struct {
+		providerType string
+		ok           bool
+	}
+
+	providers := []string{"lmstudio", "omlx", "ollama", "vllm"}
+	results := make(chan probeResult, len(providers))
+	var wg sync.WaitGroup
+
+	for _, p := range providers {
+		wg.Add(1)
+		go func(providerType string) {
+			defer wg.Done()
+			if canProbeProvider(ctx, baseURL, providerType) {
+				results <- probeResult{providerType, true}
+			}
+		}(p)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for result := range results {
+		if result.ok {
+			return result.providerType, true
+		}
+	}
+	return "", false
+}
+
+// canProbeProvider checks if a provider responds at baseURL by probing a
+// provider-specific endpoint.
+func canProbeProvider(ctx context.Context, baseURL, providerType string) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	base := strings.TrimRight(baseURL, "/")
+	root := base
+	if strings.HasSuffix(base, "/v1") {
+		root = base[:len(base)-3]
+	}
+
+	var endpoint string
+	switch providerType {
+	case "lmstudio":
+		endpoint = root + "/api/v0/models/test-probe"
+	case "omlx":
+		endpoint = base + "/models/status"
+	case "ollama":
+		endpoint = root + "/api/tags"
+	case "vllm":
+		endpoint = base + "/stats"
+	default:
+		return false
+	}
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		return false
+	}
+
+	return resp.StatusCode == http.StatusOK
 }
