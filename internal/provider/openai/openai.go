@@ -417,8 +417,10 @@ func (p *Provider) reasoningRequestOptions(model string, opts agent.Options) ([]
 	if policy.IsExplicitOff() {
 		switch p.thinkingWireFormat() {
 		case ThinkingWireFormatQwen:
-			if !isQwenModel(model) {
-				if explicitRequest && p.strictThinkingModelMatch() {
+			// For Qwen wire format, emit enable_thinking: false for any model unless strict matching is enabled
+			// and the model is not Qwen-named. Providers like llamaserver should emit the envelope regardless.
+			if !isQwenModel(model) && p.strictThinkingModelMatch() {
+				if explicitRequest {
 					return nil, "", fmt.Errorf("openai: qwen reasoning control is not supported for model %q on provider type %q", model, p.providerSystem)
 				}
 				return nil, "", nil
@@ -444,8 +446,11 @@ func (p *Provider) reasoningRequestOptions(model string, opts agent.Options) ([]
 	if p.thinkingWireFormat() == ThinkingWireFormatOpenAIEffort {
 		return openAIEffortReasoningOptions(policy, p.protocolCapabilities().ReasoningAliasMap, p.logger, model, p.providerSystem)
 	}
-	if p.thinkingWireFormat() == ThinkingWireFormatQwen && !isQwenModel(model) {
-		if explicitRequest && p.strictThinkingModelMatch() {
+	// For Qwen wire format, only enforce strict model matching if explicitly requested by the provider.
+	// Providers like llamaserver (which run arbitrary GGUF models) should emit Qwen controls for any model
+	// and let the server ignore them if unsupported. L1 introspection can refine this at construction time.
+	if p.thinkingWireFormat() == ThinkingWireFormatQwen && !isQwenModel(model) && p.strictThinkingModelMatch() {
+		if explicitRequest {
 			return nil, "", fmt.Errorf("openai: qwen reasoning control is not supported for model %q on provider type %q", model, p.providerSystem)
 		}
 		return nil, "", nil
