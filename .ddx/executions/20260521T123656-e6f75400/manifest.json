@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260521T123656-e6f75400",
+  "bead_id": "fizeau-c8a30416",
+  "base_rev": "4b0d501ee50d8208fce8dd91e051497421a9552c",
+  "created_at": "2026-05-21T12:37:01.446270148Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-c8a30416",
+    "title": "providers: declare ThinkingWireFormatOpenAIEffort wire format and assert effort-shape serialization",
+    "description": "PROBLEM\nADR-010 §7 (2026-05-11 amendment) adds a new ThinkingWireFormat enum value, `ThinkingWireFormatOpenAIEffort`, that emits flat top-level `reasoning_effort: \"\u003ctier\u003e\"` on enable and top-level `think: false` on disable. Without this typed constant and its translator branches, ds4 / deepseek-v4-flash cannot be served via the canonical effort wire and the catalog cannot pin a model to that wire form.\n\nROOT CAUSE\n- `internal/provider/openai/protocol_support.go:52-67` declares the `ThinkingWireFormat` enum.\n- `internal/provider/openai/openai.go:437-438` handles the explicit-off branch for `ThinkingWireFormatOpenAIEffort` (`option.WithJSONSet(\"think\", false)`).\n- `internal/provider/openai/openai.go:446-447` routes the enable branch to `openAIEffortReasoningOptions` at `internal/provider/openai/openai.go:507`, which emits top-level `reasoning_effort: \"\u003ctier\u003e\"`.\n- `internal/provider/ds4/ds4.go:64` pins the ds4 provider's `ThinkingFormat` to this constant; `internal/provider/lucebox/introspection.go:88` returns it when L1 introspection reports `reasoning_effort` support.\n\nPROPOSED FIX\nEnsure `ThinkingWireFormatOpenAIEffort = \"openai_effort\"` is declared as a typed `ThinkingWireFormat` constant in `internal/provider/openai/protocol_support.go` alongside the other wire format values, and that the openai translator emits flat top-level `reasoning_effort: \"\u003ctier\u003e\"` for explicit tier requests and top-level `think: false` for explicit-off. Add a focused unit test that drives a `Chat` call with `Reasoning: ReasoningHigh` through an `httptest.NewServer`, captures the JSON body, and asserts both the presence of `reasoning_effort` and the absence of the other wire forms.\n\nNON-SCOPE\n- ADR-010 §6' introspection adapter expansion to OpenRouter / Ollama / vLLM / rapid-mlx (governed by fizeau-cdbfcf6d).\n- ds4 introspection adapter changes (already landed).\n- llamaserver `chat_template_kwargs` envelope (separate child).\n- Reasoning-token telemetry fallback from `message.reasoning_content` (separate child).\n- Catalog reasoning_wire schema or value updates.\n- ADR-010 §10 verification-against-portable-budgets policy.\n\nGoverning artifact: docs/helix/02-design/adr/ADR-010-reasoning-wire-form-from-catalog.md §7.\nDiscovered-from: fizeau-8e37e536 (AR-2026-05-17-repo).",
+    "acceptance": "1) AC-WireConstant: `internal/provider/openai/protocol_support.go` declares `ThinkingWireFormatOpenAIEffort ThinkingWireFormat = \"openai_effort\"` as a typed constant in the same `const` block as the other wire formats.\n2) AC-EnableBranch: `internal/provider/openai/openai.go` routes the explicit-tier branch through `openAIEffortReasoningOptions`, emitting top-level `reasoning_effort: \"\u003ctier\u003e\"` (verified by request-body capture).\n3) AC-DisableBranch: `internal/provider/openai/openai.go` emits top-level `think: false` when the policy is explicit-off and the wire format is `ThinkingWireFormatOpenAIEffort`.\n4) AC-NamedTestSerialize: `TestThinkingWireFormatOpenAIEffort_Serialize` in `internal/provider/openai/protocol_support_test.go` drives a `Chat` with `Reasoning: ReasoningHigh`, asserts `reqBody[\"reasoning_effort\"] == \"high\"`, and asserts `reqBody` does NOT contain `\"thinking\"`, `\"enable_thinking\"`, or `\"thinking_budget\"`.\n5) AC-GoTest: `go test ./internal/provider/openai/... -count=1` is green.\n6) AC-LefthookGate: `lefthook run pre-push` is green (covers vet, lint, race, gosec, govulncheck).",
+    "parent": "fizeau-a5d07641",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T123656-e6f75400",
+    "prompt": ".ddx/executions/20260521T123656-e6f75400/prompt.md",
+    "manifest": ".ddx/executions/20260521T123656-e6f75400/manifest.json",
+    "result": ".ddx/executions/20260521T123656-e6f75400/result.json",
+    "checks": ".ddx/executions/20260521T123656-e6f75400/checks.json",
+    "usage": ".ddx/executions/20260521T123656-e6f75400/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-fizeau-c8a30416-20260521T123656-e6f75400"
+  },
+  "prompt_sha": "49a97acb2891583ec5a07aceff181ee6284516b940091ff357757c32ab4fb1cb"
+}
