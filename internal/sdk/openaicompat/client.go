@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/easel/fizeau/internal/compaction"
 	agent "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/provider/quotaheaders"
 	oai "github.com/openai/openai-go"
@@ -467,19 +468,15 @@ func tokenUsage(input, output, total, cacheRead int) agent.TokenUsage {
 //  1. usage.completion_tokens_details.reasoning_tokens (authoritative; even
 //     an explicit zero is honoured — the provider signalled no reasoning ran).
 //  2. Top-level usage.reasoning_tokens > 0 (non-standard servers).
-//  3. char-count(reasoningContent)÷4 when the usage path is absent AND
-//     reasoningContent is non-empty. Returns approx=true.
-//
-// The char-count/4 estimator is a v1 placeholder (4 chars ≈ 1 token for
-// English; accuracy degrades for CJK or heavily-symbolic content). A future
-// bead can replace it with a real tokenizer once measurement shows the
-// approximation error matters in practice.
+//  3. EstimateTokens(reasoningContent) when the usage path is absent AND
+//     reasoningContent is non-empty. Returns approx=true. Uses the project's
+//     shared token-counting heuristic (4 chars ≈ 1 token with ceiling division).
 //
 // Returns (tokens, approx). approx is true only in case 3.
 func extractReasoningTokens(rawUsageJSON, reasoningContent string) (int, bool) {
 	if rawUsageJSON == "" {
 		if reasoningContent != "" {
-			return len(reasoningContent) / 4, true
+			return compaction.EstimateTokens(reasoningContent), true
 		}
 		return 0, false
 	}
@@ -497,15 +494,15 @@ func extractReasoningTokens(rawUsageJSON, reasoningContent string) (int, bool) {
 	}
 	if raw.CompletionTokensDetails.ReasoningTokens != nil {
 		// Field present — respect the value even if zero (provider said no
-		// reasoning ran; do not fall through to the char-count heuristic).
+		// reasoning ran; do not fall through to the content-count heuristic).
 		return *raw.CompletionTokensDetails.ReasoningTokens, false
 	}
 	if raw.ReasoningTokens != nil && *raw.ReasoningTokens > 0 {
 		return *raw.ReasoningTokens, false
 	}
-	// usage path absent; fall back to reasoning_content char-count estimate.
+	// usage path absent; fall back to reasoning_content token estimate.
 	if reasoningContent != "" {
-		return len(reasoningContent) / 4, true
+		return compaction.EstimateTokens(reasoningContent), true
 	}
 	return 0, false
 }
