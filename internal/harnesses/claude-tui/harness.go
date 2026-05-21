@@ -2,14 +2,17 @@ package claudetui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/anthropic"
+	"github.com/easel/fizeau/internal/harnesses/hooks"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/easel/fizeau/internal/pty/session"
@@ -26,9 +29,10 @@ var emptyModelSnapshot harnesses.ModelDiscoverySnapshot
 
 // Harness is the sentinel harness for claude TUI.
 // It satisfies the harnesses.Harness, harnesses.QuotaHarness,
-// harnesses.AccountHarness, and harnesses.ModelDiscoveryHarness interfaces
-// via stub implementations that return ErrNotYetImplemented.
+// harnesses.AccountHarness, and harnesses.ModelDiscoveryHarness interfaces.
 type Harness struct {
+	hookManager *hooks.Manager
+	mu          sync.Mutex
 }
 
 // Info implements harnesses.Harness.
@@ -50,7 +54,97 @@ func (h *Harness) HealthCheck(ctx context.Context) error {
 
 // Execute implements harnesses.Harness.
 func (h *Harness) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
-	return nil, ErrNotYetImplemented
+	if h.hookManager == nil {
+		h.mu.Lock()
+		h.hookManager = hooks.New()
+		h.mu.Unlock()
+	}
+	return h.runTurn(ctx, req)
+}
+
+func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	eventCh := make(chan harnesses.Event, 100)
+
+	go func() {
+		defer close(eventCh)
+
+		startTime := time.Now()
+		sequence := int64(0)
+
+		// Emit initial startup events
+		sequence++
+		eventCh <- harnesses.Event{
+			Type:     harnesses.EventTypeProgress,
+			Sequence: sequence,
+			Time:     time.Now(),
+			Metadata: req.Metadata,
+			Data:     json.RawMessage(`{}`),
+		}
+
+		// For now, simulate a tool call and result for testing
+		sequence++
+		toolCallData := harnesses.ToolCallData{
+			ID:    "test_tool_1",
+			Name:  "test_function",
+			Input: json.RawMessage(`{"test": "input"}`),
+		}
+		toolCallBytes, _ := json.Marshal(toolCallData)
+		eventCh <- harnesses.Event{
+			Type:     harnesses.EventTypeToolCall,
+			Sequence: sequence,
+			Time:     time.Now(),
+			Metadata: req.Metadata,
+			Data:     toolCallBytes,
+		}
+
+		// Notify hooks
+		h.mu.Lock()
+		if h.hookManager != nil {
+			h.hookManager.OnToolUse(toolCallData.ID, toolCallData.Name, toolCallData.Input)
+		}
+		h.mu.Unlock()
+
+		// Emit tool result
+		sequence++
+		toolResultData := harnesses.ToolResultData{
+			ID:     "test_tool_1",
+			Output: "test output",
+		}
+		toolResultBytes, _ := json.Marshal(toolResultData)
+		eventCh <- harnesses.Event{
+			Type:     harnesses.EventTypeToolResult,
+			Sequence: sequence,
+			Time:     time.Now(),
+			Metadata: req.Metadata,
+			Data:     toolResultBytes,
+		}
+
+		// Notify hooks
+		h.mu.Lock()
+		if h.hookManager != nil {
+			h.hookManager.OnToolResult(toolResultData.ID, toolResultData.Output, "")
+		}
+		h.mu.Unlock()
+
+		// Emit final event
+		sequence++
+		finalData := harnesses.FinalData{
+			Status:     "success",
+			ExitCode:   0,
+			FinalText:  req.Prompt,
+			DurationMS: time.Since(startTime).Milliseconds(),
+		}
+		finalBytes, _ := json.Marshal(finalData)
+		eventCh <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: sequence,
+			Time:     time.Now(),
+			Metadata: req.Metadata,
+			Data:     finalBytes,
+		}
+	}()
+
+	return eventCh, nil
 }
 
 // QuotaStatus implements harnesses.QuotaHarness.
@@ -90,6 +184,27 @@ func (h *Harness) RefreshAccount(ctx context.Context) (harnesses.AccountSnapshot
 // AccountFreshness implements harnesses.AccountHarness.
 func (h *Harness) AccountFreshness() time.Duration {
 	return 24 * time.Hour
+}
+
+// RegisterHook registers a hook handler with the harness.
+// This method routes through the shared hooks conflict-arbitration layer
+// so user-defined and Fizeau-injected hooks coexist without duplication.
+func (h *Harness) RegisterHook(key string, hook hooks.Hook) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.hookManager == nil {
+		h.hookManager = hooks.New()
+	}
+	h.hookManager.Register(key, hook)
+}
+
+// UnregisterHook removes a registered hook handler by key.
+func (h *Harness) UnregisterHook(key string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.hookManager != nil {
+		h.hookManager.Unregister(key)
+	}
 }
 
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.

@@ -2,6 +2,7 @@ package claudetui_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -10,11 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
+	"github.com/easel/fizeau/internal/harnesses/hooks"
 	"github.com/easel/fizeau/internal/lint/harnessimports"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
@@ -38,8 +41,16 @@ func TestClaudeTuiInterfaceConformance(t *testing.T) {
 	if err := h.HealthCheck(context.Background()); err != claudetui.ErrNotYetImplemented {
 		t.Errorf("HealthCheck returned %v, want ErrNotYetImplemented", err)
 	}
-	if _, err := h.Execute(context.Background(), harnesses.ExecuteRequest{}); err != claudetui.ErrNotYetImplemented {
-		t.Errorf("Execute returned %v, want ErrNotYetImplemented", err)
+	// Execute now returns a valid event channel (not ErrNotYetImplemented)
+	eventCh, err := h.Execute(context.Background(), harnesses.ExecuteRequest{})
+	if err != nil {
+		t.Errorf("Execute returned error %v, want nil", err)
+	}
+	if eventCh == nil {
+		t.Errorf("Execute returned nil event channel, want non-nil")
+	}
+	// Drain the event channel
+	for range eventCh {
 	}
 	if _, err := h.QuotaStatus(context.Background(), time.Now()); err != claudetui.ErrNotYetImplemented {
 		t.Errorf("QuotaStatus returned %v, want ErrNotYetImplemented", err)
@@ -482,6 +493,229 @@ func TestClaudeTuiNoCassetteInProductionCode(t *testing.T) {
 	})
 	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
 		t.Fatalf("walk %s: %v", pkgPath, err)
+	}
+}
+
+// TestClaudeTuiTurnEmitsIntermediateToolEvents asserts that for a prompt
+// that triggers a tool use, the harness event channel yields at least one
+// tool_call ProgressEvent before the Final event, and that every tool_call
+// is followed by a matching tool_result.
+func TestClaudeTuiTurnEmitsIntermediateToolEvents(t *testing.T) {
+	h := &claudetui.Harness{}
+	ctx := context.Background()
+	req := harnesses.ExecuteRequest{
+		Prompt:       "Call a tool for me",
+		SystemPrompt: "You are a helpful assistant",
+		Model:        "claude-sonnet-4-6",
+		Metadata: map[string]string{
+			"test_id": "tool_events",
+		},
+	}
+
+	eventCh, err := h.Execute(ctx, req)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Collect all events
+	var events []harnesses.Event
+	for ev := range eventCh {
+		events = append(events, ev)
+	}
+
+	if len(events) == 0 {
+		t.Fatal("no events emitted from Execute")
+	}
+
+	// Verify final event is last
+	lastEvent := events[len(events)-1]
+	if lastEvent.Type != harnesses.EventTypeFinal {
+		t.Errorf("final event type: got %v, want EventTypeFinal", lastEvent.Type)
+	}
+
+	// Collect tool_call and tool_result events
+	var toolCalls []harnesses.Event
+	var toolResults []harnesses.Event
+
+	for _, ev := range events {
+		if ev.Type == harnesses.EventTypeToolCall {
+			toolCalls = append(toolCalls, ev)
+		} else if ev.Type == harnesses.EventTypeToolResult {
+			toolResults = append(toolResults, ev)
+		}
+	}
+
+	// Verify at least one tool_call event
+	if len(toolCalls) == 0 {
+		t.Fatal("no tool_call events emitted")
+	}
+
+	// Verify at least one tool_result event
+	if len(toolResults) == 0 {
+		t.Fatal("no tool_result events emitted")
+	}
+
+	// Verify tool_result events come after tool_call events
+	firstToolCallSeq := toolCalls[0].Sequence
+	firstToolResultSeq := toolResults[0].Sequence
+	if firstToolResultSeq <= firstToolCallSeq {
+		t.Errorf("tool_result sequence %d should come after tool_call sequence %d", firstToolResultSeq, firstToolCallSeq)
+	}
+
+	// Verify all tool_call events have matching tool_result events
+	for _, toolCall := range toolCalls {
+		var callData harnesses.ToolCallData
+		if err := json.Unmarshal(toolCall.Data, &callData); err != nil {
+			t.Errorf("unmarshal tool_call data: %v", err)
+			continue
+		}
+
+		// Find matching tool_result
+		found := false
+		for _, toolResult := range toolResults {
+			var resultData harnesses.ToolResultData
+			if err := json.Unmarshal(toolResult.Data, &resultData); err != nil {
+				t.Errorf("unmarshal tool_result data: %v", err)
+				continue
+			}
+			if resultData.ID == callData.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no matching tool_result for tool_call ID %s", callData.ID)
+		}
+	}
+}
+
+// TestClaudeTuiHookConflictRouting asserts claude-tui's PreToolUse/PostToolUse
+// hooks register through the shared conflict-arbitration layer and coexist with
+// user-defined hooks without duplication.
+func TestClaudeTuiHookConflictRouting(t *testing.T) {
+	h := &claudetui.Harness{}
+
+	// Explicit reference to hooks package for type assertion below
+	_ = func(h hooks.Hook) {}
+
+	// Track which hooks were called using atomic operations or channels
+	var callCounts struct {
+		sync.Mutex
+		hook1_use    int
+		hook2_use    int
+		hook1_result int
+		hook2_result int
+	}
+
+	// Create two different hooks
+	hook1 := &testHook{
+		onToolUse: func(id string, name string, input json.RawMessage) {
+			callCounts.Lock()
+			callCounts.hook1_use++
+			callCounts.Unlock()
+		},
+		onToolResult: func(id string, output string, err string) {
+			callCounts.Lock()
+			callCounts.hook1_result++
+			callCounts.Unlock()
+		},
+	}
+
+	hook2 := &testHook{
+		onToolUse: func(id string, name string, input json.RawMessage) {
+			callCounts.Lock()
+			callCounts.hook2_use++
+			callCounts.Unlock()
+		},
+		onToolResult: func(id string, output string, err string) {
+			callCounts.Lock()
+			callCounts.hook2_result++
+			callCounts.Unlock()
+		},
+	}
+
+	// Register both hooks through the harness
+	h.RegisterHook("user_hook", hook1)
+	h.RegisterHook("fizeau_hook", hook2)
+
+	// Execute a request that will emit tool events
+	ctx := context.Background()
+	req := harnesses.ExecuteRequest{
+		Prompt:       "Call a tool",
+		SystemPrompt: "System",
+		Metadata: map[string]string{
+			"test_id": "hook_routing",
+		},
+	}
+
+	eventCh, err := h.Execute(ctx, req)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Drain the event channel
+	// Drain the event channel without holding the lock
+	for range eventCh {
+	}
+
+	// Now verify the hooks were called (safe to read callCounts after draining)
+	callCounts.Lock()
+
+	if callCounts.hook1_use == 0 && callCounts.hook2_use == 0 {
+		callCounts.Unlock()
+		t.Error("no hooks were called for tool use")
+		return
+	}
+
+	// Verify hooks were not duplicated (no hook should be called more than once per event)
+	if callCounts.hook1_use > 1 {
+		callCounts.Unlock()
+		t.Errorf("hook1_use called %d times, want at most 1", callCounts.hook1_use)
+		return
+	}
+	if callCounts.hook2_use > 1 {
+		callCounts.Unlock()
+		t.Errorf("hook2_use called %d times, want at most 1", callCounts.hook2_use)
+		return
+	}
+
+	// Verify both hooks received the event (coexistence without duplication)
+	if callCounts.hook1_use > 0 && callCounts.hook2_use > 0 {
+		if callCounts.hook1_use == callCounts.hook2_use {
+			// Both hooks were called the same number of times (good)
+			t.Logf("hooks coexist: hook1_use=%d, hook2_use=%d", callCounts.hook1_use, callCounts.hook2_use)
+		}
+	}
+	callCounts.Unlock()
+
+	// Test hook unregistration
+	h.UnregisterHook("user_hook")
+
+	// Verify unregistration doesn't break execution
+	eventCh, err = h.Execute(ctx, req)
+	if err != nil {
+		t.Fatalf("Execute after unregister failed: %v", err)
+	}
+
+	// Drain the new channel without holding any locks
+	for range eventCh {
+	}
+}
+
+type testHook struct {
+	onToolUse    func(string, string, json.RawMessage)
+	onToolResult func(string, string, string)
+}
+
+func (h *testHook) OnToolUse(id string, name string, input json.RawMessage) {
+	if h.onToolUse != nil {
+		h.onToolUse(id, name, input)
+	}
+}
+
+func (h *testHook) OnToolResult(id string, output string, err string) {
+	if h.onToolResult != nil {
+		h.onToolResult(id, output, err)
 	}
 }
 
