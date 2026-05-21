@@ -1,0 +1,48 @@
+{
+  "attempt_id": "20260521T033905-1b044484",
+  "bead_id": "fizeau-3a7b46b2",
+  "base_rev": "4efe9b26fba2719d951f7148bc52b9643ec1ae51",
+  "created_at": "2026-05-21T03:39:11.860881556Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-3a7b46b2",
+    "title": "claude-tui/gate: capture /usage deltas for `claude --print` mode run 3",
+    "description": "PROBLEM: ADR-013's economic premise hinges on `claude --print` consuming API-metered request paths rather than the subscription window. The third empirical `--print` run is not captured, so the required three-run sample is incomplete.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md:1 has an empty `--print mode measurements` placeholder and no Run 3 `/usage` snapshots or turn output for this mode.\n\nPROPOSED FIX: Dependency ID: fizeau-a45dafe6. Governing artifact: ADR-013. Using the model, prompt, account, and refresh-delay defined in docs/helix/02-design/billing-observation-claude-tui.md, run `claude --print` once against the same authenticated account and append a labeled `Run 3` entry to the `--print mode measurements` section. Capture the `/usage` snapshot BEFORE, the full turn output, completion timestamp, and the `/usage` snapshot AFTER at refresh-delay + safety margin, \u003e=60s post-completion. Record wall-clock timestamps for both snapshots and attest no concurrent claude activity from the same account during Run 3.\n\nNON-SCOPE: PTY+hooks measurements, delta computation, verdict determination, ADR-013 disposition, methodology authoring, Runs 1-2 capture except for preserving their existing content.\n\nAC:\n1) TestPrintModeRun3Labeled: doc's `--print mode measurements` section contains one labeled Run 3 entry.\n2) TestPrintModeRun3BeforeAfterSnapshots: Run 3 has BEFORE and AFTER `/usage` snapshot blocks.\n3) TestPrintModeRun3TurnOutputRecorded: Run 3 includes the full captured `claude --print` turn output.\n4) TestPrintModeRun3SnapshotTimestamps: Run 3 BEFORE and AFTER snapshots each have wall-clock timestamps.\n5) TestPrintModeRun3AfterRespectsRefreshDelay: Run 3 AFTER snapshot timestamp is \u003e= completion-time + documented refresh-delay safety margin and \u003e=60s post-completion.\n6) TestPrintModeRun3SingleAccountAttested: Run 3 attests no concurrent claude activity from the same account during its measurement window.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestPrintModeRun3Labeled\n2) TestPrintModeRun3BeforeAfterSnapshots\n3) TestPrintModeRun3TurnOutputRecorded\n4) TestPrintModeRun3SnapshotTimestamps\n5) TestPrintModeRun3AfterRespectsRefreshDelay\n6) TestPrintModeRun3SingleAccountAttested\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-cc0dd5b2",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-21T03:39:03.837141108Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T033905-1b044484",
+    "prompt": ".ddx/executions/20260521T033905-1b044484/prompt.md",
+    "manifest": ".ddx/executions/20260521T033905-1b044484/manifest.json",
+    "result": ".ddx/executions/20260521T033905-1b044484/result.json",
+    "checks": ".ddx/executions/20260521T033905-1b044484/checks.json",
+    "usage": ".ddx/executions/20260521T033905-1b044484/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-3a7b46b2-20260521T033905-1b044484"
+  },
+  "prompt_sha": "21425b19dc37e454bf646c19a1f92ebe95e9266cdbebaeb364188f2910eed650"
+}
