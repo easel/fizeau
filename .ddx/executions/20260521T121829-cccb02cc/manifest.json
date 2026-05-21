@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260521T121829-cccb02cc",
+  "bead_id": "fizeau-3dbfae4f",
+  "base_rev": "531cfa88977e0d4275e5f908458a5a4c7fc7f436",
+  "created_at": "2026-05-21T12:18:34.931987676Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-3dbfae4f",
+    "title": "harnesses/codex: emit supported non-empty LimitID",
+    "description": "PROBLEM\nThe Fizeau pre-push test run failed in `internal/harnesses` at `TestHarnessCapabilityMatrixSupportedLimitIDsMatch/codex`: the codex harness capability matrix emitted `LimitID \"\"`, but the supported set is `[codex codex-weekly]`. This breaks the default test gate and can also make quota/limit accounting ambiguous for Codex routes.\n\nROOT CAUSE\nThe codex harness capability metadata path is producing or preserving an empty limit identifier where the supported matrix expects a concrete Codex limit ID. The failure was observed during the 2026-05-21 pre-push run from /home/erik/Projects/fizeau.\n\nPROPOSED FIX\nTrace the codex capability matrix construction and ensure every Codex capability entry carries a valid supported `LimitID` such as `codex` or `codex-weekly`, according to the existing supported-limit mapping. Add/adjust a focused regression test so an empty `LimitID` cannot reappear.\n\nNON-SCOPE\nDo not rename supported Codex limit IDs, change quota semantics, or special-case the failing assertion away. The fix should align the emitted metadata with the supported matrix.",
+    "acceptance": "1. `TestHarnessCapabilityMatrixSupportedLimitIDsMatch/codex` passes and asserts no Codex capability emits an empty `LimitID`.\n2. A focused regression test covers the codex capability construction path that previously emitted `LimitID \"\"`.\n3. `go test ./internal/harnesses/... -run 'TestHarnessCapabilityMatrixSupportedLimitIDsMatch|Codex' -count=1` passes.\n4. `go test ./internal/harnesses/... -count=1` passes.",
+    "labels": [
+      "area:harnesses",
+      "area:codex",
+      "kind:bug",
+      "reliability"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T121829-cccb02cc",
+    "prompt": ".ddx/executions/20260521T121829-cccb02cc/prompt.md",
+    "manifest": ".ddx/executions/20260521T121829-cccb02cc/manifest.json",
+    "result": ".ddx/executions/20260521T121829-cccb02cc/result.json",
+    "checks": ".ddx/executions/20260521T121829-cccb02cc/checks.json",
+    "usage": ".ddx/executions/20260521T121829-cccb02cc/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-fizeau-3dbfae4f-20260521T121829-cccb02cc"
+  },
+  "prompt_sha": "4b451704ef5b16c725d50ab49130b72b0fdaf2b1094d16707ec503c8547c83b5"
+}
