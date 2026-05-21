@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190826-acff6241",
+  "bead_id": "agent-fb8db30d",
+  "base_rev": "5a9f7eb0f19bd1afa6ab2be2ad2120cf70c9ca50",
+  "created_at": "2026-04-30T19:08:26.625603773Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-fb8db30d",
+    "title": "FZ-022 Move route and session state paths under Fizeau",
+    "description": "Ensure route-state, route-health, session logs, and related state defaults live under .fizeau after the config path flip.",
+    "acceptance": "Route/session targeted tests pass and assert .fizeau paths; no touched runtime files retain .agent.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:config",
+      "area:session"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:26Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:26.127708458Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190826-acff6241",
+    "prompt": ".ddx/executions/20260430T190826-acff6241/prompt.md",
+    "manifest": ".ddx/executions/20260430T190826-acff6241/manifest.json",
+    "result": ".ddx/executions/20260430T190826-acff6241/result.json",
+    "checks": ".ddx/executions/20260430T190826-acff6241/checks.json",
+    "usage": ".ddx/executions/20260430T190826-acff6241/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-fb8db30d-20260430T190826-acff6241"
+  }
+}

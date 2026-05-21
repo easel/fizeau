@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "All AGENT_HARNESS_* env var literals in harness tests and docs are consistently renamed to FIZEAU_HARNESS_* with matching skip messages updated. Remaining AGENT_HARNESS_* hits are only in .ddx/beads.jsonl tracker metadata (historical context), which is allowlisted.",
+  "findings": [
+    { "severity": "info", "summary": "AGENT_HARNESS_* references remain only in .ddx/beads.jsonl as historical bead descriptions/notes; acceptable as tracker metadata.", "location": ".ddx/beads.jsonl" },
+    { "severity": "info", "summary": "Non-record-mode behavior preserved: tests still gate on env var presence and skip when unset; only the gating name changed.", "location": "harness_golden_integration_test.go:269" }
+  ]
+}
+```

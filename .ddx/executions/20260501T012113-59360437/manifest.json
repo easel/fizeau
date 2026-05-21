@@ -1,0 +1,52 @@
+{
+  "attempt_id": "20260501T012113-59360437",
+  "bead_id": "agent-3e36f753",
+  "base_rev": "93c257b18f9b4c3ccec925ec032853839c9920d1",
+  "created_at": "2026-05-01T01:21:13.830736545Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-3e36f753",
+    "title": "FZ-035b Rename benchscore command to fiz-benchscore",
+    "description": "Update cmd/benchscore command name/help/errors/tests from ddx-agent-benchscore to fiz-benchscore.",
+    "acceptance": "cmd/benchscore tests pass and usage/errors use fiz-benchscore.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:go",
+      "area:benchmark"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T19:08:40.385044572Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "routing under-specified: pass at least one of Harness/Profile/ModelRef/Model/Provider, or auto-selection inputs\nresult_rev=293228efe38f2e973fe385954db14ec94ede6c2c\nbase_rev=293228efe38f2e973fe385954db14ec94ede6c2c\nretry_after=2026-05-01T01:08:40Z",
+          "created_at": "2026-04-30T19:08:40.718899018Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T012113-59360437",
+    "prompt": ".ddx/executions/20260501T012113-59360437/prompt.md",
+    "manifest": ".ddx/executions/20260501T012113-59360437/manifest.json",
+    "result": ".ddx/executions/20260501T012113-59360437/result.json",
+    "checks": ".ddx/executions/20260501T012113-59360437/checks.json",
+    "usage": ".ddx/executions/20260501T012113-59360437/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-3e36f753-20260501T012113-59360437"
+  }
+}

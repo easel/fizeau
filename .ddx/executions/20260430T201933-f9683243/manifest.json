@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260430T201933-f9683243",
+  "bead_id": "agent-689d4848",
+  "base_rev": "4708c4a66548ccc42cdb3cd733d1a5ed3d3d12f3",
+  "created_at": "2026-04-30T20:19:34.336498953Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-689d4848",
+    "title": "FZ-027 Rename test fixtures with old config env literals",
+    "description": "Audit and update test fixtures that contain .agent, ~/.config/agent, AGENT_*, or DDX_AGENT_* literals after runtime env/path rename.",
+    "acceptance": "Fixture audit table is recorded in notes or docs; targeted tests pass; remaining old literals are allowlisted.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:test",
+      "phase:config"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T20:19:33Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "950107",
+      "execute-loop-heartbeat-at": "2026-04-30T20:19:33.840786166Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T201933-f9683243",
+    "prompt": ".ddx/executions/20260430T201933-f9683243/prompt.md",
+    "manifest": ".ddx/executions/20260430T201933-f9683243/manifest.json",
+    "result": ".ddx/executions/20260430T201933-f9683243/result.json",
+    "checks": ".ddx/executions/20260430T201933-f9683243/checks.json",
+    "usage": ".ddx/executions/20260430T201933-f9683243/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-689d4848-20260430T201933-f9683243"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260501T014934-60ac1688",
+  "bead_id": "agent-09507a14",
+  "base_rev": "4c35b6e168da5e6abb006c71f57827842a953d83",
+  "created_at": "2026-05-01T01:49:34.517069159Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-09507a14",
+    "title": "FZ-051 Rename routing docs",
+    "description": "Update current docs/routing files for Fizeau/fiz and new config/env names. Split per file if the file list grows beyond ten.",
+    "acceptance": "docs/routing examples use fiz and FIZEAU names; docs/routing has no unallowlisted old names.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:routing"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T014934-60ac1688",
+    "prompt": ".ddx/executions/20260501T014934-60ac1688/prompt.md",
+    "manifest": ".ddx/executions/20260501T014934-60ac1688/manifest.json",
+    "result": ".ddx/executions/20260501T014934-60ac1688/result.json",
+    "checks": ".ddx/executions/20260501T014934-60ac1688/checks.json",
+    "usage": ".ddx/executions/20260501T014934-60ac1688/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-09507a14-20260501T014934-60ac1688"
+  }
+}

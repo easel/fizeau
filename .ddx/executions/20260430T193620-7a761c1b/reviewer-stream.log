@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Hard-cut rename complete: all four FIZEAU_* env vars exercised by tests in config_test.go, cli_process_test.go, and service_new_test.go; old AGENT_* runtime names remain only in .ddx/beads.jsonl tracker history.",
+  "findings": [
+    { "severity": "info", "summary": "All four FIZEAU_PROVIDER/BASE_URL/API_KEY/MODEL vars are covered across unit tests (config_test.go) and integration tests (cli_process_test.go, service_new_test.go).", "location": "internal/config/config_test.go:259" },
+    { "severity": "info", "summary": "Code, docs, and demo script consistently switched; remaining AGENT_* matches are confined to the bead tracker file, which records historical bead text.", "location": ".ddx/beads.jsonl" }
+  ]
+}
+```

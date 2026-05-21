@@ -1,0 +1,20 @@
+{
+  "bead_id": "agent-fb8db30d",
+  "attempt_id": "20260430T193004-9a657e5d",
+  "base_rev": "cb36c91f0dc03bd315771fc7187c5da31d170543",
+  "result_rev": "cb36c91f0dc03bd315771fc7187c5da31d170543",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "ResolveRoute: no live provider supports prompt of 0 tokens with tools=false at tier ≥ cheap",
+  "session_id": "eb-eef7477e",
+  "duration_ms": 4235,
+  "exit_code": 1,
+  "error": "ResolveRoute: no live provider supports prompt of 0 tokens with tools=false at tier ≥ cheap",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260430T193004-9a657e5d",
+  "prompt_file": ".ddx/executions/20260430T193004-9a657e5d/prompt.md",
+  "manifest_file": ".ddx/executions/20260430T193004-9a657e5d/manifest.json",
+  "result_file": ".ddx/executions/20260430T193004-9a657e5d/result.json",
+  "started_at": "2026-04-30T19:30:04.489729987Z",
+  "finished_at": "2026-04-30T19:30:08.725131518Z"
+}

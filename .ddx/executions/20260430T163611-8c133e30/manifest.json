@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T163611-8c133e30",
+  "bead_id": "agent-e88fa548",
+  "base_rev": "c815362ace5751df13e97283cd1010f21d8a0603",
+  "created_at": "2026-04-30T16:36:12.318007363Z",
+  "requested": {
+    "harness": "lmstudio",
+    "model": "qwen3.6-27b",
+    "provider": "hel",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-e88fa548",
+    "title": "CL-006a Delete obsolete routing redirect docs",
+    "description": "Delete only the superseded redirect stubs approved by CL-003 rows CL-003.01 and CL-003.02: docs/routing-profile-catalog.md and docs/routing-profile-override-precedence.md. Do not modify active routing docs except if a verifier finds a live link that must be removed.",
+    "acceptance": "Both redirect stub files are removed; rg shows no active references to routing-profile-catalog or routing-profile-override-precedence outside cleanup/research history; targeted docs-related checks pass; close notes or commit cite CL-003.01 and CL-003.02.",
+    "parent": "agent-b46430d2",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:docs"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T163611-8c133e30",
+    "prompt": ".ddx/executions/20260430T163611-8c133e30/prompt.md",
+    "manifest": ".ddx/executions/20260430T163611-8c133e30/manifest.json",
+    "result": ".ddx/executions/20260430T163611-8c133e30/result.json",
+    "checks": ".ddx/executions/20260430T163611-8c133e30/checks.json",
+    "usage": ".ddx/executions/20260430T163611-8c133e30/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-e88fa548-20260430T163611-8c133e30"
+  }
+}

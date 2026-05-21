@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260501T022248-6179bc39",
+  "bead_id": "agent-6efd3d63",
+  "base_rev": "6f3eaf7660a4ffa1143e7775e9410a1cd6932424",
+  "created_at": "2026-05-01T02:22:49.976126467Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-6efd3d63",
+    "title": "FZ-065 Audit and announce external consumer break",
+    "description": "Audit for external consumers beyond DDx and prepare announcement/migration guidance if any exist.",
+    "acceptance": "Audit states external consumer status and links migration note or records N/A with evidence.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:release"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T022248-6179bc39",
+    "prompt": ".ddx/executions/20260501T022248-6179bc39/prompt.md",
+    "manifest": ".ddx/executions/20260501T022248-6179bc39/manifest.json",
+    "result": ".ddx/executions/20260501T022248-6179bc39/result.json",
+    "checks": ".ddx/executions/20260501T022248-6179bc39/checks.json",
+    "usage": ".ddx/executions/20260501T022248-6179bc39/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-6efd3d63-20260501T022248-6179bc39"
+  }
+}

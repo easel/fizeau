@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T155827-cdcda203",
+  "bead_id": "agent-6543053e",
+  "base_rev": "10446491543d694cecf0ade4a542980f305e5ed9",
+  "created_at": "2026-04-30T15:58:28.996732404Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-6543053e",
+    "title": "CL-004 Inventory stale scripts fixtures and assets",
+    "description": "Inventory scripts, fixtures, cast files, JSONL sessions, benchmark profiles, generated assets, and testdata that may be stale before the rename.",
+    "acceptance": "Inventory table lists each candidate with keep/delete/archive status and evidence from rg, tests, or script references.",
+    "parent": "agent-996dca04",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:tooling"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T155827-cdcda203",
+    "prompt": ".ddx/executions/20260430T155827-cdcda203/prompt.md",
+    "manifest": ".ddx/executions/20260430T155827-cdcda203/manifest.json",
+    "result": ".ddx/executions/20260430T155827-cdcda203/result.json",
+    "checks": ".ddx/executions/20260430T155827-cdcda203/checks.json",
+    "usage": ".ddx/executions/20260430T155827-cdcda203/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-6543053e-20260430T155827-cdcda203"
+  }
+}

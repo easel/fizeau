@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190835-fee37179",
+  "bead_id": "agent-fee0000d",
+  "base_rev": "0a57ae99fb96110a53f802f227c85ff882e39c21",
+  "created_at": "2026-04-30T19:08:36.022209104Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-fee0000d",
+    "title": "FZ-033 Rename installer to fiz",
+    "description": "Update install.sh and installer acceptance tests for fiz artifact and binary names.",
+    "acceptance": "bash tests/install_sh_acceptance.sh passes and expects fiz artifacts/binary paths.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:release",
+      "area:install"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:35Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:35.477403106Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190835-fee37179",
+    "prompt": ".ddx/executions/20260430T190835-fee37179/prompt.md",
+    "manifest": ".ddx/executions/20260430T190835-fee37179/manifest.json",
+    "result": ".ddx/executions/20260430T190835-fee37179/result.json",
+    "checks": ".ddx/executions/20260430T190835-fee37179/checks.json",
+    "usage": ".ddx/executions/20260430T190835-fee37179/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-fee0000d-20260430T190835-fee37179"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "bead_id": "agent-8e0b426d",
+  "attempt_id": "20260430T165246-6c96ff95",
+  "base_rev": "7f3c40b61c22472b7e9e213b0b11656dd8116db5",
+  "result_rev": "1d48938971d710dc288e0ac13e6e551c56d6af3d",
+  "outcome": "task_succeeded",
+  "status": "success",
+  "detail": "success",
+  "harness": "omlx",
+  "provider": "vidar",
+  "model": "Qwen3.6-27B-MLX-8bit",
+  "session_id": "eb-89e15a24",
+  "duration_ms": 676546,
+  "tokens": 89195,
+  "exit_code": 0,
+  "execution_dir": ".ddx/executions/20260430T165246-6c96ff95",
+  "prompt_file": ".ddx/executions/20260430T165246-6c96ff95/prompt.md",
+  "manifest_file": ".ddx/executions/20260430T165246-6c96ff95/manifest.json",
+  "result_file": ".ddx/executions/20260430T165246-6c96ff95/result.json",
+  "usage_file": ".ddx/executions/20260430T165246-6c96ff95/usage.json",
+  "started_at": "2026-04-30T16:52:47.71440073Z",
+  "finished_at": "2026-04-30T17:04:04.260644561Z"
+}

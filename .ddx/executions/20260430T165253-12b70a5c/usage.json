@@ -1,0 +1,9 @@
+{
+  "attempt_id": "20260430T165253-12b70a5c",
+  "harness": "omlx",
+  "provider": "vidar",
+  "model": "Qwen3.6-27B-MLX-8bit",
+  "tokens": 161301,
+  "input_tokens": 154930,
+  "output_tokens": 6371
+}

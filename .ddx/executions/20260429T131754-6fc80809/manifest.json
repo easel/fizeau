@@ -1,0 +1,95 @@
+{
+  "attempt_id": "20260429T131754-6fc80809",
+  "bead_id": "agent-4aa3584e",
+  "base_rev": "2cae7fec12d34f3c719baca773a4b36e79579c28",
+  "created_at": "2026-04-29T13:17:55.281510335Z",
+  "requested": {
+    "harness": "lmstudio",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-4aa3584e",
+    "title": "harness-parity: run the benchmark and append per-task results + winner + top-3 gaps",
+    "description": "Child 3 of agent-b5d67344's iteration-loop split. Execute the actual paired benchmark and append the data sections to the deliverable doc. Long-running operator-driven work (3-8 hours wall-clock); not suitable for a single execute-bead pass.\n\nDepends on agent-bea748e7 (manifest arms) and agent-1bffdd79 (doc skeleton).\n\n## How to run\n\n  python scripts/beadbench/run_beadbench.py     --arms agent-omlx-vidar-qwen36,pi-omlx-vidar-qwen36     --tasks \u003ccurated-8-task-subset\u003e     --pair --output docs/research/AR-2026-04-26-agent-vs-pi-omlx-vidar-qwen36/\n\n(exact CLI subject to run_beadbench.py's actual flags; check --help)\n\n## Deliverable updates\n\nAfter the run completes:\n\n### 3. Per-task pairwise outcome table\n\n| task | agent_status | pi_status | agent_cost | pi_cost | agent_duration | pi_duration | agent_review | pi_review |\n| ...\n\n### 4. Aggregate metrics\n\n- agent success rate: X%, pi success rate: Y%, delta: Δ pp\n- mean cost ratio (agent/pi): R\n- mean duration ratio (agent/pi): D\n- reviewer-verdict distribution per arm\n- winner: agent | pi | tie (with deciding metric)\n\n### 5. Top-3 gaps\n\nRanked by which lever (compaction / tools / system prompt / reasoning) the iteration should attack first. Each gap with concrete evidence:\n- 'agent failed N tasks via tool-call loops; pi did not — tools area is top gap'\n- 'agent's mean cost was 2.3x pi's at same success rate — system prompt verbosity / preset choice'\n- etc.\n\nThese gaps drive the iteration beads (child 4, filed reactively).\n\n## Why this isn't an agent execute-bead pass\n\nEach Qwen3.6-27B-MLX-8bit task runs 5-30+ minutes including verifier (cargo test / go test). 16 paired runs is 3-8 hours wall-clock plus per-task sandbox setup with multi-GB repo clones. Single execute-bead Claude pass cannot keep an interactive session alive for that duration without timing out. Run as long-running background or operator-driven; the closing bead just needs to land the populated doc.",
+    "acceptance": "1. docs/research/AR-2026-04-26-agent-vs-pi-omlx-vidar-qwen36.md sections 3-5 are populated from real benchmark run output (per-task pairwise table, aggregate metrics, winner declaration with deciding metric, top-3 gaps with concrete evidence).\n2. N\u003e=8 paired tasks executed; doc states N and any task-skip reasons.\n3. Top-3 gaps section names a concrete lever (compaction/tools/system prompt/reasoning) for each of the top 3 ranked observations, with task-level evidence (e.g. specific tasks where the gap manifested).\n4. First row appended to docs/research/agent-vs-pi-parity.md (per agent-f43d1ed2's tracker — that bead still requires that file exist so this bead also creates the file if missing).\n5. go test ./... -count=1 passes (no test changes expected; output is doc artifacts).",
+    "parent": "agent-b5d67344",
+    "labels": [
+      "area:benchmark",
+      "area:operational",
+      "kind:research"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-29T13:17:54Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "30257",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "tier=cheap harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-29T13:16:37.987648982Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-29T13:16:40.200071627Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-29T13:16:42.405609143Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"cheap\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-29T13:16:42.472398875Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=3 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "ddx",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-04-29T13:16:42.614306988Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-29T13:17:41.810050843Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-29T13:17:54.566236175Z",
+      "spec-id": "ADR-006"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-006",
+      "path": "docs/helix/02-design/adr/ADR-006-overrides-as-routing-failure-signals.md",
+      "title": "ADR-006: Manual Overrides Are Auto-Routing Failure Signals"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260429T131754-6fc80809",
+    "prompt": ".ddx/executions/20260429T131754-6fc80809/prompt.md",
+    "manifest": ".ddx/executions/20260429T131754-6fc80809/manifest.json",
+    "result": ".ddx/executions/20260429T131754-6fc80809/result.json",
+    "checks": ".ddx/executions/20260429T131754-6fc80809/checks.json",
+    "usage": ".ddx/executions/20260429T131754-6fc80809/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-4aa3584e-20260429T131754-6fc80809"
+  }
+}

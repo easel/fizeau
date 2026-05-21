@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260430T171008-2cae1126",
+  "bead_id": "agent-f9173d55",
+  "base_rev": "210715390c34a96d820f3799014d8e63a4cc0545",
+  "created_at": "2026-04-30T17:10:08.855413638Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-f9173d55",
+    "title": "CL-007c Archive raw demo session captures",
+    "description": "Archive only the raw demo JSONL captures approved by CL-004 row CL-004.17: demos/sessions/demo-read.jsonl, demo-edit.jsonl, and demo-bash.jsonl. Preserve the published website cast assets and keep demos/record.sh usable.",
+    "acceptance": "The three raw JSONL captures are moved out of demos/sessions into docs/research/archive/ or an equivalent archive path; website/static/demos/*.cast remains untouched; demos/record.sh still has a valid target directory behavior; rg shows no active references to the old JSONL paths outside cleanup/research history; bash -n demos/record.sh passes; close notes or commit cite CL-004.17.",
+    "parent": "agent-bcf3ef58",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:tooling"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"vidar\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T17:09:42.801318789Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=vidar model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260430T165253-12b70a5c\",\"harness\":\"omlx\",\"provider\":\"vidar\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"input_tokens\":154930,\"output_tokens\":6371,\"total_tokens\":161301,\"cost_usd\":0,\"duration_ms\":1007597,\"exit_code\":1}",
+          "created_at": "2026-04-30T17:09:42.904483779Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=161301 model=Qwen3.6-27B-MLX-8bit"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T171008-2cae1126",
+    "prompt": ".ddx/executions/20260430T171008-2cae1126/prompt.md",
+    "manifest": ".ddx/executions/20260430T171008-2cae1126/manifest.json",
+    "result": ".ddx/executions/20260430T171008-2cae1126/result.json",
+    "checks": ".ddx/executions/20260430T171008-2cae1126/checks.json",
+    "usage": ".ddx/executions/20260430T171008-2cae1126/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-f9173d55-20260430T171008-2cae1126"
+  }
+}

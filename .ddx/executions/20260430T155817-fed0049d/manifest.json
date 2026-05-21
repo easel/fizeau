@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260430T155817-fed0049d",
+  "bead_id": "agent-e965bac2",
+  "base_rev": "10446491543d694cecf0ade4a542980f305e5ed9",
+  "created_at": "2026-04-30T15:58:18.841501974Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-e965bac2",
+    "title": "CL-003 Inventory duplicate or stale docs",
+    "description": "Inventory docs that are duplicate, stale, or historical before the rename. Do not edit/delete docs in this bead.",
+    "acceptance": "Inventory table lists active/historical/delete/archive status for docs candidates and cites the replacement or reason.",
+    "parent": "agent-996dca04",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:docs"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"hel\",\"resolved_model\":\"qwen3.6-27b\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T15:57:46.857803102Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=hel model=qwen3.6-27b"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T155817-fed0049d",
+    "prompt": ".ddx/executions/20260430T155817-fed0049d/prompt.md",
+    "manifest": ".ddx/executions/20260430T155817-fed0049d/manifest.json",
+    "result": ".ddx/executions/20260430T155817-fed0049d/result.json",
+    "checks": ".ddx/executions/20260430T155817-fed0049d/checks.json",
+    "usage": ".ddx/executions/20260430T155817-fed0049d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-e965bac2-20260430T155817-fed0049d"
+  }
+}

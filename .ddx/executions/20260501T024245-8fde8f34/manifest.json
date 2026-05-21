@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260501T024245-8fde8f34",
+  "bead_id": "agent-59c8afaf",
+  "base_rev": "8afea19c00249f265662dd823d3ba844fa7eb7ff",
+  "created_at": "2026-05-01T02:42:46.152431644Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-59c8afaf",
+    "title": "FZ-071 Final stale-name cleanup pass",
+    "description": "Resolve any remaining unallowlisted old-name hits found by FZ-070.",
+    "acceptance": "Rename-noise checker passes in enforced mode and go test ./... passes.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "phase:enforcement"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T024245-8fde8f34",
+    "prompt": ".ddx/executions/20260501T024245-8fde8f34/prompt.md",
+    "manifest": ".ddx/executions/20260501T024245-8fde8f34/manifest.json",
+    "result": ".ddx/executions/20260501T024245-8fde8f34/result.json",
+    "checks": ".ddx/executions/20260501T024245-8fde8f34/checks.json",
+    "usage": ".ddx/executions/20260501T024245-8fde8f34/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-59c8afaf-20260501T024245-8fde8f34"
+  }
+}

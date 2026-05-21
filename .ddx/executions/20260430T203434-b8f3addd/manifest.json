@@ -1,0 +1,55 @@
+{
+  "harness": "claude",
+  "model": "opus",
+  "session_id": "/home/erik/Projects/agent/.ddx/agent-logs/svc-1777581274639545760.jsonl",
+  "base_rev": "4708c4a66548ccc42cdb3cd733d1a5ed3d3d12f3",
+  "result_rev": "869b1f313c0f37881af071f9ec192e2b97517ece",
+  "verdict": "APPROVE",
+  "bead_id": "agent-689d4848",
+  "execution_dir": ".ddx/executions/20260430T203434-b8f3addd",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1003,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 495,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/notes/FZ-027-fixture-audit.md",
+          "install.sh",
+          "internal/core/integration_test.go",
+          "internal/ptytest/docker_conformance_integration_test.go",
+          "internal/renamecheck/renamecheck.go",
+          "scripts/beadbench/run_beadbench.py",
+          "scripts/benchmark/run_benchmark.sh",
+          "scripts/benchmark/smoke_run.sh",
+          "tests/install_sh_acceptance.sh"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 16886,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 20010,
+    "output_bytes": 1323,
+    "elapsed_ms": 32706,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

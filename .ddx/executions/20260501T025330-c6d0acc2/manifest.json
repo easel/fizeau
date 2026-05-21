@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260501T025330-c6d0acc2",
+  "bead_id": "agent-f533bff7",
+  "base_rev": "d071667baf724911225c8a8fcad35cd25fb4cde2",
+  "created_at": "2026-05-01T02:53:30.971422659Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-f533bff7",
+    "title": "FZ-061 Execute DDx Fizeau pre-release import bump",
+    "description": "In the DDx repo, consume the Fizeau pre-release from FZ-063 and migrate the downstream integration surfaces that still point at the old agent identity.\n\nIn-scope DDx changes:\n- Go module/import path: replace github.com/DocumentDrivenDX/agent with github.com/DocumentDrivenDX/fizeau and pin the Fizeau pre-release tag produced by FZ-063.\n- Config/env surface: update DDx configuration, harness wiring, documentation, examples, and env passthrough from old AGENT_* / ddx-agent assumptions to the renamed FIZEAU_* / fizeau surfaces where DDx invokes or configures the runtime.\n- Binary surface: update DDx command discovery, harness invocation, installer/test fixtures, and docs that expect the old ddx-agent/agent binary so they call or describe fiz instead.\n\nOut of scope:\n- Pinning the final non-prerelease Fizeau tag; that is FZ-064.\n- Rewriting historical DDx evidence or archived docs that intentionally preserve old names.",
+    "acceptance": "In the DDx repo after FZ-063 is available:\n1. go.mod/go.sum pin github.com/DocumentDrivenDX/fizeau at the Fizeau pre-release tag, and active Go imports no longer reference github.com/DocumentDrivenDX/agent.\n2. DDx config/env/harness surfaces that invoke or configure this runtime use FIZEAU_* / fizeau names, with any retained AGENT_* references limited to documented compatibility or historical-only contexts.\n3. DDx binary invocation, install/test fixtures, and active docs use the fiz binary name instead of ddx-agent/agent where they refer to this runtime.\n4. DDx verification passes: go test ./... and a rename grep/static check showing no active github.com/DocumentDrivenDX/agent, ddx-agent, or AGENT_* runtime references remain outside explicit historical/compat allowlists.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:tracking",
+      "area:ddx"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T025330-c6d0acc2",
+    "prompt": ".ddx/executions/20260501T025330-c6d0acc2/prompt.md",
+    "manifest": ".ddx/executions/20260501T025330-c6d0acc2/manifest.json",
+    "result": ".ddx/executions/20260501T025330-c6d0acc2/result.json",
+    "checks": ".ddx/executions/20260501T025330-c6d0acc2/checks.json",
+    "usage": ".ddx/executions/20260501T025330-c6d0acc2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-f533bff7-20260501T025330-c6d0acc2"
+  }
+}

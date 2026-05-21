@@ -1,0 +1,23 @@
+{
+  "bead_id": "agent-e965bac2",
+  "attempt_id": "20260430T155729-22e11d29",
+  "base_rev": "69f2646a37b74abdec2b5262f2ad3912a4f9db26",
+  "result_rev": "69f2646a37b74abdec2b5262f2ad3912a4f9db26",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "agent: provider error: openai: POST \"http://hel:1234/v1/chat/completions\": 502 Bad Gateway ",
+  "harness": "lmstudio",
+  "provider": "hel",
+  "model": "qwen3.6-27b",
+  "session_id": "eb-ca2bf7b9",
+  "duration_ms": 15066,
+  "exit_code": 1,
+  "error": "agent: provider error: openai: POST \"http://hel:1234/v1/chat/completions\": 502 Bad Gateway ",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260430T155729-22e11d29",
+  "prompt_file": ".ddx/executions/20260430T155729-22e11d29/prompt.md",
+  "manifest_file": ".ddx/executions/20260430T155729-22e11d29/manifest.json",
+  "result_file": ".ddx/executions/20260430T155729-22e11d29/result.json",
+  "started_at": "2026-04-30T15:57:31.46646982Z",
+  "finished_at": "2026-04-30T15:57:46.53325509Z"
+}

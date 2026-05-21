@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260501T015602-6766c90e",
+  "bead_id": "agent-030f2bd8",
+  "base_rev": "a58aa332bd1674fc1f7b851fed2de236cce32fe2",
+  "created_at": "2026-05-01T01:56:03.146295773Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-030f2bd8",
+    "title": "FZ-050 Rename README primary content",
+    "description": "Update README for Fizeau/fiz, fizeau import path, .fizeau config, and FIZEAU env vars.",
+    "acceptance": "README uses Fizeau/fiz/current names; old names appear only in explicit migration note or allowlist.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:docs"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T015602-6766c90e",
+    "prompt": ".ddx/executions/20260501T015602-6766c90e/prompt.md",
+    "manifest": ".ddx/executions/20260501T015602-6766c90e/manifest.json",
+    "result": ".ddx/executions/20260501T015602-6766c90e/result.json",
+    "checks": ".ddx/executions/20260501T015602-6766c90e/checks.json",
+    "usage": ".ddx/executions/20260501T015602-6766c90e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-030f2bd8-20260501T015602-6766c90e"
+  }
+}

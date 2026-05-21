@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T165253-12b70a5c",
+  "bead_id": "agent-f9173d55",
+  "base_rev": "7f3c40b61c22472b7e9e213b0b11656dd8116db5",
+  "created_at": "2026-04-30T16:52:55.191116921Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-f9173d55",
+    "title": "CL-007c Archive raw demo session captures",
+    "description": "Archive only the raw demo JSONL captures approved by CL-004 row CL-004.17: demos/sessions/demo-read.jsonl, demo-edit.jsonl, and demo-bash.jsonl. Preserve the published website cast assets and keep demos/record.sh usable.",
+    "acceptance": "The three raw JSONL captures are moved out of demos/sessions into docs/research/archive/ or an equivalent archive path; website/static/demos/*.cast remains untouched; demos/record.sh still has a valid target directory behavior; rg shows no active references to the old JSONL paths outside cleanup/research history; bash -n demos/record.sh passes; close notes or commit cite CL-004.17.",
+    "parent": "agent-bcf3ef58",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:tooling"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T165253-12b70a5c",
+    "prompt": ".ddx/executions/20260430T165253-12b70a5c/prompt.md",
+    "manifest": ".ddx/executions/20260430T165253-12b70a5c/manifest.json",
+    "result": ".ddx/executions/20260430T165253-12b70a5c/result.json",
+    "checks": ".ddx/executions/20260430T165253-12b70a5c/checks.json",
+    "usage": ".ddx/executions/20260430T165253-12b70a5c/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-f9173d55-20260430T165253-12b70a5c"
+  }
+}

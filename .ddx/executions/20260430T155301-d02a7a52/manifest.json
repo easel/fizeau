@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260430T155301-d02a7a52",
+  "bead_id": "agent-235efb9a",
+  "base_rev": "d642d20f96c607a852847bfaa687faae78aab4a8",
+  "created_at": "2026-04-30T15:53:01.43586871Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-235efb9a",
+    "title": "CL-001 Define dead/duplicative cleanup criteria",
+    "description": "Define objective criteria for what may be deleted or archived before the rename. Cleanup must be evidence-driven: no imports, no active docs references, no CLI path, no generated asset dependency, or explicit duplicate supersession.",
+    "acceptance": "A cleanup criteria doc exists under docs/research/ and includes delete/archive/keep criteria, required evidence types, and rollback expectations.",
+    "parent": "agent-996dca04",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "phase:pre-rename"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T155301-d02a7a52",
+    "prompt": ".ddx/executions/20260430T155301-d02a7a52/prompt.md",
+    "manifest": ".ddx/executions/20260430T155301-d02a7a52/manifest.json",
+    "result": ".ddx/executions/20260430T155301-d02a7a52/result.json",
+    "checks": ".ddx/executions/20260430T155301-d02a7a52/checks.json",
+    "usage": ".ddx/executions/20260430T155301-d02a7a52/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-235efb9a-20260430T155301-d02a7a52"
+  }
+}

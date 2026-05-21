@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T165246-6c96ff95",
+  "bead_id": "agent-8e0b426d",
+  "base_rev": "7f3c40b61c22472b7e9e213b0b11656dd8116db5",
+  "created_at": "2026-04-30T16:52:47.706379952Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-8e0b426d",
+    "title": "CL-007b Archive orphan tasktracking eval fixture",
+    "description": "Archive only the orphan eval fixture approved by CL-004 row CL-004.15: eval/tasktracking/fixtures.yaml. Preserve the fixture under a research/archive path and do not invent a new eval runner.",
+    "acceptance": "The fixture is moved out of eval/tasktracking into docs/research/archive/ or an equivalent archive path; rg shows no active references to the old path outside cleanup/research history; go test ./eval/... or the nearest runnable eval check passes; close notes or commit cite CL-004.15.",
+    "parent": "agent-bcf3ef58",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:tooling"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T165246-6c96ff95",
+    "prompt": ".ddx/executions/20260430T165246-6c96ff95/prompt.md",
+    "manifest": ".ddx/executions/20260430T165246-6c96ff95/manifest.json",
+    "result": ".ddx/executions/20260430T165246-6c96ff95/result.json",
+    "checks": ".ddx/executions/20260430T165246-6c96ff95/checks.json",
+    "usage": ".ddx/executions/20260430T165246-6c96ff95/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-8e0b426d-20260430T165246-6c96ff95"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190850-6b2a3290",
+  "bead_id": "agent-b862a8e1",
+  "base_rev": "8e6f48668bf0956225f7970f96170e3b35d5a159",
+  "created_at": "2026-04-30T19:08:51.421736496Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-b862a8e1",
+    "title": "FZ-052 Rename website current content",
+    "description": "Update website current Hugo/Hextra content and hugo.yaml links for Fizeau/fiz. Visual refresh with skitch/DESIGN.md is out of scope.",
+    "acceptance": "Website build passes and a link check or static URL check passes; current website content uses Fizeau/fiz.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:website"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:50Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:50.923788427Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190850-6b2a3290",
+    "prompt": ".ddx/executions/20260430T190850-6b2a3290/prompt.md",
+    "manifest": ".ddx/executions/20260430T190850-6b2a3290/manifest.json",
+    "result": ".ddx/executions/20260430T190850-6b2a3290/result.json",
+    "checks": ".ddx/executions/20260430T190850-6b2a3290/checks.json",
+    "usage": ".ddx/executions/20260430T190850-6b2a3290/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-b862a8e1-20260430T190850-6b2a3290"
+  }
+}

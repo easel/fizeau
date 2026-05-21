@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260430T195920-771962a9",
+  "bead_id": "agent-0fdb9cc0",
+  "base_rev": "6d1568fcf16cadc3503050b7541370e838ca83ad",
+  "created_at": "2026-04-30T19:59:21.380484446Z",
+  "requested": {
+    "model": "qwen/qwen3.6-27b",
+    "provider": "bragi",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-0fdb9cc0",
+    "title": "FZ-026a Rename benchmark script env vars",
+    "description": "Rename benchmark shell script and benchmark README env vars from DDX_AGENT_* to FIZEAU_BENCH_* or FIZEAU_* per FZ-002 taxonomy.",
+    "acceptance": "scripts/benchmark README and shell scripts use enumerated new names; a chosen dry-run command passes; old DDX_AGENT_* absent outside allowlist in scripts/benchmark.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:tooling",
+      "area:benchmark"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:59:20Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "939331",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T19:08:31.981605399Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "routing under-specified: pass at least one of Harness/Profile/ModelRef/Model/Provider, or auto-selection inputs\nresult_rev=92f7e0acde180745ae5d17e0dc7fecfe899917a5\nbase_rev=92f7e0acde180745ae5d17e0dc7fecfe899917a5\nretry_after=2026-05-01T01:08:32Z",
+          "created_at": "2026-04-30T19:08:32.299627498Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-30T19:59:20.915229657Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T195920-771962a9",
+    "prompt": ".ddx/executions/20260430T195920-771962a9/prompt.md",
+    "manifest": ".ddx/executions/20260430T195920-771962a9/manifest.json",
+    "result": ".ddx/executions/20260430T195920-771962a9/result.json",
+    "checks": ".ddx/executions/20260430T195920-771962a9/checks.json",
+    "usage": ".ddx/executions/20260430T195920-771962a9/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-0fdb9cc0-20260430T195920-771962a9"
+  }
+}

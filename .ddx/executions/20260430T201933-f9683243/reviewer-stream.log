@@ -1,0 +1,12 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Audit table at .ddx/notes/FZ-027-fixture-audit.md documents every touched fixture/script; AGENT_*/DDX_AGENT_*/.agent literals in test fixtures are renamed or allowlisted in renamecheck.go with rationale tying back to a follow-up harness rename.",
+  "findings": [
+    { "severity": "info", "summary": "Audit notes 7 remaining .agent/~/.config/agent occurrences in README.md, demos/record.sh, scripts/benchmark/README.md, and website docs as 'out of scope'; these dirs are not in skippedDirs, so confirm renamecheck rules don't flag them or track a follow-up bead.", "location": ".ddx/notes/FZ-027-fixture-audit.md:60" },
+    { "severity": "info", "summary": "Renamed local var AGENT_VERSION→BINARY_VERSION but the resulting JSON field is still emitted as 'agent_version'; intentional for downstream report consumers but worth noting in case schema rename is desired later.", "location": "scripts/benchmark/run_benchmark.sh:391" },
+    { "severity": "info", "summary": "skippedFiles entries (harness_golden_integration_test.go, service_*_test.go) are root-relative basenames; if renamecheck matches by basename only this could mask same-named files elsewhere — minor, scope is small.", "location": "internal/renamecheck/renamecheck.go:60" }
+  ]
+}
+```

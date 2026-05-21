@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190842-fef53420",
+  "bead_id": "agent-484670dd",
+  "base_rev": "a1894c37f2a752f6ac07d2fb2971ae189892bda8",
+  "created_at": "2026-04-30T19:08:43.036363495Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-484670dd",
+    "title": "FZ-039 Rename GitHub repo metadata files",
+    "description": "Audit CODEOWNERS, issue templates, PR templates, and other .github metadata for old product naming.",
+    "acceptance": "All active .github metadata uses Fizeau/fiz or is allowlisted with reason.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:github"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:42Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:42.481522329Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190842-fef53420",
+    "prompt": ".ddx/executions/20260430T190842-fef53420/prompt.md",
+    "manifest": ".ddx/executions/20260430T190842-fef53420/manifest.json",
+    "result": ".ddx/executions/20260430T190842-fef53420/result.json",
+    "checks": ".ddx/executions/20260430T190842-fef53420/checks.json",
+    "usage": ".ddx/executions/20260430T190842-fef53420/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-484670dd-20260430T190842-fef53420"
+  }
+}

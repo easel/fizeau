@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260501T022915-89146f08",
+  "bead_id": "agent-5d9b8b16",
+  "base_rev": "d65b1e3045f974f44f2f1d920fc81ffd0f207070",
+  "created_at": "2026-05-01T02:29:15.59643375Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-5d9b8b16",
+    "title": "FZ-070 Promote rename-noise checker to CI gate",
+    "description": "After all rename leaves land, make the rename-noise checker fail CI on unallowlisted old names.",
+    "acceptance": "CI fails on unallowlisted old module path, package agent at root, ddx-agent, DDX Agent/DDx Agent, .agent, AGENT_*, and DDX_AGENT_*; CI passes on current tree.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:ci",
+      "phase:enforcement"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T022915-89146f08",
+    "prompt": ".ddx/executions/20260501T022915-89146f08/prompt.md",
+    "manifest": ".ddx/executions/20260501T022915-89146f08/manifest.json",
+    "result": ".ddx/executions/20260501T022915-89146f08/result.json",
+    "checks": ".ddx/executions/20260501T022915-89146f08/checks.json",
+    "usage": ".ddx/executions/20260501T022915-89146f08/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-5d9b8b16-20260501T022915-89146f08"
+  }
+}

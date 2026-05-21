@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260430T175819-aad34ec2",
+  "bead_id": "agent-ec6e3bf3",
+  "base_rev": "cd0b14984c175f4a84e3ca3afaa7d9e800445667",
+  "created_at": "2026-04-30T17:58:19.34138634Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-ec6e3bf3",
+    "title": "FZ-008 Define PR and branch strategy for rename",
+    "description": "Decide whether rename lands as stacked PRs, one integration branch, or sequential main commits, including how FZ-070 CI gate is staged.",
+    "acceptance": "Decision note states branch/PR strategy, merge order, and rollback checkpoints.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "phase:decision"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T175819-aad34ec2",
+    "prompt": ".ddx/executions/20260430T175819-aad34ec2/prompt.md",
+    "manifest": ".ddx/executions/20260430T175819-aad34ec2/manifest.json",
+    "result": ".ddx/executions/20260430T175819-aad34ec2/result.json",
+    "checks": ".ddx/executions/20260430T175819-aad34ec2/checks.json",
+    "usage": ".ddx/executions/20260430T175819-aad34ec2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-ec6e3bf3-20260430T175819-aad34ec2"
+  }
+}

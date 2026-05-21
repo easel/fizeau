@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T173221-44a63826",
+  "bead_id": "agent-737a1952",
+  "base_rev": "b31b1fbd56bc4f94427231b66c97534a7804fb88",
+  "created_at": "2026-04-30T17:32:21.711836812Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-737a1952",
+    "title": "FZ-001 Adopt Fizeau rename decision artifact",
+    "description": "Update the rename artifacts to adopt Fizeau/fiz and specify the broad boundary: module, root package, CLI, config dirs, env vars, public docs, DDx dependency, release/updater decision, and non-goals.",
+    "acceptance": "docs/research/rename-fizeau-2026-04-27.md contains H2 sections named Target Names, Rename Boundary, Non-Goals, Config/Env Policy, DDx Dependency, and Release/Updater Decision.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "phase:decision"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T173221-44a63826",
+    "prompt": ".ddx/executions/20260430T173221-44a63826/prompt.md",
+    "manifest": ".ddx/executions/20260430T173221-44a63826/manifest.json",
+    "result": ".ddx/executions/20260430T173221-44a63826/result.json",
+    "checks": ".ddx/executions/20260430T173221-44a63826/checks.json",
+    "usage": ".ddx/executions/20260430T173221-44a63826/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-737a1952-20260430T173221-44a63826"
+  }
+}

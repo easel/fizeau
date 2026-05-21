@@ -1,0 +1,89 @@
+{
+  "attempt_id": "20260429T183734-71069b77",
+  "bead_id": "agent-2259d69f",
+  "base_rev": "7fc42eeb1b73c73a6caa14dd6f6b7b16b440a000",
+  "created_at": "2026-04-29T18:37:35.003825323Z",
+  "requested": {
+    "harness": "lmstudio",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-2259d69f",
+    "title": "Step 0 — Model census + selection-fallback hierarchy",
+    "description": "Produce docs/research/model-census-2026-04-XX.md with one row per candidate (model, provider, release/refresh date, output $/Mtok, input $/Mtok, cached-input $/Mtok if applicable, max output tokens, tool-use quality, harness compatibility for codex/claude-code/opencode/pi/ddx-agent, model-snapshot-id). Apply the v7 selection-fallback hierarchy in order: (1) tool-use viable; (2) in bracket (output \u003c= $3/Mtok); (3) recency (\u003e=2025-11-01). Exclusions documented for audit trail. Pick Phase A.1 anchor + Phase A.2 second model from surviving rows; vendors must differ across A.1 anchor and A.2 second. Excluded by recency: GPT-4o, GPT-4.1-mini, original Sonnet/Haiku/Gemini-2.5-Flash. Excluded by bracket: Sonnet 4.6, Opus, GPT-5 full.",
+    "acceptance": "Doc lands; selection-fallback hierarchy applied per row with outcomes; user signs off on (anchor, second-model) pair. If no kept candidate exists for a vendor, that vendor is dropped from Phase A — not substituted with non-compliant fallback.",
+    "parent": "agent-6c7a4c11",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:benchmark",
+      "kind:spike",
+      "area:tooling"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-29T18:37:34Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "3001196",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-29T15:13:16.324194748Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260429T151014-815f10dc\",\"harness\":\"claude\",\"input_tokens\":18,\"output_tokens\":11266,\"total_tokens\":11284,\"cost_usd\":0.79460575,\"duration_ms\":181725,\"exit_code\":0}",
+          "created_at": "2026-04-29T15:13:16.391365092Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=11284 cost_usd=0.7946"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-04-29T15:16:39.725816888Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "REQUEST_CHANGES\nCensus doc applies hierarchy per row, documents exclusions, and proposes (GPT-5.3-mini, Gemini 3 Flash) pair with differing vendors. AC requires user sign-off, which is pending — doc is correctly marked DRAFT. Several pricing/recency values are unverified placeholders.\nartifact: .ddx/executions/20260429T151014-815f10dc/reviewer-stream.log\nharness=claude\nmodel=opus\ninput_bytes=19885\noutput_bytes=1536\nelapsed_ms=16487",
+          "created_at": "2026-04-29T15:16:56.336837149Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "REQUEST_CHANGES"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "2026-04-29T15:16:56.40302475Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review: REQUEST_CHANGES"
+        },
+        {
+          "actor": "erik",
+          "body": "post-merge review: REQUEST_CHANGES\nCensus doc applies hierarchy per row, documents exclusions, and proposes (GPT-5.3-mini, Gemini 3 Flash) pair with differing vendors. AC requires user sign-off, which is pending — doc is correctly marked DRAFT. Several pricing/recency values are unverified placeholders.\nresult_rev=f90c3732220cfa34a738c0c26d6ba20ae346c04b\nbase_rev=b4b6fc2f5a6155698f69fb969059d50cea5e0873",
+          "created_at": "2026-04-29T15:16:56.465172652Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_request_changes"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-29T18:37:34.306441263Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260429T183734-71069b77",
+    "prompt": ".ddx/executions/20260429T183734-71069b77/prompt.md",
+    "manifest": ".ddx/executions/20260429T183734-71069b77/manifest.json",
+    "result": ".ddx/executions/20260429T183734-71069b77/result.json",
+    "checks": ".ddx/executions/20260429T183734-71069b77/checks.json",
+    "usage": ".ddx/executions/20260429T183734-71069b77/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-2259d69f-20260429T183734-71069b77"
+  }
+}

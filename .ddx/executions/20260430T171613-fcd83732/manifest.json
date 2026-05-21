@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T171613-fcd83732",
+  "bead_id": "agent-71632f5a",
+  "base_rev": "f6139871ddf1ed97011a77d7bec17d96028b995b",
+  "created_at": "2026-04-30T17:16:13.557212423Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-71632f5a",
+    "title": "CL-008 Publish post-cleanup rename-surface count",
+    "description": "After cleanup deletes land, measure the remaining rename surface so Fizeau beads operate on the smallest practical set of files.",
+    "acceptance": "A docs/research note records counts for old module path, package agent at root, ddx-agent, DDX Agent/DDx Agent, .agent, AGENT_*, DDX_AGENT_* and compares them to the pre-cleanup baseline.",
+    "parent": "agent-996dca04",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "phase:pre-rename"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T171613-fcd83732",
+    "prompt": ".ddx/executions/20260430T171613-fcd83732/prompt.md",
+    "manifest": ".ddx/executions/20260430T171613-fcd83732/manifest.json",
+    "result": ".ddx/executions/20260430T171613-fcd83732/result.json",
+    "checks": ".ddx/executions/20260430T171613-fcd83732/checks.json",
+    "usage": ".ddx/executions/20260430T171613-fcd83732/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-71632f5a-20260430T171613-fcd83732"
+  }
+}

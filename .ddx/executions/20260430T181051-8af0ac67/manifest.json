@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T181051-8af0ac67",
+  "bead_id": "agent-6a2616c8",
+  "base_rev": "c5c5e3acf60c84a16fe48e78eba82d0e574941e8",
+  "created_at": "2026-04-30T18:10:52.056420996Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-6a2616c8",
+    "title": "FZ-030 Rename productinfo constants to Fizeau",
+    "description": "Change internal/productinfo source-of-truth values to Fizeau, fiz, and fizeau.",
+    "acceptance": "productinfo has Name=Fizeau, BinaryName=fiz, ConfigDir=fizeau; targeted tests pass.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:go",
+      "area:product"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T181051-8af0ac67",
+    "prompt": ".ddx/executions/20260430T181051-8af0ac67/prompt.md",
+    "manifest": ".ddx/executions/20260430T181051-8af0ac67/manifest.json",
+    "result": ".ddx/executions/20260430T181051-8af0ac67/result.json",
+    "checks": ".ddx/executions/20260430T181051-8af0ac67/checks.json",
+    "usage": ".ddx/executions/20260430T181051-8af0ac67/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-6a2616c8-20260430T181051-8af0ac67"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "bead_id": "agent-2259d69f",
+  "attempt_id": "20260429T183734-71069b77",
+  "base_rev": "7fc42eeb1b73c73a6caa14dd6f6b7b16b440a000",
+  "result_rev": "7fc42eeb1b73c73a6caa14dd6f6b7b16b440a000",
+  "outcome": "task_no_changes",
+  "status": "no_changes",
+  "detail": "no_changes",
+  "harness": "lmstudio",
+  "provider": "bragi",
+  "session_id": "eb-a00a43ec",
+  "duration_ms": 5542211,
+  "tokens": 80688,
+  "exit_code": 0,
+  "failure_mode": "no_changes",
+  "execution_dir": ".ddx/executions/20260429T183734-71069b77",
+  "prompt_file": ".ddx/executions/20260429T183734-71069b77/prompt.md",
+  "manifest_file": ".ddx/executions/20260429T183734-71069b77/manifest.json",
+  "result_file": ".ddx/executions/20260429T183734-71069b77/result.json",
+  "usage_file": ".ddx/executions/20260429T183734-71069b77/usage.json",
+  "started_at": "2026-04-29T18:37:35.005436618Z",
+  "finished_at": "2026-04-29T20:09:57.216862299Z"
+}

@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190827-44b7d5a9",
+  "bead_id": "agent-db083b89",
+  "base_rev": "edeedb37f4151721afb273631f5783bb38f02e5f",
+  "created_at": "2026-04-30T19:08:27.869707138Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-db083b89",
+    "title": "FZ-023 Rename runtime provider env vars to FIZEAU",
+    "description": "Hard-cut provider env overrides from AGENT_PROVIDER/BASE_URL/API_KEY/MODEL to FIZEAU_PROVIDER/BASE_URL/API_KEY/MODEL. No aliases.",
+    "acceptance": "Tests prove FIZEAU_PROVIDER, FIZEAU_BASE_URL, FIZEAU_API_KEY, and FIZEAU_MODEL work; old runtime env names are absent outside allowlist.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:config",
+      "area:env"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:27Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:27.381822408Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190827-44b7d5a9",
+    "prompt": ".ddx/executions/20260430T190827-44b7d5a9/prompt.md",
+    "manifest": ".ddx/executions/20260430T190827-44b7d5a9/manifest.json",
+    "result": ".ddx/executions/20260430T190827-44b7d5a9/result.json",
+    "checks": ".ddx/executions/20260430T190827-44b7d5a9/checks.json",
+    "usage": ".ddx/executions/20260430T190827-44b7d5a9/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-db083b89-20260430T190827-44b7d5a9"
+  }
+}

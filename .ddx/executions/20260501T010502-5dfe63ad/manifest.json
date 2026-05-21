@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260501T010502-5dfe63ad",
+  "bead_id": "agent-5b9dabb2",
+  "base_rev": "d371972349d502fea1cc30c71994fa7b001d3a09",
+  "created_at": "2026-05-01T01:05:02.933873134Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-5b9dabb2",
+    "title": "FZ-028 Audit embedded assets and testdata for old names",
+    "description": "Audit //go:embed assets, testdata, golden files, JSON fixtures, and generated snapshots for old product/config/env names.",
+    "acceptance": "Every embedded/testdata old-name hit is renamed or allowlisted with reason; relevant targeted tests pass.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:test",
+      "phase:config"
+    ],
+    "metadata": {
+      "claimed-at": "2026-05-01T01:05:02Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "992502",
+      "execute-loop-heartbeat-at": "2026-05-01T01:05:02.409990741Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T010502-5dfe63ad",
+    "prompt": ".ddx/executions/20260501T010502-5dfe63ad/prompt.md",
+    "manifest": ".ddx/executions/20260501T010502-5dfe63ad/manifest.json",
+    "result": ".ddx/executions/20260501T010502-5dfe63ad/result.json",
+    "checks": ".ddx/executions/20260501T010502-5dfe63ad/checks.json",
+    "usage": ".ddx/executions/20260501T010502-5dfe63ad/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-5b9dabb2-20260501T010502-5dfe63ad"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "bead_id": "agent-fb8db30d",
+  "attempt_id": "20260430T193021-dbf76813",
+  "base_rev": "104a9b405ca7def8a41d721161877d587c477715",
+  "result_rev": "104a9b405ca7def8a41d721161877d587c477715",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "agent: execute: model \"haiku\" is not supported by harness \"claude\"; supported models: sonnet, sonnet-4.6, opus, opus-4.7, claude-sonnet-4-6",
+  "harness": "claude",
+  "model": "haiku",
+  "session_id": "eb-7978504c",
+  "duration_ms": 4178,
+  "exit_code": 1,
+  "error": "agent: execute: model \"haiku\" is not supported by harness \"claude\"; supported models: sonnet, sonnet-4.6, opus, opus-4.7, claude-sonnet-4-6",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260430T193021-dbf76813",
+  "prompt_file": ".ddx/executions/20260430T193021-dbf76813/prompt.md",
+  "manifest_file": ".ddx/executions/20260430T193021-dbf76813/manifest.json",
+  "result_file": ".ddx/executions/20260430T193021-dbf76813/result.json",
+  "started_at": "2026-04-30T19:30:22.171765532Z",
+  "finished_at": "2026-04-30T19:30:26.350329856Z"
+}

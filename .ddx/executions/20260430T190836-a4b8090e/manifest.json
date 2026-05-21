@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190836-a4b8090e",
+  "bead_id": "agent-bf64dc3b",
+  "base_rev": "f324fcf37354e5c643218a74690546fed0b5abe4",
+  "created_at": "2026-04-30T19:08:37.375348879Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-bf64dc3b",
+    "title": "FZ-034 Rename updater to fiz artifacts",
+    "description": "Update updater artifact lookup, messages, and tests to use fiz artifacts and implement hard-cut or bridge behavior from FZ-004.",
+    "acceptance": "Updater tests pass and assert behavior specified by FZ-004; user-facing updater messages say Fizeau/fiz.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:release",
+      "area:update"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:36Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:36.876365565Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190836-a4b8090e",
+    "prompt": ".ddx/executions/20260430T190836-a4b8090e/prompt.md",
+    "manifest": ".ddx/executions/20260430T190836-a4b8090e/manifest.json",
+    "result": ".ddx/executions/20260430T190836-a4b8090e/result.json",
+    "checks": ".ddx/executions/20260430T190836-a4b8090e/checks.json",
+    "usage": ".ddx/executions/20260430T190836-a4b8090e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-bf64dc3b-20260430T190836-a4b8090e"
+  }
+}

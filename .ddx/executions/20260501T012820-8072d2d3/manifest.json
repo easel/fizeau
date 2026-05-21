@@ -1,0 +1,52 @@
+{
+  "attempt_id": "20260501T012820-8072d2d3",
+  "bead_id": "agent-9a551983",
+  "base_rev": "b0c07c1137e6fd742e725713a50f7647d9074d20",
+  "created_at": "2026-05-01T01:28:21.016282433Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-9a551983",
+    "title": "FZ-035a Rename bench command to fiz-bench",
+    "description": "Update cmd/bench command name/help/errors/tests from ddx-agent-bench to fiz-bench.",
+    "acceptance": "cmd/bench tests pass and help/errors use fiz-bench.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:go",
+      "area:benchmark"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T19:08:38.888401486Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "routing under-specified: pass at least one of Harness/Profile/ModelRef/Model/Provider, or auto-selection inputs\nresult_rev=cfed14d60821a4c7d22748d32ba1e0359d89dfa4\nbase_rev=cfed14d60821a4c7d22748d32ba1e0359d89dfa4\nretry_after=2026-05-01T01:08:39Z",
+          "created_at": "2026-04-30T19:08:39.236133984Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T012820-8072d2d3",
+    "prompt": ".ddx/executions/20260501T012820-8072d2d3/prompt.md",
+    "manifest": ".ddx/executions/20260501T012820-8072d2d3/manifest.json",
+    "result": ".ddx/executions/20260501T012820-8072d2d3/result.json",
+    "checks": ".ddx/executions/20260501T012820-8072d2d3/checks.json",
+    "usage": ".ddx/executions/20260501T012820-8072d2d3/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-9a551983-20260501T012820-8072d2d3"
+  }
+}

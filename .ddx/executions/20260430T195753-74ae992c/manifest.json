@@ -1,0 +1,51 @@
+{
+  "harness": "claude",
+  "model": "opus",
+  "session_id": "/home/erik/Projects/agent/.ddx/agent-logs/svc-1777579073523894701.jsonl",
+  "base_rev": "a72d7103b651f6d44c1fd5bd4a1ee5385c6bfcc1",
+  "result_rev": "e9c587465b9b47fad11a151a0e2b1b2379883764",
+  "verdict": "APPROVE",
+  "bead_id": "agent-15a78af8",
+  "execution_dir": ".ddx/executions/20260430T195753-74ae992c",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1017,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 390,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "docs/helix/02-design/harness-golden-integration.md",
+          "docs/research/scripts-fixtures-assets-cleanup-inventory-2026-04-30.md",
+          "harness_golden_integration_test.go",
+          "internal/harnesses/claude/quota_pty_integration_test.go",
+          "internal/harnesses/codex/quota_pty_integration_test.go"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 11735,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 14768,
+    "output_bytes": 787,
+    "elapsed_ms": 31810,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

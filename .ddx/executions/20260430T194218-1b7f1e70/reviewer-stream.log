@@ -1,0 +1,13 @@
+Old `AGENT_DEBUG_WIRE` references remain only in `CHANGELOG.md` and `.ddx/beads.jsonl`, both of which are explicitly allowlisted as historical evidence per `docs/research/fizeau-rename-allowlist-2026-04-30.md` (entries for `AGENT_*` env vars). The rename is consistent across the doc, code, and test, and tests reference the env vars through the `envDebugWire*` constants so the literal-string rename should not break them.
+
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "All three wire-debug env vars renamed to FIZEAU_* in code, doc comment, FEAT-003 spec, and test comment. Remaining AGENT_DEBUG_WIRE references are confined to CHANGELOG.md and .ddx/beads.jsonl — both historical surfaces per the rename allowlist.",
+  "findings": [
+    { "severity": "info", "summary": "Constant identifier envDebugWire and field comments still use the historical 'agent:' prefix in the stderr fallback message; acceptable since the constant value is what is contractual.", "location": "internal/sdk/openaicompat/debug.go:76" },
+    { "severity": "info", "summary": "CHANGELOG.md still contains AGENT_DEBUG_WIRE strings (lines 880, 895, 922, 925) as historical release notes; allowed by the rename allowlist's historical classification.", "location": "CHANGELOG.md:880" }
+  ]
+}
+```

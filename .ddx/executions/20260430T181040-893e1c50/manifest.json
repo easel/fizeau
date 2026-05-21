@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T181040-893e1c50",
+  "bead_id": "agent-9a2780d8",
+  "base_rev": "c5c5e3acf60c84a16fe48e78eba82d0e574941e8",
+  "created_at": "2026-04-30T18:10:40.506592598Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-9a2780d8",
+    "title": "FZ-003 Add rename-noise checker in report-only mode",
+    "description": "Add a checker that reports unallowlisted old-name hits using FZ-002 taxonomy, but exits 0 while the rename is in progress.",
+    "acceptance": "Checker command and Makefile target exist; fixture test proves allowlisted hits do not fail and forbidden hits are reported; report-only mode exits 0.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:tooling",
+      "phase:safety"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T181040-893e1c50",
+    "prompt": ".ddx/executions/20260430T181040-893e1c50/prompt.md",
+    "manifest": ".ddx/executions/20260430T181040-893e1c50/manifest.json",
+    "result": ".ddx/executions/20260430T181040-893e1c50/result.json",
+    "checks": ".ddx/executions/20260430T181040-893e1c50/checks.json",
+    "usage": ".ddx/executions/20260430T181040-893e1c50/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-9a2780d8-20260430T181040-893e1c50"
+  }
+}

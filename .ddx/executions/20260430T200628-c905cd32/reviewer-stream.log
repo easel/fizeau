@@ -1,0 +1,13 @@
+Skipping the syntax check since it wasn't approved. The grep verification is sufficient: zero `DDX_AGENT_*` references remain in `scripts/benchmark`, and `FIZEAU_BENCH_BINARY`/`FIZEAU_BENCH_SHA` appear consistently across all four files (README, env file, both scripts).
+
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Rename is complete and consistent: DDX_AGENT_BINARY/SHA → FIZEAU_BENCH_BINARY/SHA across README, env file, run_benchmark.sh, and smoke_run.sh. Grep confirms zero DDX_AGENT_* remain in scripts/benchmark; DDX_BENCH_* (separate namespace) preserved correctly.",
+  "findings": [
+    { "severity": "info", "summary": "Bash -n syntax check was not run (tool approval declined); rename is purely literal substitution within existing parameter expansions, so structural risk is minimal.", "location": "scripts/benchmark/run_benchmark.sh" },
+    { "severity": "info", "summary": "Example paths in README and env file still reference 'ddx-agent-linux-amd64' as the artifact filename — not in scope for this env-var rename bead but worth noting for follow-up.", "location": "scripts/benchmark/README.md:60" }
+  ]
+}
+```

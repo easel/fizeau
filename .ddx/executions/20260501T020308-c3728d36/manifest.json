@@ -1,0 +1,52 @@
+{
+  "attempt_id": "20260501T020308-c3728d36",
+  "bead_id": "agent-466ec5bd",
+  "base_rev": "217c64b907c733396896f0a6ce5b2c06d834776f",
+  "created_at": "2026-05-01T02:03:08.839100339Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-466ec5bd",
+    "title": "FZ-036a Rename README badges and repo URLs",
+    "description": "Update README badges and repository URLs after repo rename decision.",
+    "acceptance": "README badges/URLs point to DocumentDrivenDX/fizeau or are explicitly deferred by FZ-004.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:docs"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T19:08:54.669530729Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "routing under-specified: pass at least one of Harness/Profile/ModelRef/Model/Provider, or auto-selection inputs\nresult_rev=f05b5e0bd738f11931a47a11eca2dea9063eae76\nbase_rev=f05b5e0bd738f11931a47a11eca2dea9063eae76\nretry_after=2026-05-01T01:08:54Z",
+          "created_at": "2026-04-30T19:08:55.018290333Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T020308-c3728d36",
+    "prompt": ".ddx/executions/20260501T020308-c3728d36/prompt.md",
+    "manifest": ".ddx/executions/20260501T020308-c3728d36/manifest.json",
+    "result": ".ddx/executions/20260501T020308-c3728d36/result.json",
+    "checks": ".ddx/executions/20260501T020308-c3728d36/checks.json",
+    "usage": ".ddx/executions/20260501T020308-c3728d36/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-466ec5bd-20260501T020308-c3728d36"
+  }
+}

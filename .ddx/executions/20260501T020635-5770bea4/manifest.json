@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260501T020635-5770bea4",
+  "bead_id": "agent-7d488208",
+  "base_rev": "bfc829fd10af28c616f9554565000db3a4508a82",
+  "created_at": "2026-05-01T02:06:36.285358618Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-7d488208",
+    "title": "FZ-040c Document telemetry dashboard impact",
+    "description": "Document dashboard/query impact of telemetry identity changes so operators can update external observability if needed.",
+    "acceptance": "Telemetry impact note lists changed service names/keys and required dashboard updates or states none.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:telemetry"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T020635-5770bea4",
+    "prompt": ".ddx/executions/20260501T020635-5770bea4/prompt.md",
+    "manifest": ".ddx/executions/20260501T020635-5770bea4/manifest.json",
+    "result": ".ddx/executions/20260501T020635-5770bea4/result.json",
+    "checks": ".ddx/executions/20260501T020635-5770bea4/checks.json",
+    "usage": ".ddx/executions/20260501T020635-5770bea4/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-7d488208-20260501T020635-5770bea4"
+  }
+}

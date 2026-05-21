@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T181030-d1c5977f",
+  "bead_id": "agent-81cd8519",
+  "base_rev": "c5c5e3acf60c84a16fe48e78eba82d0e574941e8",
+  "created_at": "2026-04-30T18:10:31.06629276Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-81cd8519",
+    "title": "FZ-012a Decide public Go symbol rename table",
+    "description": "Audit exported root/API symbols and decide which are product-brand names versus domain LLM-agent names.",
+    "acceptance": "Decision table lists DdxAgent, AgentInfo, AgentName, and any other exported agent-named symbols with keep/rename decision and reason. No code changes.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:docs",
+      "area:api"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T181030-d1c5977f",
+    "prompt": ".ddx/executions/20260430T181030-d1c5977f/prompt.md",
+    "manifest": ".ddx/executions/20260430T181030-d1c5977f/manifest.json",
+    "result": ".ddx/executions/20260430T181030-d1c5977f/result.json",
+    "checks": ".ddx/executions/20260430T181030-d1c5977f/checks.json",
+    "usage": ".ddx/executions/20260430T181030-d1c5977f/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-81cd8519-20260430T181030-d1c5977f"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "harness": "claude",
+  "model": "opus",
+  "session_id": "/home/erik/Projects/agent/.ddx/agent-logs/svc-1777578076099945878.jsonl",
+  "base_rev": "0126ed94c83e53dccb6371d903a83f9629f72bc3",
+  "result_rev": "8e7404c798622ab74cac7985133c9c15a52e322c",
+  "verdict": "APPROVE",
+  "bead_id": "agent-db083b89",
+  "execution_dir": ".ddx/executions/20260430T194116-6c4b0c58",
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 511,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 705,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "README.md",
+          "agentcli/cli_process_test.go",
+          "agentcli/run.go",
+          "demos/record.sh",
+          "docs/helix/01-frame/features/FEAT-006-standalone-cli.md",
+          "docs/helix/02-design/plan-2026-04-08-rename-agent.md",
+          "docs/helix/02-design/solution-designs/SD-002-standalone-cli.md",
+          "docs/helix/02-design/solution-designs/SD-007-provider-import.md",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "picompat/translate.go",
+          "service_new_test.go",
+          "website/content/docs/getting-started.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 11271,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 14113,
+    "output_bytes": 793,
+    "elapsed_ms": 36392,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

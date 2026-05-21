@@ -1,0 +1,52 @@
+{
+  "attempt_id": "20260501T011219-2b434409",
+  "bead_id": "agent-5b9dabb2",
+  "base_rev": "9bd5e9f344007e13cc569583753c93f6cb931b6a",
+  "created_at": "2026-05-01T01:12:20.001284941Z",
+  "requested": {
+    "harness": "claude",
+    "model": "sonnet",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-5b9dabb2",
+    "title": "FZ-028 Audit embedded assets and testdata for old names",
+    "description": "Audit //go:embed assets, testdata, golden files, JSON fixtures, and generated snapshots for old product/config/env names.",
+    "acceptance": "Every embedded/testdata old-name hit is renamed or allowlisted with reason; relevant targeted tests pass.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:test",
+      "phase:config"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen/qwen3.6-35b-a3b\",\"fallback_chain\":[],\"requested_harness\":\"agent\",\"requested_provider\":\"bragi\",\"requested_model\":\"qwen/qwen3.6-35b-a3b\"}",
+          "created_at": "2026-05-01T01:11:34.308037162Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=bragi model=qwen/qwen3.6-35b-a3b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260501T010829-c8eba7b5\",\"harness\":\"agent\",\"provider\":\"bragi\",\"model\":\"qwen/qwen3.6-35b-a3b\",\"input_tokens\":26665,\"output_tokens\":2621,\"total_tokens\":29286,\"cost_usd\":0,\"duration_ms\":184349,\"exit_code\":1}",
+          "created_at": "2026-05-01T01:11:34.393368692Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=29286 model=qwen/qwen3.6-35b-a3b"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T011219-2b434409",
+    "prompt": ".ddx/executions/20260501T011219-2b434409/prompt.md",
+    "manifest": ".ddx/executions/20260501T011219-2b434409/manifest.json",
+    "result": ".ddx/executions/20260501T011219-2b434409/result.json",
+    "checks": ".ddx/executions/20260501T011219-2b434409/checks.json",
+    "usage": ".ddx/executions/20260501T011219-2b434409/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-5b9dabb2-20260501T011219-2b434409"
+  }
+}

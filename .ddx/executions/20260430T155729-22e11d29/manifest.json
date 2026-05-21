@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T155729-22e11d29",
+  "bead_id": "agent-e965bac2",
+  "base_rev": "69f2646a37b74abdec2b5262f2ad3912a4f9db26",
+  "created_at": "2026-04-30T15:57:31.444981279Z",
+  "requested": {
+    "harness": "lmstudio",
+    "model": "qwen3.6-27b",
+    "provider": "hel",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-e965bac2",
+    "title": "CL-003 Inventory duplicate or stale docs",
+    "description": "Inventory docs that are duplicate, stale, or historical before the rename. Do not edit/delete docs in this bead.",
+    "acceptance": "Inventory table lists active/historical/delete/archive status for docs candidates and cites the replacement or reason.",
+    "parent": "agent-996dca04",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:docs"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T155729-22e11d29",
+    "prompt": ".ddx/executions/20260430T155729-22e11d29/prompt.md",
+    "manifest": ".ddx/executions/20260430T155729-22e11d29/manifest.json",
+    "result": ".ddx/executions/20260430T155729-22e11d29/result.json",
+    "checks": ".ddx/executions/20260430T155729-22e11d29/checks.json",
+    "usage": ".ddx/executions/20260430T155729-22e11d29/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-e965bac2-20260430T155729-22e11d29"
+  }
+}

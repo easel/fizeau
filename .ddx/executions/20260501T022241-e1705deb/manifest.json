@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260501T022241-e1705deb",
+  "bead_id": "agent-fdbf75d5",
+  "base_rev": "6f3eaf7660a4ffa1143e7775e9410a1cd6932424",
+  "created_at": "2026-05-01T02:22:42.242332077Z",
+  "requested": {
+    "harness": "codex",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-fdbf75d5",
+    "title": "FZ-060 File DDx downstream migration bead",
+    "description": "Create a DDx-side tracker bead for importing github.com/DocumentDrivenDX/fizeau and consuming fiz/FIZEAU rename surfaces.",
+    "acceptance": "DDx tracker contains a bead with import path, config/env, binary implications, and dependency on a Fizeau pre-release.",
+    "parent": "agent-2b694e0e",
+    "labels": [
+      "area:rename",
+      "kind:tracking",
+      "area:ddx"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-30T19:08:58.813712143Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "routing under-specified: pass at least one of Harness/Profile/ModelRef/Model/Provider, or auto-selection inputs\nresult_rev=26b39907e220340cc7d33c1116052fb9d322e3cd\nbase_rev=26b39907e220340cc7d33c1116052fb9d322e3cd\nretry_after=2026-05-01T01:08:59Z",
+          "created_at": "2026-04-30T19:08:59.16990273Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260501T022241-e1705deb",
+    "prompt": ".ddx/executions/20260501T022241-e1705deb/prompt.md",
+    "manifest": ".ddx/executions/20260501T022241-e1705deb/manifest.json",
+    "result": ".ddx/executions/20260501T022241-e1705deb/result.json",
+    "checks": ".ddx/executions/20260501T022241-e1705deb/checks.json",
+    "usage": ".ddx/executions/20260501T022241-e1705deb/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-fdbf75d5-20260501T022241-e1705deb"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "attempt_id": "20260430T190859-d44cce42",
+  "bead_id": "agent-c263de66",
+  "base_rev": "9aebbf45b2f1e5096083fb8d53b73c87a1391949",
+  "created_at": "2026-04-30T19:09:00.116961267Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-c263de66",
+    "title": "Provide OPENAI_API_KEY for Phase A.1 live matrix",
+    "description": "Human-owned credential prerequisite for the Phase A.1 live matrix. Tooling prerequisites are now installed and verified, but the paid OpenAI credential is not present in the environment. This bead should be completed by exporting the required secret in the intended execution environment; do not record the secret value in tracker notes or docs.",
+    "acceptance": "1. In the intended execution environment, 'test -n \"$OPENAI_API_KEY\"' succeeds. 2. A tracker note records only the variable name OPENAI_API_KEY and the verification timestamp, without exposing the secret value.",
+    "parent": "agent-73f90363",
+    "labels": [
+      "helix",
+      "kind:credential",
+      "area:ci"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-30T19:08:59Z",
+      "claimed-machine": "sindri",
+      "claimed-pid": "705043",
+      "execute-loop-heartbeat-at": "2026-04-30T19:08:59.587596791Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T190859-d44cce42",
+    "prompt": ".ddx/executions/20260430T190859-d44cce42/prompt.md",
+    "manifest": ".ddx/executions/20260430T190859-d44cce42/manifest.json",
+    "result": ".ddx/executions/20260430T190859-d44cce42/result.json",
+    "checks": ".ddx/executions/20260430T190859-d44cce42/checks.json",
+    "usage": ".ddx/executions/20260430T190859-d44cce42/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-c263de66-20260430T190859-d44cce42"
+  }
+}

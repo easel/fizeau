@@ -1,0 +1,65 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Hard-cut rename complete: all four FIZEAU_* env vars exercised by tests in config_test.go, cli_process_test.go, and service_new_test.go; old AGENT_* runtime names remain only in .ddx/beads.jsonl tracker history.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "All four FIZEAU_PROVIDER/BASE_URL/API_KEY/MODEL vars are covered across unit tests (config_test.go) and integration tests (cli_process_test.go, service_new_test.go).",
+      "location": "internal/config/config_test.go:259"
+    },
+    {
+      "severity": "info",
+      "summary": "Code, docs, and demo script consistently switched; remaining AGENT_* matches are confined to the bead tracker file, which records historical bead text.",
+      "location": ".ddx/beads.jsonl"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 511,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 705,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "README.md",
+          "agentcli/cli_process_test.go",
+          "agentcli/run.go",
+          "demos/record.sh",
+          "docs/helix/01-frame/features/FEAT-006-standalone-cli.md",
+          "docs/helix/02-design/plan-2026-04-08-rename-agent.md",
+          "docs/helix/02-design/solution-designs/SD-002-standalone-cli.md",
+          "docs/helix/02-design/solution-designs/SD-007-provider-import.md",
+          "internal/config/config.go",
+          "internal/config/config_test.go",
+          "picompat/translate.go",
+          "service_new_test.go",
+          "website/content/docs/getting-started.md"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 11271,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 14113,
+    "output_bytes": 793,
+    "elapsed_ms": 36392,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

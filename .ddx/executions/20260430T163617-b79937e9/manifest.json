@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260430T163617-b79937e9",
+  "bead_id": "agent-2ea4e19b",
+  "base_rev": "c815362ace5751df13e97283cd1010f21d8a0603",
+  "created_at": "2026-04-30T16:36:17.557167985Z",
+  "requested": {
+    "harness": "omlx",
+    "model": "Qwen3.6-27B-MLX-8bit",
+    "provider": "vidar",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "agent-2ea4e19b",
+    "title": "CL-006b Archive historical tool-evolution matrix doc",
+    "description": "Archive only the historical doc approved by CL-003 row CL-003.12: scripts/benchmark/tool-evolution-matrix.md. Preserve content and move it under a clearly marked research archive path.",
+    "acceptance": "The file is moved out of scripts/benchmark into docs/research/archive/ or an equivalent archive path; rg shows no active references to the old path outside cleanup/research history; relevant docs checks pass; close notes or commit cite CL-003.12.",
+    "parent": "agent-b46430d2",
+    "labels": [
+      "area:rename",
+      "kind:cleanup",
+      "area:docs"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260430T163617-b79937e9",
+    "prompt": ".ddx/executions/20260430T163617-b79937e9/prompt.md",
+    "manifest": ".ddx/executions/20260430T163617-b79937e9/manifest.json",
+    "result": ".ddx/executions/20260430T163617-b79937e9/result.json",
+    "checks": ".ddx/executions/20260430T163617-b79937e9/checks.json",
+    "usage": ".ddx/executions/20260430T163617-b79937e9/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-agent-2ea4e19b-20260430T163617-b79937e9"
+  }
+}
