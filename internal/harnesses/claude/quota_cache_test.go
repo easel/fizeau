@@ -97,6 +97,11 @@ func TestWriteClaudeQuotaAtomicAndMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm())
 
+	// Verify the containing directory is not world-readable.
+	dirInfo, err := os.Stat(filepath.Dir(path))
+	require.NoError(t, err)
+	assert.Equal(t, fs.FileMode(0o750), dirInfo.Mode().Perm())
+
 	// No leftover tmp file.
 	_, err = os.Stat(path + ".tmp")
 	assert.True(t, os.IsNotExist(err), "tmp file should not remain after rename")
