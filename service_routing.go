@@ -132,7 +132,12 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 	if result != nil {
 		result.RequestedPolicy = req.Policy
 		result.PowerPolicy = powerPolicy
-		result.Model = resolveSubprocessModelAlias(result.Harness, result.Model)
+		// Skip subprocess model alias resolution for subscription harnesses;
+		// their model names from the catalog don't need dynamic discovery.
+		cfg, ok := s.registry.Get(result.Harness)
+		if !ok || harnessPaymentKind(result.Harness, cfg) != modelcatalog.BillingModelSubscription {
+			result.Model = resolveSubprocessModelAlias(result.Harness, result.Model)
+		}
 		result.Power = catalogPowerForModel(cat, result.Model)
 	}
 	s.cacheRouteDecision(req.Model, result)
@@ -714,13 +719,15 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 			entry.AutoRoutingEligible = false
 		}
 
-		if qs, ok := subscriptionQuotaForHarness(name, time.Now()); ok {
-			entry.QuotaOK = qs.OK
-			entry.QuotaStale = qs.Present && !qs.Fresh
-			entry.SubscriptionOK = qs.OK
-			entry.QuotaPercentUsed = qs.PercentUsed
-			entry.QuotaTrend = qs.Trend
-			entry.QuotaReason = qs.Reason
+		if st.Available {
+			if qs, ok := subscriptionQuotaForHarness(name, time.Now()); ok {
+				entry.QuotaOK = qs.OK
+				entry.QuotaStale = qs.Present && !qs.Fresh
+				entry.SubscriptionOK = qs.OK
+				entry.QuotaPercentUsed = qs.PercentUsed
+				entry.QuotaTrend = qs.Trend
+				entry.QuotaReason = qs.Reason
+			}
 		}
 
 		// Native "fiz" harness: enumerate snapshot-derived provider rows.

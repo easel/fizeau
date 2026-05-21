@@ -28,7 +28,9 @@ func SubscriptionForHarness(name string, now time.Time) (SubscriptionView, bool)
 	if !ok {
 		return SubscriptionView{}, false
 	}
-	status, err := qh.QuotaStatus(context.Background(), now)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	status, err := qh.QuotaStatus(ctx, now)
 	if err != nil {
 		return SubscriptionView{}, false
 	}

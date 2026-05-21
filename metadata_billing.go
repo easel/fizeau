@@ -29,6 +29,14 @@ func providerTypeUsesFixedBilling(providerType string) bool {
 
 func routingHarnessEntryFromMetadata(name string, cfg harnesses.HarnessConfig, st harnesses.HarnessStatus) routing.HarnessEntry {
 	billing := harnessPaymentKind(name, cfg)
+	supportedModels := []string(nil)
+	autoRoutingModels := []string(nil)
+	// Skip expensive model discovery for subscription harnesses and unavailable harnesses.
+	// Subscription harnesses use catalog-based models instead of dynamic discovery.
+	if st.Available && billing != modelcatalog.BillingModelSubscription {
+		supportedModels = subprocessHarnessModelIDs(name, cfg)
+		autoRoutingModels = subprocessHarnessAutoRoutingModels(name, cfg)
+	}
 	return routing.HarnessEntry{
 		Name:                name,
 		Surface:             cfg.Surface,
@@ -40,8 +48,8 @@ func routingHarnessEntryFromMetadata(name string, cfg harnesses.HarnessConfig, s
 		TestOnly:            cfg.TestOnly,
 		ExactPinSupport:     cfg.ExactPinSupport,
 		DefaultModel:        cfg.DefaultModel,
-		SupportedModels:     subprocessHarnessModelIDs(name, cfg),
-		AutoRoutingModels:   subprocessHarnessAutoRoutingModels(name, cfg),
+		SupportedModels:     supportedModels,
+		AutoRoutingModels:   autoRoutingModels,
 		SupportedReasoning:  supportedReasoning(cfg),
 		MaxReasoningTokens:  cfg.MaxReasoningTokens,
 		SupportedPerms:      supportedPermissions(cfg),

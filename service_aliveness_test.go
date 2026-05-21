@@ -472,6 +472,7 @@ models:
 		}
 	})
 	makeOnlyCodexSubprocessAvailable(svc)
+	mockCodexHarnessForTest(t)
 
 	start := time.Now()
 	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "default"})
@@ -569,6 +570,7 @@ models:
 		}
 	})
 	makeOnlyCodexSubprocessAvailable(svc)
+	mockCodexHarnessForTest(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -724,6 +726,7 @@ models:
 	svc.registry.LookPath = func(string) (string, error) {
 		return "", exec.ErrNotFound
 	}
+	mockAllHarnessesForTest(t)
 	now := time.Now().UTC()
 	svc.providerProbe.RecordProbe("grendel", "", false, now)
 	svc.providerProbe.RecordProbe("vidar", "", false, now)
@@ -1024,6 +1027,28 @@ func makeOnlyCodexSubprocessAvailable(svc *service) {
 		}
 		return "", exec.ErrNotFound
 	}
+}
+
+func mockAllHarnessesForTest(t *testing.T) {
+	t.Helper()
+	oldHook := harnessInstanceHook
+	harnessInstanceHook = func(instances map[string]harnesses.Harness) map[string]harnesses.Harness {
+		return make(map[string]harnesses.Harness)
+	}
+	t.Cleanup(func() {
+		harnessInstanceHook = oldHook
+	})
+}
+
+func mockCodexHarnessForTest(t *testing.T) {
+	t.Helper()
+	oldHook := harnessInstanceHook
+	harnessInstanceHook = func(instances map[string]harnesses.Harness) map[string]harnesses.Harness {
+		return make(map[string]harnesses.Harness)
+	}
+	t.Cleanup(func() {
+		harnessInstanceHook = oldHook
+	})
 }
 
 func TestExtractHostPort(t *testing.T) {

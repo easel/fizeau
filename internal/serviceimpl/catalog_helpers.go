@@ -158,7 +158,6 @@ func ResolveSubprocessModelAlias(harness, model string) string {
 		}
 		snapshot, err := mdh.DefaultModelSnapshot()
 		if err != nil {
-			// Model discovery failed; return the unresolved model.
 			return model
 		}
 		resolved, err := mdh.ResolveModelAlias(model, snapshot)
