@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260521T034338-c5fc8e8b",
+  "bead_id": "fizeau-5dac2084",
+  "base_rev": "602facec2f38e9a65851bd9db6c733332f15ad53",
+  "created_at": "2026-05-21T03:43:42.262679527Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5dac2084",
+    "title": "claude-tui: drive turns via internal/pty and emit intermediate tool_call/tool_result ProgressEvents through arbitrated PreToolUse/PostToolUse hooks",
+    "description": "PROBLEM: claude-tui currently has no real turn-execution path; ADR-013 §3 requires driving the Anthropic CLI through internal/pty/ and emitting mid-turn tool_call/tool_result ProgressEvents during the turn (not at Stop), via PreToolUse/PostToolUse hooks that coexist with user-defined hooks.\n\nROOT CAUSE:\n- internal/harnesses/claudetui/harness.go: RunTurn is a stub or --print-style path; it does not open a PTY session or stream intermediate events.\n- internal/pty/: library exists but has no claude-tui caller wiring readers, writers, or end-of-turn detection.\n- internal/harnesses/hooks/ (shared conflict-arbitration layer): claude-tui's PreToolUse/PostToolUse hooks are not registered through it, risking duplicate or clobbered user hooks (ADR-013 §3 hook-conflict concern).\n\nPROPOSED FIX:\n1. Implement claudetui.Harness.RunTurn to open an internal/pty/ session, write the prompt, drive readers, detect the CLI's end-of-turn marker, and emit a Final ProgressEvent.\n2. Install PreToolUse/PostToolUse hook handlers that emit tool_call and tool_result ProgressEvents on the harness event channel as they fire, before the Final event.\n3. Route registration of these hooks through the existing internal/harnesses/hooks conflict-arbitration layer so user-defined hooks coexist without duplication; do NOT introduce a new arbitration mechanism.\n\nNON-SCOPE:\n- Session pooling, /clear-between-turns, orphan reaping (sibling child B).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- Performance benchmarking and 2x/10ms ratchets (sibling child D).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on child #1. Governing artifacts: ADR-013 §3, CONTRACT-004, internal/pty/ library.",
+    "acceptance": "1) TestClaudeTuiTurnEmitsIntermediateToolEvents asserts that for a prompt that triggers a tool use, the harness event channel yields at least one tool_call ProgressEvent before the Final event, and that every tool_call is followed by a matching tool_result.\n2) TestClaudeTuiHookConflictRouting asserts claude-tui's PreToolUse/PostToolUse hooks register through the shared conflict-arbitration layer and coexist with user-defined hooks without duplication.\n3) go test ./... -count=1 is green.\n4) lefthook run pre-commit is green.",
+    "parent": "fizeau-60ce39cb",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T034338-c5fc8e8b",
+    "prompt": ".ddx/executions/20260521T034338-c5fc8e8b/prompt.md",
+    "manifest": ".ddx/executions/20260521T034338-c5fc8e8b/manifest.json",
+    "result": ".ddx/executions/20260521T034338-c5fc8e8b/result.json",
+    "checks": ".ddx/executions/20260521T034338-c5fc8e8b/checks.json",
+    "usage": ".ddx/executions/20260521T034338-c5fc8e8b/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-5dac2084-20260521T034338-c5fc8e8b"
+  },
+  "prompt_sha": "58942409b3a38dd01f0ff6a2cbe327d0aaada5217b081820ab0334b3de5047dc"
+}
