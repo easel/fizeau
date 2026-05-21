@@ -25,6 +25,25 @@ Measurements do not overlap with `claude --print` batch-mode measurement window.
 
 ---
 
+## Decision Rule
+
+**Verdict Mapping** (pre-registered to prevent post-hoc rule-shopping):
+
+| Outcome | Condition |
+|---------|-----------|
+| **subscription-confirmed** | PTY+hooks transport shows subscription billing (BEFORE/AFTER quota delta in the subscription weekly-usage window, not API request count) **AND** `--print` batch transport shows identical subscription billing pattern (same subscription quota field increments, no API metering observed). This confirms both the TUI fork and the batch harness access subscription infrastructure, fulfilling ADR-013's economic premise. |
+| **subscription-rejected** | Both PTY+hooks and `--print` show API metering behavior only (no movement in subscription quota windows; all deltas appear in request-count or similar API metering fields). This would indicate the subscription fork failed to secure subscription-billed routing. |
+| **subscription-ambiguous** | Delta patterns are inconclusive: (a) PTY shows subscription while `--print` shows API metering (transports diverge, endpoint routing is unclear), or (b) neither transport moves clearly observable fields (deltas are within noise or below refresh-delay sensitivity), or (c) one or both runs lack clean snapshot pairs. A follow-up experiment with refined instrumentation is required. |
+
+**Application**:
+- Gather BEFORE and AFTER `/usage` snapshots for each transport (PTY+hooks and `--print`).
+- Compute deltas: `subscription_delta = AFTER[subscription_weekly_usage] - BEFORE[subscription_weekly_usage]` and `api_delta = AFTER[api_request_count] - BEFORE[api_request_count]`.
+- If **all PTY+hooks runs show subscription_delta > 0 and api_delta = 0** AND **all `--print` runs show subscription_delta > 0 and api_delta = 0**, assign verdict **subscription-confirmed**.
+- If **all runs show subscription_delta = 0 and api_delta > 0**, assign verdict **subscription-rejected**.
+- Otherwise, assign verdict **subscription-ambiguous**.
+
+---
+
 ## PTY+Hooks Mode Measurements
 
 ### Run 1: Simple Arithmetic Query
