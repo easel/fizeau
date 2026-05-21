@@ -58,6 +58,11 @@ func writeCodexQuota(path string, snapshot codexQuotaSnapshot) error {
 			snapshot.Account = account
 		}
 	}
+	for i := range snapshot.Windows {
+		if snapshot.Windows[i].LimitID == "" {
+			snapshot.Windows[i].LimitID = defaultCodexLimitID(snapshot.Windows[i].WindowMinutes)
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create codex quota cache dir: %w", err)
 	}
@@ -134,6 +139,17 @@ type codexQuotaRoutingDecision struct {
 	Age             time.Duration
 	Snapshot        *codexQuotaSnapshot
 	Reason          string
+}
+
+func defaultCodexLimitID(windowMinutes int) string {
+	switch windowMinutes {
+	case 300:
+		return "codex"
+	case 10080:
+		return "codex-weekly"
+	default:
+		return "codex"
+	}
 }
 
 // decideCodexQuotaRouting turns a durable quota snapshot into a foreground

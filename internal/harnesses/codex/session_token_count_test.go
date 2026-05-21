@@ -178,3 +178,72 @@ func mustTime(t *testing.T, value string) time.Time {
 	}
 	return parsed.UTC()
 }
+
+func TestCodexQuotaWindowFromRaw_DefaultLimitID(t *testing.T) {
+	tests := []struct {
+		name          string
+		json          string
+		expectLimitID string
+		expectOK      bool
+	}{
+		{
+			name:          "missing limit_id uses window-based default (5h)",
+			json:          `{"window_minutes":300,"used_percent":50}`,
+			expectLimitID: "codex",
+			expectOK:      true,
+		},
+		{
+			name:          "missing limit_id uses window-based default (7d)",
+			json:          `{"window_minutes":10080,"used_percent":25}`,
+			expectLimitID: "codex-weekly",
+			expectOK:      true,
+		},
+		{
+			name:          "null limit_id uses window-based default (5h)",
+			json:          `{"window_minutes":300,"used_percent":60,"limit_id":null}`,
+			expectLimitID: "codex",
+			expectOK:      true,
+		},
+		{
+			name:          "empty string limit_id uses window-based default (7d)",
+			json:          `{"window_minutes":10080,"used_percent":15,"limit_id":""}`,
+			expectLimitID: "codex-weekly",
+			expectOK:      true,
+		},
+		{
+			name:          "explicit limit_id is preserved (5h)",
+			json:          `{"window_minutes":300,"used_percent":40,"limit_id":"custom"}`,
+			expectLimitID: "custom",
+			expectOK:      true,
+		},
+		{
+			name:          "explicit limit_id is preserved (7d)",
+			json:          `{"window_minutes":10080,"used_percent":30,"limit_id":"codex-weekly"}`,
+			expectLimitID: "codex-weekly",
+			expectOK:      true,
+		},
+		{
+			name:          "unknown window uses default codex",
+			json:          `{"window_minutes":60,"used_percent":50}`,
+			expectLimitID: "codex",
+			expectOK:      true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			window, ok := codexQuotaWindowFromRaw([]byte(tc.json))
+			if ok != tc.expectOK {
+				t.Fatalf("codexQuotaWindowFromRaw ok: got %v, want %v", ok, tc.expectOK)
+			}
+			if !ok {
+				return
+			}
+			if window.LimitID == "" {
+				t.Fatalf("LimitID must not be empty; got %q", window.LimitID)
+			}
+			if window.LimitID != tc.expectLimitID {
+				t.Fatalf("LimitID: got %q, want %q", window.LimitID, tc.expectLimitID)
+			}
+		})
+	}
+}

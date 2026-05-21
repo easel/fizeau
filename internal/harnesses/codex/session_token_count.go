@@ -295,9 +295,13 @@ func codexQuotaWindowFromRaw(raw json.RawMessage) (harnesses.QuotaWindow, bool) 
 	if !ok {
 		return harnesses.QuotaWindow{}, false
 	}
+	limitID := stringFromRaw(obj["limit_id"])
+	if limitID == "" {
+		limitID = defaultCodexLimitID(windowMinutes)
+	}
 	window := harnesses.QuotaWindow{
 		Name:          codexQuotaWindowName(windowMinutes),
-		LimitID:       stringFromRaw(obj["limit_id"]),
+		LimitID:       limitID,
 		LimitName:     stringFromRaw(obj["limit_name"]),
 		WindowMinutes: windowMinutes,
 		UsedPercent:   usedPercent,
