@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260521T034145-a55e3c2f",
+  "bead_id": "fizeau-33a2ad0f",
+  "base_rev": "0931d20771a1debf6df4cd1845e2944525013a10",
+  "created_at": "2026-05-21T03:41:49.830855207Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-33a2ad0f",
+    "title": "claude-tui/gate: reconcile `claude --print` measurement section",
+    "description": "PROBLEM: ADR-013's economic premise requires the `--print mode measurements` section to show exactly three complete empirical runs. Even after individual captures are added, the section still needs an aggregate reconciliation proving the parent verification requirements across all runs.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md:1 uses the `--print mode measurements` placeholder as the source of truth, but no aggregate check confirms exactly three labeled runs, six snapshots, three outputs, timestamp coverage, refresh-delay compliance, and whole-window single-account attestation.\n\nPROPOSED FIX: Dependency ID: fizeau-a45dafe6. Governing artifact: ADR-013. Audit only the `--print mode measurements` section of docs/helix/02-design/billing-observation-claude-tui.md. Normalize labels to exactly `Run 1`, `Run 2`, and `Run 3`; remove accidental duplicate empty placeholders; verify each run has BEFORE and AFTER `/usage` snapshots, full turn output, wall-clock snapshot timestamps, completion timestamp, and proof that AFTER was captured at refresh-delay + safety margin, \u003e=60s post-completion. Add or tighten a single-account attestation covering the full `--print` measurement window. Do not invent missing measurement data; if evidence is missing, mark the bead blocked and name the missing run evidence.\n\nNON-SCOPE: PTY+hooks measurements, delta computation, verdict determination, ADR-013 disposition, methodology authoring, new `claude --print` captures unless replacing explicitly missing or malformed evidence is operator-approved.\n\nAC:\n1) TestPrintModeExactlyThreeRuns: doc's `--print mode measurements` section contains exactly three labeled runs: Run 1, Run 2, and Run 3.\n2) TestPrintModeSixSnapshots: the three runs contain exactly six `/usage` snapshot blocks, one BEFORE and one AFTER per run.\n3) TestPrintModeAllTurnOutputsPresent: each of the three runs has captured turn output.\n4) TestPrintModeAllSnapshotTimestampsPresent: every `/usage` snapshot has a wall-clock timestamp.\n5) TestPrintModeAllAfterRefreshDelaysVerified: every AFTER snapshot timestamp is \u003e= that run's completion-time + documented refresh-delay safety margin and \u003e=60s post-completion.\n6) TestPrintModeWholeWindowSingleAccountAttested: the section attests no concurrent claude activity from the same account across the full `--print` measurement window.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestPrintModeExactlyThreeRuns\n2) TestPrintModeSixSnapshots\n3) TestPrintModeAllTurnOutputsPresent\n4) TestPrintModeAllSnapshotTimestampsPresent\n5) TestPrintModeAllAfterRefreshDelaysVerified\n6) TestPrintModeWholeWindowSingleAccountAttested\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-cc0dd5b2",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260521T034145-a55e3c2f",
+    "prompt": ".ddx/executions/20260521T034145-a55e3c2f/prompt.md",
+    "manifest": ".ddx/executions/20260521T034145-a55e3c2f/manifest.json",
+    "result": ".ddx/executions/20260521T034145-a55e3c2f/result.json",
+    "checks": ".ddx/executions/20260521T034145-a55e3c2f/checks.json",
+    "usage": ".ddx/executions/20260521T034145-a55e3c2f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-33a2ad0f-20260521T034145-a55e3c2f"
+  },
+  "prompt_sha": "5cb9d4bb045b133bf49506b0def46d924143055d9c750577c23cf3eb6549de5f"
+}
