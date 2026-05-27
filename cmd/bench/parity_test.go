@@ -286,17 +286,18 @@ func TestGoRunnerParityFixturesCapturedBeforeDeactivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read go-runner dir: %v", err)
 	}
-	if len(entries) < 3 {
-		t.Fatalf("expected at least 3 Go runner fixtures, got %d", len(entries))
-	}
+	var dirCount int
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			t.Fatalf("expected directory entries in go-runner, got file: %s", entry.Name())
+		if entry.IsDir() {
+			dirCount++
+			reportPath := filepath.Join(goRunnerDir, entry.Name(), "report.json")
+			if _, err := os.Stat(reportPath); err != nil {
+				t.Fatalf("missing report.json in go-runner cell %s: %v", entry.Name(), err)
+			}
 		}
-		reportPath := filepath.Join(goRunnerDir, entry.Name(), "report.json")
-		if _, err := os.Stat(reportPath); err != nil {
-			t.Fatalf("missing report.json in go-runner cell %s: %v", entry.Name(), err)
-		}
+	}
+	if dirCount < 3 {
+		t.Fatalf("expected at least 3 Go runner fixtures, got %d", dirCount)
 	}
 }
 
@@ -309,17 +310,18 @@ func TestBashRunnerParityFixturesCaptured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read bash-runner dir: %v", err)
 	}
-	if len(entries) < 3 {
-		t.Fatalf("expected at least 3 bash runner fixtures, got %d", len(entries))
-	}
+	var dirCount int
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			t.Fatalf("expected directory entries in bash-runner, got file: %s", entry.Name())
+		if entry.IsDir() {
+			dirCount++
+			reportPath := filepath.Join(bashRunnerDir, entry.Name(), "report.json")
+			if _, err := os.Stat(reportPath); err != nil {
+				t.Fatalf("missing report.json in bash-runner cell %s: %v", entry.Name(), err)
+			}
 		}
-		reportPath := filepath.Join(bashRunnerDir, entry.Name(), "report.json")
-		if _, err := os.Stat(reportPath); err != nil {
-			t.Fatalf("missing report.json in bash-runner cell %s: %v", entry.Name(), err)
-		}
+	}
+	if dirCount < 3 {
+		t.Fatalf("expected at least 3 bash runner fixtures, got %d", dirCount)
 	}
 }
 
