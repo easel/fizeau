@@ -296,3 +296,16 @@ DDx canonical consumer + legacy formatter isolation
   counter is maintained.
 - Golden samples include LLM timing and token usage so `tok/sec` appears when
   calculable and is omitted when the timing window is absent.
+
+## Shell-Runner Progress Events
+
+See [SD-011-addendum-shell-runner-events](./SD-011-addendum-shell-runner-events.md)
+for how the shell-based benchmark runner (`./benchmark`) emits progress events
+within this canonical framework. The addendum specifies:
+
+- The progress event stream shape and JSON schema for shell orchestration.
+- Event taxonomy for sweep lifecycle, resume/skip, cell execution, retry, budget,
+  and interrupt.
+- How shell-runner events relate to canonical ProgressEvent (constraints,
+  extensions, fallback reconstruction).
+- Collector and formatter contracts for consuming progress.jsonl files.
