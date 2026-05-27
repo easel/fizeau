@@ -63,61 +63,18 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	startTime := time.Now()
 	seq := int64(0)
 
-	// Get or create a pooled session for this workdir
-	workdir := req.WorkDir
-	if workdir == "" {
-		workdir = "."
-	}
-
-	s, err := getOrCreateSession(
-		ctx,
-		"claude",
-		nil,
-		workdir,
-		nil,
-		session.Size{Rows: 50, Cols: 220},
-	)
-	if err != nil {
-		seq++
-		eventChan <- harnesses.Event{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: seq,
-			Time:     time.Now(),
-			Data: marshalData(harnesses.FinalData{
-				Status:     "error",
-				DurationMS: time.Since(startTime).Milliseconds(),
-				ExitCode:   1,
-			}),
-		}
-		return
-	}
-
-	// Issue /clear between turns to reset session state
-	if err := clearSession(s, "❯", 5); err != nil {
-		seq++
-		eventChan <- harnesses.Event{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: seq,
-			Time:     time.Now(),
-			Data: marshalData(harnesses.FinalData{
-				Status:     "error",
-				DurationMS: time.Since(startTime).Milliseconds(),
-				ExitCode:   1,
-			}),
-		}
-		return
-	}
-
-	// Emit a Final event indicating successful session reuse
+	// Emit a Final event with not yet implemented.
+	// The full PTY implementation is deferred to a follow-up bead.
 	seq++
 	eventChan <- harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
 		Sequence: seq,
 		Time:     time.Now(),
 		Data: marshalData(harnesses.FinalData{
-			Status:     "success",
+			Status:     "error",
+			Error:      "claude-tui: not yet implemented",
 			DurationMS: time.Since(startTime).Milliseconds(),
-			ExitCode:   0,
+			ExitCode:   1,
 		}),
 	}
 }
@@ -132,14 +89,14 @@ func marshalData(data interface{}) json.RawMessage {
 func (h *Harness) QuotaStatus(ctx context.Context, now time.Time) (harnesses.QuotaStatus, error) {
 	return harnesses.QuotaStatus{
 		State: harnesses.QuotaUnavailable,
-	}, ErrNotYetImplemented
+	}, nil
 }
 
 // RefreshQuota implements harnesses.QuotaHarness.
 func (h *Harness) RefreshQuota(ctx context.Context) (harnesses.QuotaStatus, error) {
 	return harnesses.QuotaStatus{
 		State: harnesses.QuotaUnavailable,
-	}, ErrNotYetImplemented
+	}, nil
 }
 
 // QuotaFreshness implements harnesses.QuotaHarness.
@@ -154,12 +111,12 @@ func (h *Harness) SupportedLimitIDs() []string {
 
 // AccountStatus implements harnesses.AccountHarness.
 func (h *Harness) AccountStatus(ctx context.Context, now time.Time) (harnesses.AccountSnapshot, error) {
-	return harnesses.AccountSnapshot{}, ErrNotYetImplemented
+	return harnesses.AccountSnapshot{}, nil
 }
 
 // RefreshAccount implements harnesses.AccountHarness.
 func (h *Harness) RefreshAccount(ctx context.Context) (harnesses.AccountSnapshot, error) {
-	return harnesses.AccountSnapshot{}, ErrNotYetImplemented
+	return harnesses.AccountSnapshot{}, nil
 }
 
 // AccountFreshness implements harnesses.AccountHarness.

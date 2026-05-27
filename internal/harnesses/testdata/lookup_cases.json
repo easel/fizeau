@@ -2,14 +2,14 @@
   {
     "name": "all four major CLI harnesses installed",
     "installed": ["claude", "codex", "pi", "opencode", "gemini"],
-    "expect_available": ["codex", "claude", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini", "virtual", "script"],
-    "expect_unavailable": ["claude-tui"]
+    "expect_available": ["codex", "claude", "claude-tui", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini", "virtual", "script"],
+    "expect_unavailable": []
   },
   {
     "name": "only claude installed",
     "installed": ["claude"],
-    "expect_available": ["claude", "fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
-    "expect_unavailable": ["claude-tui", "codex", "opencode", "pi", "gemini"]
+    "expect_available": ["claude", "claude-tui", "fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
+    "expect_unavailable": ["codex", "opencode", "pi", "gemini"]
   },
   {
     "name": "only codex installed",

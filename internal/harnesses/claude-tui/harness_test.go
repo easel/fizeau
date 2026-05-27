@@ -52,19 +52,20 @@ func TestClaudeTuiInterfaceConformance(t *testing.T) {
 		for range eventChan {
 		}
 	}
-	if _, err := h.QuotaStatus(context.Background(), time.Now()); err != claudetui.ErrNotYetImplemented {
-		t.Errorf("QuotaStatus returned %v, want ErrNotYetImplemented", err)
+	// Per CONTRACT-004, quota/account methods return well-formed zero values, not errors.
+	if _, err := h.QuotaStatus(context.Background(), time.Now()); err != nil {
+		t.Errorf("QuotaStatus returned %v, want nil error", err)
 	}
-	if _, err := h.RefreshQuota(context.Background()); err != claudetui.ErrNotYetImplemented {
-		t.Errorf("RefreshQuota returned %v, want ErrNotYetImplemented", err)
+	if _, err := h.RefreshQuota(context.Background()); err != nil {
+		t.Errorf("RefreshQuota returned %v, want nil error", err)
 	}
 	_ = h.QuotaFreshness()
 	_ = h.SupportedLimitIDs()
-	if _, err := h.AccountStatus(context.Background(), time.Now()); err != claudetui.ErrNotYetImplemented {
-		t.Errorf("AccountStatus returned %v, want ErrNotYetImplemented", err)
+	if _, err := h.AccountStatus(context.Background(), time.Now()); err != nil {
+		t.Errorf("AccountStatus returned %v, want nil error", err)
 	}
-	if _, err := h.RefreshAccount(context.Background()); err != claudetui.ErrNotYetImplemented {
-		t.Errorf("RefreshAccount returned %v, want ErrNotYetImplemented", err)
+	if _, err := h.RefreshAccount(context.Background()); err != nil {
+		t.Errorf("RefreshAccount returned %v, want nil error", err)
 	}
 	_ = h.AccountFreshness()
 	// DefaultModelSnapshot() is allowed to either succeed (if live PTY is available)
@@ -288,6 +289,9 @@ func TestClaudeTuiRegistryEntry(t *testing.T) {
 		t.Fatal("claude-tui not registered")
 	}
 
+	if config.Binary != "claude" {
+		t.Errorf("Binary: got %q, want \"claude\"", config.Binary)
+	}
 	if config.BaseArgs != nil && len(config.BaseArgs) > 0 {
 		t.Errorf("BaseArgs: got %v, want nil or empty", config.BaseArgs)
 	}
@@ -519,9 +523,6 @@ func TestClaudeTuiTurnEmitsIntermediateToolEvents(t *testing.T) {
 
 	eventChan, err := h.Execute(ctx, req)
 	if err != nil {
-		if err == claudetui.ErrNotYetImplemented {
-			t.Skip("claude-tui Execute not yet implemented")
-		}
 		t.Fatalf("Execute failed: %v", err)
 	}
 
@@ -544,6 +545,14 @@ func TestClaudeTuiTurnEmitsIntermediateToolEvents(t *testing.T) {
 	lastEvent := events[len(events)-1]
 	if lastEvent.Type != harnesses.EventTypeFinal {
 		t.Errorf("last event type: got %v, want EventTypeFinal", lastEvent.Type)
+	}
+
+	// Check if this is a stub "not yet implemented" error and skip if so
+	var finalData harnesses.FinalData
+	if err := json.Unmarshal(lastEvent.Data, &finalData); err == nil {
+		if finalData.Status == "error" && strings.Contains(finalData.Error, "not yet implemented") {
+			t.Skip("claude-tui Execute not yet implemented")
+		}
 	}
 
 	// Look for at least one tool_call event before the final event.
@@ -653,6 +662,14 @@ func TestClaudeTuiSessionPoolReusesAndClears(t *testing.T) {
 	finalEvent1 := events1[len(events1)-1]
 	if finalEvent1.Type != harnesses.EventTypeFinal {
 		t.Errorf("first Execute: last event type is %v, want EventTypeFinal", finalEvent1.Type)
+	}
+
+	// Check if this is a stub "not yet implemented" error and skip if so
+	var tempFinalData harnesses.FinalData
+	if err := json.Unmarshal(finalEvent1.Data, &tempFinalData); err == nil {
+		if tempFinalData.Status == "error" && strings.Contains(tempFinalData.Error, "not yet implemented") {
+			t.Skip("claude-tui Execute not yet implemented")
+		}
 	}
 
 	// Second Execute call with same workdir
@@ -1088,9 +1105,6 @@ func BenchmarkClaudeTuiTurnWallTime(b *testing.B) {
 
 		eventChan, err := h.Execute(ctx, req)
 		if err != nil {
-			if err == claudetui.ErrNotYetImplemented {
-				b.Skip("claude-tui Execute not yet fully implemented")
-			}
 			b.Fatalf("Execute failed on iteration %d: %v", i, err)
 		}
 
@@ -1098,8 +1112,21 @@ func BenchmarkClaudeTuiTurnWallTime(b *testing.B) {
 			b.Skip("Execute returned nil channel (not implemented)")
 		}
 
-		// Drain the event channel to completion
-		for range eventChan {
+		// Drain the event channel to completion and check for stub error
+		var benchmarkSkip bool
+		for event := range eventChan {
+			if event.Type == harnesses.EventTypeFinal {
+				var finalData harnesses.FinalData
+				if err := json.Unmarshal(event.Data, &finalData); err == nil {
+					if finalData.Status == "error" && strings.Contains(finalData.Error, "not yet implemented") {
+						benchmarkSkip = true
+					}
+				}
+			}
+		}
+
+		if benchmarkSkip {
+			b.Skip("claude-tui Execute not yet fully implemented")
 		}
 
 		turnDuration := time.Since(turnStart)

@@ -63,7 +63,7 @@ var builtinHarnesses = map[string]HarnessConfig{
 	},
 	"claude-tui": {
 		Name:                "claude-tui",
-		Binary:              "claude-tui",
+		Binary:              "claude",
 		BaseArgs:            nil,
 		PermissionArgs:      nil,
 		PromptMode:          "stdin", // TUI interaction via stdin
