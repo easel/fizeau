@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260527T214747-6be36fd9",
+  "bead_id": "fizeau-2eeb9a43",
+  "base_rev": "728a819a832902844882cc9caaac85533664eafc",
+  "created_at": "2026-05-27T21:47:51.873212682Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2eeb9a43",
+    "title": "bench-pr-A2: bash runner core — dispatch, listing/validate/preflight, --plan, matrix expansion",
+    "description": "PROBLEM: fiz-bench matrix (cmd/bench/matrix.go, ~2244 LOC) is the only way to enumerate and run the matrix; it requires host Python and Go. We need a single bash entrypoint scripts/benchmark/benchmark that parses args, lists config, validates, runs preflight (image rebuild), and prints the matrix under --plan with zero side effects.\n\nROOT CAUSE: matrix orchestration (profile/bench-set parsing, profile x task x rep expansion) lives in Go at cmd/bench/matrix.go and is dispatched from cmd/bench/main.go:40 (case \"matrix\"); there is no shell equivalent and no pure --plan path.\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- Dispatch: ./benchmark \u003csubcommand\u003e with subcommands profiles | bench-sets | task-executors | harness-adapters | validate | preflight; no subcommand = run mode.\n- Run-mode flags: --profile P[,P2,...] --bench-set B[,B2,...] [--plan] [--force-rerun] [--retry-invalid] [--reps N] [--jobs N] [--max-cost-usd X] [--out DIR]. --profile and --bench-set are both required for --plan and run.\n- Read profile/bench-set/concurrency-group YAML via yq -o=json.\n- Matrix expansion: profile x task x rep -\u003e ordered cell list; resolve tasks_from: references (path relative to the bench-set file) AND inline tasks: lists; default task_executor=harbor when framework==terminal-bench (PR C finalizes the schema).\n- preflight: rebuild the harbor-runner image (invokes A1 build-harbor-runner.sh) when the cached image label != current content sha.\n- --plan: validate + print the matrix; NO file writes, NO Docker pulls/builds.\n\nNON-SCOPE: per-cell execution/result/report compose (A3); concurrency/signals/budget (A4); adapters/image/runtime-probe (A1); Go changes/parity/deactivation (A5); cell-report.schema.json (PR B); tasks_from/task_executor schema finalization (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: depends on A1 (preflight invokes build-harbor-runner.sh; matrix default executor=harbor). Parent fizeau-163efede. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary prints the matrix, creates NO files, and builds NO Docker images. (parent AC1) Test: Test_PlanIsPure, Test_PlanPrintsMatrix (scripts/benchmark/tests/plan.bats).\n2. ./benchmark profiles and ./benchmark bench-sets list config parsed from YAML. Test: Test_ListingSubcommands (plan.bats).\n3. ./benchmark validate exits non-zero on a malformed profile/bench-set and zero on the canary. Test: Test_Validate (plan.bats).\n4. Matrix expansion resolves both tasks_from: and inline tasks: and orders profile x task x rep. Test: Test_MatrixExpansion (scripts/benchmark/tests/matrix.bats).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "Runner-core ACs 1-4 pass, including parent AC1 (--plan purity); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T214747-6be36fd9",
+    "prompt": ".ddx/executions/20260527T214747-6be36fd9/prompt.md",
+    "manifest": ".ddx/executions/20260527T214747-6be36fd9/manifest.json",
+    "result": ".ddx/executions/20260527T214747-6be36fd9/result.json",
+    "checks": ".ddx/executions/20260527T214747-6be36fd9/checks.json",
+    "usage": ".ddx/executions/20260527T214747-6be36fd9/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-2eeb9a43-20260527T214747-6be36fd9"
+  },
+  "prompt_sha": "06332e707d18b62a667ef943286d58b41665df8e90504e5170a1f5959afdd305"
+}
