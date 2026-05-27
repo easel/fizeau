@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260527T190007-c8b80706",
+  "bead_id": "fizeau-3361e927",
+  "base_rev": "c04c20d6fd4c269fbcabfb5972dc983a39e2f579",
+  "created_at": "2026-05-27T19:00:16.831580963Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-3361e927",
+    "title": "bench-pr-A5: agent-leak fix + planning_mode schema, Go-runner deactivati: part 1",
+    "description": "PROBLEM\nParent bead fizeau-7b72beec is too broad for one execution pass. This child owns part 1 of 2 of that parent scope.\n\nROOT CAUSE\nPROBLEM: (a) Benchmark runs silently enable planning mode because ToolPreset==\"benchmark\" forces PlanningMode; (b) the Go runner is still the live entrypoint; (c) we must prove the bash runner produces equivalent cells before retiring the Go runner.\n\nROOT CAUSE: internal/serviceimpl/execute_native.go:265 reads `PlanningMode: req.PlanningMode || req.ToolPreset == \"benchmark\"`, leaking planning mode into every benchmark agent. cmd/bench/main.go still dispatches execution subcommands (matrix, sweep, run, plan) to the Go runner. There is no parity harness.\n\nPROPOSED FIX:\n- Agent-leak: delete the `|| req.ToolPreset == \"benchmark\"` clause at internal/serviceimpl/execute_native.go:265. Add `sampling.planning_mode: bool` (default false) to the profile YAML schema; update harness-adapters/fiz (from A2) to read it and append `--plan` when true. Find profiles relying on the preset via `rg -l 'preset.*benchmark|FIZEAU_PRESET' scripts/benchmark/profiles/` and add `sampling.planning_mode: true` to each.\n- Deactivation: modify cmd/bench/main.go to short-circuit execution subcommands (matrix, sweep, run, plan) with the redirect 'use ./benchmark — see scripts/benchmark/README.md' and exit 2; listing subcommands (profiles, bench-sets) stay functional until PR F.\n- Parity (ORDER REQUIRED — capture must precede the deactivation commit): run the Go runner against canary (sindri-lucebox + tb-2-1-canary, 3 reps) and commit 3 representative cell reports to scripts/benchmark/testdata/parity/go-runner/; run the bash runner (A3+A4) against the same canary and commit cells to scripts/benchmark/testdata/parity/bash-runner/; add scripts/benchmark/testdata/parity/diff.sh (bash + jq) reporting field divergence outside an allowlist (cell-id, timestamps, paths, and NEW fields such as harbor_runner_image_digest, model_server.commit).\n\nNON-SCOPE: harbor image (A1); shell adapter creation (A2, this only wires planning_mode into fiz); runner core (A3); concurrency/budget (A4); plus parent out-of-scope: cell-report.schema.json (PR B), tasks_from/task_executor schema (PR C), Node collector (PR D), Node importers (PR E), deleting cmd/bench (PR F), docs (PR G).\n\nGOVERNING ARTIFACT: plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDENCIES: A3 and A4 (bash runner must produce cells for parity and for the deactivation redirect to be safe); A2 (fiz adapter exists). Satisfies parent AC4, AC6, A\n...[truncated]\n\nPROPOSED FIX\nImplement only this child acceptance slice:\n- Implement the first bounded slice of the parent bead.\n\nNON-SCOPE\nDo not implement parent acceptance criteria assigned to sibling child beads. Preserve every parent non-scope constraint unless this child explicitly narrows it.",
+    "acceptance": "1. Implement the first bounded slice of the parent bead.\n2. lefthook run pre-commit passes.",
+    "parent": "fizeau-7b72beec",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "piece:A5-goleak-deactivation-parity",
+      "decomposed"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected\",\"fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\"}",
+          "created_at": "2026-05-27T18:59:51.149381101Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:00:05.616647939Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T190007-c8b80706",
+    "prompt": ".ddx/executions/20260527T190007-c8b80706/prompt.md",
+    "manifest": ".ddx/executions/20260527T190007-c8b80706/manifest.json",
+    "result": ".ddx/executions/20260527T190007-c8b80706/result.json",
+    "checks": ".ddx/executions/20260527T190007-c8b80706/checks.json",
+    "usage": ".ddx/executions/20260527T190007-c8b80706/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-3361e927-20260527T190007-c8b80706"
+  },
+  "prompt_sha": "1cf140acd78ba86b13bd68c7f69db951314978d17ff6c2f2018fbe37ded389f8"
+}
