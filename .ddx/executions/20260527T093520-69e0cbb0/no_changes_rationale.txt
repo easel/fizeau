@@ -1,0 +1,3 @@
+status: blocked
+reason: `go test ./... -count=1` is red in unrelated packages outside the claude-tui shutdown-reaper scope (for example `github.com/easel/fizeau` route-health/service tests, `cmd/bench` fixture drift, and `internal/harnesses` capability-matrix/documentation checks), so the bead cannot satisfy the required repo-wide green gate from this work alone.
+verification_command: go test ./... -count=1
