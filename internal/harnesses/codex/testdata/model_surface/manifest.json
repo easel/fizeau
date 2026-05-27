@@ -6,7 +6,9 @@
   },
   "harness": {
     "name": "codex",
-    "binary_version": "codex-cli 0.130.0"
+    "binary_version": "codex-cli 0.130.0",
+    "captured_at": "2026-05-18T08:05:15Z",
+    "freshness_window": "24h"
   },
   "command": {
     "argv": [
