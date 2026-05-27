@@ -1,0 +1,45 @@
+{
+  "bead_id": "fizeau-e3b9b921",
+  "attempt_id": "20260527T053546-0356ff94",
+  "base_rev": "40fe6a4bbbcaa28a5c5279f4d6987b9dd4a3a369",
+  "result_rev": "8ce5d850782591eba5b2027bc60fbb9dca85b66e",
+  "implementation_rev": "8ce5d850782591eba5b2027bc60fbb9dca85b66e",
+  "landed_branch": "master",
+  "outcome": "preserved",
+  "status": "land_conflict",
+  "detail": "large-deletion gate: docs/helix/02-design/billing-observation-claude-tui.md deleted 346 lines (threshold 200) without intentional large deletion acknowledgement",
+  "orchestrator_status": "land_conflict",
+  "reason": "large-deletion gate: docs/helix/02-design/billing-observation-claude-tui.md deleted 346 lines (threshold 200) without intentional large deletion acknowledgement",
+  "preserve_ref": "refs/ddx/iterations/fizeau-e3b9b921/20260527T053546-0356ff94-3d1e0e5eddc6",
+  "candidate_ref": "refs/ddx/iterations/20260527T053546-0356ff94/0",
+  "required_exec_summary": "skipped",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260527T053546-0356ff94",
+      "result_rev": "8ce5d850782591eba5b2027bc60fbb9dca85b66e",
+      "implementer_route": {
+        "harness": "claude",
+        "model": "haiku"
+      },
+      "review_result": {},
+      "final_decision": "success"
+    }
+  ],
+  "harness": "claude",
+  "model": "haiku",
+  "session_id": "eb-272999fa",
+  "duration_ms": 190076,
+  "tokens": 12779,
+  "cost_usd": 0.3268009,
+  "exit_code": 0,
+  "project_root": "/Users/erik/Projects/fizeau",
+  "execution_dir": ".ddx/executions/20260527T053546-0356ff94",
+  "prompt_file": ".ddx/executions/20260527T053546-0356ff94/prompt.md",
+  "manifest_file": ".ddx/executions/20260527T053546-0356ff94/manifest.json",
+  "result_file": ".ddx/executions/20260527T053546-0356ff94/result.json",
+  "usage_file": ".ddx/executions/20260527T053546-0356ff94/usage.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-27T05:35:53.881154626Z",
+  "finished_at": "2026-05-27T05:39:03.95756787Z"
+}
