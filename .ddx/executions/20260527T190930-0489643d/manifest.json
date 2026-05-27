@@ -1,0 +1,82 @@
+{
+  "attempt_id": "20260527T190930-0489643d",
+  "bead_id": "fizeau-66c686ea",
+  "base_rev": "6a28ab4c1a9c6384514949eeba966361a7da1910",
+  "created_at": "2026-05-27T19:09:36.546201972Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-66c686ea",
+    "title": "bench-runner: amend SD-011 with shell-runner progress event taxonomy (or file SD-011-addendum)",
+    "description": "AR-2026-05-17-repo finding. SD-011 (canonical progress events) describes DDx/Fizeau native streams; it does not govern what the new ./benchmark bash runner emits for operator visibility. plan-2026-05-15 §PR 1d defines the operator contract but does not standardize the runner-to-operator progress format (raw logs vs structured events vs new shell-specific format). Before PR D (Node collector) lands, decide the contract and amend SD-011 (or add SD-011-addendum-shell-events.md).\n\nSource review: fizeau-a15106ab.",
+    "acceptance": "SD-011 (or a referenced addendum) defines: the progress-event shape the bash runner emits, where formatting/structuring happens (runner vs collector vs website), and how it relates to the existing canonical-progress-events taxonomy.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:bench",
+      "spec:SD-011",
+      "discovered-from:fizeau-a15106ab",
+      "governing:plan-2026-05-15-benchmark-runner-simplification"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-66c686ea\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:21:51.460048409Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-3342310708.lock' write error. Out of diskspace: exit status 128\",\"rationale\":\"pre-execute-bead checkpoint failed due to out-of-disk-space on /tmp lock file; environmental/transport issue unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:22:03.171436993Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-3342310708.lock' write error. Out of diskspace: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-18T13:22:03.20991666Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:09:28.518024211Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "spec-id": "SD-011",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:36Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "SD-011",
+      "path": "docs/helix/02-design/solution-designs/SD-011-canonical-progress-events.md",
+      "title": "Solution Design: SD-011 — Canonical Progress Events"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T190930-0489643d",
+    "prompt": ".ddx/executions/20260527T190930-0489643d/prompt.md",
+    "manifest": ".ddx/executions/20260527T190930-0489643d/manifest.json",
+    "result": ".ddx/executions/20260527T190930-0489643d/result.json",
+    "checks": ".ddx/executions/20260527T190930-0489643d/checks.json",
+    "usage": ".ddx/executions/20260527T190930-0489643d/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-66c686ea-20260527T190930-0489643d"
+  },
+  "prompt_sha": "bbdbd98d9f34873570e1fd10b1326e1c7d1f7bc15e5fbb6ed358037309dff561"
+}
