@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -64,10 +67,11 @@ func (h *Harness) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-
 	return eventChan, nil
 }
 
-// runTurn drives a single turn through the PTY, emitting events on the channel.
+// runTurn drives a single turn through the PTY, registering hooks and reading the transcript.
 func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eventChan chan harnesses.Event) {
 	defer close(eventChan)
 
+	logger := slog.Default()
 	startTime := time.Now()
 	seq := int64(0)
 
@@ -75,50 +79,68 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
 		seq++
-		eventChan <- harnesses.Event{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: seq,
-			Time:     time.Now(),
-			Data: marshalData(harnesses.FinalData{
-				Status:     "error",
-				Error:      fmt.Sprintf("claude binary not found in PATH: %v", err),
-				DurationMS: time.Since(startTime).Milliseconds(),
-				ExitCode:   1,
-			}),
-		}
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("claude binary not found: %v", err), 1)
 		return
 	}
 
-	// Build environment allowlist per ADR-013 §Environment Allowlist
+	// Build environment allowlist per ADR-013
 	env := BuildEnvironmentAllowlist()
 
-	// Start PTY session
+	// Create a temporary directory for hook payloads
+	hookDir, err := ioutil.TempDir("", "claude-tui-hooks-*")
+	if err != nil {
+		seq++
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to create hook dir: %v", err), 1)
+		return
+	}
+	defer os.RemoveAll(hookDir)
+
+	// Build hook configurations
+	hookPayloads := buildHookConfigs(hookDir)
+	settingsJSON, warnings := composeSettingsJSON(hookPayloads, logger)
+
+	// Emit warnings as FinalWarning events if there were hook conflicts
+	if len(warnings) > 0 {
+		for _, w := range warnings {
+			seq++
+			fd := harnesses.FinalData{
+				Status: "hook_conflict",
+				Warnings: []harnesses.FinalWarning{{
+					Code:    "hook_conflict",
+					Message: w,
+				}},
+				DurationMS: time.Since(startTime).Milliseconds(),
+			}
+			data, _ := json.Marshal(fd)
+			eventChan <- harnesses.Event{
+				Type:     harnesses.EventTypeFinal,
+				Sequence: seq,
+				Time:     time.Now(),
+				Data:     data,
+			}
+		}
+	}
+
+	// Build command args with --settings
+	args := []string{"--settings", settingsJSON}
+
+	// Start PTY session with hooks registered
 	ptySession, err := session.Start(
 		ctx,
 		claudePath,
-		[]string{},
+		args,
 		req.WorkDir,
 		env,
 		session.Size{Rows: 50, Cols: 220},
 	)
 	if err != nil {
 		seq++
-		eventChan <- harnesses.Event{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: seq,
-			Time:     time.Now(),
-			Data: marshalData(harnesses.FinalData{
-				Status:     "error",
-				Error:      fmt.Sprintf("failed to start PTY session: %v", err),
-				DurationMS: time.Since(startTime).Milliseconds(),
-				ExitCode:   1,
-			}),
-		}
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to start PTY: %v", err), 1)
 		return
 	}
 	defer ptySession.Close()
 
-	// Start the startup probe responder
+	// Start the startup probe responder for Ink startup
 	responder := probes.New(probes.Config{
 		Session:      ptySession,
 		ReadyMarkers: []string{"❯", "> "},
@@ -128,8 +150,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 
 	deadline := time.Now().Add(10 * time.Second)
 	if err := responder.Ready(deadline); err != nil {
-		// Log but don't fail — startup probes are best-effort
-		_ = err
+		logger.Debug("startup probe timeout (non-fatal)", "error", err)
 	}
 
 	// Send prompt via bracketed paste
@@ -139,22 +160,15 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 
 	if err := ptySession.SendBytes(bracketedPaste); err != nil {
 		seq++
-		eventChan <- harnesses.Event{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: seq,
-			Time:     time.Now(),
-			Data: marshalData(harnesses.FinalData{
-				Status:     "error",
-				Error:      fmt.Sprintf("failed to send prompt: %v", err),
-				DurationMS: time.Since(startTime).Milliseconds(),
-				ExitCode:   1,
-			}),
-		}
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to send prompt: %v", err), 1)
 		return
 	}
 
-	// Process output and emit events
-	outputBuf := strings.Builder{}
+	// Monitor for Stop hook payload to get transcript path
+	var transcriptPath string
+	stopHookPayloadFile := filepath.Join(hookDir, "stop-hook-payload.json")
+
+	// Process PTY output and wait for stop hook
 	turnTimeout := time.NewTimer(5 * time.Minute)
 	defer turnTimeout.Stop()
 
@@ -163,43 +177,31 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		case <-ctx.Done():
 			_ = ptySession.Kill()
 			seq++
-			eventChan <- harnesses.Event{
-				Type:     harnesses.EventTypeFinal,
-				Sequence: seq,
-				Time:     time.Now(),
-				Data: marshalData(harnesses.FinalData{
-					Status:     "cancelled",
-					DurationMS: time.Since(startTime).Milliseconds(),
-					ExitCode:   130,
-				}),
-			}
+			emitFinalEvent(eventChan, seq, startTime, "cancelled", "", 130)
 			return
 
 		case chunk, ok := <-ptySession.Output():
 			if !ok {
-				// Output closed; process final state
+				// PTY closed, check for stop hook payload
+				if transcriptPath, err = readStopHookPayload(stopHookPayloadFile); err != nil {
+					logger.Debug("stop hook payload not found, continuing without transcript", "error", err)
+				}
+				// Process transcript if available
+				if transcriptPath != "" {
+					if err := h.emitTranscriptEvents(ctx, transcriptPath, eventChan, &seq, startTime); err != nil {
+						logger.Warn("failed to read transcript", "path", transcriptPath, "error", err)
+					}
+				}
+
+				// Emit final event
 				stat := ptySession.Wait()
 				seq++
-				eventChan <- harnesses.Event{
-					Type:     harnesses.EventTypeFinal,
-					Sequence: seq,
-					Time:     time.Now(),
-					Data: marshalData(harnesses.FinalData{
-						Status:     "success",
-						DurationMS: time.Since(startTime).Milliseconds(),
-						ExitCode:   stat.Code,
-						FinalText:  outputBuf.String(),
-					}),
-				}
+				emitFinalEvent(eventChan, seq, startTime, "success", "", stat.Code)
 				return
 			}
 
-			if chunk.Bytes != nil {
-				outputBuf.Write(chunk.Bytes)
-			}
-
-			// Check for Escape key to cancel
-			if bytes.Contains(chunk.Bytes, []byte("\x1b")) {
+			// Handle escape key to cancel
+			if chunk.Bytes != nil && bytes.Contains(chunk.Bytes, []byte("\x1b")) {
 				_ = ptySession.SendKey(session.KeyEscape)
 				continue
 			}
@@ -209,20 +211,125 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		case <-turnTimeout.C:
 			_ = ptySession.Kill()
 			seq++
-			eventChan <- harnesses.Event{
-				Type:     harnesses.EventTypeFinal,
-				Sequence: seq,
-				Time:     time.Now(),
-				Data: marshalData(harnesses.FinalData{
-					Status:     "error",
-					Error:      "turn timeout exceeded",
-					DurationMS: time.Since(startTime).Milliseconds(),
-					ExitCode:   124,
-				}),
-			}
+			emitFinalEvent(eventChan, seq, startTime, "error", "turn timeout exceeded", 124)
 			return
 		}
 	}
+}
+
+// emitTranscriptEvents reads the JSONL transcript and emits canonical events.
+func (h *Harness) emitTranscriptEvents(ctx context.Context, transcriptPath string, eventChan chan<- harnesses.Event, seq *int64, startTime time.Time) error {
+	// Expand ~ in the path
+	expandedPath, err := ExpandTranscriptPath(transcriptPath)
+	if err != nil {
+		return fmt.Errorf("expand path: %w", err)
+	}
+
+	tailer := NewTranscriptTailer(expandedPath, "default", slog.Default())
+	if err := tailer.Open(ctx); err != nil {
+		return fmt.Errorf("open transcript: %w", err)
+	}
+	defer tailer.Close()
+
+	// Read events from transcript
+	return tailer.ReadEvents(ctx, eventChan)
+}
+
+// emitFinalEvent is a helper to emit a final event on the channel.
+func emitFinalEvent(eventChan chan<- harnesses.Event, seq int64, startTime time.Time, status, errMsg string, exitCode int) {
+	fd := harnesses.FinalData{
+		Status:     status,
+		Error:      errMsg,
+		DurationMS: time.Since(startTime).Milliseconds(),
+		ExitCode:   exitCode,
+	}
+	data, _ := json.Marshal(fd)
+	eventChan <- harnesses.Event{
+		Type:     harnesses.EventTypeFinal,
+		Sequence: seq,
+		Time:     time.Now(),
+		Data:     data,
+	}
+}
+
+// buildHookConfigs creates hook command definitions for Claude Code.
+// Returns a map of hook names to their command implementations.
+func buildHookConfigs(hookDir string) map[string]string {
+	return map[string]string{
+		"SessionStart": fmt.Sprintf("echo 'session started' > %s/session-start.log", filepath.Join(hookDir, "session-start.log")),
+		"Stop":         fmt.Sprintf("echo '{\"transcript_path\":\"$CLAUDE_TRANSCRIPT_PATH\"}' > %s/stop-hook-payload.json", hookDir),
+		"PreToolUse":   fmt.Sprintf("echo 'tool use: $CLAUDE_TOOL_NAME' >> %s/tool-use.log", filepath.Join(hookDir, "tool-use.log")),
+		"PostToolUse":  fmt.Sprintf("echo 'tool done: $CLAUDE_TOOL_NAME' >> %s/tool-use.log", filepath.Join(hookDir, "tool-use.log")),
+	}
+}
+
+// composeSettingsJSON builds the --settings JSON with hook definitions.
+// Returns the JSON string and any warnings from hook conflicts.
+func composeSettingsJSON(hookPayloads map[string]string, logger *slog.Logger) (string, []string) {
+	var warnings []string
+
+	// Build the hooks settings
+	hooks := make(map[string]interface{})
+	for hookName, command := range hookPayloads {
+		hooks[hookName] = map[string]interface{}{
+			"command": command,
+			"shell":   "sh",
+		}
+	}
+
+	settings := map[string]interface{}{
+		"hooks": hooks,
+	}
+
+	// Check for conflicts with existing user settings
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		userSettingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+		if fileExists(userSettingsPath) {
+			// Read user settings and check for conflicting hooks
+			userData, err := ioutil.ReadFile(userSettingsPath)
+			if err == nil {
+				var userSettings map[string]interface{}
+				if err := json.Unmarshal(userData, &userSettings); err == nil {
+					if userHooks, ok := userSettings["hooks"].(map[string]interface{}); ok {
+						for hookName := range userHooks {
+							if _, conflict := hooks[hookName].(map[string]interface{}); conflict {
+								msg := fmt.Sprintf("hook conflict: %s already defined in ~/.claude/settings.json (will be overridden)", hookName)
+								warnings = append(warnings, msg)
+								logger.Warn("hook conflict detected", "hook", hookName)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Marshal to JSON
+	jsonBytes, _ := json.Marshal(settings)
+	return string(jsonBytes), warnings
+}
+
+// readStopHookPayload reads the transcript path from the stop hook payload file.
+func readStopHookPayload(payloadPath string) (string, error) {
+	// Wait briefly for hook to write the file
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		data, err := ioutil.ReadFile(payloadPath)
+		if err == nil {
+			return ReadHookPayload(data)
+		}
+		if i < maxAttempts-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	return "", fmt.Errorf("stop hook payload not written within timeout")
+}
+
+// fileExists returns true if the file exists and is not a directory.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // marshalData encodes data as JSON.
