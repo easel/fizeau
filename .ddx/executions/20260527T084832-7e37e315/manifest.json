@@ -1,0 +1,54 @@
+{
+  "attempt_id": "20260527T084832-7e37e315",
+  "bead_id": "fizeau-50b6f055",
+  "base_rev": "dedcf41c0b3edac4b191a2cf2bbe7a022d95076a",
+  "created_at": "2026-05-27T08:48:39.673208547Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-50b6f055",
+    "title": "harnesses: kill the spawned process group on every exit path (not just ctx-cancel) — gemini/claude/codex subprocesses orphan and leak",
+    "description": "PROBLEM\nRunning `fiz --provider local` (and long bench sessions) leaks orphaned harness subprocesses. Observed 2026-05-27 on the dev host: 366 leaked `gemini` node processes, ~14 GB RSS, accumulated over 15+ hours, all reparented to PID 1 (parents long dead). The same shape applies to any harness whose CLI spawns its own children: on a NORMAL (successful) run the spawned process group is never signaled, so any grandchild the harness CLI itself forked survives fizeau's exit and orphans.\n\nROOT CAUSE (file:line)\n- Every harness runner creates a fresh process group via setProcessGroupAttr (Setpgid=true) in internal/harnesses/{harness}/runner_unix.go and ships a killProcessGroup helper that signals the negative pgid.\n- internal/harnesses/gemini/runner.go:274-282 — the cleanup goroutine calls killProcessGroup(cmd) ONLY on `\u003c-ctx.Done()`. On normal completion the `\u003c-stdoutReady` branch wins and the goroutine returns without killing the group. cmd.Wait() (runner.go:286) reaps only the direct child; any process the gemini CLI itself spawned (the gemini main -\u003e gemini worker pairs seen in `ps`) stays in the group, un-signaled, and orphans to PID 1.\n- killProcessGroup (internal/harnesses/{harness}/runner_unix.go) sends a single SIGTERM with no SIGKILL escalation, so even on cancel/timeout a child that ignores SIGTERM survives.\n- A stale-harness reaper exists (service_stale_harness_reaper.go + service_stale_harness_reaper_unix.go terminateOwnedProcessGroup, SIGTERM-\u003eSIGKILL) but NOTHING in the runners registers a harness-sessions/*.json record at cmd.Start(), so the reaper has no PIDs/PGIDs to act on and is effectively a no-op for these leaks.\n- Audit the sibling runners for the same conditional-cleanup shape: internal/harnesses/claude/runner.go:263 \u0026 :426, internal/harnesses/codex/runner.go:233, internal/harnesses/pi/runner.go:207, internal/harnesses/opencode/runner.go:204 (spawn via internal/harnesses/exec.go:18 HarnessCommand).\n\nPROPOSED FIX\n1. Kill the process group on EVERY exit path of every harness runner (success, error, timeout, cancel) — not only on ctx cancellation. e.g. ensure the cleanup goroutine always calls killProcessGroup before the runner returns, or `defer killProcessGroup(cmd)` immediately after a successful Start.\n2. Escalate killProcessGroup to SIGTERM -\u003e bounded grace -\u003e SIGKILL (mirror terminateOwnedProcessGroup in service_stale_harness_reaper_unix.go) so stubborn grandchildren cannot survive.\n3. Backstop: either register a (pid,pgid) session record at cmd.Start() that the stale-harness reaper consumes, or remove the dead reaper infra and document why. Wire one path so the reaper is not silently inert.\n\nNON-SCOPE\n- Harness output parsing/streaming behavior is unchanged.\n- Windows process-group semantics (only *_unix.go is covered) — out of scope; note if it matters.\n- The claude-tui PTY-pool orphan reaper (fizeau-a14eba0c) is a distinct mechanism; cross-ref only.\n\nCROSS-REF: fizeau-a14eba0c (claude-tui PTY orphan reaper).",
+    "acceptance": "1. After a NORMAL (successful) harness run, no subprocess spawned by that run survives the runner's return: a test spawns a fake provider binary that forks a long-lived grandchild, runs it through the runner to a \"success\" outcome, and asserts the grandchild process is gone (not reparented to PID 1) once the runner returns. Lives in internal/harnesses (gemini runner at minimum).\n2. The process-group kill fires on ALL outcomes — success, error, timeout, and cancel — verified by a table test over those outcomes (the gemini runner.go:274-282 conditional-cleanup gap is closed, and sibling runners are audited/fixed for the same shape).\n3. killProcessGroup escalates SIGTERM -\u003e bounded grace -\u003e SIGKILL, verified by a test using a child that ignores SIGTERM.\n4. Backstop wired: either harness runners register a (pid,pgid) session record consumed by the stale-harness reaper (with a test proving a leaked group is reaped), OR the unused reaper infra is removed. Not left silently inert.\n5. go test ./... green; lint passes.",
+    "labels": [
+      "area:harnesses",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "severity:high",
+      "observability"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T08:48:30.731093911Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T083726-8e573fa3\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":5655067,\"output_tokens\":46633,\"total_tokens\":5701700,\"cost_usd\":0,\"duration_ms\":658278,\"exit_code\":0}",
+          "created_at": "2026-05-27T08:48:30.796820145Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=5701700 model=gpt-5.4-mini"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T084832-7e37e315",
+    "prompt": ".ddx/executions/20260527T084832-7e37e315/prompt.md",
+    "manifest": ".ddx/executions/20260527T084832-7e37e315/manifest.json",
+    "result": ".ddx/executions/20260527T084832-7e37e315/result.json",
+    "checks": ".ddx/executions/20260527T084832-7e37e315/checks.json",
+    "usage": ".ddx/executions/20260527T084832-7e37e315/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-50b6f055-20260527T084832-7e37e315"
+  },
+  "prompt_sha": "ac99f360eddba02efee99bb418c09f63afec6bf4b4bb781f74d0b2222619ce9d"
+}
