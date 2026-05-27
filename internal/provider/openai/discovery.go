@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/easel/fizeau/internal/modelmatch"
+	"github.com/easel/fizeau/internal/provider/limits"
 	"github.com/easel/fizeau/internal/sdk/openaicompat"
 )
 
@@ -159,4 +163,202 @@ func NormalizeModelID(requested string, catalog []string) (string, error) {
 	default:
 		return "", fmt.Errorf("ambiguous model %q: matches %v", requested, matches)
 	}
+}
+
+// ProbeProviderFlavor attempts to detect the provider type from a baseURL by:
+// 1. Checking explicit config hints (if non-empty)
+// 2. Probing known provider endpoints (per-provider heuristics)
+// 3. Concurrent probes to resolve ambiguity
+//
+// Returns the detected provider type or "" if detection fails.
+// Known types: "lmstudio", "omlx", "openrouter", "ollama", "vllm", "rapid-mlx", etc.
+func ProbeProviderFlavor(ctx context.Context, baseURL string, explicitType string) string {
+	if explicitType != "" {
+		return explicitType
+	}
+
+	baseURL = strings.TrimRight(baseURL, "/")
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+
+	host := u.Host
+	if host == "" {
+		return ""
+	}
+
+	hostname, port, err := net.SplitHostPort(host)
+	if err != nil {
+		hostname = host
+		port = ""
+	}
+
+	// Standardize localhost variants
+	if hostname == "127.0.0.1" || hostname == "[::1]" {
+		hostname = "localhost"
+	}
+
+	// Port-based heuristics for local providers
+	switch port {
+	case "1234":
+		return "lmstudio"
+	case "1235":
+		return "omlx"
+	case "11434":
+		return "ollama"
+	case "8000":
+		return "vllm"
+	}
+
+	// URL pattern heuristics
+	if strings.Contains(baseURL, "openrouter") {
+		return "openrouter"
+	}
+	if strings.Contains(baseURL, "api.anthropic.com") {
+		return "anthropic"
+	}
+	if strings.Contains(baseURL, "api.openai.com") {
+		return "openai"
+	}
+
+	// Concurrent probes for ambiguous cases (localhost without explicit port)
+	results := make(chan string, 3)
+	var wg sync.WaitGroup
+
+	probes := []struct {
+		providerType string
+		probeURL     string
+	}{
+		{"lmstudio", strings.TrimSuffix(baseURL, "/v1") + "/api/v0/models/probe"},
+		{"omlx", baseURL + "/models/status"},
+		{"ollama", baseURL + "/api/tags"},
+	}
+
+	for _, p := range probes {
+		wg.Add(1)
+		go func(ptype, purl string) {
+			defer wg.Done()
+			reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, purl, nil)
+			if req != nil {
+				resp, err := http.DefaultClient.Do(req)
+				if err == nil {
+					defer resp.Body.Close()
+					if resp.StatusCode == http.StatusOK {
+						results <- ptype
+					}
+				}
+			}
+		}(p.providerType, p.probeURL)
+	}
+
+	wg.Wait()
+	close(results)
+
+	// Return first detected provider type
+	if len(results) > 0 {
+		return <-results
+	}
+	return ""
+}
+
+// LookupModelLimits queries the appropriate provider endpoint for model limits.
+// Dispatches to the right provider based on the explicit providerType or
+// probes the baseURL to detect the provider flavor.
+//
+// Returns ModelLimits with zero values if limits cannot be determined.
+func LookupModelLimits(ctx context.Context, baseURL, providerType, apiKey string, headers map[string]string, model string) limits.ModelLimits {
+	if providerType == "" {
+		providerType = ProbeProviderFlavor(ctx, baseURL, "")
+	}
+
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	switch providerType {
+	case "lmstudio":
+		return lookupLMStudioLimits(ctx, baseURL, model)
+	case "omlx":
+		return lookupOMLXLimits(ctx, baseURL, model)
+	case "openrouter":
+		return lookupOpenRouterLimits(ctx, baseURL, apiKey, headers, model)
+	default:
+		return limits.ModelLimits{}
+	}
+}
+
+func lookupLMStudioLimits(ctx context.Context, baseURL, model string) limits.ModelLimits {
+	root := strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1")
+	endpoint := root + "/api/v0/models/" + url.QueryEscape(model)
+
+	var info struct {
+		LoadedContextLength int `json:"loaded_context_length"`
+		MaxContextLength    int `json:"max_context_length"`
+	}
+	if err := getAndDecode(ctx, 5*time.Second, endpoint, "", nil, &info); err != nil {
+		return limits.ModelLimits{}
+	}
+
+	contextLen := info.LoadedContextLength
+	if contextLen == 0 {
+		contextLen = info.MaxContextLength
+	}
+	return limits.ModelLimits{ContextLength: contextLen}
+}
+
+func lookupOMLXLimits(ctx context.Context, baseURL, model string) limits.ModelLimits {
+	base := strings.TrimRight(baseURL, "/")
+	endpoint := base + "/models/status"
+
+	var status struct {
+		Models []struct {
+			ID               string `json:"id"`
+			MaxContextWindow int    `json:"max_context_window"`
+			MaxTokens        int    `json:"max_tokens"`
+		} `json:"models"`
+	}
+	if err := getAndDecode(ctx, 5*time.Second, endpoint, "", nil, &status); err != nil {
+		return limits.ModelLimits{}
+	}
+
+	for _, entry := range status.Models {
+		if strings.EqualFold(entry.ID, model) {
+			return limits.ModelLimits{
+				ContextLength:       entry.MaxContextWindow,
+				MaxCompletionTokens: entry.MaxTokens,
+			}
+		}
+	}
+	return limits.ModelLimits{}
+}
+
+func lookupOpenRouterLimits(ctx context.Context, baseURL, apiKey string, headers map[string]string, model string) limits.ModelLimits {
+	var list struct {
+		Data []struct {
+			ID            string `json:"id"`
+			ContextLength int    `json:"context_length"`
+			TopProvider   struct {
+				MaxCompletionTokens int `json:"max_completion_tokens"`
+			} `json:"top_provider"`
+		} `json:"data"`
+	}
+	endpoint := strings.TrimRight(baseURL, "/") + "/models"
+	if err := getAndDecode(ctx, 10*time.Second, endpoint, apiKey, headers, &list); err != nil {
+		return limits.ModelLimits{}
+	}
+
+	normalizeID := func(s string) string {
+		return strings.ToLower(strings.ReplaceAll(s, "-", "."))
+	}
+	normModel := normalizeID(model)
+	for _, m := range list.Data {
+		if strings.EqualFold(m.ID, model) || normalizeID(m.ID) == normModel {
+			return limits.ModelLimits{
+				ContextLength:       m.ContextLength,
+				MaxCompletionTokens: m.TopProvider.MaxCompletionTokens,
+			}
+		}
+	}
+	return limits.ModelLimits{}
 }
