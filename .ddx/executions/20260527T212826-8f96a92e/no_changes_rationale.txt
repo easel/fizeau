@@ -1,0 +1,38 @@
+status: completed
+reason: Per-cell execution loop with resume/retry already fully implemented and tested.
+
+The bead fizeau-76963ca1 (bench-pr-A3: per-cell execution loop, resume/retry, run-mode cell reports)
+is already complete. All acceptance criteria verified:
+
+1. ✓ AC1: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary produces cells with:
+   - report.json embedding profile, command, env_redacted, task_executor_version, harbor_runner_image_digest
+   - fiz.txt, fiz.err artifacts
+   - session/ directory
+   Test: Test_RunProducesCells, Test_ReportShape (verified via test_runner_loop.bash)
+
+2. ✓ AC2: sweep.json created with task_executor_version and harbor_runner_image_digest
+   Test: verified in test_runner_loop.bash line 81-87
+
+3. ✓ AC3: Re-running skips cells with terminal final_status
+   Test: Test_ResumeSkipsTerminal (verified: "skip: terminal_cells=1 >= reps=1")
+
+4. ✓ AC4: --retry-invalid reruns invalid cells with attempt_of and superseded_by back-links
+   Test: Test_RetryInvalid (verified: superseded_by back-link confirmed)
+   Also handles orphan cell-state.json (verified: orphan cell retry linking)
+
+5. ✓ AC5: Transient 5xx triggers exponential backoff + eventual success
+   Test: Test_TransientRetryLinks (verified: retry attempts with backoff)
+
+Implementation verified in scripts/benchmark/benchmark:
+- run_one_cell() - per-cell execution with cell-state.json sentinel (line 1267-1473)
+- run_cell_with_per_cell_retry() - per-cell retry with attempt_of/superseded_by (line 1479-1530)
+- run_executor_with_retry() - transient retry with bounded exponential backoff (line 1002-1034)
+- run_sweep() - main execution loop with resume/retry rules (line 1570-1759)
+- write_sweep_metadata() - sweep.json composition (line 965-977)
+- Budget halting, signal handling, and interruption support all in place
+
+Test execution:
+Test command: bash scripts/benchmark/test_runner_loop.bash
+Result: PASS: all 5 acceptance scenarios verified
+
+No code changes required. Work is complete.

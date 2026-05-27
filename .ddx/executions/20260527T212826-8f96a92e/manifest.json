@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260527T212826-8f96a92e",
+  "bead_id": "fizeau-76963ca1",
+  "base_rev": "b1908fbb9c07c3927e83ad0ac43776805bf00a2e",
+  "created_at": "2026-05-27T21:28:30.973707989Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-76963ca1",
+    "title": "bench-pr-A3: per-cell execution loop, resume/retry, run-mode cell reports",
+    "description": "PROBLEM: With dispatch + matrix expansion in place (A2), the bash runner must actually execute cells: drive harness-adapter -\u003e task-executor, compose report.json, and resume/retry safely so a re-run does not repeat completed work or lose attribution.\n\nROOT CAUSE: per-cell execution and report composition live in Go (cmd/bench/matrix.go) with no shell loop; resume/retry semantics are Go-internal and not reproducible from bash.\n\nPROPOSED FIX (scripts/benchmark/benchmark run mode):\n- Per-cell loop: write cell-state.json sentinel; harness-adapters/\u003cname\u003e command \u003c profile.json -\u003e command-spec.json; compose task-spec; task-executors/\u003cname\u003e \u003c task-spec.json -\u003e cell_dir/result.json; compose report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/, model_server (from runtime-probe.sh), harbor_runner_image_digest; delete cell-state.json on clean close.\n- Resume default: skip if cell_dir/report.json exists with a terminal final_status; --force-rerun ignores; --retry-invalid reruns cells with non-empty invalid_class OR an orphan cell-state.json.\n- Per-cell transient retry: bounded exponential backoff for transient errors (connection refused, 5xx, EOF parse). The new attempt cell records attempt_of:; back-write superseded_by: into the prior (closed) cell — the one allowed mutation of a closed cell.\n\nNON-SCOPE: dispatch/listing/--plan/matrix expansion (A2); concurrency/signals/budget (A4); adapters/image/runtime-probe (A1); Go changes/parity/deactivation (A5); cell-report.schema.json (PR B); tasks_from/task_executor schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: depends on A2 (matrix/dispatch) and A1 (adapters, harbor executor, runtime-probe). Parent fizeau-163efede. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary runs the canary and produces cells under bench/results/fiz-tools-v1/cells/; each cell report.json embeds profile, command, env_redacted, fiz.txt, fiz.err, session/. (parent AC2) Test: Test_RunProducesCells, Test_ReportShape (scripts/benchmark/test_runner_loop.bash).\n2. Re-running skips cells with a terminal final_status; --force-rerun reruns them. Test: Test_ResumeSkipsTerminal (test_runner_loop.bash).\n3. --retry-invalid reruns cells with non-empty invalid_class or an orphan cell-state.json. Test: Test_RetryInvalid (test_runner_loop.bash).\n4. A simulated transient error yields a retry cell carrying attempt_of: with a superseded_by: back-link written into the prior cell. Test: Test_TransientRetryLinks (test_runner_loop.bash).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "Execution-loop ACs 1-4 pass, including parent AC2 (run produces cells); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T212826-8f96a92e",
+    "prompt": ".ddx/executions/20260527T212826-8f96a92e/prompt.md",
+    "manifest": ".ddx/executions/20260527T212826-8f96a92e/manifest.json",
+    "result": ".ddx/executions/20260527T212826-8f96a92e/result.json",
+    "checks": ".ddx/executions/20260527T212826-8f96a92e/checks.json",
+    "usage": ".ddx/executions/20260527T212826-8f96a92e/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-76963ca1-20260527T212826-8f96a92e"
+  },
+  "prompt_sha": "d9bb7d088663ecc744128d324d16ed442f02cff6b574ee7ea416f55e4082cbc0"
+}
