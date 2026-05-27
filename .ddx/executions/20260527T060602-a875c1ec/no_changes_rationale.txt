@@ -1,0 +1,2 @@
+status: open
+reason: CGO_ENABLED=1 go test ./... -race fails in unrelated packages already present in the worktree baseline (for example cmd/bench, internal/harnesses, and service_aliveness), so AC5 cannot be satisfied without out-of-scope fixes.
