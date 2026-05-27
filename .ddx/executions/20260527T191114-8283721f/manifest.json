@@ -1,0 +1,98 @@
+{
+  "attempt_id": "20260527T191114-8283721f",
+  "bead_id": "fizeau-a5d07641",
+  "base_rev": "c82a1475a1265ec05922e3e1502543459021f61d",
+  "created_at": "2026-05-27T19:11:22.835789489Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-a5d07641",
+    "title": "providers: finish ADR-010 amendments — OpenAIEffort wire format, llamaserver kwargs envelope, reasoning-token content fallback",
+    "description": "AR-2026-05-17-repo finding. ADR-010 amendment (2026-05-11) §5'-10' prescribes three follow-on items not yet implemented:\n- New ThinkingWireFormatOpenAIEffort wire format value.\n- llamaserver chat_template_kwargs envelope fix (currently emits top-level enable_thinking).\n- Reasoning-token telemetry fallback from message.reasoning_content when usage field is absent.\n\nSource review: fizeau-8e37e536.",
+    "acceptance": "1) internal/config (or owning package) defines ThinkingWireFormatOpenAIEffort with at least one unit test that asserts it serializes via OpenAI effort wire shape.\n2) internal/provider/llamaserver emits enable_thinking inside chat_template_kwargs; assertion test covers wire body.\n3) Reasoning-token telemetry extracts tokens from message.reasoning_content when provider usage block omits reasoning-token count; covered by a focused unit test.\n4) go test ./... -count=1 green.",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:providers",
+      "spec:ADR-010",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"1) internal/config (or owning package) defines ThinkingWireFormatOpenAIEffort with at least one unit test that asserts it serializes via OpenAI effort wire shape.\",\"coverage\":\"Child 1 AC 1 (constant defined/exported) + Child 1 AC 2 (TestThinkingWireFormatOpenAIEffort_Serialize asserts OpenAI effort wire shape) + Child 1 AC 3 (round-trip coverage).\"},{\"parent_ac\":\"2) internal/provider/llamaserver emits enable_thinking inside chat_template_kwargs; assertion test covers wire body.\",\"coverage\":\"Child 2 AC 1 (nested emission, top-level removed) + Child 2 AC 2 (TestLlamaserver_EnableThinking_WireBody asserts both presence and absence) + Child 2 AC 3 (disabled path).\"},{\"parent_ac\":\"3) Reasoning-token telemetry extracts tokens from message.reasoning_content when provider usage block omits reasoning-token count; covered by a focused unit test.\",\"coverage\":\"Child 3 AC 1 (fallback implemented) + Child 3 AC 2 (TestReasoningTokens_FallbackFromContent three-case coverage) + Child 3 AC 3 (usage precedence asserted).\"},{\"parent_ac\":\"4) go test ./... -count=1 green.\",\"coverage\":\"Child 1 AC 4, Child 2 AC 4, Child 3 AC 4 — each child re-runs full module test suite as a gate; lefthook gates (Child 1 AC 5, Child 2 AC 5, Child 3 AC 5) preserve the parent's verification requirement.\"}],\"child_ids\":[\"fizeau-775574b1\",\"fizeau-e633cd36\",\"fizeau-df3147ef\"],\"rationale\":\"ADR-010 amendment §5'-10' enumerates three independently shippable items: a new enum value (config-layer), a provider-specific wire-body fix (llamaserver), and a cross-provider telemetry fallback (usage extractor). Each touches a distinct package with no ordering dependency — the enum addition is not consumed by either of the other two children, llamaserver's envelope fix is local to that provider, and the reasoning-token fallback reads response bodies independent of the request-side wire format. Splitting along these seams yields three small, reviewable PRs that each carry their own named tests and full-suite gate, while every parent AC including the go-test green-bar maps cleanly into per-child coverage.\"}",
+          "created_at": "2026-05-18T12:39:14.808439886Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-775574b1, fizeau-e633cd36, fizeau-df3147ef"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:06:32.045216314Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"bfd56758c221808ce1e152ef35216d03493d36b3\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\\n\\nRun 'docker run --help' for more information: exit status 125\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"bfd56758c221808ce1e152ef35216d03493d36b3\",\"session_id\":\"eb-b2d2701b\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T19:07:00.248101225Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=bfd56758c221808ce1e152ef35216d03493d36b3\nbase_rev=bfd56758c221808ce1e152ef35216d03493d36b3\nretry_after=2026-05-28T01:07:00Z\noutcome_reason=unknown",
+          "created_at": "2026-05-27T19:07:00.316452869Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (new dirty paths: .ddx/executions/20260527T190946-e5e22f34/embedded/git-bin/git, .ddx/executions/20260527T190946-e5e22f34/embedded/git-global.cfg, .ddx/executions/20260527T190946-e5e22f34/embedded/git-local-private.cfg, .ddx/executions/20260527T190946-e5e22f34/manifest.json, .ddx/executions/20260527T190946-e5e22f34/prompt.md, .ddx/executions/20260527T190946-e5e22f34/result.json; changed existing dirty paths: .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"665a87b45850018ee2d54d5a14826854a8a222ec27187b08d57a109408b62170\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"665a87b45850018ee2d54d5a14826854a8a222ec27187b08d57a109408b62170\"}",
+          "created_at": "2026-05-27T19:10:50.357360386Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:11:13.354297607Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "spec-id": "ADR-010",
+      "work-cooldown-base-rev": "bfd56758c221808ce1e152ef35216d03493d36b3",
+      "work-last-detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+      "work-last-status": "execution_failed",
+      "work-retry-after": "2026-05-28T01:07:00Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-010",
+      "path": "docs/helix/02-design/adr/ADR-010-reasoning-wire-form-from-catalog.md",
+      "title": "ADR-010: Reasoning Wire Form Belongs in the Model Catalog"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T191114-8283721f",
+    "prompt": ".ddx/executions/20260527T191114-8283721f/prompt.md",
+    "manifest": ".ddx/executions/20260527T191114-8283721f/manifest.json",
+    "result": ".ddx/executions/20260527T191114-8283721f/result.json",
+    "checks": ".ddx/executions/20260527T191114-8283721f/checks.json",
+    "usage": ".ddx/executions/20260527T191114-8283721f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-a5d07641-20260527T191114-8283721f"
+  },
+  "prompt_sha": "8ee5d09c75a986c199c926fa4ef4394fda310f151c7e2312d35bb790d0942bed"
+}
