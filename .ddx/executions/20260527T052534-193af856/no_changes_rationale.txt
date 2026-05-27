@@ -1,0 +1,2 @@
+status: blocked
+reason: unrelated baseline failures in `go test ./... -count=1` prevent satisfying the bead's repo-wide verification gate; observed failures include `TestResolveRoute_UnknownLocalHealthDoesNotBlockSubscriptionFallback`, `TestCLI_JSONOutput_IsMachineReadable`, and `TestHarnessCapabilityMatrixSupportedLimitIDsMatch`.
