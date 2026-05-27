@@ -1,0 +1,62 @@
+{
+  "attempt_id": "20260527T120924-590243c3",
+  "bead_id": "fizeau-a2883576",
+  "base_rev": "f4253e6a74c0d9d71c0ebb79477f6f5cbcdc20dd",
+  "created_at": "2026-05-27T12:09:35.144779452Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-a2883576",
+    "title": "bench-pr-A3: bash runner core — dispatch, matrix expansion, --plan, execution loop, retry, resume",
+    "description": "PROBLEM: The runner is Go (cmd/bench/matrix.go ~2232 LOC) and requires host Python. We need scripts/benchmark/benchmark (bash, no extension) to drive sweeps with host = bash + Node + Docker.\n\nROOT CAUSE: All matrix orchestration lives in cmd/bench/matrix.go, including the host PYTHONPATH injection at cmd/bench/matrix.go:1105; there is no shell runner.\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- Arg parsing + dispatch: `./benchmark \u003csubcommand\u003e` with profiles | bench-sets | task-executors | harness-adapters | validate | preflight | (no subcommand = run mode).\n- Run-mode flags: --profile P[,...] --bench-set B[,...] [--plan] [--force-rerun] [--retry-invalid] [--reps N] [--jobs N] [--max-cost-usd X] [--out DIR].\n- Read profile/bench-set/concurrency-group YAML via `yq -o=json`.\n- Matrix expansion: profile × task × rep -\u003e ordered cell list; resolve `tasks_from:` (path relative to bench-set file) and inline `tasks:`; default task_executor=harbor when framework==terminal-bench (PR C finalizes schema).\n- --plan: print the matrix only; create NO files and build NO Docker images.\n- Resume default: skip when cell_dir/report.json exists with terminal final_status; --force-rerun ignores; --retry-invalid reruns cells with non-empty invalid_class OR orphan cell-state.json.\n- Per-cell loop: write cell-state.json sentinel; `harness-adapters/\u003cname\u003e command \u003c profile.json` -\u003e command-spec.json; compose task-spec; `task-executors/harbor \u003c task-spec.json` (writes cell_dir/result.json); compose report.json with embedded profile, command, env_redacted, fiz.txt, fiz.err, session/; delete cell-state.json on close.\n- Per-cell retry: bounded exponential backoff for transient errors (connection refused, 5xx, EOF parse); write attempt_of into the retry cell and back-write superseded_by into the prior closed cell (the one permitted mutation of a closed cell).\n- `preflight` triggers a harbor-runner rebuild when the cached image label != current content sha (hook from A1).\n\nNON-SCOPE: flock concurrency, setsid process groups, --jobs pool, SIGINT/SIGTERM handling, in-flight.json (A4); budget accounting and budget_halted (A4); Go agent-leak fix, parity fixtures, Go deactivation (A5); plus parent out-of-scope: cell-report.schema.json (PR B), tasks_from/task_executor schema finalization (PR C), Node collector (PR D), Node importers (PR E), deleting cmd/bench (PR F), docs (PR G).\n\nGOVERNING ARTIFACT: plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDENCIES: A1 (image) and A2 (adapters/task-executor) must exist. Satisfies parent AC1 and AC2.\n\nACCEPTANCE (numbered; Test* symbols in scripts/benchmark/tests/runner.bats):\n1. Test_plan_prints_matrix_no_files: `./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary` prints the matrix and creates no files (parent AC1).\n2. Test_plan_builds_no_image: the same --plan invocation builds no Docker images (parent AC1).\n3. Test_run_produces_cells: `./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary` produces cells under bench/results/fiz-tools-v1/cells/ (parent AC2).\n4. Test_report_has_embedded_fields: each cell report.json embeds profile, command, env_redacted, fiz.txt, fiz.err, session/ (parent AC2).\n5. Test_resume_skips_terminal_cell: a second run skips cells whose report.json has a terminal final_status; --force-rerun does not.\n6. Test_retry_invalid_reruns: --retry-invalid reruns cells with non-empty invalid_class or orphan cell-state.json, writing attempt_of/superseded_by links.\nGates: `lefthook run pre-commit` passes (shellcheck + bats); `go test ./...` passes.",
+    "acceptance": "Test_plan_prints_matrix_no_files, Test_plan_builds_no_image, Test_run_produces_cells, Test_report_has_embedded_fields, Test_resume_skips_terminal_cell, and Test_retry_invalid_reruns pass; lefthook pre-commit and go test ./... pass.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "piece:A3-runner-core"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"fingerprint\":\"fe44f546fec370653fc5dc65ab6c0cd25c0915de637ae1ff83862134fcc46573\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fe44f546fec370653fc5dc65ab6c0cd25c0915de637ae1ff83862134fcc46573\"}",
+          "created_at": "2026-05-27T12:01:25.651832854Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T12:09:22.781394809Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T120130-02d5c80d\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":452939,\"exit_code\":-1}",
+          "created_at": "2026-05-27T12:09:22.831292889Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T120924-590243c3",
+    "prompt": ".ddx/executions/20260527T120924-590243c3/prompt.md",
+    "manifest": ".ddx/executions/20260527T120924-590243c3/manifest.json",
+    "result": ".ddx/executions/20260527T120924-590243c3/result.json",
+    "checks": ".ddx/executions/20260527T120924-590243c3/checks.json",
+    "usage": ".ddx/executions/20260527T120924-590243c3/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-a2883576-20260527T120924-590243c3"
+  },
+  "prompt_sha": "f3bfcb0f4c571ed21a84774ba75b7180ac323dc2c4d4b5d28e65de053c35a4c9"
+}
