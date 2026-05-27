@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260527T232411-b82d1e44",
+  "bead_id": "fizeau-2af5c365",
+  "base_rev": "0c3e5dda5939a371bf990b00a19c453ea01a4fc5",
+  "created_at": "2026-05-27T23:24:16.1769827Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2af5c365",
+    "title": "bench-pr-A1c: task-executors/harbor wrapper + task-executor listing + CONTRACT",
+    "description": "PROBLEM: There is no host-side bash task executor that runs a graded Harbor task via the containerized runner; the Go runner invokes the harbor binary directly on the host. The bash runner (A3) needs a task-executor adapter that shells out to `docker run` the harbor-runner image, returns a result.json, and records runner provenance into the sweep.\n\nROOT CAUSE: cmd/bench/matrix.go runMatrixHarbor builds harbor args and runs opts.harborBin directly on the host with repo-root PYTHONPATH (the `// Add repo root to PYTHONPATH ...` block, ~lines 1117-1129); harborAgentArgs (~lines 1014-1026) is the only thing selecting the harbor plugin. No scripts/benchmark/task-executors/harbor wrapper drives the container.\n\nPROPOSED FIX:\n- scripts/benchmark/task-executors/harbor: bash wrapper with a '# SUMMARY:' header; reads task-spec.json on stdin; docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \"$cell_dir:/output\" -v \"$tasks_dir:/tasks:ro\" -e FIZEAU_API_KEY -e FIZEAU_BASE_URL -e FIZEAU_MODEL fizeau-harbor-runner:latest run --agent-import-path \"$harbor_plugin\" --task-id \"$task_id\" --output /output (harbor_plugin sourced from the harness adapter's install-spec.json); writes cell_dir/result.json; records task_executor_version + harbor_runner_image_digest into \u003cout\u003e/sweep.json for copy into each cell.\n- ./benchmark task-executors: list every task executor with its '# SUMMARY:' line.\n- scripts/benchmark/task-executors/CONTRACT.md: document the task-spec.json (stdin) and result.json shapes, the sweep.json provenance fields, and the '# SUMMARY:' convention.\n\nNON-SCOPE: harbor-runner Docker image + build script (sibling A1a — consumed here, not built); shell harness-adapters set + their listing/contract (sibling A1b); runtime-probe.sh (sibling A1d); runner dispatch/--plan/matrix expansion (A2); per-cell execution loop, resume/retry, report compose (A3); concurrency/signals/budget (A4); Go changes, deactivation, parity (A5); cell-report.schema.json (PR B); tasks_from/task_executor bench-set schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: parent fizeau-163efede; sibling A1a (consumes the fizeau-harbor-runner:latest image + build script) and the harbor_plugin emission convention from sibling A1b. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./benchmark task-executors lists every task executor with its '# SUMMARY:' line. Test: Test_AdapterListing_TaskExecutors (scripts/benchmark/tests/adapters.bats).\n2. task-executors/harbor reads task-spec.json on stdin, issues the documented `docker run ... fizeau-harbor-runner:latest run ...` invocation (asserted against a stub docker on PATH), writes cell_dir/result.json, and records task_executor_version + harbor_runner_image_digest into sweep.json. Test: Test_TaskExecutorHarbor_Invocation (scripts/benchmark/tests/harbor-runner.bats).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "task-executors/harbor drives the runner image via docker run, writes result.json, records sweep provenance, and self-lists with '# SUMMARY:' (Test_AdapterListing_TaskExecutors, Test_TaskExecutorHarbor_Invocation); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-4d81d3f0",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-27T23:24:04.528778122Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T232411-b82d1e44",
+    "prompt": ".ddx/executions/20260527T232411-b82d1e44/prompt.md",
+    "manifest": ".ddx/executions/20260527T232411-b82d1e44/manifest.json",
+    "result": ".ddx/executions/20260527T232411-b82d1e44/result.json",
+    "checks": ".ddx/executions/20260527T232411-b82d1e44/checks.json",
+    "usage": ".ddx/executions/20260527T232411-b82d1e44/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-2af5c365-20260527T232411-b82d1e44"
+  },
+  "prompt_sha": "c30de56c2f8cdbf1b8a6a21e89b8d7952f9be6ef53b8497f651638e426bcf0e7"
+}
