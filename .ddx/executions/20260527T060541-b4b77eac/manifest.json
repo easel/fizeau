@@ -1,0 +1,213 @@
+{
+  "attempt_id": "20260527T060541-b4b77eac",
+  "bead_id": "fizeau-6d71a41f",
+  "base_rev": "f37a75d8e918cd0be5ec398ee692b0e00443b464",
+  "created_at": "2026-05-27T06:05:49.24812582Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-6d71a41f",
+    "title": "concerns: audit go-std declared linters vs current Makefile/.golangci.yml coverage",
+    "description": "PROBLEM: AR-2026-05-17-repo (fizeau-a1b61f00) flags that .ddx/plugins/helix/workflows/concerns/go-std/practices.md declares a golangci-lint baseline (govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic) while .golangci.yml enables only misspell and the Makefile runs go vet, gosec, govulncheck, go test -race pre-push. Before the open decision (parent: AR Open Decisions §1) can be resolved, the team needs an unambiguous, line-anchored mapping of declared baseline → current coverage → gap.\n\nROOT CAUSE: No artifact in repo enumerates which declared linter is replaced by which Makefile target (or is uncovered). The go-std concern document at .ddx/plugins/helix/workflows/concerns/go-std/practices.md (linter baseline section) does not cross-reference .golangci.yml or Makefile, and the local override in docs/helix/01-frame/concerns.md §go-std is silent on the substitution. The decision in the parent bead is blocked on this mapping.\n\nPROPOSED FIX: Produce a mapping artifact at docs/helix/01-frame/concerns/go-std-lint-audit.md (or as an appendix in docs/helix/01-frame/concerns.md) that lists each declared linter, the Makefile/.golangci.yml mechanism that currently covers it (or 'GAP'), and a one-line rationale citing the tool's documented equivalence. Each cited mechanism must include file:line (Makefile lint/test/security targets; .golangci.yml linters block; practices.md baseline section).\n\nNON-SCOPE: Do not modify .golangci.yml. Do not add an override paragraph to docs/helix/01-frame/concerns.md §go-std. Do not select path A or B — that is the sibling bead. Do not modify .ddx/plugins/helix/workflows/concerns/go-std/practices.md (upstream concern, not in scope per parent).\n\nGOVERNING ARTIFACTS: AR-2026-05-17-repo (fizeau-a1b61f00); .ddx/plugins/helix/workflows/concerns/go-std/practices.md; docs/helix/01-frame/concerns.md; Makefile; .golangci.yml.\n\nDEPENDENCIES: None.\n\nVERIFICATION: Mapping artifact reviewed; every declared linter has a row; every row cites a file:line; pre-push gate green (no code changes expected).",
+    "acceptance": "AC1 (TestGoStdLintAuditCoversAllDeclared): The audit artifact lists exactly the seven declared linters — govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic — in the order declared by .ddx/plugins/helix/workflows/concerns/go-std/practices.md.\nAC2 (TestGoStdLintAuditCitesSources): Each row cites at least one file:line reference (Makefile target, .golangci.yml block, or the literal token 'GAP — no current mechanism').\nAC3 (TestGoStdLintAuditMarksGaps): Rows whose current coverage is not equivalent to the declared linter are explicitly marked 'GAP' with a one-line consequence note (e.g., 'no dead-code detection without staticcheck').\nAC4 (TestGoStdLintAuditEnumeratesExclusions): The audit names any project-accepted exclusions discovered (e.g., generated files, vendored code) with a file:line citation, so the sibling resolution bead can carry them forward verbatim under path A.\nAC5 Gates: `go test ./... -race` passes; `lefthook run pre-push` passes; markdown lint (if configured in lefthook) passes on the new artifact.",
+    "parent": "fizeau-397e9e0d",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:audit",
+      "area:concerns",
+      "spec:go-std",
+      "discovered-from:fizeau-a1b61f00"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:54:32.36448756Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T134040-a45425c8\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":3337043,\"output_tokens\":23217,\"total_tokens\":3360260,\"cost_usd\":0,\"duration_ms\":830160,\"exit_code\":0}",
+          "created_at": "2026-05-18T13:54:32.399884459Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=3360260 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi-club-3090\",\"resolved_model\":\"qwen3.6-27b-autoround\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T13:54:48.620707143Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi-club-3090 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.6-27b-autoround\",\"actual_power\":5,\"actual_provider\":\"bragi-club-3090\",\"attempt_id\":\"20260518T135432-f0dfbc30\",\"bead_id\":\"fizeau-6d71a41f\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:54:48.829814163Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.6-27b-autoround harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://bragi:8020/v1/chat/completions\\\": dial tcp 100.127.38.115:8020: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://bragi:8020/v1/chat/completions\\\": dial tcp 100.127.38.115:8020: i/o timeout\",\"harness\":\"fiz\",\"model\":\"qwen3.6-27b-autoround\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi-club-3090\"}",
+          "created_at": "2026-05-18T13:54:48.914074662Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi-club-3090 model=qwen3.6-27b-autoround connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://bragi:8020/v1/chat/completions\": dial tcp 100.127.38.115:8020: i/o timeout\npowerClass=standard\nresult_rev=63c4b9b8f3b6cff22d2762975576f87d4bf7ea04\nbase_rev=63c4b9b8f3b6cff22d2762975576f87d4bf7ea04\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T13:54:48.940431023Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T15:42:23.275763254Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T152853-e9ee1efe\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2961641,\"output_tokens\":25206,\"total_tokens\":2986847,\"cost_usd\":0,\"duration_ms\":808352,\"exit_code\":0}",
+          "created_at": "2026-05-18T15:42:23.308095596Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2986847 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-18T15:42:43.73158446Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"grendel\",\"attempt_id\":\"20260518T154223-272e9553\",\"bead_id\":\"fizeau-6d71a41f\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T15:42:43.944533063Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel\"}",
+          "created_at": "2026-05-18T15:42:44.035411916Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel model=qwen3.5-27b connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout\npowerClass=standard\nresult_rev=a0233ca95445081c479a8eadd32d80a890aecb59\nbase_rev=a0233ca95445081c479a8eadd32d80a890aecb59\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T15:42:44.063234065Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-21T03:36:58.981522948Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-21T03:37:07.246215187Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260521T033700-272068f1\",\"bead_id\":\"fizeau-6d71a41f\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-21T03:37:08.504585143Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"88d49ec2084b6150fe239d682b8938cadcc0a03d\",\"classification\":\"needs_investigation\",\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\\n\\nRun 'docker run --help' for more information: exit status 125\",\"rationale\":\"docker-clone harness setup failed before implementation started: bind mount source /home/erik/.local/share/claude/versions/2.1.146 does not exist (duration 16ms, result_rev==base_rev, no code changed). This is a deterministic infrastructure/environment misconfiguration in the execution harness, not a bead defect, and will keep failing on plain retry until the missing claude version path or docker-clone config is fixed by an operator.\",\"recommended_action\":\"release_claim_needs_investigation\",\"result_rev\":\"88d49ec2084b6150fe239d682b8938cadcc0a03d\",\"session_id\":\"eb-ae9feb9b\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-21T03:38:05.067373092Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "needs_investigation: release_claim_needs_investigation"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=88d49ec2084b6150fe239d682b8938cadcc0a03d\nbase_rev=88d49ec2084b6150fe239d682b8938cadcc0a03d\nretry_after=2026-05-21T09:38:05Z\noutcome_reason=needs_investigation",
+          "created_at": "2026-05-21T03:38:05.129658663Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T06:05:39.65676008Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T055327-b3aed33d\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2151221,\"output_tokens\":11899,\"total_tokens\":2163120,\"cost_usd\":0,\"duration_ms\":725886,\"exit_code\":0}",
+          "created_at": "2026-05-27T06:05:39.690779244Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2163120 model=gpt-5.4-mini"
+        }
+      ],
+      "work-cooldown-base-rev": "88d49ec2084b6150fe239d682b8938cadcc0a03d",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T13:54:48Z",
+          "count": 1,
+          "model": "qwen3.6-27b-autoround",
+          "provider": "bragi-club-3090",
+          "reason": "provider_connectivity"
+        },
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T15:42:44Z",
+          "count": 1,
+          "model": "qwen3.5-27b",
+          "provider": "grendel",
+          "reason": "provider_connectivity"
+        }
+      ],
+      "work-last-detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\n\nRun 'docker run --help' for more information: exit status 125",
+      "work-last-status": "execution_failed",
+      "work-retry-after": "2026-05-21T09:38:05Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T060541-b4b77eac",
+    "prompt": ".ddx/executions/20260527T060541-b4b77eac/prompt.md",
+    "manifest": ".ddx/executions/20260527T060541-b4b77eac/manifest.json",
+    "result": ".ddx/executions/20260527T060541-b4b77eac/result.json",
+    "checks": ".ddx/executions/20260527T060541-b4b77eac/checks.json",
+    "usage": ".ddx/executions/20260527T060541-b4b77eac/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-6d71a41f-20260527T060541-b4b77eac"
+  },
+  "prompt_sha": "fd29484fd68f0ee2398544fb0b6646d20ef598e0b55b9ff4dab26a1940ae23a3"
+}
