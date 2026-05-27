@@ -1,0 +1,2 @@
+status: blocked
+reason: go test ./... is still red in internal/harnesses/capability_matrix_test.go on pre-existing documentation/matrix expectations unrelated to the harness process-group leak fix. Fixing those failures would require editing docs/helix/02-design/billing-observation-claude-tui.md and related capability-matrix evidence outside this bead's scope.
