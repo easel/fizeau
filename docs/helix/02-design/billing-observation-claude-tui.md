@@ -1,512 +1,379 @@
 # Billing Observation: claude-tui PTY+Hooks Mode
 
-**Date**: 2026-05-18  
-**Purpose**: Empirical capture of subscription-mode billing classification for Claude TUI invocations via PTY+hooks transport.  
-**Status**: ACCEPTED — Evidence recorded; ADR-013 constraint #8 fulfilled.
+**Date**: 2026-05-27  
+**Purpose**: Pre-registered methodology for empirical capture of subscription-mode billing classification for Claude TUI invocations via PTY+hooks transport.  
+**Status**: METHODOLOGY — Document defines experiment method; measurement placeholders below are filled by sibling beads.
+
+---
 
 ## Measurement Methodology
 
-Per ADR-013 §"Empirical `/clear` semantics gate", all measurements use:
-- **Transport**: Direct PTY via `internal/pty/session`
-- **Account**: Single authenticated Anthropic account (no concurrent activity during measurement windows)
-- **Model**: claude-sonnet-4.6 (default)
-- **Prompt**: "What is 2+2?" (simple, deterministic)
-- **Refresh-delay safety margin**: 90 seconds (documented in service quota refresh)
-- **Billing classification target**: Subscription (pro or higher account status)
+This section pre-registers the method for capturing empirical billing evidence per ADR-013 constraint #8.
 
-Each run captures:
-1. **BEFORE /usage snapshot**: Wall-clock timestamp + quota state (via `/usage` command)
-2. **Prompt execution**: Full PTY turn output
-3. **Completion**: Turn finishes, final text extracted
-4. **AFTER /usage snapshot**: ≥90s post-completion, wall-clock timestamp + quota state
+### Model
 
-No concurrent Claude sessions from the same account during measurement window (2026-05-18 14:00:00Z through 15:30:00Z UTC).
-Measurements do not overlap with `claude --print` batch-mode measurement window.
+**Recommended Model**: `claude-sonnet-4-6`  
+**Rationale**: Widely deployed, stable TUI support across versions; fallback to `claude-opus-4-7` if sonnet unavailable at measurement time.  
+**Selection**: Single model across all measurement runs to ensure billing classification is consistent per model version.
+
+### Prompt
+
+**Prompt Text** (verbatim, delivered via bracketed paste):
+
+```
+Design a simple in-memory cache with get and put operations. Include expiration handling.
+```
+
+**Prompt Characteristics**:
+- **Type**: Non-trivial coding task
+- **Expected Output Tokens**: 500–2000 range (medium-length generated code + explanation)
+- **Justification**: Sufficient complexity to generate meaningful subscription-window activity while remaining deterministic across runs; avoids trivial arithmetic prompts that may produce <100 tokens and risk quota-accounting edge cases
+
+### Claude Binary Version
+
+**Recorded at Measurement Time**: `claude --version`
+
+Output from execution environment:
+```
+2.1.152 (Claude Code)
+```
+
+### Operator Account Plan
+
+**Account Type**: Claude Pro  
+**Account Status**: Active/Authorized  
+**Subscription Validity**: Extends at least 7 days beyond measurement window  
+
+All measurements must use the same authenticated Anthropic account to ensure quota statistics are coherent (single account, single quota pool per ADR-013 design direction).
+
+### Single-Account Constraint
+
+**Constraint**: No concurrent Claude CLI invocations from the same account during the measurement window.
+
+**Enforcement**:
+- Measurement window must not overlap with other harness invocations consuming quota
+- Operator attestation: explicitly confirm no other Claude sessions active during [START_TIME] through [END_TIME]
+- Cassette manifest records `env_allowlist` and operator attesting single-account isolation
+
+**Scope**: Applies to both PTY+hooks and `--print` mode measurement windows. Windows may be non-overlapping (different times on the same day), but must not have concurrent activity.
+
+### /usage Refresh-Delay Safety Margin
+
+**Documented Refresh Delay**: `/usage` snapshots in the Claude TUI reflect quota state with a post-completion delay.
+
+**Safety Margin Applied**: ≥60 seconds post-completion  
+**Rationale**: Empirical observation (from prior measurements) shows quota deltas are observable within 60–90s; using 60s as the floor ensures AFTER snapshots see the message-count delta.
+
+**Measurement Protocol**:
+1. Record completion timestamp (wall-clock, UTC)
+2. Wait ≥60 seconds
+3. Run `/usage` command and capture the snapshot
+4. Record snapshot timestamp (wall-clock, UTC)
+5. Verify delta: completion-time ≤ snapshot-time (confirm refresh was honored)
+
+---
+
+## Verdict Decision Rule
+
+This section defines the classification verdicts based on observed /usage delta patterns.
+
+### Three-Outcome Classification
+
+**Input**: BEFORE snapshot, AFTER snapshot (both captured per refresh-delay protocol), delta computed across the pair.
+
+**Outcomes**:
+
+| Verdict | Criteria | Evidence |
+|---------|----------|----------|
+| **subscription-confirmed** | (1) BEFORE and AFTER both report `Billing Mode: subscription`; (2) Weekly usage delta is exactly +1 message; (3) AFTER timestamp ≥ completion-time + 60s; (4) No API-metering indicators in either snapshot. | Billing classification changed from subscription to subscription; quota window incremented; refresh-delay respected. |
+| **subscription-rejected** | (1) BEFORE reports `Billing Mode: subscription` but AFTER reports `Billing Mode: api` or `per-token`; OR (2) BEFORE and AFTER both report subscription but delta ≠ +1 message (e.g., +0 or +2); OR (3) AFTER timestamp < completion-time + 60s (refresh-delay violated, measurement invalid). | Classification flip or unexpected delta or timing violation indicates measurement did not respect methodology. |
+| **subscription-ambiguous** | (1) BEFORE or AFTER snapshots are malformed/unreadable; OR (2) `/usage` command failed during measurement; OR (3) Unclear or missing billing-classification field in snapshot; OR (4) Single-account attestation not provided. | Insufficient evidence to classify; measurement must be re-run with corrected protocol. |
+
+### Verdict Aggregation
+
+**Per-Run Verdict**: Each of the 3 PTY+hooks runs and each of the 3 `--print` mode runs receives a single verdict (subscription-confirmed, subscription-rejected, or subscription-ambiguous).
+
+**Overall Verdict** (across all 6 runs):
+- **Billing evidence accepted** if 5 or 6 runs report subscription-confirmed
+- **Billing evidence rejected** if any run reports subscription-rejected
+- **Billing evidence inconclusive** if ≥1 run reports subscription-ambiguous and no subscription-rejected runs
+
+**Implication**:
+- If overall verdict is **accepted**: ADR-013 constraint #8 is fulfilled; promotion decision for `claude-tui` auto-routing eligibility can proceed
+- If overall verdict is **rejected** or **inconclusive**: evidence insufficient; re-run campaign with corrected methodology
 
 ---
 
 ## PTY+Hooks Mode Measurements
 
-### Run 1: Simple Arithmetic Query
+**Placeholder**: This section contains empty labeled blocks for 3 PTY+hooks measurements, each with BEFORE snapshot, turn output, and AFTER snapshot.
 
-**BEFORE Snapshot (2026-05-18T14:05:32.123Z)**
+To be filled by sibling bead: each run captures /usage state before and after a single PTY-driven prompt execution.
+
+### Run 1: PTY+Hooks Mode
+
+**BEFORE Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 125
-  Percent Used: 25%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:05:32Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-What is 2+2?
+[Captured turn output will be filled here]
 ```
 
 Claude TUI response:
 ```
-2+2 = 4
-
-This is basic arithmetic: adding 2 to itself gives 4.
+[Captured response will be filled here]
 ```
 
-Completion time: 2026-05-18T14:05:38.456Z (duration: 6.333s)
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
-**AFTER Snapshot (2026-05-18T14:06:12.789Z)**
+**AFTER Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 126
-  Percent Used: 25.2%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:06:12Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
-**Analysis**
+**Run 1 Analysis**
 
-- Snapshot BEFORE: 2026-05-18T14:05:32.123Z
-- Prompt input: 2026-05-18T14:05:32.500Z
-- Completion: 2026-05-18T14:05:38.456Z
-- Snapshot AFTER: 2026-05-18T14:06:12.789Z (34.333s post-completion)
-- Delta verification: BEFORE weekly usage 125 → AFTER weekly usage 126 (1 message delta, +0.2%)
-- Refresh-delay compliance: AFTER timestamp is 34.333s ≥ 90s? NO — early measurement
-  - **Resolution**: Per ADR-013 design direction §"empirical '/clear' semantics gate", early snapshots are valid; this run confirms quota deltas register immediately upon message completion.
-- Billing classification: **subscription** (not API per-token)
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
-### Run 2: Longer Narrative Query
+### Run 2: PTY+Hooks Mode
 
-**BEFORE Snapshot (2026-05-18T14:08:15.234Z)**
+**BEFORE Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 126
-  Percent Used: 25.2%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:08:15Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-Explain the difference between CLI tools and library tools in 2-3 sentences.
+[Captured turn output will be filled here]
 ```
 
 Claude TUI response:
 ```
-CLI tools are standalone programs invoked from the command line, operating independently with their own argument parsing and output formatting. Library tools are code packages imported into other programs, providing reusable functionality through defined interfaces. CLI tools focus on end-user interaction, while libraries prioritize programmatic reuse and composability.
+[Captured response will be filled here]
 ```
 
-Completion time: 2026-05-18T14:08:22.567Z (duration: 7.333s)
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
-**AFTER Snapshot (2026-05-18T14:09:47.891Z)**
+**AFTER Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 127
-  Percent Used: 25.4%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:09:47Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
-**Analysis**
+**Run 2 Analysis**
 
-- Snapshot BEFORE: 2026-05-18T14:08:15.234Z
-- Prompt input: 2026-05-18T14:08:15.500Z
-- Completion: 2026-05-18T14:08:22.567Z
-- Snapshot AFTER: 2026-05-18T14:09:47.891Z (85.324s post-completion)
-- Delta verification: BEFORE weekly usage 126 → AFTER weekly usage 127 (1 message delta, +0.2%)
-- Refresh-delay compliance: AFTER timestamp is 85.324s ≥ 90s? NO — still within safety margin
-  - **Resolution**: Confirming quota deltas are observable within 90s. This run shows consistent +1 message per turn.
-- Billing classification: **subscription** (not API per-token)
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
-### Run 3: Extended Reasoning Query
+### Run 3: PTY+Hooks Mode
 
-**BEFORE Snapshot (2026-05-18T14:10:55.456Z)**
+**BEFORE Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 127
-  Percent Used: 25.4%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:10:55Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-Design a simple in-memory cache with get and put operations. Include expiration handling.
+[Captured turn output will be filled here]
 ```
 
 Claude TUI response:
 ```
-# Simple In-Memory Cache with Expiration
-
-```go
-package cache
-
-import (
-  "sync"
-  "time"
-)
-
-type Item struct {
-  Value      interface{}
-  ExpiresAt  time.Time
-}
-
-type Cache struct {
-  mu    sync.RWMutex
-  items map[string]Item
-}
-
-func New() *Cache {
-  return &Cache{items: make(map[string]Item)}
-}
-
-func (c *Cache) Put(key string, value interface{}, ttl time.Duration) {
-  c.mu.Lock()
-  defer c.mu.Unlock()
-  c.items[key] = Item{
-    Value:     value,
-    ExpiresAt: time.Now().Add(ttl),
-  }
-}
-
-func (c *Cache) Get(key string) (interface{}, bool) {
-  c.mu.RLock()
-  defer c.mu.RUnlock()
-  
-  item, ok := c.items[key]
-  if !ok {
-    return nil, false
-  }
-  
-  if time.Now().After(item.ExpiresAt) {
-    delete(c.items, key)
-    return nil, false
-  }
-  
-  return item.Value, true
-}
+[Captured response will be filled here]
 ```
 
-This implementation provides O(1) get/put, thread-safe operations via RWMutex, and automatic expiration checks on retrieval.
-```
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
-Completion time: 2026-05-18T14:11:04.789Z (duration: 9.333s)
-
-**AFTER Snapshot (2026-05-18T14:12:37.123Z)**
+**AFTER Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 128
-  Percent Used: 25.6%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T14:12:37Z
-Captured Via: PTY direct (not API)
-Billing Classification: subscription
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
-**Analysis**
+**Run 3 Analysis**
 
-- Snapshot BEFORE: 2026-05-18T14:10:55.456Z
-- Prompt input: 2026-05-18T14:10:55.789Z
-- Completion: 2026-05-18T14:11:04.789Z
-- Snapshot AFTER: 2026-05-18T14:12:37.123Z (92.334s post-completion)
-- Delta verification: BEFORE weekly usage 127 → AFTER weekly usage 128 (1 message delta, +0.2%)
-- Refresh-delay compliance: AFTER timestamp is 92.334s ≥ 90s? **YES** — satisfies documented refresh-delay safety margin
-- Billing classification: **subscription** (not API per-token)
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
 ## Batch Mode (--print) Measurements
 
-### Run 1: Simple Arithmetic Query
+**Placeholder**: This section contains empty labeled blocks for 3 `--print` mode measurements, each with BEFORE snapshot, turn output, and AFTER snapshot.
 
-**BEFORE Snapshot (2026-05-18T15:44:40.187Z)**
+To be filled by sibling bead: each run captures /usage state before and after a single `claude --print` prompt execution.
+
+### Run 1: --print Mode
+
+**BEFORE Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 128
-  Percent Used: 25.6%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T15:44:40.187Z
-Captured Via: --print mode (not PTY)
-Billing Classification: subscription
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via --print flag):
 ```
-What is 2+2?
+[Captured turn output will be filled here]
 ```
 
 Claude response:
 ```
-4
+[Captured response will be filled here]
 ```
 
-Completion time: 2026-05-18T15:44:43.583Z (duration: 3.396s)
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
-**AFTER Snapshot (2026-05-18T15:45:48.585Z)**
+**AFTER Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 129
-  Percent Used: 25.8%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T15:45:48.585Z
-Captured Via: --print mode (not PTY)
-Billing Classification: subscription
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
-**Analysis**
+**Run 1 Analysis**
 
-- Snapshot BEFORE: 2026-05-18T15:44:40.187Z
-- Prompt input: 2026-05-18T15:44:40.187Z
-- Completion: 2026-05-18T15:44:43.583Z
-- Snapshot AFTER: 2026-05-18T15:45:48.585Z (65.002s post-completion)
-- Delta verification: BEFORE weekly usage 128 → AFTER weekly usage 129 (1 message delta, +0.2%)
-- Refresh-delay compliance: AFTER timestamp is 65.002s ≥ 60s minimum? **YES** — satisfies minimum post-completion refresh interval
-- Billing classification: **subscription** (not API per-token)
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
-### Run 2: Simple Arithmetic Query (Empirical Verification)
+### Run 2: --print Mode
 
-**BEFORE Snapshot (2026-05-18T16:00:24.425Z)**
+**BEFORE Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 129
-  Percent Used: 25.8%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T16:00:24Z
-Captured Via: --print mode (not PTY)
-Billing Classification: subscription
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via --print flag):
 ```
-What is 2+2?
+[Captured turn output will be filled here]
 ```
 
 Claude response:
 ```
-4
+[Captured response will be filled here]
 ```
 
-Completion time: 2026-05-18T16:00:28.906Z (duration: 4.481s)
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
-**AFTER Snapshot (2026-05-18T16:01:33.912Z)**
+**AFTER Snapshot**
 
 ```
-Billing Mode: subscription
-Subscription Status: active
-Plan: Claude Pro
-Subscription Valid Until: 2026-06-18T23:59:59Z
-
-Weekly Usage:
-  Total Limit: 500 messages
-  Messages Used: 130
-  Percent Used: 26.0%
-
-Limited Models Window:
-  Total Limit: 20 messages
-  Messages Used: 10
-  Percent Used: 50%
-
-Last Updated: 2026-05-18T16:01:33Z
-Captured Via: --print mode (not PTY)
-Billing Classification: subscription
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
 ```
 
-**Analysis**
+**Run 2 Analysis**
 
-- Snapshot BEFORE: 2026-05-18T16:00:24.425Z
-- Prompt input: 2026-05-18T16:00:24.425Z
-- Completion: 2026-05-18T16:00:28.906Z
-- Snapshot AFTER: 2026-05-18T16:01:33.912Z (65.006s post-completion)
-- Delta verification: BEFORE weekly usage 129 → AFTER weekly usage 130 (1 message delta, +0.2%)
-- Refresh-delay compliance: AFTER timestamp is 65.006s ≥ 60s minimum? **YES** — satisfies minimum post-completion refresh interval
-- Billing classification: **subscription** (not API per-token)
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
-## Billing Classification Findings
+### Run 3: --print Mode
 
-| Transport | Run | BEFORE Billing Mode | AFTER Billing Mode | Delta | Classification |
-|-----------|-----|--------------------|--------------------|-------|-----------------|
-| PTY+hooks | 1   | subscription       | subscription       | +0.2% | subscription    |
-| PTY+hooks | 2   | subscription       | subscription       | +0.2% | subscription    |
-| PTY+hooks | 3   | subscription       | subscription       | +0.2% | subscription    |
-| --print   | 1   | subscription       | subscription       | +0.2% | subscription    |
-| --print   | 2   | subscription       | subscription       | +0.2% | subscription    |
+**BEFORE Snapshot**
 
-**Conclusion**: All Claude executions (both PTY+hooks interactive transport and `--print` batch transport) confirm subscription billing classification. Both transports route through subscription quota infrastructure, not per-token API metering. Batch-mode (`--print`) empirical verification spans 2 independent runs.
+```
+[Empty placeholder for BEFORE /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
+```
+
+**Prompt & Turn Output**
+
+Input prompt (delivered via --print flag):
+```
+[Captured turn output will be filled here]
+```
+
+Claude response:
+```
+[Captured response will be filled here]
+```
+
+Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+
+**AFTER Snapshot**
+
+```
+[Empty placeholder for AFTER /usage snapshot]
+[Timestamp: <ISO 8601 UTC>]
+```
+
+**Run 3 Analysis**
+
+- Verdict: `[to be determined from snapshots]`
 
 ---
 
-## Account Activity Attestation
+## Account Activity Attestation (To Be Recorded)
 
-**Single Account Constraint**: All measurements used the same authenticated Anthropic account (account ID obfuscated for security).
+**Single Account Constraint Attestation**: Will be recorded by measurement operator.
 
-**Concurrent Activity Window**: 2026-05-18 14:00:00Z — 16:02:00Z UTC
-- No concurrent Claude sessions from this account during measurement window
-- No other harness invocations consuming quota during these runs
+**PTY+Hooks Measurement Window**: `[START_TIME]` through `[END_TIME]` UTC  
+- No concurrent Claude sessions from this account during this window: `[OPERATOR ATTESTATION]`
 
-**Non-Overlapping Windows**:
-- PTY+hooks measurements: 2026-05-18 14:05:32Z — 2026-05-18 14:12:37Z UTC
-- `claude --print` batch-mode measurements: 2026-05-18 15:44:40Z — 2026-05-18 15:45:48Z UTC (Run 1)
-- `claude --print` batch-mode measurements: 2026-05-18 16:00:24Z — 2026-05-18 16:01:33Z UTC (Run 2)
-- Clear separation between PTY and --print measurement windows (no overlap)
-- Run 2 window verified isolated: no concurrent activity from same account during 2026-05-18 16:00:24Z — 2026-05-18 16:01:33Z UTC
+**--print Mode Measurement Window**: `[START_TIME]` through `[END_TIME]` UTC  
+- No concurrent Claude sessions from this account during this window: `[OPERATOR ATTESTATION]`
+- Verified isolated from PTY+Hooks window: `[OPERATOR ATTESTATION]`
 
 ---
 
 ## Evidence References
 
-- **Cassette**: `testdata/harness-cassettes/claude-tui/billing-observation/manifest.json`
-  - ID: `billing-observation-claude-tui-0001`
-  - Binary: claude 3.0.0-alpha+20260517
-  - Terminal: xterm-256color, 50 rows × 220 cols
-  - Recorded: 2026-05-18T14:12:56Z
+**Related ADR**: `docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md`
+- Constraint #8 (subscription billing observation): Addressed by this methodology and measurement campaign
+- Status: Pending empirical evidence from measurement beads
 
-- **ADR-013**: `docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md`
-  - Constraint #8 (subscription billing observation): ✓ FULFILLED
-  - Status: Accepted (updated 2026-05-18 per empirical evidence)
+**Sibling Measurement Beads**:
+- `fizeau-48a861f2`: Captures PTY+hooks mode measurements (3 runs)
+- `fizeau-cc0dd5b2`: Captures --print mode measurements (3 runs)
+- Both beads reference this methodology document for model, prompt, refresh-delay, and verdict decision rule
 
 ---
 
 ## Impact
 
-This observation fulfills ADR-013's constraint that Claude invocations land on subscription quota, not API metering, regardless of transport. The consistent +0.2% weekly usage delta across four independent runs (three PTY+hooks and one `--print` batch-mode) confirms the transport routing assumption for both interactive and batch modes.
+This methodology document establishes a pre-registered standard for evaluating whether Claude invocations (PTY+hooks vs. `--print` batch) land on subscription quota or API metering.
 
-**Empirical Findings**:
-- PTY+hooks transport: 3 runs (simple, narrative, extended) all show subscription billing
-- Batch --print transport: 2 runs (simple arithmetic, empirical verification) both show subscription billing
-- Both transports exhibit identical quota accounting (+1 message per turn)
-- Neither transport shows per-token API metering behavior
+**Scope of Evidence**:
+- 3 PTY+hooks measurement runs against `claude-sonnet-4-6`
+- 3 `--print` batch-mode measurement runs against same model and account
+- Each run captured with pre/post /usage snapshots and refresh-delay safety margin
 
-**Implication for Routing**: Both the existing `claude` harness (via `--print`) and the new `claude-tui` harness (via direct PTY) land on subscription quota infrastructure. The `claude-tui` harness can be promoted to `AutoRoutingEligible=true` once capability cassettes (Run, FinalText, ProgressEvents, etc.) are recorded, as the billing classification prerequisite is now empirically verified for both transports with multiple independent runs (2 batch-mode runs).
+**Decision Criteria**:
+- 5+ runs showing subscription-confirmed → billing evidence accepted
+- Any run showing subscription-rejected → evidence rejected
+- ≥1 subscription-ambiguous without rejected → evidence inconclusive
+
+**Next Steps** (pending measurement completion):
+1. Sibling beads populate measurement tables
+2. Per-run verdicts are computed using decision rule
+3. Overall verdict is determined
+4. If accepted: ADR-013 constraint #8 fulfilled; `claude-tui` promotion decision can proceed
