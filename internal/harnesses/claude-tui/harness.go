@@ -226,32 +226,6 @@ func (h *Harness) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// reapSession reaps a PTY session by killing the process, with a brief
-// timeout to allow graceful shutdown.
-func reapSession(ctx context.Context, s *session.Session) error {
-	// Send SIGKILL to the process via Kill()
-	// The Kill() method sends SIGTERM first, waits 100ms, then sends SIGKILL
-	_ = s.Kill()
-
-	// Wait for process to exit with a deadline
-	done := make(chan struct{})
-
-	go func() {
-		_ = s.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Process exited
-		return nil
-	case <-ctx.Done():
-		// Timeout reached; the process should already be dead from Kill()
-		<-done
-		return ctx.Err()
-	}
-}
-
 // SupportedAliases implements harnesses.ModelDiscoveryHarness.
 func (h *Harness) SupportedAliases() []string {
 	return nil

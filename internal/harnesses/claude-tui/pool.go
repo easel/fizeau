@@ -2,7 +2,11 @@ package claudetui
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/easel/fizeau/internal/pty/session"
 )
@@ -56,12 +60,28 @@ func getOrCreateSession(ctx context.Context, binary string, args []string, workd
 // clearSession issues /clear to the session and waits for the ready marker.
 func clearSession(s *session.Session, readyMarker string, timeout int) error {
 	if err := s.SendBytes([]byte("/clear\r")); err != nil {
-		return err
+		return fmt.Errorf("send /clear: %w", err)
 	}
 
-	// Wait for the ready marker to reappear
-	// This is handled by the caller in the runTurn flow
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	for {
+		select {
+		case chunk, ok := <-s.Output():
+			if !ok {
+				return errors.New("output channel closed before prompt marker seen")
+			}
+			if chunk.ReadError != nil {
+				return fmt.Errorf("read error: %w", chunk.ReadError)
+			}
+			if strings.Contains(string(chunk.Bytes), readyMarker) {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for clear prompt: %w", ctx.Err())
+		}
+	}
 }
 
 // GetPooledSession returns the cached session for a workdir (for testing).
@@ -97,4 +117,25 @@ func getLiveSessionsSnapshot() []*session.Session {
 // that will be added to the pool for the orphan reaper test.
 func GetOrCreateSessionForTest(ctx context.Context, binary string, args []string, workdir string, env []string, size session.Size) (*session.Session, error) {
 	return getOrCreateSession(ctx, binary, args, workdir, env, size)
+}
+
+// reapSession reaps a PTY session by killing the process, with a brief
+// timeout to allow graceful shutdown.
+func reapSession(ctx context.Context, s *session.Session) error {
+	_ = s.Kill()
+
+	done := make(chan struct{})
+
+	go func() {
+		_ = s.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		<-done
+		return ctx.Err()
+	}
 }
