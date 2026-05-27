@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260527T205925-00486838",
+  "bead_id": "fizeau-38f07f18",
+  "base_rev": "3da44d7d190f8b3141b87d3cc33142a94377a6ad",
+  "created_at": "2026-05-27T20:59:29.998782865Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-38f07f18",
+    "title": "harness: CI gate — cassette presence + freshness + credentialed drift detector",
+    "description": "Two CI gates lock in the contract:\n\n(a) Cassette-as-test-fixture freshness (every PR): every harness with a TUI model surface (codex, claude, gemini, opencode, pi) has testdata/model_surface/ checked in and CapturedAt within a configured TTL (default 30 days). Stale fixtures fail because they no longer prove the parser works against current TUI output.\n\n(b) Live-discovery drift detector (scheduled / credentialed, harness_integration tag): runs ReadXModelDiscoveryViaPTY against the live authenticated CLI, captures a fresh snapshot, diffs against the checked-in cassette. Mismatch fails with a re-record instruction. Missing credentials emit a structured SKIP (parsable by CI). SKIPs older than TTL fail the presence check above.\n\nThis is now scoped correctly: at runtime, live PTY is authoritative and uncached cassette has no role. The CI gates here exist to keep test fixtures honest, not to gate runtime behaviour.",
+    "acceptance": "1) A unit test (internal/harnesses/cassette_presence_test.go or similar) asserts every harness in {codex, claude, gemini, opencode, pi} has a testdata/model_surface/ cassette and that CapturedAt is within the configured TTL; runs by default in go test ./... .\n2) A harness_integration-tagged test runs against the live authenticated CLI, captures a fresh snapshot, and diffs against the cassette; mismatches fail with actionable re-record instructions.\n3) CI reports SKIP vs FAIL distinctly for the credentialed drift job; SKIPs older than TTL fail the presence test.\n4) Documentation explains how to re-record a cassette (and explicitly notes cassettes are test fixtures, not runtime fallbacks).",
+    "parent": "fizeau-89eca738",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "principle:no-static-fallback",
+      "governance:capability-matrix"
+    ],
+    "metadata": {
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T205925-00486838",
+    "prompt": ".ddx/executions/20260527T205925-00486838/prompt.md",
+    "manifest": ".ddx/executions/20260527T205925-00486838/manifest.json",
+    "result": ".ddx/executions/20260527T205925-00486838/result.json",
+    "checks": ".ddx/executions/20260527T205925-00486838/checks.json",
+    "usage": ".ddx/executions/20260527T205925-00486838/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-38f07f18-20260527T205925-00486838"
+  },
+  "prompt_sha": "68c5747cb655012da774390ae7aba9bd23c06effd6a7d99f8fef3ec2bd8d01a7"
+}
