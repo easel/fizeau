@@ -1,0 +1,56 @@
+{
+  "attempt_id": "20260527T191351-38a529e2",
+  "bead_id": "fizeau-866931c2",
+  "base_rev": "70efb31eb6a20196a3d1a9bea538d84056bc402d",
+  "created_at": "2026-05-27T19:13:59.879513418Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-866931c2",
+    "title": "claude-tui/step3: PTY transport — Execute path with startup-probe responder + bracketed-paste prompt delivery",
+    "description": "Replace the stub Execute with the real PTY path.\n\nWORK:\n- Use internal/pty/session to spawn 'claude' (no --print, no -p, no --output-format, no other batch flags).\n- Implement a small startup-probe responder for DA1/DA2/DSR/XTVERSION/window-size queries the Ink TUI emits at startup. Belongs in internal/pty/ as a reusable helper (the quota probe path consumes it too).\n- Deliver prompts via bracketed paste (ESC[200~ ... ESC[201~ + Enter). Single keystrokes for slash commands/menu navigation use a 25-75ms inter-key delay band.\n- Env allowlist per ADR-013 §Environment Allowlist: pass-through HOME/PATH/USER/LOGNAME/SHELL/LANG/LC_ALL/TZ/XDG_*/CLAUDE_*; set TERM/LANG/LC_ALL defaults if absent. Drop everything else.\n- Cancellation: Esc by default; Ctrl-C fallback restarts the session.\n\nNON-SCOPE: JSONL transcript parsing (sub-bead step 4); session pool (sub-bead step 6); model/reasoning selection drivers (sub-bead step 5).",
+    "acceptance": "1) internal/pty/probes/ (or equivalent) ships a reusable startup-probe responder for DA1/DA2/DSR/XTVERSION/window-size; quota probe path either refactored to consume it OR a follow-up bead is filed (name it in the closing note).\n2) claude-tui Runner.Execute starts a PTY session against claude (binary path resolved via PATH), sends a multi-line prompt via bracketed paste, and observes the prompt echo. Verified by a unit test using a synthetic PTY echo program.\n3) Bracketed-paste correctness assertion: the prompt bytes appear inside ESC[200~ ... ESC[201~ markers exactly once; no leakage outside; multi-line prompts arrive as a single burst (no per-byte delay inside paste).\n4) Inter-key delay band configurable (default 25-75ms); enforced for single keystrokes via a measurable test.\n5) Env allowlist enforced: assertion test (a) asserts the documented allowed set is passed; (b) asserts unknown env vars are dropped; (c) asserts no Fizeau-introduced CLAUDE_*, ANTHROPIC_*, *_AGENT*, *_AUTOMATED* variables appear in the spawned process environment.\n6) Cassette round-trip: a record-mode test against the synthetic PTY echo program produces a cassette that, when replayed via internal/pty/cassette, yields identical Events.\n7) Cancellation paths verified: Esc cancels the turn (final event with Status='cancelled'); Ctrl-C closes the session and the runner reports an error.\n8) go test ./internal/harnesses/claude-tui/... ./internal/pty/... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "area:pty",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:13:49.888461119Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T191351-38a529e2",
+    "prompt": ".ddx/executions/20260527T191351-38a529e2/prompt.md",
+    "manifest": ".ddx/executions/20260527T191351-38a529e2/manifest.json",
+    "result": ".ddx/executions/20260527T191351-38a529e2/result.json",
+    "checks": ".ddx/executions/20260527T191351-38a529e2/checks.json",
+    "usage": ".ddx/executions/20260527T191351-38a529e2/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-866931c2-20260527T191351-38a529e2"
+  },
+  "prompt_sha": "298b070bf4de27648f7ff279e1d6f0c6c164269a29d006bffbd9023ad3bde2fd"
+}
