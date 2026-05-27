@@ -1,0 +1,63 @@
+{
+  "attempt_id": "20260527T234444-3359991d",
+  "bead_id": "fizeau-5cfc7178",
+  "base_rev": "fd7f9fc9bea8b0fa1e4fded8d22f5a8a7e4e1312",
+  "created_at": "2026-05-27T23:44:52.766766429Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 6
+  },
+  "bead": {
+    "id": "fizeau-5cfc7178",
+    "title": "claude-tui/step5: pooled session lifetime with /clear between turns + orphan reaper",
+    "description": "Per ADR-013 design constraints #4 (session pool), #5 (empirical /clear semantics gate), #6 (orphan reaper).\n\nWORK:\n- Package-scope singleton pool, keyed by (harness, workdir). Depth 1 per key default; expandable for service-mode concurrency.\n- Between turns: /clear command resets conversation; verify model selection persists and permission mode persists per the empirical gate.\n- Orphan reaper: startup helper analogous to service_stale_harness_reaper.go that kills claude processes whose parent fiz PID is gone before constructing the pool. No persistent state.\n\nGATE: ADR-013 constraint #5 requires verifying /clear semantics against the installed Claude CLI (resets history; doesn't reset model/permissions/auth). If /clear is unstable, fall back to per-Execute sessions (claude-p model) and document the cost.",
+    "acceptance": "1) An empirical /clear semantics report exists under docs/helix/02-design/ documenting the verification: history reset, model persists, permission mode persists, auth persists, new transcript file path emitted via the next Stop hook. claude --version included.\n2) If /clear semantics hold: pooled-session implementation with depth-1 default, package-scope singleton, per-(harness, workdir) key. Pool placement asserted by a test that confirms two distinct \u0026claudetui.Runner{} instances share the pool.\n3) If /clear is unstable on any of the verified dimensions: per-Execute sessions with cold-start cost documented; both branches pass the conformance suite.\n4) Pool concurrent-claim safety: two simultaneous Execute calls on the same (harness, workdir) serialize on the pooled session (no race; no broken state); tested by a goroutine race test.\n5) Pool eviction on /clear failure: if /clear emits an error or the session becomes unresponsive mid-turn, the pool evicts the session and the next Execute on that key gets a fresh session; tested with a synthetic /clear-failing fixture.\n6) Orphan reaper integrated into runner startup; reaps claude processes whose parent fiz PID is gone. Reaper kill-and-recover test: spawn a session, fake-crash fiz (test helper kills the parent PID indirectly), restart, verify the new runner reaps the orphan before claiming the pool.\n7) A focused integration test asserts second Execute on the same (harness, workdir) reuses the pooled session when /clear is supported (assertion: same PID, second call latency \u003c first call latency by the expected Ink+auth startup margin).\n8) Service-mode concurrency: pool depth \u003e1 supported via configuration; a test exercises depth=3 with three concurrent Execute calls and asserts all three complete with three distinct pool slots.\n9) go test ./internal/harnesses/claude-tui/... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"gate dependency: /clear semantics verification is both a precondition and acceptance criterion #1: Bead has detailed acceptance criteria and clear work items, but the /clear semantics verification is structured as both a gate (blocks full implementation decision) and acceptance criterion #1. This creates a circular dependency: the pool strategy choice depends on verifying /clear, but verification is acceptance work. The conditional fallback path (pooled sessions vs. per-Execute) also bifurcates testing scope. Dependency fizeau-7f54f63c is unverified. Operator should clarify: (a) is the /clear report pre-work or acceptance?, (b) is ADR-013 available for cross-reference?, (c) should service-mode concurrency (depth\\u003e1) be in scope or handled separately?\",\"fingerprint\":\"567e9eac8f42eca3af4282c0340f11fbd1dea237bb2b662ccd101474994ad514\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"567e9eac8f42eca3af4282c0340f11fbd1dea237bb2b662ccd101474994ad514\"}",
+          "created_at": "2026-05-27T23:44:17.417905933Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-27T23:44:43.303208057Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        }
+      ],
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T234444-3359991d",
+    "prompt": ".ddx/executions/20260527T234444-3359991d/prompt.md",
+    "manifest": ".ddx/executions/20260527T234444-3359991d/manifest.json",
+    "result": ".ddx/executions/20260527T234444-3359991d/result.json",
+    "checks": ".ddx/executions/20260527T234444-3359991d/checks.json",
+    "usage": ".ddx/executions/20260527T234444-3359991d/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-5cfc7178-20260527T234444-3359991d"
+  },
+  "prompt_sha": "c42ba53f89a707f4f25977254d85283f863920a0d253db5f4ecb3c3c13866cb0"
+}
