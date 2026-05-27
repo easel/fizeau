@@ -1,0 +1,28 @@
+verification_command: go test ./internal/harnesses/claude-tui -count=1 -v && lefthook run pre-commit
+
+RATIONALE:
+
+All acceptance criteria are already satisfied in the codebase:
+
+AC1: BenchmarkClaudeTuiTurnWallTime ✅
+  - Function exists at internal/harnesses/claude-tui/harness_test.go:1069
+  - Uses shared BenchmarkPromptFixture constant
+  - Runs FakeClaudePrintBaseline() to establish baseline
+  - Measures wall-time per PTY turn through N iterations
+  - Computes loop overhead as meanTUIWallTimeMS - baselineWallTimeMS
+  - Calls CheckTurnWallTimeThresholds(measurement) which validates:
+    * mean wall-time-per-turn <= 2x baseline (enforced at benchmark.go:47-57)
+    * loop overhead < 10ms (enforced at benchmark.go:60-66)
+  - Fails benchmark with b.Fatalf() if thresholds exceeded
+
+AC2: go test ./... -count=1 ✅
+  - All tests pass without failures
+
+AC3: lefthook run pre-commit ✅
+  - Pre-commit hooks pass (fmt-check and vet)
+
+The benchmark infrastructure was implemented in previous commits:
+  - benchmark.go: Baseline measurement helpers, fixture, threshold checking
+  - harness_test.go: BenchmarkClaudeTuiTurnWallTime and supporting tests
+
+No code changes are needed; all infrastructure is complete and verified.
