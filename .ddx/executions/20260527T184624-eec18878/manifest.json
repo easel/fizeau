@@ -1,0 +1,152 @@
+{
+  "attempt_id": "20260527T184624-eec18878",
+  "bead_id": "fizeau-2af00baf",
+  "base_rev": "11ed591d907364d864b32965bdb7a9c9075887da",
+  "created_at": "2026-05-27T18:46:29.090776395Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2af00baf",
+    "title": "claude-tui: benchmark per-turn wall time and loop overhead against claude --print baseline",
+    "description": "PROBLEM: ADR-013 §3 testing concern requires that claude-tui's loop overhead beyond inference stay under 10ms and that wall-time-per-turn stay within 2x of claude --print on an equivalent prompt. Without an enforcing benchmark, regressions in the PTY driver, session pool, or hook fan-out can silently violate these ratchets.\n\nROOT CAUSE:\n- internal/harnesses/claudetui/: no benchmark exists that compares the PTY turn path to a claude --print baseline on a shared canned prompt.\n- No assertion harness for the \u003c10ms loop-overhead and \u003c2x wall-time bounds.\n\nPROPOSED FIX:\n1. Add a shared canned prompt fixture and a claude --print baseline runner in the claudetui test package.\n2. Add BenchmarkClaudeTuiTurnWallTime that runs N iterations of the PTY turn path, measures wall time, and computes the loop overhead by subtracting measured inference time.\n3. Fail the benchmark if mean wall-time-per-turn exceeds 2x the baseline or if loop overhead exceeds 10ms.\n\nNON-SCOPE:\n- PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- Session pool, /clear, orphan reaping (sibling child B).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on sibling children A, B, C. Governing artifacts: ADR-013 §3, CONTRACT-004.",
+    "acceptance": "1) BenchmarkClaudeTuiTurnWallTime asserts mean wall-time-per-turn is within 2x of the claude --print baseline on the shared canned prompt, and that loop overhead beyond inference is under 10ms.\n2) go test ./... -count=1 is green.\n3) lefthook run pre-commit is green.",
+    "parent": "fizeau-60ce39cb",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"1) BenchmarkClaudeTuiTurnWallTime asserts mean wall-time-per-turn is within 2x of the claude --print baseline on the shared canned prompt, and that loop overhead beyond inference is under 10ms.\",\"coverage\":\"Child 1 AC1-AC3 covers the shared canned prompt fixture and claude --print baseline runner. Child 2 AC1-AC4 covers BenchmarkClaudeTuiTurnWallTime, 2x wall-time enforcement, under-10ms loop-overhead enforcement, reported metrics, and operator-required skip behavior.\"},{\"parent_ac\":\"2) go test ./... -count=1 is green.\",\"coverage\":\"Child 1 AC5 and Child 2 AC6 require go test ./... -count=1.\"},{\"parent_ac\":\"3) lefthook run pre-commit is green.\",\"coverage\":\"Child 1 AC6 and Child 2 AC7 require lefthook run pre-commit.\"}],\"child_ids\":[\"fizeau-9517f735\",\"fizeau-7351b908\"],\"rationale\":\"The parent is too broad because it mixes fixture design, live baseline command execution, PTY benchmark orchestration, threshold math, and repo-wide gates. Two children keep the work independently executable: the first lands reusable default-CI-testable benchmark inputs and baseline measurement plumbing, while the second depends on that plumbing plus sibling implementation beads A/B/C to enforce ADR-013's actual benchmark ratchets against the real claude-tui turn path.\"}",
+          "created_at": "2026-05-27T08:35:20.047007173Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-9517f735, fizeau-7351b908"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T11:29:35.183041891Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T110810-1c3fabc7\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":16,\"output_tokens\":561,\"total_tokens\":577,\"cost_usd\":0.47993760000000013,\"duration_ms\":1275718,\"exit_code\":0}",
+          "created_at": "2026-05-27T11:29:35.224410318Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=577 cost_usd=0.4799 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T110810-1c3fabc7\",\"bead_id\":\"fizeau-2af00baf\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-27T11:29:39.611060348Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-27T11:29:39.678822172Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-27T11:29:39.742346583Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=5468a3a06739dd307877af5aac17d3b9945ff7d2\nbase_rev=5468a3a06739dd307877af5aac17d3b9945ff7d2\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-27T11:29:39.769900145Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-2af00baf\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T17:55:42.256750286Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"checking out isolated clone base: fatal: unable to read tree (14135075c7230ff9dc655bbbf026bef43deb0fe1): exit status 128\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T17:55:53.704482061Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "checking out isolated clone base: fatal: unable to read tree (14135075c7230ff9dc655bbbf026bef43deb0fe1): exit status 128",
+          "created_at": "2026-05-27T17:55:53.747638739Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode result: json: cannot unmarshal number into Go struct field .tractability of type string\",\"fingerprint\":\"4b6fe2e51df8846a632a6ffb960c3cc553273a3f422199975f0a6018508ec79a\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4b6fe2e51df8846a632a6ffb960c3cc553273a3f422199975f0a6018508ec79a\"}",
+          "created_at": "2026-05-27T17:56:55.708419621Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-2af00baf\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T17:57:48.847945782Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "tracker lock timeout (max elapsed, lock: /home/erik/Projects/fizeau/.ddx/.git-tracker.lock, owner pid: 421999)\noutcome_reason=timeout",
+          "created_at": "2026-05-27T17:57:48.909563952Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected\",\"fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\"}",
+          "created_at": "2026-05-27T18:45:53.232592742Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "work-no-changes-count": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T184624-eec18878",
+    "prompt": ".ddx/executions/20260527T184624-eec18878/prompt.md",
+    "manifest": ".ddx/executions/20260527T184624-eec18878/manifest.json",
+    "result": ".ddx/executions/20260527T184624-eec18878/result.json",
+    "checks": ".ddx/executions/20260527T184624-eec18878/checks.json",
+    "usage": ".ddx/executions/20260527T184624-eec18878/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-2af00baf-20260527T184624-eec18878"
+  },
+  "prompt_sha": "eb39f06ad77ff1c9f37d7ac427daaf87361675e0cfe2d163bb494f1f3e5acf85"
+}
