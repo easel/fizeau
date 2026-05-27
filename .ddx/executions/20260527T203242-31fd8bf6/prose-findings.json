@@ -1,0 +1,7 @@
+{
+  "ran": true,
+  "changed_docs": [
+    "docs/helix/02-design/solution-designs/SD-011-addendum-shell-runner-events.md",
+    "docs/helix/02-design/solution-designs/SD-011-canonical-progress-events.md"
+  ]
+}
