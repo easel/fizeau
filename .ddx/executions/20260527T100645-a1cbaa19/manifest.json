@@ -1,0 +1,75 @@
+{
+  "attempt_id": "20260527T100645-a1cbaa19",
+  "bead_id": "fizeau-04d91f3b",
+  "base_rev": "80492065488d300eb5f3f3b6b08d0bd77f1e32d2",
+  "created_at": "2026-05-27T10:06:49.78263761Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-04d91f3b",
+    "title": "claude-tui: shutdown orphan reaper for live PTY children (SIGTERM then SIGKILL)",
+    "description": "PROBLEM: ADR-013 §3 (decision item 6, orphan reaper) requires that PTY child processes left alive be reaped on harness shutdown within a bounded timeout, escalating SIGTERM to SIGKILL, so a terminating fiz process does not leak orphaned `claude` PTY children.\n\nROOT CAUSE:\n- internal/harnesses/claude-tui/harness.go:36-149 — the Harness exposes no Shutdown method (only Info/HealthCheck/Execute/Quota/Account/ModelDiscovery), so pooled PTY children are never terminated and nothing enumerates live PTY children at teardown.\n- internal/pty/session/types.go:276,293,309 — Session.Close/Kill/Wait exist but are not driven from any harness-level shutdown path; the process-group kill at internal/pty/session/session_unix.go:122-134 is invoked only on context cancel, not on harness teardown.\n\nPROPOSED FIX:\n1. Add Harness.Shutdown(ctx) that enumerates the pool's live PTY sessions and reaps each within a bounded timeout: send SIGTERM (Session.Close), then escalate to SIGKILL (Session.Kill) if Session.Wait does not return before the deadline.\n2. The reaper inspects live session state only — no persistent or cross-invocation state (ADR-013 §3 item 6).\n\nNON-SCOPE:\n- The session pool data structure, reuse, and `/clear`-between-turns logic (sibling child in this decomposition).\n- The startup cross-invocation reaper analogous to service_stale_harness_reaper*.go — this bead is the in-process shutdown reaper only.\n- The PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- Performance benchmarking and 2x/10ms ratchets (sibling child D).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on the sibling session-pool child of this decomposition, child #1, and sibling child A. Governing artifacts: ADR-013 §3 (decision item 6), CONTRACT-004, internal/pty/ library.",
+    "acceptance": "1) TestClaudeTuiOrphanReaper asserts that on harness Shutdown any leftover PTY child processes are reaped within a bounded timeout (SIGTERM then escalated SIGKILL).\n2) go test ./... -count=1 is green.\n3) lefthook run pre-commit is green.",
+    "parent": "fizeau-a14eba0c",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T09:50:43.686066895Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T093520-69e0cbb0\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":5150751,\"output_tokens\":28584,\"total_tokens\":5179335,\"cost_usd\":0,\"duration_ms\":917221,\"exit_code\":0}",
+          "created_at": "2026-05-27T09:50:43.720244149Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=5179335 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-27T09:51:05.371772316Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260527T093455-18b3626c\",\"bead_id\":\"fizeau-04d91f3b\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-27T10:05:25Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-27T10:05:25.959508519Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        }
+      ],
+      "work-consecutive-wedges": {
+        "at": "2026-05-27T10:05:25Z",
+        "count": 1,
+        "last_reason": "progress_watchdog"
+      }
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T100645-a1cbaa19",
+    "prompt": ".ddx/executions/20260527T100645-a1cbaa19/prompt.md",
+    "manifest": ".ddx/executions/20260527T100645-a1cbaa19/manifest.json",
+    "result": ".ddx/executions/20260527T100645-a1cbaa19/result.json",
+    "checks": ".ddx/executions/20260527T100645-a1cbaa19/checks.json",
+    "usage": ".ddx/executions/20260527T100645-a1cbaa19/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-04d91f3b-20260527T100645-a1cbaa19"
+  },
+  "prompt_sha": "1b37003abfd882a1a7daa27b5ae0fc9621358333242df77cf7ac1138cf016360"
+}
