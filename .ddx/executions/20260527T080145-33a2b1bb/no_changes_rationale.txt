@@ -1,0 +1,2 @@
+status: blocked
+reason: repository-wide `go test ./... -count=1` fails in unrelated pre-existing suites outside the claude-tui bead scope (for example docs/capability-matrix and benchmark/conformance tests, plus long-running service/CLI integration tests that time out under the default 10m test timeout). The bead instructions prohibit editing those unrelated files, so I cannot make the full suite green from this scope.
