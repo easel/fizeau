@@ -133,6 +133,7 @@ export_cell_worker_functions() {
     append_budget_cell \
     budget_is_halted \
     write_budget_halted_cell \
+    write_interrupted_cell_report \
     run_one_cell \
     run_cell_with_per_cell_retry \
     budget_or_run_cell
@@ -210,9 +211,10 @@ unregister_inflight() {
 
 # interrupt_inflight_cells is called during signal handling. For each in-flight cell:
 #   1. SIGTERM the cell's process group
-#   2. docker stop containers matching the cell's label (--time=30s grace)
-#   3. Wait up to grace_seconds for containers to stop
-#   4. Force-kill any stragglers with docker kill
+#   2. Write interrupted report for cells that don't have one
+#   3. docker stop containers matching the cell's label (--time=30s grace)
+#   4. Wait up to grace_seconds for containers to stop
+#   5. Force-kill any stragglers with docker kill
 # Also removes the cell from in-flight.json.
 interrupt_inflight_cells() {
   local grace_seconds="${BENCH_TERM_GRACE_SECONDS:-30}"
@@ -234,19 +236,25 @@ interrupt_inflight_cells() {
     pid="$(jq -r '.pid' <<<"${cell_json}")"
 
     [[ -n "${cell_id}" ]] || continue
-    cells_to_kill+=("${cell_id}:${pid}")
+    cells_to_kill+=("${cell_id}:${pid}:${cell_dir}")
     cell_count=$((cell_count + 1))
 
     # SIGTERM the cell's process group (try both negative PID for process group and regular PID)
     if [[ -n "${pid}" ]] && (( pid > 0 )); then
       kill -TERM -"${pid}" >/dev/null 2>&1 || kill -TERM "${pid}" >/dev/null 2>&1 || true
     fi
+
+    # Write interrupted report if metadata file exists and no report yet
+    if [[ -f "${cell_dir}/.interrupt-metadata" && ! -f "${cell_dir}/report.json" ]]; then
+      source "${cell_dir}/.interrupt-metadata" || continue
+      write_interrupted_cell_report "${cell_id}" "${cell_dir}" "${profile_id}" "${te_ver}" "${hd}" "${task}" || true
+    fi
   done <<<"${cells}"
 
   # If there are containers to stop, do so with a grace period
   if [[ ${cell_count} -gt 0 ]]; then
     for cell_spec in "${cells_to_kill[@]}"; do
-      cell_id="${cell_spec%:*}"
+      cell_id="${cell_spec%:*:*}"
       docker ps -q --filter "label=fizeau-cell=${cell_id}" 2>/dev/null \
         | xargs -r docker stop --time=30 >/dev/null 2>&1 || true
     done
@@ -256,7 +264,7 @@ interrupt_inflight_cells() {
 
     # Force-kill any remaining containers that didn't stop
     for cell_spec in "${cells_to_kill[@]}"; do
-      cell_id="${cell_spec%:*}"
+      cell_id="${cell_spec%:*:*}"
       docker ps -q --filter "label=fizeau-cell=${cell_id}" 2>/dev/null \
         | xargs -r docker kill >/dev/null 2>&1 || true
     done
@@ -1260,6 +1268,39 @@ write_budget_halted_cell() {
   printf '%s\n' "${cell_dir}"
 }
 
+# write_interrupted_cell_report writes a report for an interrupted cell.
+# Called from trap handlers that need access to the cell_id and cell_dir.
+write_interrupted_cell_report() {
+  local cell_id="$1" cell_dir="$2" profile_id="$3" te_ver="$4" hd="$5"
+  local task="$6"
+
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  jq -n \
+    --arg cell_id "${cell_id}" \
+    --arg task "${task}" \
+    --arg profile "${profile_id}" \
+    --arg now "${now}" \
+    --arg te_ver "${te_ver}" \
+    --arg hd "${hd}" \
+    '{
+       cell_id:$cell_id,
+       task_id:$task,
+       framework:"terminal-bench",
+       dataset:"terminal-bench-2-1",
+       started_at:$now,
+       finished_at:$now,
+       rep:"1/1",
+       final_status:"interrupted",
+       invalid_class:"",
+       process_outcome:"killed",
+       cost_usd_at_run_time:0,
+       task_executor_version:$te_ver,
+       harbor_runner_image_digest:$hd
+     }' >"${cell_dir}/report.json.tmp"
+  mv "${cell_dir}/report.json.tmp" "${cell_dir}/report.json"
+}
+
 # Run one cell start-to-finish: cell-state sentinel, harness-adapter command,
 # task-spec composition, task-executor invocation with retry, report.json
 # composition, sentinel cleanup, optional back-write of superseded_by into
@@ -1277,45 +1318,24 @@ run_one_cell() {
   cell_dir="${out}/cells/${dataset_dir}/${task}/${cell_id}"
   mkdir -p "${cell_dir}"
 
-  # Handler for SIGTERM during cell execution
-  write_interrupted_report() {
-    local now
-    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    jq -n \
-      --arg cell_id "${cell_id}" \
-      --arg task "${task}" \
-      --arg profile "${profile_id}" \
-      --arg now "${now}" \
-      --arg te_ver "${te_ver}" \
-      --arg hd "${hd}" \
-      '{
-         cell_id:$cell_id,
-         task_id:$task,
-         framework:"terminal-bench",
-         dataset:"terminal-bench-2-1",
-         started_at:$now,
-         finished_at:$now,
-         rep:"1/1",
-         final_status:"interrupted",
-         invalid_class:"",
-         process_outcome:"killed",
-         cost_usd_at_run_time:0,
-         task_executor_version:$te_ver,
-         harbor_runner_image_digest:$hd
-       }' >"${cell_dir}/report.json.tmp"
-    mv "${cell_dir}/report.json.tmp" "${cell_dir}/report.json"
-  }
-
   # Register as in-flight so signal handlers can interrupt us
   register_inflight "${cell_id}" "${cell_dir}"
-  trap 'write_interrupted_report; unregister_inflight "${cell_id}"; trap - RETURN TERM; exit 143' TERM
+  # Write cell metadata that signal handlers can use to reconstruct the report
+  cat >"${cell_dir}/.interrupt-metadata" <<EOF
+cell_id=${cell_id}
+profile_id=${profile_id}
+task=${task}
+te_ver=${te_ver}
+hd=${hd}
+EOF
+  trap 'unregister_inflight "${cell_id}"; trap - RETURN TERM; exit 143' TERM
   trap 'unregister_inflight "${cell_id}"; trap - RETURN TERM' RETURN
 
   # Check if global interrupt flag is set before starting
   if [[ -n "${interrupted_flag}" && -f "${interrupted_flag}" ]]; then
     warn "cell ${cell_id}: halting due to signal interrupt"
     # Write interrupted report immediately
-    write_interrupted_report
+    write_interrupted_cell_report "${cell_id}" "${cell_dir}" "${profile_id}" "${te_ver}" "${hd}" "${task}"
     printf '%s\n' "${cell_dir}"
     return 0
   fi
