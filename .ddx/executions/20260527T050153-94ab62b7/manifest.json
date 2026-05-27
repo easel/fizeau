@@ -1,0 +1,185 @@
+{
+  "attempt_id": "20260527T050153-94ab62b7",
+  "bead_id": "fizeau-e3b9b921",
+  "base_rev": "fc3e056e54916af9f59298e74b5d31aea01f74f1",
+  "created_at": "2026-05-27T05:01:57.291993861Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e3b9b921",
+    "title": "claude-tui/gate: billing-observation doc skeleton, methodology, decision rule",
+    "description": "PROBLEM: ADR-013 constraint #8 requires empirical billing evidence, but no methodology document exists to anchor the experiment. Without an upfront written method (model, prompt, account, single-account constraint, decision rule) the later measurements cannot be evaluated against a pre-registered standard.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md does not exist (file absent). ADR-013 at docs/helix/01-frame/adrs/ADR-013-*.md is in 're-proposed' status pending this evidence and cannot be promoted without a written method.\n\nPROPOSED FIX: Create docs/helix/02-design/billing-observation-claude-tui.md with sections: Model (recommend claude-sonnet-4-6 or claude-opus-4-7), Prompt (non-trivial coding task expected to produce 500-2000 output tokens, quoted verbatim), claude --version output, Operator Account Plan (Pro/Max/etc), Single-Account Constraint (no other claude-driven activity from same account during measurement window), /usage Refresh Delay note (with documented safety margin \u003e=60s), and Decision Rule mapping {subscription-confirmed, subscription-rejected, subscription-ambiguous} verdicts to the delta patterns defined in parent AC#7. Leave empty placeholder tables for --print and PTY+hooks measurement data to be filled by sibling beads.\n\nNON-SCOPE: Running the prompt, capturing /usage snapshots, computing deltas, writing verdict, modifying ADR-013, closing parent bead. Code changes outside docs/.\n\nAC:\n1) TestBillingObservationDocExists: docs/helix/02-design/billing-observation-claude-tui.md is present in tree.\n2) TestDocContainsModelPromptVersionAccount: doc contains the exact model id, the verbatim prompt, `claude --version` output, and operator account plan.\n3) TestDocContainsSingleAccountConstraint: doc has a 'Single-Account Constraint' section forbidding concurrent claude activity from the same account during the window.\n4) TestDocContainsRefreshDelayNote: doc documents /usage refresh-delay and the chosen post-completion wait (\u003e=60s).\n5) TestDocContainsDecisionRule: doc defines the verdict decision rule covering all three outcomes from parent AC#7.\n6) TestDocHasEmptyMeasurementPlaceholders: doc has labeled empty placeholders for --print and PTY+hooks data sections.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestBillingObservationDocExists\n2) TestDocContainsModelPromptVersionAccount\n3) TestDocContainsSingleAccountConstraint\n4) TestDocContainsRefreshDelayNote\n5) TestDocContainsDecisionRule\n6) TestDocHasEmptyMeasurementPlaceholders\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-a45dafe6",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T11:45:22.914813984Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T114253-39b50617\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":135542,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:45:23.486770511Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-18T11:47:32.328587452Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T114525-19dc3fd1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":104161,\"exit_code\":-1}",
+          "created_at": "2026-05-18T11:47:32.666122558Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T114525-19dc3fd1\",\"bead_id\":\"fizeau-e3b9b921\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T11:47:35.139838444Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "signal: killed\npowerClass=standard\nresult_rev=efe1f38978b5a33179ef0245529365bab4fd2b00\nbase_rev=8579fbda043452d1fc99540b05a8ae05ce8ae02a\noutcome_reason=timeout",
+          "created_at": "2026-05-18T11:47:35.382470521Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi-club-3090\",\"resolved_model\":\"qwen3.6-27b-autoround\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-18T14:30:40.867123225Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi-club-3090 model=qwen3.6-27b-autoround"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.6-27b-autoround\",\"actual_power\":5,\"actual_provider\":\"bragi-club-3090\",\"attempt_id\":\"20260518T143027-0ea60f12\",\"bead_id\":\"fizeau-e3b9b921\",\"estimated_difficulty\":\"easy\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"cheap\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T14:30:41.079491199Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=easy powerClass=cheap model=qwen3.6-27b-autoround harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://bragi:8020/v1/chat/completions\\\": dial tcp 100.127.38.115:8020: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://bragi:8020/v1/chat/completions\\\": dial tcp 100.127.38.115:8020: i/o timeout\",\"harness\":\"fiz\",\"model\":\"qwen3.6-27b-autoround\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi-club-3090\"}",
+          "created_at": "2026-05-18T14:30:41.17907007Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi-club-3090 model=qwen3.6-27b-autoround connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://bragi:8020/v1/chat/completions\": dial tcp 100.127.38.115:8020: i/o timeout\npowerClass=cheap\nresult_rev=e19823fdc966590b6fed7e9ffeefe45ee78e9942\nbase_rev=e19823fdc966590b6fed7e9ffeefe45ee78e9942\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T14:30:41.205845993Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[],\"requested_harness\":\"codex\",\"requested_model\":\"gpt-5.4-mini\"}",
+          "created_at": "2026-05-18T19:12:37.69522979Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T185824-e535a857\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":2272045,\"output_tokens\":31533,\"total_tokens\":2303578,\"cost_usd\":0,\"duration_ms\":848432,\"exit_code\":0}",
+          "created_at": "2026-05-18T19:12:37.728594681Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2303578 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-21T03:30:58.057149429Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-21T03:31:04.755568294Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260521T033059-6919381c\",\"bead_id\":\"fizeau-e3b9b921\",\"estimated_difficulty\":\"easy\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"cheap\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-21T03:31:06.170536794Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=easy powerClass=cheap note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"99ebc95a93cb368c7bfcd019a524dfb351c36d78\",\"classification\":\"transport\",\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\\n\\nRun 'docker run --help' for more information: exit status 125\",\"rationale\":\"docker-clone setup failed in 18ms before any work executed: invalid bind mount because host path /home/erik/.local/share/claude/versions/2.1.146 does not exist. This is a harness/environment provisioning failure unrelated to the bead's content, spec, or acceptance criteria. Release the claim and retry, ideally on a route with a valid claude versions mount.\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"99ebc95a93cb368c7bfcd019a524dfb351c36d78\",\"session_id\":\"eb-6cd829e2\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-21T03:32:10.931050047Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=cheap\nresult_rev=99ebc95a93cb368c7bfcd019a524dfb351c36d78\nbase_rev=99ebc95a93cb368c7bfcd019a524dfb351c36d78\noutcome_reason=transport",
+          "created_at": "2026-05-21T03:32:10.969956722Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T14:30:41Z",
+          "count": 1,
+          "model": "qwen3.6-27b-autoround",
+          "provider": "bragi-club-3090",
+          "reason": "provider_connectivity"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T050153-94ab62b7",
+    "prompt": ".ddx/executions/20260527T050153-94ab62b7/prompt.md",
+    "manifest": ".ddx/executions/20260527T050153-94ab62b7/manifest.json",
+    "result": ".ddx/executions/20260527T050153-94ab62b7/result.json",
+    "checks": ".ddx/executions/20260527T050153-94ab62b7/checks.json",
+    "usage": ".ddx/executions/20260527T050153-94ab62b7/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-e3b9b921-20260527T050153-94ab62b7"
+  },
+  "prompt_sha": "5083cd9eed7fc8d86a813484eecfeea9b3a864e527411a10e488a2cd6455c053"
+}
