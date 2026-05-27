@@ -1475,16 +1475,17 @@ run_one_cell() {
 # run_cell_with_per_cell_retry invokes run_one_cell with per-cell retry logic
 # for transient errors. Each retry attempt gets a fresh cell_id and cell_dir,
 # linked via attempt_of/superseded_by. Returns the final cell_dir.
+# initial_attempt_of="" disables initial attempt_of tracking.
 run_cell_with_per_cell_retry() {
   local out="$1" profile_id="$2" profile_file="$3"
   local framework="$4" dataset="$5" dataset_dir="$6" task="$7"
   local rep_idx="$8" total_reps="$9" adapter="${10}"
-  local te_ver="${11}" hd="${12}" interrupted_flag="${13:-}"
+  local te_ver="${11}" hd="${12}" interrupted_flag="${13:-}" initial_attempt_of="${14:-}"
 
   local max_attempts="${BENCH_RETRY_MAX_ATTEMPTS}"
   local backoff="${BENCH_RETRY_BACKOFF_BASE}"
   local attempt=1
-  local prior_cell_dir=""
+  local prior_cell_dir="${initial_attempt_of}"
 
   while :; do
     local cell_dir
@@ -1532,12 +1533,12 @@ run_cell_with_per_cell_retry() {
 # budget cap has been hit) or invokes run_cell_with_per_cell_retry. On success
 # it appends the cell's cost into <out>/budget.json so the halt flag flips for
 # the next cell. cap="" disables budget machinery entirely. interrupted_flag=""
-# disables interrupt checking.
+# disables interrupt checking. prior_cell_dir="" disables attempt_of tracking.
 budget_or_run_cell() {
   local out="$1" profile_id="$2" profile_file="$3"
   local framework="$4" dataset="$5" dataset_dir="$6" task="$7"
   local rep_idx="$8" total_reps="$9" adapter="${10}"
-  local te_ver="${11}" hd="${12}" cap="${13}" interrupted_flag="${14:-}"
+  local te_ver="${11}" hd="${12}" cap="${13}" interrupted_flag="${14:-}" prior_cell_dir="${15:-}"
 
   local cell_dir
   if [[ -n "${cap}" ]] && budget_is_halted "${out}"; then
@@ -1551,7 +1552,7 @@ budget_or_run_cell() {
   cell_dir="$(run_cell_with_per_cell_retry "${out}" "${profile_id}" "${profile_file}" \
                 "${framework}" "${dataset}" "${dataset_dir}" "${task}" \
                 "${rep_idx}" "${total_reps}" "${adapter}" \
-                "${te_ver}" "${hd}" "${interrupted_flag}")"
+                "${te_ver}" "${hd}" "${interrupted_flag}" "${prior_cell_dir}")"
 
   if [[ -n "${cap}" && -f "${cell_dir}/report.json" ]]; then
     local cell_id cost
@@ -1679,17 +1680,17 @@ run_sweep() {
         if [[ ${force_rerun} -eq 1 ]]; then
           local r
           for ((r = 1; r <= reps; r++)); do
-            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|${r}|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}")
+            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|${r}|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}|")
           done
         elif [[ ${retry_invalid} -eq 1 ]]; then
           local prior
           while IFS= read -r prior; do
             [[ -n "${prior}" ]] || continue
-            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|1|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}")
+            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|1|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}|${prior}")
           done <"${invalid_file}"
           while IFS= read -r prior; do
             [[ -n "${prior}" ]] || continue
-            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|1|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}")
+            cells_to_run+=("${profile_id}|${profile_file}|${framework}|${dataset}|${dataset_dir}|${task}|1|${reps}|${adapter}|${te_ver}|${hd}|${max_cost_usd}|${concurrency_group}|${prior}")
           done <"${orphan_file}"
           warn "retry-invalid: profile=${profile_id} task=${task} reran invalid=${invalid_count} orphan=${orphan_count}"
         else
@@ -1725,7 +1726,7 @@ run_sweep() {
           fi
 
           # Parse cell spec
-          IFS='|' read -r p_id p_file fw ds ds_dir tsk rep_idx t_reps adp te_v hd_v cap cg <<<"${cell_spec}"
+          IFS='|' read -r p_id p_file fw ds ds_dir tsk rep_idx t_reps adp te_v hd_v cap cg prior_cell <<<"${cell_spec}"
 
           # Acquire concurrency-group lock
           local lock_fd
@@ -1738,7 +1739,7 @@ run_sweep() {
             "${out}" "${p_id}" "${p_file}" \
             "${fw}" "${ds}" "${ds_dir}" "${tsk}" \
             "${rep_idx}" "${t_reps}" "${adp}" \
-            "${te_v}" "${hd_v}" "${cap}" "${interrupted_flag}"
+            "${te_v}" "${hd_v}" "${cap}" "${interrupted_flag}" "${prior_cell}"
 
           active_jobs=$((active_jobs + 1))
         done
