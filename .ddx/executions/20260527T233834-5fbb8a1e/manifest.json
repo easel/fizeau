@@ -1,0 +1,79 @@
+{
+  "attempt_id": "20260527T233834-5fbb8a1e",
+  "bead_id": "fizeau-e46a791a",
+  "base_rev": "6909949f93951c7b8d735e12d9d38f8559f427a8",
+  "created_at": "2026-05-27T23:38:38.906845293Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e46a791a",
+    "title": "claude-tui/step6: QuotaHarness implementation — consume shared anthropic quota snapshot",
+    "description": "Implement QuotaStatus / RefreshQuota / QuotaFreshness / SupportedLimitIDs on claudetui.Runner.\n\nCONTRACT: ADR-013 specifies both claude and claude-tui share the same durable cache under the single-account assumption. QuotaStatus reads the anthropic-package-owned snapshot mirror; RefreshQuota delegates the /usage PTY probe (already implemented for claude) through the anthropic package. claude-tui does not own a parallel quota probe.\n\nThe routehealth.RefreshScheduler will drive RefreshQuota automatically via QuotaFreshness().",
+    "acceptance": "1) QuotaStatus returns the same data the claude harness's QuotaStatus returns when given the same cache state — verified by a side-by-side test using harnesstest synthetics.\n2) SupportedLimitIDs returns the same set as claude's SupportedLimitIDs (same Anthropic /usage window taxonomy).\n3) RefreshQuota performs a /usage PTY probe (via the shared probe machinery in anthropic/) and persists the result to the shared cache.\n4) Cache contention test: claude.Runner.RefreshQuota and claudetui.Runner.RefreshQuota called concurrently coalesce to a single PTY probe via single-flight; verified by counting probe invocations in a test double.\n5) Cassette evidence for the /usage probe: a record-mode test (build tag harness_integration) against an authenticated claude binary records /usage frames into a cassette at internal/harnesses/claude-tui/testdata/quota_probe/; a replay-mode test (default CI) reads the cassette and verifies the parsed QuotaStatus matches expected shape.\n6) QuotaFreshness returns a positive duration matching ADR-013's documented value (recommend 15 minutes default to match claude).\n7) Conformance suite passes; routehealth.RefreshScheduler schedules claude-tui refreshes without modification — verified by a service-level test that observes scheduler-driven refresh calls hitting claude-tui.\n8) go test ./internal/harnesses/claude-tui/... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "spec:CONTRACT-004"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-e46a791a\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:28:48.850492921Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"infrastructure\",\"decode_warnings\":[{\"field\":\"classification\",\"warning\":\"unknown classification\",\"raw_excerpt\":\"infrastructure\"}],\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-1835014808.lock' write error. Out of diskspace: exit status 128\",\"malformed\":true,\"rationale\":\"pre-execute-bead checkpoint failed due to disk space exhaustion writing to /tmp lock file; transient host environment issue unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:28:58.925531516Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "unusable triage classification: infrastructure"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-1835014808.lock' write error. Out of diskspace: exit status 128",
+          "created_at": "2026-05-18T13:28:58.962039788Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Atomic implementation bead with clear acceptance criteria and documented test strategy. Implements four related QuotaHarness methods on claudetui.Runner per ADR-013 contract. Spec references explicit; sophisticated testing approach (cassettes, single-flight verification, side-by-side comparison) is well-specified in acceptance criteria. Prior failure (diskspace on checkpoint) is infrastructure-level and not a blocker. Implementer should read ADR-013/CONTRACT-004 first to understand shared cache contract, then execute sequentially through acceptance criteria.\",\"fingerprint\":\"bdd5a66c53c4f278e5ed820976cafa1f724937ca681a6ff5c2d582b6f31741bd\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"bdd5a66c53c4f278e5ed820976cafa1f724937ca681a6ff5c2d582b6f31741bd\"}",
+          "created_at": "2026-05-27T23:38:28.500793095Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T233834-5fbb8a1e",
+    "prompt": ".ddx/executions/20260527T233834-5fbb8a1e/prompt.md",
+    "manifest": ".ddx/executions/20260527T233834-5fbb8a1e/manifest.json",
+    "result": ".ddx/executions/20260527T233834-5fbb8a1e/result.json",
+    "checks": ".ddx/executions/20260527T233834-5fbb8a1e/checks.json",
+    "usage": ".ddx/executions/20260527T233834-5fbb8a1e/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-e46a791a-20260527T233834-5fbb8a1e"
+  },
+  "prompt_sha": "333026e78dd0d54dd823185ac306d212347c2e0a910b46bc8460f61825478043"
+}
