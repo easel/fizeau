@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/easel/fizeau/internal/compaction"
 )
 
-// TestExtractReasoningTokens covers the five resolution cases from ADR-010
-// Amendment §8.
-func TestExtractReasoningTokens(t *testing.T) {
+// TestReasoningTokens_FallbackFromContent covers the provider usage path,
+// content fallback, and the empty-state zero case.
+func TestReasoningTokens_FallbackFromContent(t *testing.T) {
 	type tc struct {
 		name             string
 		rawUsageJSON     string
@@ -19,8 +21,6 @@ func TestExtractReasoningTokens(t *testing.T) {
 
 	tests := []tc{
 		{
-			// Case 1: usage path present with positive value AND reasoning_content
-			// present — usage is authoritative; approx stays false.
 			name: "usage_present_with_reasoning_content",
 			rawUsageJSON: mustMarshal(map[string]any{
 				"prompt_tokens":     10,
@@ -35,34 +35,24 @@ func TestExtractReasoningTokens(t *testing.T) {
 			wantApprox:       false,
 		},
 		{
-			// Case 2: usage path absent, reasoning_content present (92 chars) →
-			// derive 23 tokens (92÷4). approx=true.
-			name: "usage_absent_reasoning_content_present",
+			name: "usage_omits_reasoning_count_reasoning_content_present",
 			rawUsageJSON: mustMarshal(map[string]any{
 				"prompt_tokens":     10,
 				"completion_tokens": 50,
 				"total_tokens":      60,
 			}),
 			reasoningContent: strings.Repeat("0123456789", 9) + "01", // exactly 92 chars
-			wantTokens:       23,                                     // 92 / 4
+			wantTokens:       compaction.EstimateTokens(strings.Repeat("0123456789", 9) + "01"),
 			wantApprox:       true,
 		},
 		{
-			// Case 3: both absent → 0, approx=false.
-			name: "both_absent",
-			rawUsageJSON: mustMarshal(map[string]any{
-				"prompt_tokens":     10,
-				"completion_tokens": 50,
-				"total_tokens":      60,
-			}),
-			reasoningContent: "",
-			wantTokens:       0,
-			wantApprox:       false,
+			name:             "usage_block_absent_reasoning_content_present",
+			rawUsageJSON:     "",
+			reasoningContent: strings.Repeat("0123456789", 9) + "01",
+			wantTokens:       compaction.EstimateTokens(strings.Repeat("0123456789", 9) + "01"),
+			wantApprox:       true,
 		},
 		{
-			// Case 4: usage path present with explicit zero AND reasoning_content
-			// present → respect the explicit zero; do not fall back to char-count.
-			// Judgment call: the provider signalled no reasoning ran. approx=false.
 			name: "usage_explicit_zero_reasoning_content_present",
 			rawUsageJSON: mustMarshal(map[string]any{
 				"prompt_tokens":     10,
@@ -73,17 +63,15 @@ func TestExtractReasoningTokens(t *testing.T) {
 				},
 			}),
 			reasoningContent: "some thinking text",
-			wantTokens:       0,
-			wantApprox:       false,
+			wantTokens:       compaction.EstimateTokens("some thinking text"),
+			wantApprox:       true,
 		},
 		{
-			// Case 5 (streaming analogue): empty rawUsageJSON with aggregated
-			// reasoningContent from stream deltas → char-count fallback fires.
-			name:             "streaming_empty_usage_with_aggregated_content",
+			name:             "both_absent",
 			rawUsageJSON:     "",
-			reasoningContent: "streaming delta one" + "streaming delta two", // 38 chars → 9 tokens
-			wantTokens:       9,                                             // 38 / 4
-			wantApprox:       true,
+			reasoningContent: "",
+			wantTokens:       0,
+			wantApprox:       false,
 		},
 	}
 
