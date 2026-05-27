@@ -1,0 +1,12 @@
+{
+  "redaction_rules_applied": [
+    "HOME path rewriting",
+    "environment variable allowlist"
+  ],
+  "environment_values_removed": [],
+  "secret_pattern_hit_counts": {},
+  "fields_intentionally_preserved": [
+    "model names",
+    "variant/reasoning levels"
+  ]
+}

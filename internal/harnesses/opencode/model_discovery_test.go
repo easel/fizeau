@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/easel/fizeau/internal/pty/cassette"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultOpenCodeModelDiscovery(t *testing.T) {
@@ -274,4 +277,70 @@ func assertContainsString(t *testing.T, values []string, want, label string) {
 		}
 	}
 	t.Fatalf("%s missing %q in %#v", label, want, values)
+}
+
+// TestModelSurfaceCassetteReturnsNonEmptyModels verifies that the recorded
+// model surface cassette can be parsed and returns the expected models.
+func TestModelSurfaceCassetteReturnsNonEmptyModels(t *testing.T) {
+	cassetteDir := filepath.Join("testdata", "model_surface")
+
+	snapshot, err := ReadOpenCodeModelDiscoveryFromCassette(cassetteDir)
+	require.NoError(t, err, "cassette should parse without error")
+
+	// AC2: cassette reader returns non-empty Models slice
+	require.NotEmpty(t, snapshot.Models, "models should not be empty")
+
+	// AC2: covers expected opencode models
+	hasGPT := false
+	hasClaudeSONNET := false
+	hasMinimax := false
+	for _, model := range snapshot.Models {
+		if model == "opencode/gpt-5.4" {
+			hasGPT = true
+		}
+		if model == "opencode/claude-sonnet-4-6" {
+			hasClaudeSONNET = true
+		}
+		if model == "opencode/minimax-m2.5-free" {
+			hasMinimax = true
+		}
+	}
+	require.True(t, hasGPT, "models should include opencode/gpt-5.4")
+	require.True(t, hasClaudeSONNET, "models should include opencode/claude-sonnet-4-6")
+	require.True(t, hasMinimax, "models should include opencode/minimax-m2.5-free")
+}
+
+// TestModelSurfaceCassetteStructure verifies the cassette directory structure
+// conforms to ADR-002 schema v1.
+func TestModelSurfaceCassetteStructure(t *testing.T) {
+	// AC1: cassette structure exists per ADR-002 schema v1
+	cassetteDir := filepath.Join("testdata", "model_surface")
+
+	reader, err := cassette.Open(cassetteDir)
+	require.NoError(t, err, "cassette should open successfully")
+
+	// Verify manifest loads
+	manifest := reader.Manifest()
+	require.NotNil(t, manifest, "manifest should exist")
+	require.Equal(t, 1, manifest.Version, "manifest version should be 1")
+	require.Equal(t, "opencode", manifest.Harness.Name, "harness name should be opencode")
+
+	// Verify discovery record exists and has models
+	discovery := reader.Discovery()
+	require.NotNil(t, discovery, "discovery record should exist")
+	require.Greater(t, len(discovery.Models), 0, "discovery should have models")
+	require.Greater(t, len(discovery.ReasoningLevels), 0, "discovery should have reasoning levels")
+
+	// Verify final record exists
+	final := reader.Final()
+	require.NotNil(t, final, "final record should exist")
+	require.Equal(t, 0, final.Exit.Code, "exit code should be 0")
+
+	// Verify frames exist
+	frames := reader.Frames()
+	require.NotEmpty(t, frames, "frames should be present")
+
+	// Verify scrub report exists
+	scrub := reader.ScrubReport()
+	require.NotNil(t, scrub, "scrub report should exist")
 }
