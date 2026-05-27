@@ -67,7 +67,8 @@ func (h *Harness) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-
 	return eventChan, nil
 }
 
-// runTurn drives a single turn through the PTY, registering hooks and reading the transcript.
+// runTurn drives a single turn through the PTY using a pooled session, with /clear
+// between turns to reset conversation history.
 func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eventChan chan harnesses.Event) {
 	defer close(eventChan)
 
@@ -124,9 +125,10 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	// Build command args with --settings
 	args := []string{"--settings", settingsJSON}
 
-	// Start PTY session with hooks registered
-	ptySession, err := session.Start(
+	// Get or create pooled session
+	ptySession, err := getOrCreatePooledSession(
 		ctx,
+		"claude-tui",
 		claudePath,
 		args,
 		req.WorkDir,
@@ -135,12 +137,42 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	)
 	if err != nil {
 		seq++
-		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to start PTY: %v", err), 1)
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to get pooled session: %v", err), 1)
 		return
 	}
-	defer ptySession.Close()
 
-	// Start the startup probe responder for Ink startup
+	// Release or evict session based on execution result
+	defer func() {
+		// If we got the session but execution failed partway, release it for potential reuse
+		// The next Execute may try /clear which could fail, causing eviction
+		releasePooledSession("claude-tui", req.WorkDir, ptySession)
+	}()
+
+	// For pooled sessions after the first one, try /clear to reset conversation history
+	if isPooledSessionReuse(ptySession) {
+		logger.Debug("clearing pooled session for new turn")
+		if err := clearSession(ptySession, "❯", 5*time.Second); err != nil {
+			logger.Warn("failed to clear session, evicting from pool", "error", err)
+			evictPooledSession("claude-tui", req.WorkDir, ptySession)
+			// Get a fresh session
+			ptySession, err = getOrCreatePooledSession(
+				ctx,
+				"claude-tui",
+				claudePath,
+				args,
+				req.WorkDir,
+				env,
+				session.Size{Rows: 50, Cols: 220},
+			)
+			if err != nil {
+				seq++
+				emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to get fresh session after /clear failure: %v", err), 1)
+				return
+			}
+		}
+	}
+
+	// Start the startup probe responder for Ink startup (re-run after /clear)
 	responder := probes.New(probes.Config{
 		Session:      ptySession,
 		ReadyMarkers: []string{"❯", "> "},
@@ -194,9 +226,8 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 				}
 
 				// Emit final event
-				stat := ptySession.Wait()
 				seq++
-				emitFinalEvent(eventChan, seq, startTime, "success", "", stat.Code)
+				emitFinalEvent(eventChan, seq, startTime, "success", "", 0)
 				return
 			}
 
@@ -215,6 +246,14 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 			return
 		}
 	}
+}
+
+// isPooledSessionReuse checks if this is a reused session from the pool.
+// This is a simple placeholder; a real implementation would track this via context or session metadata.
+func isPooledSessionReuse(s *session.Session) bool {
+	// For now, we always try to clear, and if it fails on a fresh session, that's a non-fatal issue
+	// A more sophisticated implementation would track session age
+	return true
 }
 
 // emitTranscriptEvents reads the JSONL transcript and emits canonical events.

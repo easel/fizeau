@@ -723,7 +723,7 @@ func TestClaudeTuiSessionPoolReusesAndClears(t *testing.T) {
 
 	// Verify session reuse by getting the session from the pool
 	// and checking that both turns accessed the same session (same PID)
-	pooledSess := claudetui.GetPooledSession(wd)
+	pooledSess := claudetui.GetPooledSession("claude-tui", wd)
 
 	if pooledSess == nil {
 		t.Fatal("session pool is empty; session should have been cached")
