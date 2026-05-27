@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260527T224029-896a922a",
+  "bead_id": "fizeau-e79ce186",
+  "base_rev": "9e63f21257625127ef975f4b9189bd2a88cfec6f",
+  "created_at": "2026-05-27T22:40:33.713798317Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e79ce186",
+    "title": "bench-pr-A4: concurrency groups, signal handling, budget cap",
+    "description": "PROBLEM: Concurrent sweeps must not stampede a shared model server; Ctrl-C/SIGTERM must leave clean, attributable state and stop containers; runs must honor a USD cap and halt before overspending.\n\nROOT CAUSE: concurrency, signal cleanup, and cost accounting are Go-internal in cmd/bench/matrix.go (e.g., the per-cell context timeout at cmd/bench/matrix.go:1107) with no shell equivalent; the bash runner must reimplement them on top of the A3 execution loop.\n\nPROPOSED FIX (scripts/benchmark/benchmark run mode):\n- Concurrency: flock per concurrency-group at ${FIZEAU_BENCH_STATE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/fizeau-benchmark}/locks/\u003cgroup\u003e.lock; setsid for each cell process group; background-job pool capped by --jobs. Concurrent-cells state at ${FIZEAU_BENCH_STATE_DIR}/\u003chostname\u003e/in-flight.json: append the cell under flock at start, read current count, write count into the cell, remove at close, prune stale (dead-PID) entries on next read.\n- Signals: trap SIGINT/SIGTERM -\u003e stop accepting new cells; SIGTERM each in-flight cell process group and docker stop each in-flight harbor-runner container; wait 30s then SIGKILL; write final_status=interrupted (process_outcome=killed, no metrics) to in-flight cells; exit non-zero.\n- Budget: compute cost_usd_at_run_time per cell from profile.pricing x token streams at close; accumulate into \u003cout\u003e/budget.json; halt before the next cell when the cap is hit; skipped cells get a final_status=budget_halted placeholder (process_outcome=setup_failed) plus a 'note' field (write_budget_halted_cell already drafted in scripts/benchmark/benchmark).\n\nNON-SCOPE: dispatch/listing/--plan/matrix expansion (A2); execution loop/resume/retry/report compose (A3); adapters/image/runtime-probe (A1); Go changes/parity/deactivation (A5); cell-report.schema.json (PR B); tasks_from/task_executor schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: depends on A3 (the execution loop is what gets parallelized, interrupted, and costed). Parent fizeau-163efede. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted. (parent AC3) Test: Test_BudgetHalts (scripts/benchmark/test_budget.bash).\n2. SIGTERM to a mid-sweep run marks in-flight cells final_status=interrupted, docker stops each harbor-runner container, and the runner exits non-zero. Verify: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary \u0026 sleep 5; kill -TERM $!; wait; jq .final_status bench/results/.../report.json. (parent AC5) Test: Test_SigtermInterrupts (scripts/benchmark/test_sweep_shutdown.bash).\n3. Two concurrent runs in the same concurrency-group serialize via flock; in-flight.json count is accurate and prunes dead PIDs. Test: Test_ConcurrencyFlock (scripts/benchmark/test_concurrency_and_signals.bash).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "Concurrency/signal/budget ACs 1-3 pass, including parent AC3 (budget_halted) and AC5 (SIGTERM cleanup); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected\",\"fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\"}",
+          "created_at": "2026-05-27T21:55:18.170175919Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T224029-896a922a",
+    "prompt": ".ddx/executions/20260527T224029-896a922a/prompt.md",
+    "manifest": ".ddx/executions/20260527T224029-896a922a/manifest.json",
+    "result": ".ddx/executions/20260527T224029-896a922a/result.json",
+    "checks": ".ddx/executions/20260527T224029-896a922a/checks.json",
+    "usage": ".ddx/executions/20260527T224029-896a922a/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-e79ce186-20260527T224029-896a922a"
+  },
+  "prompt_sha": "88353f5e89996daa389c73058cc7b7affecdf86271fe4e63df834a8c4a5887f2"
+}
