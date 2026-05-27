@@ -28,6 +28,46 @@ type ClaudePrintBaselineResult struct {
 	SkipReason string
 }
 
+// TurnWallTimeMeasurement holds per-turn wall-time data for threshold validation.
+type TurnWallTimeMeasurement struct {
+	// BaselineWallTimePerTurnMS is the mean wall-time per turn from claude --print.
+	BaselineWallTimePerTurnMS int64
+	// TUIWallTimePerTurnMS is the mean wall-time per turn from claude-tui PTY.
+	TUIWallTimePerTurnMS int64
+	// LoopOverheadMS is the mean overhead per turn beyond measured baseline inference time.
+	LoopOverheadMS int64
+}
+
+// CheckTurnWallTimeThresholds validates that PTY turn wall-time measurements
+// satisfy ADR-013 §3 thresholds: mean PTY wall-time per turn must be within
+// 2x the baseline, and loop overhead must be under 10ms.
+// Returns nil if thresholds pass, non-nil error with details if either fails.
+func CheckTurnWallTimeThresholds(m TurnWallTimeMeasurement) error {
+	const (
+		maxWallTimeMultiplier = 2
+		maxLoopOverheadMS     = 10
+	)
+
+	// Check wall-time threshold: PTY wall-time per turn <= 2x baseline
+	maxAllowedWallTimeMS := m.BaselineWallTimePerTurnMS * maxWallTimeMultiplier
+	if m.TUIWallTimePerTurnMS > maxAllowedWallTimeMS {
+		return fmt.Errorf(
+			"PTY wall-time per turn exceeds 2x baseline: baseline=%dms, measured=%dms, allowed=%dms",
+			m.BaselineWallTimePerTurnMS, m.TUIWallTimePerTurnMS, maxAllowedWallTimeMS,
+		)
+	}
+
+	// Check loop overhead threshold: loop overhead <= 10ms
+	if m.LoopOverheadMS > maxLoopOverheadMS {
+		return fmt.Errorf(
+			"loop overhead exceeds 10ms threshold: measured=%dms",
+			m.LoopOverheadMS,
+		)
+	}
+
+	return nil
+}
+
 // ClaudePrintBaseline runs the shared benchmark prompt fixture through
 // the live claude CLI with --print and measures wall-clock time.
 // If the claude binary is unavailable or auth fails, it returns a Skipped result.
