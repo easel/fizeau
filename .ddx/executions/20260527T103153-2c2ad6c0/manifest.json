@@ -1,0 +1,62 @@
+{
+  "attempt_id": "20260527T103153-2c2ad6c0",
+  "bead_id": "fizeau-a14eba0c",
+  "base_rev": "152dd53c6dbba7633b880294df11e2d2f306c564",
+  "created_at": "2026-05-27T10:31:57.681110634Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a14eba0c",
+    "title": "claude-tui: implement PTY session pool with /clear-between-turns and orphan reaper",
+    "description": "PROBLEM: ADR-013 §3 requires a session pool keyed by working directory so consecutive turns reuse the same PTY session with /clear issued between them, and any orphaned PTY child processes must be reaped on shutdown.\n\nROOT CAUSE:\n- internal/harnesses/claudetui/harness.go: no session-pool data structure; each turn would spawn a fresh PTY, defeating reuse.\n- internal/pty/: no shutdown reaper that enumerates and terminates leftover child processes when the harness exits.\n\nPROPOSED FIX:\n1. Add a session pool in claudetui.Harness keyed by working directory; on RunTurn, look up an existing session or open a new one via internal/pty/.\n2. Between turns on the same key, write /clear to the session before injecting the new prompt; verify the CLI acknowledged the clear before proceeding.\n3. On harness Shutdown, enumerate live PTY children and reap them within a bounded timeout (SIGTERM then SIGKILL).\n\nNON-SCOPE:\n- The PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- Performance benchmarking and 2x/10ms ratchets (sibling child D).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on child #1 and sibling child A. Governing artifacts: ADR-013 §3, CONTRACT-004, internal/pty/ library.",
+    "acceptance": "1) TestClaudeTuiSessionPoolReusesAndClears asserts /clear is issued between consecutive turns sharing a working directory and that the underlying PTY session is reused (same pid).\n2) TestClaudeTuiOrphanReaper asserts that on harness shutdown any leftover PTY child processes are reaped within a bounded timeout.\n3) go test ./... -count=1 is green.\n4) lefthook run pre-commit is green.",
+    "parent": "fizeau-60ce39cb",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness check timed out after 5m0s (fizeau-a14eba0c)\",\"fingerprint\":\"3de07a18c763b3c48ab0477e8e46aa75d36519a2ac4f977ef55c0e706e89d78e\",\"policy_mode\":\"warn-only\",\"reason\":\"timeout\",\"rule_id\":\"pre_claim_intake.timeout\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\"}",
+          "created_at": "2026-05-21T04:19:43.361808356Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "timeout"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"1) TestClaudeTuiSessionPoolReusesAndClears asserts /clear is issued between consecutive turns sharing a working directory and that the underlying PTY session is reused (same pid).\",\"coverage\":\"Session-pool child AC #1 (TestClaudeTuiSessionPoolReusesAndClears) — covers /clear-between-turns and same-pid reuse via the new package-scope pool and Session.Pid() accessor.\"},{\"parent_ac\":\"2) TestClaudeTuiOrphanReaper asserts that on harness shutdown any leftover PTY child processes are reaped within a bounded timeout.\",\"coverage\":\"Orphan-reaper child AC #1 (TestClaudeTuiOrphanReaper) — covers bounded-timeout SIGTERM-then-SIGKILL reaping of live PTY children on Harness.Shutdown.\"},{\"parent_ac\":\"3) go test ./... -count=1 is green.\",\"coverage\":\"Both children AC #2 — each child carries the `go test ./... -count=1` gate.\"},{\"parent_ac\":\"4) lefthook run pre-commit is green.\",\"coverage\":\"Both children AC #3 — each child carries the `lefthook run pre-commit` gate.\"}],\"child_ids\":[\"fizeau-fe0b715f\",\"fizeau-04d91f3b\"],\"rationale\":\"The parent carries exactly two independent functional concerns that map to distinct ADR-013 §3 decision items: pooled session reuse with /clear-between-turns (item 4) and the orphan reaper (item 6). They touch different code paths (Execute/runTurn + a package-scope pool + a Session.Pid() accessor vs. a new Harness.Shutdown reaper driving Session.Close/Kill/Wait) and have separate, independently verifiable Test* symbols, so a 2-way split is the natural minimal decomposition; a 3+ way split would only fragment the pool logic artificially. The reaper child depends on the pool child because Shutdown reaps the pool's tracked sessions. Every parent non-scope item, the CONTRACT-004 and internal/pty/ governing references, the child #1 / sibling child A dependency IDs, and both verification gates are preserved verbatim in each child, with each child additionally non-scoping the other's surface.\"}",
+          "created_at": "2026-05-27T07:23:56.697420458Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-fe0b715f, fizeau-04d91f3b"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"legacy classification \\\"needs_human\\\" removed by lifecycle migration; use outcome \\\"operator_required\\\"\",\"fingerprint\":\"fa1531badab79d9048a66e8de6532ddb11ab8605abef32b6c2c05a3e7c6151bc\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fa1531badab79d9048a66e8de6532ddb11ab8605abef32b6c2c05a3e7c6151bc\"}",
+          "created_at": "2026-05-27T10:31:45.753824152Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T103153-2c2ad6c0",
+    "prompt": ".ddx/executions/20260527T103153-2c2ad6c0/prompt.md",
+    "manifest": ".ddx/executions/20260527T103153-2c2ad6c0/manifest.json",
+    "result": ".ddx/executions/20260527T103153-2c2ad6c0/result.json",
+    "checks": ".ddx/executions/20260527T103153-2c2ad6c0/checks.json",
+    "usage": ".ddx/executions/20260527T103153-2c2ad6c0/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-a14eba0c-20260527T103153-2c2ad6c0"
+  },
+  "prompt_sha": "38dcf7b88a37ce9dec2f24a7221dce6077ed224d103156ffd04ffbc5a71dcaed"
+}
