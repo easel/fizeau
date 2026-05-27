@@ -361,29 +361,47 @@ STUB
   ) &
   local sweep_pid=$!
 
-  # Wait for at least one task to start
-  sleep 0.5
+  # Wait for at least one task to start (longer wait for slower systems)
+  sleep 2
 
   # Send SIGTERM to stop scheduling and interrupt running cells
   kill -TERM "${sweep_pid}" 2>/dev/null || true
 
-  # Wait for benchmark to exit
-  wait "${sweep_pid}" 2>/dev/null || true
+  # Wait for benchmark to exit and capture exit code
+  local exit_code=0
+  wait "${sweep_pid}" 2>/dev/null || exit_code=$?
 
-  # Verify that we didn't create full reports for all tasks (they were interrupted)
+  # AC2 requirement: verify runner exits non-zero on SIGTERM
+  [[ ${exit_code} -ne 0 ]] || fail "benchmark should exit non-zero after SIGTERM (got exit_code=${exit_code})"
+
+  # Verify cells and their status
   local completed_count=0
+  local interrupted_count=0
   local total_cell_count=0
 
   if [[ -d "${tmp}/out/cells" ]]; then
-    completed_count=$(find "${tmp}/out/cells" -name "report.json" -exec grep -l '"final_status":"completed"' {} \; 2>/dev/null | wc -l)
-    total_cell_count=$(find "${tmp}/out/cells" -name "report.json" 2>/dev/null | wc -l)
+    total_cell_count=$(find "${tmp}/out/cells" -name "report.json" 2>/dev/null | wc -l | tr -d ' ')
+    completed_count=$(find "${tmp}/out/cells" -name "report.json" -exec jq -e '.final_status == "completed"' {} \; 2>/dev/null | grep -c "true" || true)
+    interrupted_count=$(find "${tmp}/out/cells" -name "report.json" -exec jq -e '.final_status == "interrupted"' {} \; 2>/dev/null | grep -c "true" || true)
+  fi
+
+  # AC2 requirement: verify that interrupted cells have final_status=interrupted
+  if [[ ${interrupted_count} -gt 0 ]]; then
+    # Spot check one interrupted cell
+    local interrupted_report
+    interrupted_report="$(find "${tmp}/out/cells" -name "report.json" -print0 | xargs -0 grep -l "interrupted" 2>/dev/null | head -1)"
+    if [[ -n "${interrupted_report}" ]]; then
+      local process_outcome
+      process_outcome="$(jq -r '.process_outcome // ""' "${interrupted_report}")"
+      assert_eq "${process_outcome}" "killed" "interrupted cell should have process_outcome=killed"
+    fi
   fi
 
   # We should have fewer completed cells than the total task count (6),
   # proving that signal handling stopped scheduling new cells
   assert_le "${completed_count}" 5 "signal did not stop scheduling (too many completed cells)"
 
-  echo "    PASS: signal handling stopped scheduling: completed=${completed_count} of 6 tasks"
+  echo "    PASS: signal handling stopped scheduling: completed=${completed_count}, interrupted=${interrupted_count} of ${total_cell_count} total, exit_code=${exit_code}"
 }
 
 # ===========================================================================
