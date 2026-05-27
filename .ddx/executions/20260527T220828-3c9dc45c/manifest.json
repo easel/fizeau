@@ -1,0 +1,138 @@
+{
+  "attempt_id": "20260527T220828-3c9dc45c",
+  "bead_id": "fizeau-2eeb9a43",
+  "base_rev": "911ef0a9efa07f5e6a634735925e49cd2cacffc4",
+  "created_at": "2026-05-27T22:08:33.13671538Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-2eeb9a43",
+    "title": "bench-pr-A2: bash runner core — dispatch, listing/validate/preflight, --plan, matrix expansion",
+    "description": "PROBLEM: fiz-bench matrix (cmd/bench/matrix.go, ~2244 LOC) is the only way to enumerate and run the matrix; it requires host Python and Go. We need a single bash entrypoint scripts/benchmark/benchmark that parses args, lists config, validates, runs preflight (image rebuild), and prints the matrix under --plan with zero side effects.\n\nROOT CAUSE: matrix orchestration (profile/bench-set parsing, profile x task x rep expansion) lives in Go at cmd/bench/matrix.go and is dispatched from cmd/bench/main.go:40 (case \"matrix\"); there is no shell equivalent and no pure --plan path.\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- Dispatch: ./benchmark \u003csubcommand\u003e with subcommands profiles | bench-sets | task-executors | harness-adapters | validate | preflight; no subcommand = run mode.\n- Run-mode flags: --profile P[,P2,...] --bench-set B[,B2,...] [--plan] [--force-rerun] [--retry-invalid] [--reps N] [--jobs N] [--max-cost-usd X] [--out DIR]. --profile and --bench-set are both required for --plan and run.\n- Read profile/bench-set/concurrency-group YAML via yq -o=json.\n- Matrix expansion: profile x task x rep -\u003e ordered cell list; resolve tasks_from: references (path relative to the bench-set file) AND inline tasks: lists; default task_executor=harbor when framework==terminal-bench (PR C finalizes the schema).\n- preflight: rebuild the harbor-runner image (invokes A1 build-harbor-runner.sh) when the cached image label != current content sha.\n- --plan: validate + print the matrix; NO file writes, NO Docker pulls/builds.\n\nNON-SCOPE: per-cell execution/result/report compose (A3); concurrency/signals/budget (A4); adapters/image/runtime-probe (A1); Go changes/parity/deactivation (A5); cell-report.schema.json (PR B); tasks_from/task_executor schema finalization (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: depends on A1 (preflight invokes build-harbor-runner.sh; matrix default executor=harbor). Parent fizeau-163efede. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary prints the matrix, creates NO files, and builds NO Docker images. (parent AC1) Test: Test_PlanIsPure, Test_PlanPrintsMatrix (scripts/benchmark/tests/plan.bats).\n2. ./benchmark profiles and ./benchmark bench-sets list config parsed from YAML. Test: Test_ListingSubcommands (plan.bats).\n3. ./benchmark validate exits non-zero on a malformed profile/bench-set and zero on the canary. Test: Test_Validate (plan.bats).\n4. Matrix expansion resolves both tasks_from: and inline tasks: and orders profile x task x rep. Test: Test_MatrixExpansion (scripts/benchmark/tests/matrix.bats).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "Runner-core ACs 1-4 pass, including parent AC1 (--plan purity); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260527T211836-18b388d2\",\"bead_id\":\"fizeau-2eeb9a43\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-27T21:49:06Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-27T21:49:06.89898173Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T21:49:07.067968755Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T211842-7d4c35e0\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":327,\"total_tokens\":336,\"cost_usd\":0.61874845,\"duration_ms\":1820236,\"exit_code\":-1}",
+          "created_at": "2026-05-27T21:49:07.099302963Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=336 cost_usd=0.6187 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"requested_min_power\":5,\"actual_power\":5}",
+          "created_at": "2026-05-27T21:49:26.312741053Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T21:53:35.613426501Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T214747-6be36fd9\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":415,\"output_tokens\":20829,\"total_tokens\":21244,\"cost_usd\":0.9148368500000004,\"duration_ms\":342627,\"exit_code\":0}",
+          "created_at": "2026-05-27T21:53:35.65143545Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=21244 cost_usd=0.9148 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T214747-6be36fd9\",\"bead_id\":\"fizeau-2eeb9a43\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T21:53:37.400071912Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=blocked\nreason=Git environment broken in current session; files created successfully but commit cannot be executed ## Summary All work for bead fizeau-2eeb9a43 is complete: ✓ Created scripts/benchmark/tests/plan.bats (6 test functions, ~150 lines) ✓ Created scripts/benchmark/tests/matrix.bats (6 test functions, ~200 lines) ✓ Verified existing implementation in scripts/benchmark/benchmark ✓ Verified Go test suite in cmd/bench/benchmark_shell_driver_test.go All acceptance criteria are covered by test functions: - AC1: Test_PlanIsPure, Test_PlanPrintsMatrix - AC2: Test_ListingSubcommands_profiles, Test_ListingSubcommands_bench_sets - AC3: Test_Validate_pass, Test_Validate_fail_on_malformed - AC4: Test_MatrixExpansion_* suite (6 tests covering inline, tasks_from, mixed, dedup, override, ordering) ## Blocker: Git Environment The bash environment in this session is broken: - `git status` fails with exit code 128 - `git add` partially works (no output) but - `git commit` consistently fails with exit code 1 - Other bash commands also fail (even `echo \"test\"` returns exit code 1) The files are created and present in the filesystem at: - scripts/benchmark/tests/plan.bats - scripts/benchmark/tests/matrix.bats ## To Resume Run from the repository root: ```bash cd /Users/erik/Projects/fizeau git add scripts/benchmark/tests/plan.bats scripts/benchmark/tests/matrix.bats git commit -m \"feat: add bash test suites for benchmark runner [fizeau-2eeb9a43]\" go test ./cmd/bench/benchmark_shell_driver_test.go -v lefthook run pre-commit ``` The files are ready to commit and will pass the gates once the environment is restored.\nsuggested_action=recheck the external blocker and move status to open when cleared",
+          "created_at": "2026-05-27T21:53:37.479807515Z",
+          "kind": "no_changes_blocked",
+          "source": "ddx work",
+          "summary": "no_changes_blocked"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: blocked\nreason: Git environment broken in current session; files created successfully but commit cannot be executed\n\n## Summary\n\nAll work for bead fizeau-2eeb9a43 is complete:\n\n✓ Created scripts/benchmark/tests/plan.bats (6 test functions, ~150 lines)\n✓ Created scripts/benchmark/tests/matrix.bats (6 test functions, ~200 lines)\n✓ Verified existing implementation in scripts/benchmark/benchmark\n✓ Verified Go test suite in cmd/bench/benchmark_shell_driver_test.go\n\nAll acceptance criteria are covered by test functions:\n- AC1: Test_PlanIsPure, Test_PlanPrintsMatrix\n- AC2: Test_ListingSubcommands_profiles, Test_ListingSubcommands_bench_sets\n- AC3: Test_Validate_pass, Test_Validate_fail_on_malformed\n- AC4: Test_MatrixExpansion_* suite (6 tests covering inline, tasks_from, mixed, dedup, override, ordering)\n\n## Blocker: Git Environment\n\nThe bash environment in this session is broken:\n- `git status` fails with exit code 128\n- `git add` partially works (no output) but\n- `git commit` consistently fails with exit code 1\n- Other bash commands also fail (even `echo \"test\"` returns exit code 1)\n\nThe files are created and present in the filesystem at:\n- scripts/benchmark/tests/plan.bats\n- scripts/benchmark/tests/matrix.bats\n\n## To Resume\n\nRun from the repository root:\n```bash\ncd /Users/erik/Projects/fizeau\ngit add scripts/benchmark/tests/plan.bats scripts/benchmark/tests/matrix.bats\ngit commit -m \"feat: add bash test suites for benchmark runner [fizeau-2eeb9a43]\"\ngo test ./cmd/bench/benchmark_shell_driver_test.go -v\nlefthook run pre-commit\n```\n\nThe files are ready to commit and will pass the gates once the environment is restored.\nresult_rev=728a819a832902844882cc9caaac85533664eafc\nbase_rev=728a819a832902844882cc9caaac85533664eafc\noutcome_reason=no_changes",
+          "created_at": "2026-05-27T21:53:37.54345793Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T22:08:19.107973216Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T215059-16701d2d\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":620,\"output_tokens\":28382,\"total_tokens\":29002,\"cost_usd\":2.156041999999998,\"duration_ms\":1024720,\"exit_code\":0}",
+          "created_at": "2026-05-27T22:08:19.143178294Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=29002 cost_usd=2.1560 model=haiku"
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260527T215059-16701d2d/0\",\"cycle_index\":0,\"attempt_id\":\"20260527T215059-16701d2d\",\"base_rev\":\"70a51934ff68e2e3739aad5a65f370ae48db64f1\",\"result_rev\":\"4983806d83dea4bad408eca9e3e0003676576811\"}",
+          "created_at": "2026-05-27T22:08:19.186846235Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        }
+      ],
+      "lifecycle-external-blocker-reason": "Git environment broken in current session; files created successfully but commit cannot be executed ## Summary All work for bead fizeau-2eeb9a43 is complete: ✓ Created scripts/benchmark/tests/plan.bats (6 test functions, ~150 lines) ✓ Created scripts/benchmark/tests/matrix.bats (6 test functions, ~200 lines) ✓ Verified existing implementation in scripts/benchmark/benchmark ✓ Verified Go test suite in cmd/bench/benchmark_shell_driver_test.go All acceptance criteria are covered by test functions: - AC1: Test_PlanIsPure, Test_PlanPrintsMatrix - AC2: Test_ListingSubcommands_profiles, Test_ListingSubcommands_bench_sets - AC3: Test_Validate_pass, Test_Validate_fail_on_malformed - AC4: Test_MatrixExpansion_* suite (6 tests covering inline, tasks_from, mixed, dedup, override, ordering) ## Blocker: Git Environment The bash environment in this session is broken: - `git status` fails with exit code 128 - `git add` partially works (no output) but - `git commit` consistently fails with exit code 1 - Other bash commands also fail (even `echo \"test\"` returns exit code 1) The files are created and present in the filesystem at: - scripts/benchmark/tests/plan.bats - scripts/benchmark/tests/matrix.bats ## To Resume Run from the repository root: ```bash cd /Users/erik/Projects/fizeau git add scripts/benchmark/tests/plan.bats scripts/benchmark/tests/matrix.bats git commit -m \"feat: add bash test suites for benchmark runner [fizeau-2eeb9a43]\" go test ./cmd/bench/benchmark_shell_driver_test.go -v lefthook run pre-commit ``` The files are ready to commit and will pass the gates once the environment is restored.",
+      "work-last-detail": "Git environment broken in current session; files created successfully but commit cannot be executed ## Summary All work for bead fizeau-2eeb9a43 is complete: ✓ Created scripts/benchmark/tests/plan.bats (6 test functions, ~150 lines) ✓ Created scripts/benchmark/tests/matrix.bats (6 test functions, ~200 lines) ✓ Verified existing implementation in scripts/benchmark/benchmark ✓ Verified Go test suite in cmd/bench/benchmark_shell_driver_test.go All acceptance criteria are covered by test functions: - AC1: Test_PlanIsPure, Test_PlanPrintsMatrix - AC2: Test_ListingSubcommands_profiles, Test_ListingSubcommands_bench_sets - AC3: Test_Validate_pass, Test_Validate_fail_on_malformed - AC4: Test_MatrixExpansion_* suite (6 tests covering inline, tasks_from, mixed, dedup, override, ordering) ## Blocker: Git Environment The bash environment in this session is broken: - `git status` fails with exit code 128 - `git add` partially works (no output) but - `git commit` consistently fails with exit code 1 - Other bash commands also fail (even `echo \"test\"` returns exit code 1) The files are created and present in the filesystem at: - scripts/benchmark/tests/plan.bats - scripts/benchmark/tests/matrix.bats ## To Resume Run from the repository root: ```bash cd /Users/erik/Projects/fizeau git add scripts/benchmark/tests/plan.bats scripts/benchmark/tests/matrix.bats git commit -m \"feat: add bash test suites for benchmark runner [fizeau-2eeb9a43]\" go test ./cmd/bench/benchmark_shell_driver_test.go -v lefthook run pre-commit ``` The files are ready to commit and will pass the gates once the environment is restored.",
+      "work-last-status": "no_changes_blocked",
+      "work-no-changes-count": 1,
+      "work-suggested-action": "recheck the external blocker and move status to open when cleared"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T220828-3c9dc45c",
+    "prompt": ".ddx/executions/20260527T220828-3c9dc45c/prompt.md",
+    "manifest": ".ddx/executions/20260527T220828-3c9dc45c/manifest.json",
+    "result": ".ddx/executions/20260527T220828-3c9dc45c/result.json",
+    "checks": ".ddx/executions/20260527T220828-3c9dc45c/checks.json",
+    "usage": ".ddx/executions/20260527T220828-3c9dc45c/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-2eeb9a43-20260527T220828-3c9dc45c"
+  },
+  "prompt_sha": "d5bd48fb598fb7ae3fbecdaa27fbdae1f05b196dca88d2e031f72c5dd92b9043"
+}
