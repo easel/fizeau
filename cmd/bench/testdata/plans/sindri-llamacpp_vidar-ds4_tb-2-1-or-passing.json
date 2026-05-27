@@ -156,10 +156,35 @@
       "max_concurrency": 1,
       "description": "vLLM with autoround quantization on bragi RTX 3090 (http://bragi:8020/v1). Single-cell serialization."
     },
+    "bragi-lmstudio": {
+      "id": "bragi-lmstudio",
+      "max_concurrency": 1,
+      "description": "LM Studio server on bragi (http://bragi:1234/v1). Single-model local lane; serialize all cells."
+    },
+    "claude-code-native": {
+      "id": "claude-code-native",
+      "max_concurrency": 1,
+      "description": "Native Claude Code subscription lane. Local CLI state is not shared; serialize all cells."
+    },
+    "codex-native": {
+      "id": "codex-native",
+      "max_concurrency": 1,
+      "description": "Native Codex CLI lane. Local CLI state is not shared; serialize all cells."
+    },
     "grendel-rapid-mlx": {
       "id": "grendel-rapid-mlx",
       "max_concurrency": 1,
       "description": "Rapid-MLX server on grendel (http://grendel:8000/v1). Single-cell serialization."
+    },
+    "noop": {
+      "id": "noop",
+      "max_concurrency": 1,
+      "description": "Calibration lane with no model traffic. Serialize all cells."
+    },
+    "openai": {
+      "id": "openai",
+      "max_concurrency": 10,
+      "description": "Managed OpenAI smoke lane (https://api.openai.com/v1). Cheap smoke runs only; keep moderate concurrency."
     },
     "openai-gpt55": {
       "id": "openai-gpt55",
