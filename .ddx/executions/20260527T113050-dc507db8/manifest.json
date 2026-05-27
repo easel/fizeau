@@ -1,0 +1,95 @@
+{
+  "attempt_id": "20260527T113050-dc507db8",
+  "bead_id": "fizeau-45cf4283",
+  "base_rev": "bdda17416732e4186d4f392285b236dbb250c275",
+  "created_at": "2026-05-27T11:30:54.801043086Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-45cf4283",
+    "title": "claude-tui/step2: scaffold internal/harnesses/claude-tui/ + register in builtinHarnesses (stub Execute)",
+    "description": "Plan step 2. Package compiles, registers, and implements Harness + the three sub-interfaces with stubs. Execute returns a final event with 'not yet implemented'; QuotaStatus/AccountStatus/DefaultModelSnapshot return zero values or sentinel errors. Conformance suite passes against the stub.\n\nFILES:\n- internal/harnesses/claude-tui/runner.go: Runner struct + Info/HealthCheck/Execute (stub) + interface method declarations.\n- internal/harnesses/claude-tui/contract004.go: explicit interface compliance assertions (_ harnesses.QuotaHarness = (*Runner)(nil), etc.) + sub-interface method stubs.\n- internal/harnesses/claude-tui/contract004_conformance_test.go: runs harnesstest conformance suite against the stub Runner.\n- internal/harnesses/registry.go: add 'claude-tui' entry per ADR-013 §Scope (empty BaseArgs/PermissionArgs/Flags; IsSubscription=true; AutoRoutingEligible=false).\n- internal/serviceimpl/execute_dispatch.go: extend the dispatcher's harness-name switch to include claude-tui constructing a \u0026claudetui.Runner{}.\n\nNON-SCOPE: PTY transport (sub-bead step 3); real model discovery (sub-bead step 5); real quota plumbing (sub-bead step 4).",
+    "acceptance": "1) internal/harnesses/claude-tui/ package compiles.\n2) Runner stub behavior: Execute returns a non-nil channel (the dispatcher path is exercised) that emits exactly one final event with Status='error' and a Reason naming 'not yet implemented'. Setup return value is nil — setup does not fail before run path.\n3) harnesstest.RunHarnessConformance, RunQuotaHarnessConformance, RunAccountHarnessConformance, RunModelDiscoveryHarnessConformance all pass against \u0026Runner{}. QuotaStatus/AccountStatus/DefaultModelSnapshot return well-formed zero-values (e.g. empty Windows slice, CapturedAt=time.Time{}) — the conformance suite verifies shape, not content.\n4) builtinHarnesses['claude-tui'] is present in registry.go with the documented fields (empty BaseArgs, empty PermissionArgs, empty ModelFlag/ReasoningFlag/WorkDirFlag, IsSubscription=true, AutoRoutingEligible=false, Binary='claude'). A registry-shape regression test asserts these field values exactly.\n5) execute_dispatch.go constructs claudetui.Runner when name='claude-tui'; a focused dispatch test asserts the dispatcher returns a *claudetui.Runner instance (or its harnesses.Harness wrapping) for that name.\n6) The harnessimports lint rule passes; no service*.go imports internal/harnesses/claude-tui beyond execute_dispatch.go.\n7) go test ./internal/harnesses/... -count=1 green; go test ./... -count=1 green; lefthook run pre-commit green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "spec:CONTRACT-004"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T12:13:42.807246015Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T121022-d47f5ccd\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":6,\"total_tokens\":13,\"cost_usd\":0,\"duration_ms\":186022,\"exit_code\":-1}",
+          "created_at": "2026-05-18T12:13:42.959158909Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=13 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-18T12:18:31.886150356Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T121343-b493b0f1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":1,\"total_tokens\":8,\"cost_usd\":0,\"duration_ms\":270532,\"exit_code\":-1}",
+          "created_at": "2026-05-18T12:18:32.116003092Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=8 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T121343-b493b0f1\",\"bead_id\":\"fizeau-45cf4283\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T12:18:52.139093313Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "signal: killed\npowerClass=standard\nresult_rev=63a1172a553c84aa3893e3b43b760bea41260ca1\nbase_rev=db35229d41600ac154d72570d04c36a443e7e36b\noutcome_reason=timeout",
+          "created_at": "2026-05-18T12:18:52.351104515Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T113050-dc507db8",
+    "prompt": ".ddx/executions/20260527T113050-dc507db8/prompt.md",
+    "manifest": ".ddx/executions/20260527T113050-dc507db8/manifest.json",
+    "result": ".ddx/executions/20260527T113050-dc507db8/result.json",
+    "checks": ".ddx/executions/20260527T113050-dc507db8/checks.json",
+    "usage": ".ddx/executions/20260527T113050-dc507db8/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-45cf4283-20260527T113050-dc507db8"
+  },
+  "prompt_sha": "51f15518d9301232420076a6a4b7e54e0af678a380abff84f3079ee369279a32"
+}
