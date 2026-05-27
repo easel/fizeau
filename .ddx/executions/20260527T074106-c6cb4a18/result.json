@@ -1,0 +1,33 @@
+{
+  "bead_id": "fizeau-6c074544",
+  "attempt_id": "20260527T074106-c6cb4a18",
+  "base_rev": "43441dd84b302d2ab2a9ea4ce6ad4981cf11491b",
+  "result_rev": "43441dd84b302d2ab2a9ea4ce6ad4981cf11491b",
+  "outcome": "task_no_evidence",
+  "status": "no_evidence_produced",
+  "detail": "agent exited without a commit or no_changes_rationale.txt; dirty paths: internal/harnesses/anthropic/status.go, internal/harnesses/claude-tui/harness.go, internal/harnesses/claude-tui/harness_test.go",
+  "reason": "agent exited without a commit or no_changes_rationale.txt",
+  "no_evidence_paths": [
+    "internal/harnesses/anthropic/status.go",
+    "internal/harnesses/claude-tui/harness.go",
+    "internal/harnesses/claude-tui/harness_test.go"
+  ],
+  "harness": "codex",
+  "model": "gpt-5.4-mini",
+  "predicted_power": 8,
+  "predicted_cost_usd_per_1k_tokens": 0.0075,
+  "predicted_cost_source": "subscription",
+  "session_id": "eb-3645838a",
+  "duration_ms": 1013023,
+  "exit_code": 0,
+  "error": "agent exited without a commit or no_changes_rationale.txt; dirty paths: internal/harnesses/anthropic/status.go, internal/harnesses/claude-tui/harness.go, internal/harnesses/claude-tui/harness_test.go",
+  "project_root": "/Users/erik/Projects/fizeau",
+  "failure_mode": "no_evidence_produced",
+  "execution_dir": ".ddx/executions/20260527T074106-c6cb4a18",
+  "prompt_file": ".ddx/executions/20260527T074106-c6cb4a18/prompt.md",
+  "manifest_file": ".ddx/executions/20260527T074106-c6cb4a18/manifest.json",
+  "result_file": ".ddx/executions/20260527T074106-c6cb4a18/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-27T07:41:13.317970459Z",
+  "finished_at": "2026-05-27T07:58:06.341754522Z"
+}
