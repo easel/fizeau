@@ -1,0 +1,106 @@
+{
+  "attempt_id": "20260527T230858-a61c1e80",
+  "bead_id": "fizeau-11aed801",
+  "base_rev": "304ac2300e4d83628f275d421dae82209d098ad0",
+  "created_at": "2026-05-27T23:09:01.990102677Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-11aed801",
+    "title": "bench-pr-A1a: harbor-runner Docker image + build-harbor-runner.sh content-sha label",
+    "description": "PROBLEM: The Go runner forces the host to own a Python toolchain by prepending the repo root to Harbor's PYTHONPATH so Harbor can import scripts.benchmark.harbor_adapters.*. We want the host to need only bash + Node + Docker. Harbor and its Python agent plugins must move into a container image the host can `docker run`.\n\nROOT CAUSE: cmd/bench/matrix.go, runMatrixHarbor (the `// Add repo root to PYTHONPATH so harbor_adapters modules resolve.` block, ~lines 1117-1129) prepends opts.repoRoot to PYTHONPATH so scripts.benchmark.harbor_adapters.* resolve on the host. The Python plugins that must be containerized are scripts/benchmark/harbor_adapters/{claude.py,codex.py,opencode.py,pi.py} and scripts/benchmark/harbor_agent.py (FizeauAgent, harbor_agent.py:83). No host-independent runner image exists.\n\nPROPOSED FIX:\n- scripts/benchmark/Dockerfile.harbor-runner: FROM python:3.12-slim; pip install --no-cache-dir the pinned Harbor (5-min spike resolves the pin: PyPI `harbor==0.3.0`; confirm there is no separate `harbor-bench` package and that harbor_agent.py's 0.3.x BaseInstalledAgent API matches); COPY scripts/benchmark/harbor_adapters/ -\u003e /app/harbor_adapters/ and scripts/benchmark/harbor_agent.py -\u003e /app/harbor_agent.py; ENV PYTHONPATH=/app; WORKDIR /app; ENTRYPOINT [\"harbor\"].\n- scripts/benchmark/build-harbor-runner.sh: docker build with --label image-content-sha=\u003csha256 over harbor_adapters/ + harbor_agent.py + Dockerfile.harbor-runner\u003e, hashed deterministically (LC_ALL=C find | sort | per-file sha256) so a re-run with no source change yields the same label and a Docker-cache hit.\n- ./benchmark preflight: rebuild the image iff the cached image's image-content-sha label != the freshly computed content sha; skip the rebuild when they match.\n\nNON-SCOPE: shell harness-adapters + their listing/contract (sibling A1b); task-executors/harbor wrapper + its listing/contract (sibling A1c); runtime-probe.sh (sibling A1d); runner dispatch/--plan/matrix expansion (A2); per-cell execution loop, resume/retry, report compose (A3); concurrency/signals/budget (A4); Go changes, deactivation, parity (A5); cell-report.schema.json (PR B); tasks_from/task_executor bench-set schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: parent fizeau-163efede. Foundation child — no sibling deps; sibling A1c and A2/A3/A5 depend on this image. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. build-harbor-runner.sh builds fizeau-harbor-runner:latest with an image-content-sha label equal to sha256 of harbor_adapters/ + harbor_agent.py + Dockerfile.harbor-runner; a re-run with no source change is a cache hit (label unchanged). Test: Test_BuildLabelMatchesContentSha (scripts/benchmark/tests/build_label.bats).\n2. ./benchmark preflight rebuilds the image iff the cached label differs from the current content sha. Test: Test_PreflightRebuildsOnShaChange (scripts/benchmark/tests/build_label.bats).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "harbor-runner image builds with a content-sha label and preflight rebuilds only on sha change (Test_BuildLabelMatchesContentSha, Test_PreflightRebuildsOnShaChange); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-4d81d3f0",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T22:23:22.059991538Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T220835-5661166b\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":16,\"output_tokens\":569,\"total_tokens\":585,\"cost_usd\":0.55814085,\"duration_ms\":875697,\"exit_code\":0}",
+          "created_at": "2026-05-27T22:23:22.090715973Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=585 cost_usd=0.5581 model=haiku"
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260527T220835-5661166b/0\",\"cycle_index\":0,\"attempt_id\":\"20260527T220835-5661166b\",\"base_rev\":\"ece3bc124fb83957ba8d741a107e8c63442d92f6\",\"result_rev\":\"3b559193a21a7ea02e34ae2274b06ab9a3563d66\"}",
+          "created_at": "2026-05-27T22:23:22.124695072Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt\":1,\"elapsed_ms\":0,\"harness\":\"claude\",\"model\":\"haiku\",\"over_budget\":false,\"source\":\"exponential-backoff\",\"wait_ms\":1000}",
+          "created_at": "2026-05-27T22:23:42.598018064Z",
+          "kind": "rate-limit-retry",
+          "source": "legacy agent execute-bead",
+          "summary": "attempt=1 wait=1s source=exponential-backoff"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T22:38:45.708403562Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T222349-c1b02849\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":16,\"output_tokens\":808,\"total_tokens\":824,\"cost_usd\":1.1295405,\"duration_ms\":887768,\"exit_code\":0}",
+          "created_at": "2026-05-27T22:38:45.765190393Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=824 cost_usd=1.1295 model=haiku"
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260527T222349-c1b02849/0\",\"cycle_index\":0,\"attempt_id\":\"20260527T222349-c1b02849\",\"base_rev\":\"1b7b5b9decd735b1bfc0a86283f2c11f83f4b01e\",\"result_rev\":\"17a29486804a76f801b33fbe065b1c49fdb5b97c\"}",
+          "created_at": "2026-05-27T22:38:45.810203858Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260527T220829-18b38b8b\",\"bead_id\":\"fizeau-11aed801\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-27T22:38:29Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-27T22:38:59.576723414Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        }
+      ],
+      "work-consecutive-wedges": {
+        "at": "2026-05-27T22:38:59Z",
+        "count": 1,
+        "last_reason": "progress_watchdog"
+      }
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T230858-a61c1e80",
+    "prompt": ".ddx/executions/20260527T230858-a61c1e80/prompt.md",
+    "manifest": ".ddx/executions/20260527T230858-a61c1e80/manifest.json",
+    "result": ".ddx/executions/20260527T230858-a61c1e80/result.json",
+    "checks": ".ddx/executions/20260527T230858-a61c1e80/checks.json",
+    "usage": ".ddx/executions/20260527T230858-a61c1e80/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-11aed801-20260527T230858-a61c1e80"
+  },
+  "prompt_sha": "538017a92a930e3f53ad493c020139c277531cb81791b2bb09d5f96146256dbc"
+}
