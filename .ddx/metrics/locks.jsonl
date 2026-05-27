@@ -2931,3 +2931,12 @@
 {"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":647775,"acquired_at":"2026-05-27T18:40:26.065453136Z"}
 {"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":647775,"acquired_at":"2026-05-27T18:40:26.065453136Z","released_at":"2026-05-27T18:40:28.160139127Z","duration_ms":2094}
 {"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":647775,"acquired_at":"2026-05-27T18:40:28.165723706Z"}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T18:44:53.389409111Z"}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T18:44:53.389409111Z","released_at":"2026-05-27T18:44:53.420112628Z","duration_ms":30}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T18:44:54.190908219Z"}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T18:44:54.190908219Z","released_at":"2026-05-27T18:44:54.216180199Z","duration_ms":25}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T18:46:24.428141049Z"}
+{"event":"acquire","lock_name":"index.lock","operation":"index.add","holder_pid":683355,"acquired_at":"2026-05-27T18:46:24.456357526Z"}
+{"event":"release","lock_name":"index.lock","operation":"index.add","holder_pid":683355,"acquired_at":"2026-05-27T18:46:24.456357526Z","released_at":"2026-05-27T18:46:24.524519388Z","duration_ms":68}
+{"event":"acquire","lock_name":"index.lock","operation":"index.commit","holder_pid":683355,"acquired_at":"2026-05-27T18:46:24.539818001Z"}
+{"event":"release","lock_name":"index.lock","operation":"index.commit","holder_pid":683355,"acquired_at":"2026-05-27T18:46:24.539818001Z","released_at":"2026-05-27T18:46:24.632801384Z","duration_ms":92}
