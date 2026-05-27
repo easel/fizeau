@@ -1,0 +1,97 @@
+{
+  "attempt_id": "20260527T191235-72c97dd4",
+  "bead_id": "fizeau-7ca8ec69",
+  "base_rev": "d989097df8ffc84edefc170a5e9cdd64f8a797b7",
+  "created_at": "2026-05-27T19:12:41.501524602Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-7ca8ec69",
+    "title": "providers: govern OpenRouter credit probe (SD-013 amendment or ADR-011 extension)",
+    "description": "AR-2026-05-17-repo finding. service_openrouter_credit.go (17 KB, last touched 2026-05-17) implements credit-balance probing, freshness, and quota-pool gating with no governing SD/ADR. Either amend SD-013 (provider signal matrix) to document the credit probe as a routing-evidence signal, or extend ADR-011 (cost-based routing with quota pools).",
+    "acceptance": "SD-013 OR ADR-011 contains a section describing: freshness semantics, gating threshold (DefaultOpenrouterCreditBalanceThresholdUSD), failure-mode classification (credential_invalid vs provider_unreachable), and quota-pool integration. No code change required.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:providers",
+      "spec:SD-013",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-7ca8ec69\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:20:52.650683911Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4124911278.lock' write error. Out of diskspace: exit status 128\",\"rationale\":\"pre-execute-bead checkpoint failed due to disk space exhaustion writing sha1 lock file; transient infrastructure failure unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:21:03.57144083Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4124911278.lock' write error. Out of diskspace: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-18T13:21:03.604801758Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/home/erik/Projects/fizeau/.git/index.lock': File exists.\\n\\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\",\"harness\":\"\",\"model\":\"\",\"reason\":\"lock_contention\"}",
+          "created_at": "2026-05-27T19:07:42.56991491Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "lock_contention"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-7ca8ec69\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:07:42.610087278Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/home/erik/Projects/fizeau/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\noutcome_reason=lock_contention",
+          "created_at": "2026-05-27T19:07:42.6865884Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\"}",
+          "created_at": "2026-05-27T19:12:29.226447116Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "SD-013",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:34Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T191235-72c97dd4",
+    "prompt": ".ddx/executions/20260527T191235-72c97dd4/prompt.md",
+    "manifest": ".ddx/executions/20260527T191235-72c97dd4/manifest.json",
+    "result": ".ddx/executions/20260527T191235-72c97dd4/result.json",
+    "checks": ".ddx/executions/20260527T191235-72c97dd4/checks.json",
+    "usage": ".ddx/executions/20260527T191235-72c97dd4/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-7ca8ec69-20260527T191235-72c97dd4"
+  },
+  "prompt_sha": "a6e2a1d2bdd89d83e40a6013b70e349a1ca60134a5a3a3849a9ef6528f5fa8f3"
+}
