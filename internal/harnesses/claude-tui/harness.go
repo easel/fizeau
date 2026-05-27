@@ -231,45 +231,6 @@ func marshalData(data interface{}) json.RawMessage {
 	return b
 }
 
-// QuotaStatus implements harnesses.QuotaHarness.
-func (h *Harness) QuotaStatus(ctx context.Context, now time.Time) (harnesses.QuotaStatus, error) {
-	return harnesses.QuotaStatus{
-		State: harnesses.QuotaUnavailable,
-	}, nil
-}
-
-// RefreshQuota implements harnesses.QuotaHarness.
-func (h *Harness) RefreshQuota(ctx context.Context) (harnesses.QuotaStatus, error) {
-	return harnesses.QuotaStatus{
-		State: harnesses.QuotaUnavailable,
-	}, nil
-}
-
-// QuotaFreshness implements harnesses.QuotaHarness.
-func (h *Harness) QuotaFreshness() time.Duration {
-	return 15 * time.Minute
-}
-
-// SupportedLimitIDs implements harnesses.QuotaHarness.
-func (h *Harness) SupportedLimitIDs() []string {
-	return nil
-}
-
-// AccountStatus implements harnesses.AccountHarness.
-func (h *Harness) AccountStatus(ctx context.Context, now time.Time) (harnesses.AccountSnapshot, error) {
-	return harnesses.AccountSnapshot{}, nil
-}
-
-// RefreshAccount implements harnesses.AccountHarness.
-func (h *Harness) RefreshAccount(ctx context.Context) (harnesses.AccountSnapshot, error) {
-	return harnesses.AccountSnapshot{}, nil
-}
-
-// AccountFreshness implements harnesses.AccountHarness.
-func (h *Harness) AccountFreshness() time.Duration {
-	return 24 * time.Hour
-}
-
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.
 // Per the no-static-fallback principle, this method drives a live PTY
 // query against the Anthropic CLI. On error, it returns an empty snapshot
@@ -287,7 +248,15 @@ func (h *Harness) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, erro
 
 // ResolveModelAlias implements harnesses.ModelDiscoveryHarness.
 func (h *Harness) ResolveModelAlias(family string, snapshot harnesses.ModelDiscoverySnapshot) (string, error) {
-	return "", harnesses.ErrAliasNotResolvable
+	normalized := strings.ToLower(strings.TrimSpace(family))
+	if !isSupportedClaudeTuiAlias(normalized) {
+		return "", harnesses.ErrAliasNotResolvable
+	}
+	resolved := resolveClaudeTuiFamilyAlias(normalized, snapshot)
+	if resolved == "" {
+		return "", harnesses.ErrAliasNotResolvable
+	}
+	return resolved, nil
 }
 
 // Shutdown enumerates live PTY sessions in the pool and reaps each one
@@ -331,7 +300,7 @@ func (h *Harness) Shutdown(ctx context.Context) error {
 
 // SupportedAliases implements harnesses.ModelDiscoveryHarness.
 func (h *Harness) SupportedAliases() []string {
-	return nil
+	return append([]string(nil), supportedAliases...)
 }
 
 // readClaudeTuiModelDiscoveryViaPTY spawns a PTY session against the claude CLI,
@@ -543,6 +512,26 @@ func BuildEnvironmentAllowlist() []string {
 	}
 
 	return env
+}
+
+func isSupportedClaudeTuiAlias(family string) bool {
+	for _, a := range supportedAliases {
+		if a == family {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveClaudeTuiFamilyAlias(family string, snapshot harnesses.ModelDiscoverySnapshot) string {
+	for _, model := range snapshot.Models {
+		modelLower := strings.ToLower(model)
+		familyLower := strings.ToLower(family)
+		if strings.Contains(modelLower, familyLower) {
+			return model
+		}
+	}
+	return ""
 }
 
 // Compile-time interface satisfaction assertions per CONTRACT-004.
