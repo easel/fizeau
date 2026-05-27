@@ -1,0 +1,54 @@
+{
+  "attempt_id": "20260527T233241-3ac3a0f3",
+  "bead_id": "fizeau-7f54f63c",
+  "base_rev": "b0aa273305f12d9d56865b24b493280c48356075",
+  "created_at": "2026-05-27T23:32:47.025927129Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-7f54f63c",
+    "title": "claude-tui/step4: JSONL transcript parsing seam (Stop-hook payload + ~/.claude/projects/ tailing)",
+    "description": "Per ADR-013 design constraint #2 + the prior-art survey (claude-p, shannon): the parsing seam is the on-disk JSONL transcript at ~/.claude/projects/\u003cworkdir\u003e/\u003cid\u003e.jsonl, NOT rendered TUI output. internal/pty/terminal is not required for Execute.\n\nWORK:\n- Register SessionStart + Stop hooks via --settings '\u003cinline-json\u003e' carve-out (the only flag allowed besides binary name).\n- Read transcript path from the Stop-hook payload; tail the JSONL during the turn for streaming and read the final state at Stop.\n- Translate JSONL entries to canonical service Events (text deltas, tool_call, tool_result, final with FinalData).\n- Hook conflict handling per ADR-013 §7: detect existing user ~/.claude/settings.json hooks; either compose (preferred) or surface a structured warning if merge semantics aren't preservable.\n\nNON-SCOPE: PreToolUse/PostToolUse for streaming progress (sub-bead step 5 covers if needed).",
+    "acceptance": "1) claude-tui Runner.Execute registers SessionStart + Stop + PreToolUse + PostToolUse hooks via --settings inline JSON.\n2) Stop-hook payload yields the JSONL transcript path; the runner reads it and emits canonical Events.\n3) Intermediate ProgressEvents: PreToolUse fires a tool_call event with tool name + inputs; PostToolUse fires a tool_result event with outputs. Asserted by a turn-level test using a prompt that triggers a tool use; the event sequence contains at least one tool_call before Final.\n4) Final event matches the existing claude harness's FinalData schema (tested by structural comparison against a recorded claude --print final event from cassette).\n5) Event sequence-number ordering: every emitted event carries a monotonically increasing seq number; verified by a multi-event integration test.\n6) Multi-turn replay safety: when /clear leaves a transcript file with prior turns, the runner reads only entries newer than the last-processed marker (tracked per session). Asserted by a test that pre-seeds a transcript file with two completed turns and verifies only the third turn's events are emitted.\n7) Malformed JSONL handling: lines that fail to parse are logged (structured) and skipped without aborting the turn; the next valid line is processed. Tested by injecting a malformed line mid-stream.\n8) Partial-write race: the tailer handles partially-written lines (no trailing newline yet) by waiting/retrying rather than parsing-and-failing. Tested by writing a partial line, sleeping briefly, then completing it.\n9) Hook conflict path: if user already has SessionStart/Stop/PreToolUse/PostToolUse hooks defined in ~/.claude/settings.json, the runner either composes correctly (preferred) or emits a structured warning event explaining the unsupported configuration; tested both branches.\n10) Fuzz test (testing.F): FuzzParseTranscriptLine in stream_test.go fuzzes the JSONL line parser; corpus seeded with malformed/edge-case inputs; runs at least 5 seconds in -short mode.\n11) Property test (rapid): TestTranscriptLineRoundTrip asserts canonical event -\u003e JSONL -\u003e canonical event round-trips for randomly generated event values; integrated with the existing internal/session/property_test.go style.\n12) go test ./internal/harnesses/claude-tui/... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl, .ddx/beads.jsonl.tmp-1184380-a6bf2f30, .ddx/beads.lock/acquired_at, .ddx/beads.lock/pid)\",\"fingerprint\":\"3bcd09af100b3d91f3ecb3e259ec8058211c890b08e6cd1183549a5eefc8658a\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"3bcd09af100b3d91f3ecb3e259ec8058211c890b08e6cd1183549a5eefc8658a\"}",
+          "created_at": "2026-05-27T23:32:35.188264387Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T233241-3ac3a0f3",
+    "prompt": ".ddx/executions/20260527T233241-3ac3a0f3/prompt.md",
+    "manifest": ".ddx/executions/20260527T233241-3ac3a0f3/manifest.json",
+    "result": ".ddx/executions/20260527T233241-3ac3a0f3/result.json",
+    "checks": ".ddx/executions/20260527T233241-3ac3a0f3/checks.json",
+    "usage": ".ddx/executions/20260527T233241-3ac3a0f3/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-7f54f63c-20260527T233241-3ac3a0f3"
+  },
+  "prompt_sha": "6f44ccd6ef4356ab28136c851f416683cca0fe9cb51d447d1236ad5d4beda084"
+}
