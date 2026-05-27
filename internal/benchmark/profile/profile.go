@@ -74,11 +74,12 @@ type Limits struct {
 // "high" | "" depending on the family). Pointer fields are omitted when
 // nil so server defaults apply.
 type Sampling struct {
-	Temperature float64  `yaml:"temperature"        json:"temperature"`
-	Reasoning   string   `yaml:"reasoning,omitempty" json:"reasoning,omitempty"`
-	TopP        *float64 `yaml:"top_p,omitempty"     json:"top_p,omitempty"`
-	TopK        *int     `yaml:"top_k,omitempty"     json:"top_k,omitempty"`
-	MinP        *float64 `yaml:"min_p,omitempty"     json:"min_p,omitempty"`
+	Temperature  float64  `yaml:"temperature"        json:"temperature"`
+	Reasoning    string   `yaml:"reasoning,omitempty" json:"reasoning,omitempty"`
+	TopP         *float64 `yaml:"top_p,omitempty"     json:"top_p,omitempty"`
+	TopK         *int     `yaml:"top_k,omitempty"     json:"top_k,omitempty"`
+	MinP         *float64 `yaml:"min_p,omitempty"     json:"min_p,omitempty"`
+	PlanningMode bool     `yaml:"planning_mode,omitempty" json:"planning_mode,omitempty"`
 }
 
 // ModelServerInfo is populated at run time by querying the local model server
