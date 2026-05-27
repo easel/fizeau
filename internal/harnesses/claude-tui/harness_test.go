@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	"github.com/easel/fizeau/internal/lint/harnessimports"
+	"github.com/easel/fizeau/internal/pty/session"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -712,6 +714,70 @@ func TestClaudeTuiSessionPoolReusesAndClears(t *testing.T) {
 	if pid <= 0 {
 		t.Errorf("Session.Pid returned invalid pid: %d", pid)
 	}
+}
+
+// TestClaudeTuiOrphanReaper asserts that Harness.Shutdown enumerates live PTY
+// children in the pool and reaps them within a bounded timeout using SIGTERM
+// escalation to SIGKILL.
+func TestClaudeTuiOrphanReaper(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping orphan reaper test in short mode")
+	}
+
+	h := &claudetui.Harness{}
+	tmpDir := t.TempDir()
+
+	// Create a long-running process via getOrCreateSession
+	// (which adds it to the pool) using a sleep command
+	// Use a background context without timeout for session creation
+	s, err := claudetui.GetOrCreateSessionForTest(
+		context.Background(),
+		"sleep",
+		[]string{"100"},
+		tmpDir,
+		nil,
+		session.Size{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatalf("GetOrCreateSessionForTest: %v", err)
+	}
+
+	pid, err := s.Pid()
+	if err != nil {
+		t.Fatalf("Session.Pid: %v", err)
+	}
+	if pid <= 0 {
+		t.Fatalf("invalid PID: %d", pid)
+	}
+
+	// Verify the process is alive before shutdown
+	if err := processIsAlive(pid); err != nil {
+		t.Fatalf("process not alive after Start: %v", err)
+	}
+
+	// Create a shutdown context with a short timeout (should trigger SIGKILL)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
+
+	// Shutdown should reap the orphan process
+	_ = h.Shutdown(shutdownCtx)
+
+	// Give the process time to be reaped after Kill sends SIGKILL
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the process has been terminated
+	if err := processIsAlive(pid); err == nil {
+		t.Errorf("process %d still alive after Shutdown", pid)
+	}
+}
+
+// processIsAlive checks if a process with the given PID is still running.
+func processIsAlive(pid int) error {
+	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid))
+	if err := cmd.Run(); err != nil {
+		// ps returns non-zero exit code if process is not found
+		return fmt.Errorf("process %d not alive", pid)
+	}
+	return nil
 }
 
 // findRepoRoot searches for the repository root by walking up the directory tree

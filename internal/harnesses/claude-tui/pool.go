@@ -76,3 +76,25 @@ func GetPooledSession(workdir string) *session.Session {
 	}
 	return nil
 }
+
+// getLiveSessionsSnapshot returns a snapshot of all live sessions in the pool
+// without holding the global lock beyond the snapshot operation.
+func getLiveSessionsSnapshot() []*session.Session {
+	sessionPoolMu.Lock()
+	defer sessionPoolMu.Unlock()
+	var sessions []*session.Session
+	for _, pool := range sessionPool {
+		pool.mu.Lock()
+		if pool.session != nil {
+			sessions = append(sessions, pool.session)
+		}
+		pool.mu.Unlock()
+	}
+	return sessions
+}
+
+// GetOrCreateSessionForTest is exposed for testing purposes to create a session
+// that will be added to the pool for the orphan reaper test.
+func GetOrCreateSessionForTest(ctx context.Context, binary string, args []string, workdir string, env []string, size session.Size) (*session.Session, error) {
+	return getOrCreateSession(ctx, binary, args, workdir, env, size)
+}

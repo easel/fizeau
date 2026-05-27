@@ -187,6 +187,71 @@ func (h *Harness) ResolveModelAlias(family string, snapshot harnesses.ModelDisco
 	return "", harnesses.ErrAliasNotResolvable
 }
 
+// Shutdown enumerates live PTY sessions in the pool and reaps each one
+// within a bounded timeout, sending SIGTERM and escalating to SIGKILL
+// if the process does not exit cleanly.
+func (h *Harness) Shutdown(ctx context.Context) error {
+	const defaultTimeout = 10 * time.Second
+
+	// Extract deadline from context or use a default timeout
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultTimeout)
+	}
+
+	sessions := getLiveSessionsSnapshot()
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	// Distribute remaining time across sessions
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		remaining = 100 * time.Millisecond
+	}
+	perSessionTimeout := remaining / time.Duration(len(sessions))
+	if perSessionTimeout < 100*time.Millisecond {
+		perSessionTimeout = 100 * time.Millisecond
+	}
+
+	for _, s := range sessions {
+		if time.Until(deadline) <= 0 {
+			break
+		}
+		sessionCtx, cancel := context.WithTimeout(context.Background(), perSessionTimeout)
+		_ = reapSession(sessionCtx, s)
+		cancel()
+	}
+
+	return nil
+}
+
+// reapSession reaps a PTY session by killing the process, with a brief
+// timeout to allow graceful shutdown.
+func reapSession(ctx context.Context, s *session.Session) error {
+	// Send SIGKILL to the process via Kill()
+	// The Kill() method sends SIGTERM first, waits 100ms, then sends SIGKILL
+	_ = s.Kill()
+
+	// Wait for process to exit with a deadline
+	done := make(chan struct{})
+
+	go func() {
+		_ = s.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Process exited
+		return nil
+	case <-ctx.Done():
+		// Timeout reached; the process should already be dead from Kill()
+		<-done
+		return ctx.Err()
+	}
+}
+
 // SupportedAliases implements harnesses.ModelDiscoveryHarness.
 func (h *Harness) SupportedAliases() []string {
 	return nil
