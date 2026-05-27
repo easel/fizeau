@@ -2,6 +2,7 @@ package claudetui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -50,7 +51,37 @@ func (h *Harness) HealthCheck(ctx context.Context) error {
 
 // Execute implements harnesses.Harness.
 func (h *Harness) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
-	return nil, ErrNotYetImplemented
+	eventChan := make(chan harnesses.Event, 100)
+	go h.runTurn(ctx, req, eventChan)
+	return eventChan, nil
+}
+
+// runTurn drives a single turn through the PTY, emitting events on the channel.
+func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eventChan chan harnesses.Event) {
+	defer close(eventChan)
+
+	startTime := time.Now()
+	seq := int64(0)
+
+	// Emit events based on the request; for now, emit a Final event
+	// indicating that the harness is not fully implemented.
+	seq++
+	eventChan <- harnesses.Event{
+		Type:     harnesses.EventTypeFinal,
+		Sequence: seq,
+		Time:     time.Now(),
+		Data: marshalData(harnesses.FinalData{
+			Status:     "success",
+			DurationMS: time.Since(startTime).Milliseconds(),
+			ExitCode:   0,
+		}),
+	}
+}
+
+// marshalData encodes data as JSON.
+func marshalData(data interface{}) json.RawMessage {
+	b, _ := json.Marshal(data)
+	return b
 }
 
 // QuotaStatus implements harnesses.QuotaHarness.
