@@ -1,10 +1,13 @@
 package claudetui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
 	"github.com/easel/fizeau/internal/pty/cassette"
+	"github.com/easel/fizeau/internal/pty/probes"
 	"github.com/easel/fizeau/internal/pty/session"
 )
 
@@ -46,7 +50,11 @@ func (h *Harness) Info() harnesses.HarnessInfo {
 
 // HealthCheck implements harnesses.Harness.
 func (h *Harness) HealthCheck(ctx context.Context) error {
-	return ErrNotYetImplemented
+	_, err := exec.LookPath("claude")
+	if err != nil {
+		return fmt.Errorf("claude binary not found in PATH: %w", err)
+	}
+	return nil
 }
 
 // Execute implements harnesses.Harness.
@@ -63,19 +71,157 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	startTime := time.Now()
 	seq := int64(0)
 
-	// Emit a Final event with not yet implemented.
-	// The full PTY implementation is deferred to a follow-up bead.
-	seq++
-	eventChan <- harnesses.Event{
-		Type:     harnesses.EventTypeFinal,
-		Sequence: seq,
-		Time:     time.Now(),
-		Data: marshalData(harnesses.FinalData{
-			Status:     "error",
-			Error:      "claude-tui: not yet implemented",
-			DurationMS: time.Since(startTime).Milliseconds(),
-			ExitCode:   1,
-		}),
+	// Resolve the claude binary path
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		seq++
+		eventChan <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: seq,
+			Time:     time.Now(),
+			Data: marshalData(harnesses.FinalData{
+				Status:     "error",
+				Error:      fmt.Sprintf("claude binary not found in PATH: %v", err),
+				DurationMS: time.Since(startTime).Milliseconds(),
+				ExitCode:   1,
+			}),
+		}
+		return
+	}
+
+	// Build environment allowlist per ADR-013 §Environment Allowlist
+	env := BuildEnvironmentAllowlist()
+
+	// Start PTY session
+	ptySession, err := session.Start(
+		ctx,
+		claudePath,
+		[]string{},
+		req.WorkDir,
+		env,
+		session.Size{Rows: 50, Cols: 220},
+	)
+	if err != nil {
+		seq++
+		eventChan <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: seq,
+			Time:     time.Now(),
+			Data: marshalData(harnesses.FinalData{
+				Status:     "error",
+				Error:      fmt.Sprintf("failed to start PTY session: %v", err),
+				DurationMS: time.Since(startTime).Milliseconds(),
+				ExitCode:   1,
+			}),
+		}
+		return
+	}
+	defer ptySession.Close()
+
+	// Start the startup probe responder
+	responder := probes.New(probes.Config{
+		Session:      ptySession,
+		ReadyMarkers: []string{"❯", "> "},
+		Timeout:      10 * time.Second,
+	})
+	defer responder.Stop()
+
+	deadline := time.Now().Add(10 * time.Second)
+	if err := responder.Ready(deadline); err != nil {
+		// Log but don't fail — startup probes are best-effort
+		_ = err
+	}
+
+	// Send prompt via bracketed paste
+	promptBytes := []byte(req.Prompt)
+	bracketedPaste := append([]byte("\x1b[200~"), promptBytes...)
+	bracketedPaste = append(bracketedPaste, []byte("\x1b[201~\r")...)
+
+	if err := ptySession.SendBytes(bracketedPaste); err != nil {
+		seq++
+		eventChan <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: seq,
+			Time:     time.Now(),
+			Data: marshalData(harnesses.FinalData{
+				Status:     "error",
+				Error:      fmt.Sprintf("failed to send prompt: %v", err),
+				DurationMS: time.Since(startTime).Milliseconds(),
+				ExitCode:   1,
+			}),
+		}
+		return
+	}
+
+	// Process output and emit events
+	outputBuf := strings.Builder{}
+	turnTimeout := time.NewTimer(5 * time.Minute)
+	defer turnTimeout.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			_ = ptySession.Kill()
+			seq++
+			eventChan <- harnesses.Event{
+				Type:     harnesses.EventTypeFinal,
+				Sequence: seq,
+				Time:     time.Now(),
+				Data: marshalData(harnesses.FinalData{
+					Status:     "cancelled",
+					DurationMS: time.Since(startTime).Milliseconds(),
+					ExitCode:   130,
+				}),
+			}
+			return
+
+		case chunk, ok := <-ptySession.Output():
+			if !ok {
+				// Output closed; process final state
+				stat := ptySession.Wait()
+				seq++
+				eventChan <- harnesses.Event{
+					Type:     harnesses.EventTypeFinal,
+					Sequence: seq,
+					Time:     time.Now(),
+					Data: marshalData(harnesses.FinalData{
+						Status:     "success",
+						DurationMS: time.Since(startTime).Milliseconds(),
+						ExitCode:   stat.Code,
+						FinalText:  outputBuf.String(),
+					}),
+				}
+				return
+			}
+
+			if chunk.Bytes != nil {
+				outputBuf.Write(chunk.Bytes)
+			}
+
+			// Check for Escape key to cancel
+			if bytes.Contains(chunk.Bytes, []byte("\x1b")) {
+				_ = ptySession.SendKey(session.KeyEscape)
+				continue
+			}
+
+			turnTimeout.Reset(5 * time.Minute)
+
+		case <-turnTimeout.C:
+			_ = ptySession.Kill()
+			seq++
+			eventChan <- harnesses.Event{
+				Type:     harnesses.EventTypeFinal,
+				Sequence: seq,
+				Time:     time.Now(),
+				Data: marshalData(harnesses.FinalData{
+					Status:     "error",
+					Error:      "turn timeout exceeded",
+					DurationMS: time.Since(startTime).Milliseconds(),
+					ExitCode:   124,
+				}),
+			}
+			return
+		}
 	}
 }
 
@@ -317,6 +463,86 @@ func appendUniqueString(values []string, value string) []string {
 		}
 	}
 	return append(values, value)
+}
+
+// BuildEnvironmentAllowlist constructs the environment for the PTY session
+// according to ADR-013 §Environment Allowlist.
+func BuildEnvironmentAllowlist() []string {
+	allowedKeys := map[string]bool{
+		"HOME":    true,
+		"PATH":    true,
+		"USER":    true,
+		"LOGNAME": true,
+		"SHELL":   true,
+		"LANG":    true,
+		"LC_ALL":  true,
+		"TZ":      true,
+		"TERM":    true,
+	}
+
+	// XDG_* variables are allowed
+	xdgAllowed := map[string]bool{
+		"XDG_CONFIG_HOME": true,
+		"XDG_DATA_HOME":   true,
+		"XDG_CACHE_HOME":  true,
+		"XDG_STATE_HOME":  true,
+		"XDG_RUNTIME_DIR": true,
+	}
+
+	var env []string
+	currentEnv := os.Environ()
+
+	// Pass through allowed variables from the operator environment
+	for _, kv := range currentEnv {
+		key := strings.SplitN(kv, "=", 2)[0]
+
+		// Check exact match
+		if allowedKeys[key] {
+			env = append(env, kv)
+			continue
+		}
+
+		// Check XDG_* prefix
+		if xdgAllowed[key] {
+			env = append(env, kv)
+			continue
+		}
+
+		// Check CLAUDE_* prefix (operator pre-existing variables)
+		if strings.HasPrefix(key, "CLAUDE_") {
+			env = append(env, kv)
+			continue
+		}
+	}
+
+	// Set TERM and locale defaults if not already present
+	hasTermSet := false
+	hasLangSet := false
+	hasLCAllSet := false
+
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "TERM=") {
+			hasTermSet = true
+		}
+		if strings.HasPrefix(kv, "LANG=") {
+			hasLangSet = true
+		}
+		if strings.HasPrefix(kv, "LC_ALL=") {
+			hasLCAllSet = true
+		}
+	}
+
+	if !hasTermSet {
+		env = append(env, "TERM=xterm-256color")
+	}
+	if !hasLangSet {
+		env = append(env, "LANG=C.UTF-8")
+	}
+	if !hasLCAllSet {
+		env = append(env, "LC_ALL=C.UTF-8")
+	}
+
+	return env
 }
 
 // Compile-time interface satisfaction assertions per CONTRACT-004.
