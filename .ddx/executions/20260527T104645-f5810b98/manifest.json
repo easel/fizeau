@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260527T104645-f5810b98",
+  "bead_id": "fizeau-9517f735",
+  "base_rev": "ab617c729fce84ee09b3430e12ec4def34192a6f",
+  "created_at": "2026-05-27T10:46:50.829012727Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9517f735",
+    "title": "claude-tui: add shared benchmark prompt fixture and claude --print baseline runner",
+    "description": "PROBLEM: ADR-013 §3 / ADR-013 Performance and Cost Acknowledgement requires a benchmark comparison for claude-tui before promotion, but the test package has no reusable canned prompt fixture or measured claude --print baseline for equivalent prompts.\n\nROOT CAUSE:\n- internal/harnesses/claude-tui/harness_test.go:342 only tests model snapshot parsing behavior; it does not define a benchmark prompt fixture or baseline timing runner.\n- internal/harnesses/claude-tui/harness.go:52 wires Execute through the PTY harness identity, but there is no companion test helper that invokes claude --print for apples-to-apples wall-time measurement.\n- docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md:443 requires performance/cost acknowledgement, and docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md:451 requires a claude-tui benchmark lane before auto-routing promotion.\n\nPROPOSED FIX:\n1. Add a shared canned prompt fixture for claude-tui benchmark tests under internal/harnesses/claude-tui, using deterministic text suitable for both claude-tui and claude --print.\n2. Add a claude --print baseline runner helper in the claudetui test package that measures wall time, captures command stderr/stdout safely, and can be skipped when the live claude binary or auth is unavailable.\n3. Add focused unit tests for the fixture and baseline helper using a fake claude script so default CI does not require live Anthropic credentials.\n\nNON-SCOPE:\n- PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- Session pool, /clear, orphan reaping (sibling child B).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n- Implementing BenchmarkClaudeTuiTurnWallTime threshold enforcement; this child only supplies the shared fixture and baseline runner.\n\nPARENT: fizeau-60ce39cb.\nGoverning artifacts: ADR-013 §3, CONTRACT-004.\nDependencies preserved: sibling children A, B, C are still required before the final PTY benchmark enforcement child can execute against the real PTY turn path.",
+    "acceptance": "1. TestClaudeTuiBenchmarkPromptFixture asserts the shared canned prompt is non-empty, stable, and used by both the baseline helper and the PTY benchmark helper entry points.\n2. TestClaudePrintBaselineRunnerUsesPrintMode asserts a fake claude executable is invoked with --print on the shared canned prompt and returns measured wall-time data without using claude-tui internals.\n3. TestClaudePrintBaselineRunnerSkipsWhenUnavailable asserts the live baseline path reports a skip/operator-required condition rather than failing default CI when claude or auth is unavailable.\n4. go test ./internal/harnesses/claude-tui -run 'TestClaudeTuiBenchmarkPromptFixture|TestClaudePrintBaselineRunnerUsesPrintMode|TestClaudePrintBaselineRunnerSkipsWhenUnavailable' -count=1 is green.\n5. go test ./... -count=1 is green.\n6. lefthook run pre-commit is green.",
+    "parent": "fizeau-2af00baf",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode result: json: cannot unmarshal array into Go struct field .readiness_checks.evidence of type string\",\"fingerprint\":\"348bad2af67345ed6eca7d4ff85e6e3a57001c9b2ddae93f1a8f4ec784ec96ce\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"348bad2af67345ed6eca7d4ff85e6e3a57001c9b2ddae93f1a8f4ec784ec96ce\"}",
+          "created_at": "2026-05-27T10:46:40.434455556Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T104645-f5810b98",
+    "prompt": ".ddx/executions/20260527T104645-f5810b98/prompt.md",
+    "manifest": ".ddx/executions/20260527T104645-f5810b98/manifest.json",
+    "result": ".ddx/executions/20260527T104645-f5810b98/result.json",
+    "checks": ".ddx/executions/20260527T104645-f5810b98/checks.json",
+    "usage": ".ddx/executions/20260527T104645-f5810b98/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-9517f735-20260527T104645-f5810b98"
+  },
+  "prompt_sha": "997aac4dbd36fbbd707c01cd5937645929c64d12578e8c39cf36d705c20cb5e0"
+}
