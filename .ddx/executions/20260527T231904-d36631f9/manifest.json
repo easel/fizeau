@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260527T231904-d36631f9",
+  "bead_id": "fizeau-ac7a2331",
+  "base_rev": "0b50bdfd07e2fda313b860cfb407baf869b5bb6d",
+  "created_at": "2026-05-27T23:19:08.476960535Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ac7a2331",
+    "title": "bench-pr-A1b: shell harness-adapters (8) + harness-adapters listing + CONTRACT",
+    "description": "PROBLEM: The matrix-side harness IO contract is Python (scripts/benchmark/harness_adapters/*.py), so the bash runner (A2/A3) cannot translate a profile into a harness install/command without Python. Each harness must be re-expressed as a self-describing shell adapter with install/command subcommands, and the harbor_plugin import path the Go runner hardwires must instead be emitted by these adapters.\n\nROOT CAUSE: cmd/bench/matrix.go harborAgentArgs (~lines 1014-1026) hardwires `--agent-import-path scripts.benchmark.harbor_adapters.\u003cx\u003e` per harness (claude:ClaudeAgent, codex:CodexAgent, opencode:OpencodeAgent, pi:PiAgent; default fiz -\u003e harbor_agent:FizeauAgent). The only IO contract is Python: scripts/benchmark/harness_adapters/{fiz,opencode,pi,cost_probe,noop,dumb_script}.py, with harbor classes at scripts/benchmark/harbor_agent.py:83 (FizeauAgent) and scripts/benchmark/harbor_adapters/{claude.py:31,codex.py:32,opencode.py:64,pi.py:68}.\n\nPROPOSED FIX:\n- scripts/benchmark/harness-adapters/{fiz,claude,codex,opencode,pi,cost-probe,noop,dumb-script}: each executable, with a '# SUMMARY:' header and two subcommands: `install \u003cagent-artifact-path\u003e` -\u003e install-spec.json {install_command, artifact_source, binary_path, harbor_plugin}; `command` (profile JSON on stdin) -\u003e command-spec.json {command, env, secret_env_keys}. claude/codex emit harbor_plugin scripts.benchmark.harbor_adapters.{claude:ClaudeAgent,codex:CodexAgent}; fiz emits scripts.benchmark.harbor_agent:FizeauAgent. The Python harness_adapters/*.py are the reference for emitted shapes; shared helpers in scripts/benchmark/harness-adapters/common.sh.\n- ./benchmark harness-adapters: list every harness adapter with its '# SUMMARY:' line.\n- scripts/benchmark/harness-adapters/CONTRACT.md: document install-spec.json / command-spec.json shapes and the '# SUMMARY:' convention.\n\nNON-SCOPE: harbor-runner Docker image + build script (sibling A1a); task-executors/harbor wrapper + its listing/contract (sibling A1c); runtime-probe.sh (sibling A1d); runner dispatch/--plan/matrix expansion (A2); per-cell execution loop, resume/retry, report compose (A3); concurrency/signals/budget (A4); Go changes, deactivation, parity (A5); cell-report.schema.json (PR B); tasks_from/task_executor bench-set schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: parent fizeau-163efede. No sibling deps — spec emission, listing, and contract tests need neither the runner image nor Docker. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. ./benchmark harness-adapters lists every harness adapter with its '# SUMMARY:' line. Test: Test_AdapterListing_Harness (scripts/benchmark/tests/adapters.bats).\n2. echo \u003cprofile.json\u003e | harness-adapters/fiz command emits command-spec.json matching scripts/benchmark/harness_adapters/fiz.py. Test: Test_AdapterContract_fiz (scripts/benchmark/tests/adapters.bats).\n3. harness-adapters/\u003cx\u003e install emits install-spec.json with the correct harbor_plugin for all 8 (claude-\u003e...claude:ClaudeAgent, codex-\u003e...codex:CodexAgent, fiz-\u003eharbor_agent:FizeauAgent, etc.). Test: Test_AdapterContract_claude, Test_AdapterContract_codex (scripts/benchmark/tests/adapters.bats); TestHarborAgentInstall (scripts/benchmark/test_harbor_agent.py).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "8 shell harness-adapters emit install/command specs with correct harbor_plugin and self-list with '# SUMMARY:' (Test_AdapterListing_Harness, Test_AdapterContract_fiz/claude/codex, TestHarborAgentInstall); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-4d81d3f0",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T231904-d36631f9",
+    "prompt": ".ddx/executions/20260527T231904-d36631f9/prompt.md",
+    "manifest": ".ddx/executions/20260527T231904-d36631f9/manifest.json",
+    "result": ".ddx/executions/20260527T231904-d36631f9/result.json",
+    "checks": ".ddx/executions/20260527T231904-d36631f9/checks.json",
+    "usage": ".ddx/executions/20260527T231904-d36631f9/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-ac7a2331-20260527T231904-d36631f9"
+  },
+  "prompt_sha": "bfa0a4ff5bb684fab8bc389457e736ad0f068cc3575896b8ae763429e9a9e0d2"
+}
