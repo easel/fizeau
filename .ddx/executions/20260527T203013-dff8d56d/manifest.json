@@ -1,0 +1,155 @@
+{
+  "attempt_id": "20260527T203013-dff8d56d",
+  "bead_id": "fizeau-7ca8ec69",
+  "base_rev": "6bf72a405edb04d0eb7c02b70f477eed58cf584e",
+  "created_at": "2026-05-27T20:30:22.400568074Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 6
+  },
+  "bead": {
+    "id": "fizeau-7ca8ec69",
+    "title": "providers: govern OpenRouter credit probe (SD-013 amendment or ADR-011 extension)",
+    "description": "AR-2026-05-17-repo finding. service_openrouter_credit.go (17 KB, last touched 2026-05-17) implements credit-balance probing, freshness, and quota-pool gating with no governing SD/ADR. Either amend SD-013 (provider signal matrix) to document the credit probe as a routing-evidence signal, or extend ADR-011 (cost-based routing with quota pools).",
+    "acceptance": "SD-013 OR ADR-011 contains a section describing: freshness semantics, gating threshold (DefaultOpenrouterCreditBalanceThresholdUSD), failure-mode classification (credential_invalid vs provider_unreachable), and quota-pool integration. No code change required.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:providers",
+      "spec:SD-013",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-7ca8ec69\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:20:52.650683911Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4124911278.lock' write error. Out of diskspace: exit status 128\",\"rationale\":\"pre-execute-bead checkpoint failed due to disk space exhaustion writing sha1 lock file; transient infrastructure failure unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:21:03.57144083Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4124911278.lock' write error. Out of diskspace: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-18T13:21:03.604801758Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/home/erik/Projects/fizeau/.git/index.lock': File exists.\\n\\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\",\"harness\":\"\",\"model\":\"\",\"reason\":\"lock_contention\"}",
+          "created_at": "2026-05-27T19:07:42.56991491Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "lock_contention"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-7ca8ec69\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:07:42.610087278Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: syncing checkpoint index: fatal: Unable to create '/home/erik/Projects/fizeau/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, or the lock file may be stale: exit status 128\noutcome_reason=lock_contention",
+          "created_at": "2026-05-27T19:07:42.6865884Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\"}",
+          "created_at": "2026-05-27T19:12:29.226447116Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:12:42.29806138Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-27T19:12:53.613296429Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T191243-1b36cf89\",\"bead_id\":\"fizeau-7ca8ec69\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:12:55.681705937Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"666e0ab3add9b73be4445620f3342da9c393b3bc\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\\n\\nRun 'docker run --help' for more information: exit status 125\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"666e0ab3add9b73be4445620f3342da9c393b3bc\",\"session_id\":\"eb-763a7060\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T19:13:08.506494048Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=666e0ab3add9b73be4445620f3342da9c393b3bc\nbase_rev=666e0ab3add9b73be4445620f3342da9c393b3bc\nretry_after=2026-05-28T01:13:08Z\noutcome_reason=unknown",
+          "created_at": "2026-05-27T19:13:08.57139177Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is executable as written. Acceptance criteria are specific and measurable (document freshness semantics, gating threshold, failure-mode classification, quota-pool integration). The OR choice between SD-013 and ADR-011 is contextualized (provider signal matrix vs. cost-based routing), enabling informed decision. No external blockers identified; prior execution failures were infrastructure-level (docker mount, git lock, disk space), not bead-scope issues.\",\"fingerprint\":\"a57950f54d2f15a5a15bc179e393c36d1b782201341b7b9cc2cfae22b6469f4a\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"a57950f54d2f15a5a15bc179e393c36d1b782201341b7b9cc2cfae22b6469f4a\"}",
+          "created_at": "2026-05-27T20:29:45.638902332Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-27T20:30:11.786228558Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        }
+      ],
+      "spec-id": "SD-013",
+      "work-cooldown-base-rev": "666e0ab3add9b73be4445620f3342da9c393b3bc",
+      "work-last-detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+      "work-last-status": "execution_failed",
+      "work-retry-after": "2026-05-28T01:13:08Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T203013-dff8d56d",
+    "prompt": ".ddx/executions/20260527T203013-dff8d56d/prompt.md",
+    "manifest": ".ddx/executions/20260527T203013-dff8d56d/manifest.json",
+    "result": ".ddx/executions/20260527T203013-dff8d56d/result.json",
+    "checks": ".ddx/executions/20260527T203013-dff8d56d/checks.json",
+    "usage": ".ddx/executions/20260527T203013-dff8d56d/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-7ca8ec69-20260527T203013-dff8d56d"
+  },
+  "prompt_sha": "82a2e30ab7fb37227d12c27a3a2bb6d6e9cd3424e39bdf9496fb89d9ada12a7d"
+}
