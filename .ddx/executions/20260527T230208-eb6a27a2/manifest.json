@@ -1,0 +1,33 @@
+{
+  "attempt_id": "20260527T230208-eb6a27a2",
+  "bead_id": "fizeau-31191e09",
+  "base_rev": "349be2ccac6571f77dac7aaf7c37d83a3a33e59d",
+  "created_at": "2026-05-27T23:02:12.79133789Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-31191e09",
+    "title": "bench-pr-A5: agent-leak fix + planning_mode, Go-runner deactivation, parity fixtures + diff",
+    "description": "PROBLEM: (a) The benchmark tool preset silently forces PlanningMode, leaking benchmark behavior into normal native execution. (b) Once the bash runner works, fiz-bench matrix/sweep/run/plan must redirect to it. (c) We must prove the bash runner matches the Go runner before deactivating it.\n\nROOT CAUSE:\n- internal/serviceimpl/execute_native.go:265 historically set PlanningMode: req.PlanningMode || req.ToolPreset == \"benchmark\" (ToolPreset and PlanningMode fields at execute_native.go:73-74), coupling planning to the preset rather than to an explicit profile knob.\n- Execution subcommands dispatch in Go at cmd/bench/main.go:40 (case \"matrix\"; also run at :26, sweep at :29, plan at :47).\n- No parity harness exists to compare Go vs bash cell reports field-by-field.\n\nPROPOSED FIX:\n- Remove the `|| req.ToolPreset == \"benchmark\"` clause at internal/serviceimpl/execute_native.go:265 (confirm none remains: rg 'ToolPreset == \"benchmark\"'). Add sampling.planning_mode: bool (default false) to the profile YAML schema; harness-adapters/fiz reads it and appends --plan to the command when true. Spike: rg -l 'preset.*benchmark|FIZEAU_PRESET' scripts/benchmark/profiles/ and add sampling.planning_mode: true to each affected profile.\n- cmd/bench/main.go: short-circuit the matrix|sweep|run|plan subcommands with a one-line redirect 'use ./benchmark — see scripts/benchmark/README.md' and exit 2; keep listing subcommands (profiles, bench-sets) functional until PR F.\n- Parity (ORDERING: must be captured and committed BEFORE the deactivation change merges): run the Go runner on canary (sindri-lucebox + tb-2-1-canary, 3 reps) and commit 3 representative cell reports to scripts/benchmark/testdata/parity/go-runner/; run the bash runner on the same canary and commit cells to scripts/benchmark/testdata/parity/bash-runner/. scripts/benchmark/testdata/parity/diff.sh (bash + jq) reports field divergence outside the allowlist — cell-id, timestamps, paths, and NEW fields harbor_runner_image_digest, task_executor_version, model_server.commit, attempt_of, superseded_by, cost_usd_at_run_time (see diff.sh:85-86 and testdata/parity/ALLOWLIST.md).\n\nNON-SCOPE: runner core/dispatch/--plan (A2); execution loop/resume/retry (A3); concurrency/signals/budget (A4); adapters/image/runtime-probe (A1); cell-report.schema.json (PR B); tasks_from/task_executor schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G).\n\nDEPENDENCY: depends on A3 (the bash runner must produce cells to diff) and A1 (planning_mode flows through harness-adapters/fiz). Parent fizeau-163efede. Governing artifact: plan-2026-05-15-benchmark-runner-simplification.\n\nACCEPTANCE:\n1. grep -n 'ToolPreset == \"benchmark\"' internal/serviceimpl/execute_native.go returns nothing, and native execution does not enable PlanningMode from the preset. (parent AC7) Test: TestExecuteNativePlanningModeNotForcedByPreset (internal/serviceimpl).\n2. sampling.planning_mode: true in a profile makes harness-adapters/fiz command include --plan; default false omits it. Test: Test_FizPlanningModeFlag (scripts/benchmark/tests/adapters.bats).\n3. fiz-bench matrix exits 2 with the redirect message: fiz-bench matrix 2\u003e\u00261 | grep -q 'use ./benchmark'; test $? -eq 0. (parent AC6) Test: TestBenchMatrixRedirects (cmd/bench).\n4. scripts/benchmark/testdata/parity/diff.sh against the committed go-runner fixtures is clean per the allowlist. (parent AC4) Test: Test_ParityClean (scripts/benchmark/testdata/parity tests).\nGates: go test ./... and lefthook run pre-commit both pass.",
+    "acceptance": "ACs 1-4 pass, covering parent AC7 (preset leak), AC6 (redirect), and AC4 (parity clean); go test ./... and lefthook run pre-commit green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T230208-eb6a27a2",
+    "prompt": ".ddx/executions/20260527T230208-eb6a27a2/prompt.md",
+    "manifest": ".ddx/executions/20260527T230208-eb6a27a2/manifest.json",
+    "result": ".ddx/executions/20260527T230208-eb6a27a2/result.json",
+    "checks": ".ddx/executions/20260527T230208-eb6a27a2/checks.json",
+    "usage": ".ddx/executions/20260527T230208-eb6a27a2/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-31191e09-20260527T230208-eb6a27a2"
+  },
+  "prompt_sha": "a9a6ab832cff4b1324b66650b1aeacb041020250e96d998890b1b53d15d6db86"
+}
