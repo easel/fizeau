@@ -1,0 +1,27 @@
+verification_command: go test -v ./internal/provider/openai -run "TestThinkingWireFormatOpenAIEffort_Serialize" && go test -v ./internal/provider/llamaserver -run "TestLlamaserver_EnableThinking" && go test -v ./internal/sdk/openaicompat -run "TestReasoningTokens_FallbackFromContent"
+
+## Rationale
+
+ADR-010 amendment 2026-05-11 §5'-10' prescriptions are fully implemented:
+
+**AC 1: ThinkingWireFormatOpenAIEffort constant + test**
+- Location: internal/provider/openai/protocol_support.go:63-66
+- Test: TestThinkingWireFormatOpenAIEffort_Serialize (protocol_support_test.go:43-91)
+- Status: PASS — verifies reasoning_effort key in request body
+
+**AC 2: llamaserver chat_template_kwargs envelope fix**
+- Implementation: internal/provider/openai/openai.go:482-485 (enabled), 427-429 (disabled)
+- Tests: TestLlamaserver_EnableThinking_WireBody and TestLlamaserver_EnableThinking_Disabled
+- Status: PASS — verifies enable_thinking is inside chat_template_kwargs, not top-level
+
+**AC 3: Reasoning-token telemetry fallback from message.reasoning_content**
+- Implementation: internal/sdk/openaicompat/client.go:475-504 (extractReasoningTokens)
+- Test: TestReasoningTokens_FallbackFromContent (5 subtests)
+- Status: PASS — verifies fallback chain when usage field is absent
+
+**AC 4: Affected packages test green**
+- internal/provider/openai: ok
+- internal/provider/llamaserver: ok
+- internal/sdk/openaicompat: ok
+
+No code changes required; all work prescribed by ADR-010 amendment is already implemented with comprehensive test coverage.
