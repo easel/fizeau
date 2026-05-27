@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/pty/cassette"
 )
 
 const piModelDiscoveryFreshnessWindow = 24 * time.Hour
@@ -208,4 +209,54 @@ func uniquePiStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// ReadPiModelDiscoveryFromCassette reads a recorded pi model surface cassette
+// and returns the parsed model discovery snapshot. It first checks for a
+// pre-parsed discovery record in the cassette; if not found, it parses the
+// final text or frames.
+func ReadPiModelDiscoveryFromCassette(dir string) (harnesses.ModelDiscoverySnapshot, error) {
+	reader, err := cassette.Open(dir)
+	if err != nil {
+		return harnesses.ModelDiscoverySnapshot{}, err
+	}
+	if rec := reader.Discovery(); rec != nil && len(rec.Models) > 0 {
+		return snapshotFromDiscoveryRecord(*rec), nil
+	}
+	text := reader.Final().FinalText
+	if text == "" {
+		frames := reader.Frames()
+		if len(frames) > 0 {
+			text = strings.Join(frames[len(frames)-1].Text, "\n")
+		}
+	}
+	models := parsePiListModels(text)
+	if len(models) == 0 {
+		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("no models found in pi model cassette")
+	}
+	snapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		Models:          models,
+		Source:          "cassette",
+		ReasoningLevels: []string{"off", "minimal", "low", "medium", "high", "xhigh"},
+		FreshnessWindow: piModelDiscoveryFreshnessWindow.String(),
+		Detail:          "pi model discovery from recorded cassette",
+	}
+	return snapshot, nil
+}
+
+func snapshotFromDiscoveryRecord(rec cassette.DiscoveryRecord) harnesses.ModelDiscoverySnapshot {
+	var detail string
+	if rec.Metadata != nil {
+		if d, ok := rec.Metadata["detail"].(string); ok {
+			detail = d
+		}
+	}
+	return harnesses.ModelDiscoverySnapshot{
+		Models:          rec.Models,
+		Source:          rec.Source,
+		ReasoningLevels: rec.ReasoningLevels,
+		FreshnessWindow: rec.FreshnessWindow,
+		Detail:          detail,
+	}
 }
