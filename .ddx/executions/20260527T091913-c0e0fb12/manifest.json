@@ -1,0 +1,55 @@
+{
+  "attempt_id": "20260527T091913-c0e0fb12",
+  "bead_id": "fizeau-fe0b715f",
+  "base_rev": "eaaa1a58e2b37323b30ddcf8d7298e3a8aca14ef",
+  "created_at": "2026-05-27T09:19:21.836793615Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-fe0b715f",
+    "title": "claude-tui: session pool keyed by workdir with /clear-between-turns reuse",
+    "description": "PROBLEM: ADR-013 §3 (decision item 4) requires pooled long-lived PTY sessions keyed by (harness, workdir) with `/clear` issued between turns, so consecutive Execute calls sharing a working directory reuse the same warm PTY session instead of paying Ink+auth cold-start each turn.\n\nROOT CAUSE:\n- internal/harnesses/claude-tui/harness.go:32-33 — the Harness struct has no fields and holds no session pool, so there is nowhere to cache a warm session.\n- internal/harnesses/claude-tui/harness.go:53-57 — Execute calls `go h.runTurn(...)` for every request with no pool lookup, spawning a fresh PTY per turn and defeating reuse.\n- internal/harnesses/claude-tui/harness.go:60-79 — runTurn never writes `/clear` and never reuses a session; it only emits a stub Final event.\n- internal/pty/session/types.go:176 — the Session type exposes no Pid() accessor (the pid lives only at internal/pty/session/session_unix.go:126 as `u.cmd.Process.Pid`), so session reuse cannot be asserted by pid identity.\n\nPROPOSED FIX:\n1. Add a package-scope session-pool singleton in internal/harnesses/claude-tui/ keyed by (harness, workdir) at depth 1 per key, placed at package scope rather than as a Harness/Runner field (ADR-013 §3 item 4 pool-placement rule), so two Harness instances share the pool. On Execute, look up an existing session for the workdir or open a new one via internal/pty/session.Start.\n2. Between consecutive turns sharing a key, write `/clear` to the session and confirm the CLI acknowledged the clear (ready marker re-appears) before injecting the next prompt.\n3. Add a Session.Pid() accessor in internal/pty/session exposing `u.cmd.Process.Pid` so reuse can be verified by pid identity.\n\nNON-SCOPE:\n- The shutdown orphan reaper (sibling child in this decomposition).\n- The PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- Performance benchmarking and 2x/10ms ratchets (sibling child D).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n\nDepends on child #1 and sibling child A. Governing artifacts: ADR-013 §3 (decision item 4), CONTRACT-004, internal/pty/ library.",
+    "acceptance": "1) TestClaudeTuiSessionPoolReusesAndClears asserts `/clear` is issued between consecutive turns sharing a working directory and that the underlying PTY session is reused (same pid, observed via Session.Pid()).\n2) go test ./... -count=1 is green.\n3) lefthook run pre-commit is green.",
+    "parent": "fizeau-a14eba0c",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T09:19:11.656093938Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260527T090257-c387ff7a\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":5789241,\"output_tokens\":33075,\"total_tokens\":5822316,\"cost_usd\":0,\"duration_ms\":967512,\"exit_code\":0}",
+          "created_at": "2026-05-27T09:19:11.697420683Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=5822316 model=gpt-5.4-mini"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T091913-c0e0fb12",
+    "prompt": ".ddx/executions/20260527T091913-c0e0fb12/prompt.md",
+    "manifest": ".ddx/executions/20260527T091913-c0e0fb12/manifest.json",
+    "result": ".ddx/executions/20260527T091913-c0e0fb12/result.json",
+    "checks": ".ddx/executions/20260527T091913-c0e0fb12/checks.json",
+    "usage": ".ddx/executions/20260527T091913-c0e0fb12/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-fe0b715f-20260527T091913-c0e0fb12"
+  },
+  "prompt_sha": "7df393d14042f4054a1136d38aa7d65453ea15191b92e9010f2b574470a812d2"
+}
