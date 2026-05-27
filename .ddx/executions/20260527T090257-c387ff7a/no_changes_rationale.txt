@@ -1,0 +1,2 @@
+status: blocked
+reason: `go test ./... -count=1` fails in unrelated packages outside the bead scope (`github.com/easel/fizeau`, `github.com/easel/fizeau/cmd/bench`, `github.com/easel/fizeau/internal/harnesses`) due existing timeouts, fixture drift, and adapter parity failures; the bead-scoped packages `internal/pty/session` and `internal/harnesses/claude-tui` are green, but the repo-wide required gate is not.
