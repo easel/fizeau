@@ -1,0 +1,12 @@
+{
+  "source": "cli:gemini",
+  "status": "ok",
+  "models": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+  "reasoning_levels": [],
+  "captured_at": "2026-05-18T08:00:00Z",
+  "freshness_window": "24h",
+  "staleness_behavior": "stale model discovery evidence requires authenticated CLI refresh before capability promotion",
+  "metadata": {
+    "detail": "gemini-cli exposes a bundled model surface; authenticated CLI calls refresh the model list"
+  }
+}
