@@ -1,0 +1,18 @@
+verification_command: bash -c '
+  set -e
+
+  # Test 1: Planning mode field wiring in fiz adapter
+  bash scripts/benchmark/test/test_harness_adapters.sh > /tmp/adapter_tests.log 2>&1
+
+  # Test 2: Parity diff infrastructure
+  bash scripts/benchmark/test/test_parity.sh > /tmp/parity_tests.log 2>&1
+
+  # Test 3: Agent-leak test (benchmark preset does not force planning)
+  (cd cli && go test -v -run "TestBenchmarkPresetPlanningModeMigration" > /tmp/agentleak_test.log 2>&1)
+
+  # Test 4: Verify no ToolPreset == "benchmark" clause in execute_native.go
+  ! grep -q "ToolPreset == \"benchmark\"" internal/serviceimpl/execute_native.go
+
+  # All tests passed
+  exit 0
+'
