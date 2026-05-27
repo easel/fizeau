@@ -1,0 +1,47 @@
+{
+  "attempt_id": "20260527T105245-0ad9ee26",
+  "bead_id": "fizeau-7351b908",
+  "base_rev": "598afeb19c9bd977412b55651cc16034e28454f3",
+  "created_at": "2026-05-27T10:52:55.552610908Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 6
+  },
+  "bead": {
+    "id": "fizeau-7351b908",
+    "title": "claude-tui: enforce turn wall-time and loop-overhead benchmark thresholds",
+    "description": "PROBLEM: ADR-013 §3 requires claude-tui loop overhead beyond inference to stay under 10ms and wall-time-per-turn to stay within 2x of claude --print on an equivalent prompt. After the baseline runner exists, the harness still needs an enforcing BenchmarkClaudeTuiTurnWallTime that measures the PTY turn path and fails on regression.\n\nROOT CAUSE:\n- internal/harnesses/claude-tui/harness.go:53 currently exposes Execute, but internal/harnesses/claude-tui/harness_test.go:497 only checks intermediate tool events and does not measure per-turn wall time.\n- internal/harnesses/claude-tui/harness.go:59 runs a single turn, but internal/harnesses/claude-tui/harness.go:66 only emits a final event path today; there is no benchmark harness that compares mean PTY turn wall time against the claude --print baseline.\n- docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md:501 explicitly calls out long-turn performance regression risk and requires benchmark deltas vs claude.\n\nPROPOSED FIX:\n1. Add BenchmarkClaudeTuiTurnWallTime in the claudetui test package using the shared canned prompt and claude --print baseline runner from the first child.\n2. Measure N PTY turn iterations through the claude-tui Execute path, compute mean wall-time-per-turn, compute loop overhead by subtracting measured baseline inference time, and fail when mean PTY wall time exceeds 2x baseline or loop overhead exceeds 10ms.\n3. Add deterministic unit tests around the benchmark math so default CI verifies threshold behavior without requiring live Claude credentials.\n4. Keep live benchmark execution opt-in/operator-aware when local claude TUI/auth are unavailable, while preserving hard threshold failures whenever both baseline and PTY measurements are available.\n\nNON-SCOPE:\n- PTY turn driver and intermediate ProgressEvent emission (sibling child A).\n- Session pool, /clear, orphan reaping (sibling child B).\n- AccountHarness and QuotaHarness implementations (sibling child C).\n- ModelDiscoveryHarness and no-static-fallback enforcement.\n- Capability baseline rows, evidence IDs, ADR-013 status promotion.\n- Cassette-driven static fallback for production code (forbidden by fizeau-89eca738).\n- Service-side changes beyond what child #1 already wired.\n- Redesigning the hook-conflict arbitration layer.\n- Changing benchmark thresholds from 2x wall time or 10ms loop overhead.\n\nPARENT: fizeau-60ce39cb.\nGoverning artifacts: ADR-013 §3, CONTRACT-004.\nDepends on: the child bead titled \"claude-tui: add shared benchmark prompt fixture and claude --print baseline runner\" plus sibling children A, B, and C from the parent description, because this benchmark must exercise the real PTY turn path, session reuse behavior, and account/quota-ready harness surface.",
+    "acceptance": "1. TestClaudeTuiTurnBenchmarkThresholdMath asserts the threshold helper fails when PTY mean wall-time-per-turn exceeds 2x the claude --print baseline and fails when loop overhead beyond inference exceeds 10ms.\n2. TestClaudeTuiTurnBenchmarkThresholdMathAcceptsWithinBounds asserts the same helper accepts measurements inside both ADR-013 bounds.\n3. BenchmarkClaudeTuiTurnWallTime uses the shared canned prompt, runs the claude --print baseline, runs N claude-tui PTY turn iterations, reports baseline_wall_time_per_turn, tui_wall_time_per_turn, and loop_overhead metrics, and fails when either ADR-013 threshold is exceeded.\n4. TestBenchmarkClaudeTuiTurnWallTimeOperatorSkip asserts the benchmark path returns an operator-required skip when live claude TUI/auth are unavailable, without masking threshold failures when measurements are present.\n5. go test ./internal/harnesses/claude-tui -run 'TestClaudeTuiTurnBenchmarkThresholdMath|TestClaudeTuiTurnBenchmarkThresholdMathAcceptsWithinBounds|TestBenchmarkClaudeTuiTurnWallTimeOperatorSkip' -count=1 is green.\n6. go test ./... -count=1 is green.\n7. lefthook run pre-commit is green.",
+    "parent": "fizeau-2af00baf",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-27T10:52:43.992268325Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T105245-0ad9ee26",
+    "prompt": ".ddx/executions/20260527T105245-0ad9ee26/prompt.md",
+    "manifest": ".ddx/executions/20260527T105245-0ad9ee26/manifest.json",
+    "result": ".ddx/executions/20260527T105245-0ad9ee26/result.json",
+    "checks": ".ddx/executions/20260527T105245-0ad9ee26/checks.json",
+    "usage": ".ddx/executions/20260527T105245-0ad9ee26/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-7351b908-20260527T105245-0ad9ee26"
+  },
+  "prompt_sha": "ec7da5f90cf3bcf1f78fe02aa95452fe4b964c889cc07a1d3c042434b9276466"
+}
