@@ -22,8 +22,8 @@ benchmark_adapter_read_profile() {
     | req(.provider | has("model") and (.model | type == "string" and length > 0); "missing required field .provider.model")
     | req(.provider | has("base_url") and (.base_url | type == "string" and length > 0); "missing required field .provider.base_url")
     | req(.provider | has("api_key_env") and (.api_key_env | type == "string" and length > 0); "missing required field .provider.api_key_env")
-    | req(has("sampling") and (.sampling | type == "object"); "missing required field .sampling")
-    | req(has("limits") and (.limits | type == "object"); "missing required field .limits")
+    | if has("sampling") then req(.sampling | type == "object"; ".sampling must be an object") else . end
+    | if has("limits") then req(.limits | type == "object"; ".limits must be an object") else . end
   ' <<<"${profile_json}" 2>"${err_file}")"; then
     printf '%s: %s\n' "${adapter}" "$(tr -d '\n' <"${err_file}")" >&2
     rm -f "${err_file}"

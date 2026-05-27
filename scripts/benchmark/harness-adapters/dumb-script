@@ -22,7 +22,8 @@ cmd_install() {
 }
 
 cmd_command() {
-  benchmark_adapter_read_profile dumb-script >/dev/null
+  # Drain stdin (required by calibration adapter contract)
+  cat >/dev/null
   jq -cn '{
     command: ["sh","-c","printf \"hello world\\n\" > hello.txt"],
     env: {},
