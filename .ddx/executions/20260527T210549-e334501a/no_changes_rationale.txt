@@ -1,0 +1,16 @@
+status: open
+reason: Parent bead decomposed per Step 0 (9567 bytes > 8000 threshold) into 9 child beads on 2026-05-17
+orchestrator_action: decompose
+  - fizeau-4cb07023 (A1: harbor-runner image) - closed
+  - fizeau-53a360a1 (A2: shell adapters + CONTRACT.md + runtime-probe) - closed
+  - fizeau-fe87a3ac (A3: bash runner skeleton + --plan) - depends on A1,A2
+  - fizeau-a2fd070b (A4: execution loop + retry) - depends on A3
+  - fizeau-86f89221 (A5: concurrency + signals) - depends on A4
+  - fizeau-25209a13 (A6: budget) - depends on A4
+  - fizeau-9c53ac4e (A7: agent-leak fix + planning_mode) - depends on A2
+  - fizeau-4cb31dc5 (A8: parity fixtures + diff.sh) - depends on A4,A5,A6
+  - fizeau-f7c4e686 (A9: Go runner deactivation) - depends on A4,A8
+
+Children A1 and A2 are closed. A3 onwards are pending execution.
+
+Decomposition alone is success per execute-bead instructions. No changes to commit.
