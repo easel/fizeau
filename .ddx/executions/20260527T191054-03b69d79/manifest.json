@@ -1,0 +1,88 @@
+{
+  "attempt_id": "20260527T191054-03b69d79",
+  "bead_id": "fizeau-1c78ca53",
+  "base_rev": "629f69166e2954ceee8da603f7d1c2678ff10073",
+  "created_at": "2026-05-27T19:11:03.821804559Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "fizeau-1c78ca53",
+    "title": "harness/opencode: record model_surface cassette (no-static-fallback prerequisite)",
+    "description": "Record an authenticated TUI cassette at internal/harnesses/opencode/testdata/model_surface/. opencode currently has hardcoded Models=['opencode/gpt-5.4', 'opencode/claude-sonnet-4-6'] in registry.go:101 — the cassette replaces this.",
+    "acceptance": "1) internal/harnesses/opencode/testdata/model_surface/ exists per ADR-002 schema v1.\n2) Cassette yields the live opencode model surface.\n3) Focused parse test passes.\n4) go test ./internal/harnesses/opencode/... -count=1 green.",
+    "parent": "fizeau-89eca738",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "harness:opencode",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-1c78ca53\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:24:49.419487993Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"transport\",\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-3262192885.lock' write error. Out of diskspace: exit status 128\",\"rationale\":\"pre-execute-bead checkpoint failed due to out-of-disk-space writing git index lock; infrastructure issue unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:25:00.412631942Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-3262192885.lock' write error. Out of diskspace: exit status 128\noutcome_reason=transport",
+          "created_at": "2026-05-18T13:25:00.452454028Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl)\",\"fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\"}",
+          "created_at": "2026-05-27T19:10:40.395838709Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:10:53.184217117Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        }
+      ],
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T191054-03b69d79",
+    "prompt": ".ddx/executions/20260527T191054-03b69d79/prompt.md",
+    "manifest": ".ddx/executions/20260527T191054-03b69d79/manifest.json",
+    "result": ".ddx/executions/20260527T191054-03b69d79/result.json",
+    "checks": ".ddx/executions/20260527T191054-03b69d79/checks.json",
+    "usage": ".ddx/executions/20260527T191054-03b69d79/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-1c78ca53-20260527T191054-03b69d79"
+  },
+  "prompt_sha": "8be49128b9a08fd128e6c0098df13a7aa482bf14345b3bf3c09f2f79d25e5e22"
+}
