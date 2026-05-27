@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "pi-model-surface-golden-master",
+  "content_digest": {
+    "sha256": "b4ed77765a52a8d66d15e9c6d68d62cbe0af7d45752fccf1cab79782ddb79c7e"
+  },
+  "harness": {
+    "name": "pi",
+    "binary_version": "0.0.1",
+    "account_class": "authenticated",
+    "captured_at": "2026-05-27T00:00:00Z",
+    "freshness_window": "24h"
+  },
+  "command": {
+    "argv": ["pi", "--list-models"],
+    "workdir_policy": "user_home",
+    "env_allowlist": ["HOME", "PATH", "TERM", "LANG"],
+    "timeout_ms": 30000,
+    "permission_mode": "test"
+  },
+  "terminal": {
+    "initial_rows": 24,
+    "initial_cols": 80,
+    "locale": "en_US.UTF-8",
+    "term": "xterm-256color",
+    "emulator": {
+      "name": "xterm",
+      "version": "1.0"
+    }
+  },
+  "timing": {
+    "resolution_ms": 100,
+    "clock_policy": "monotonic",
+    "replay_default": "collapsed"
+  },
+  "provenance": {
+    "git_sha": "8950f16b",
+    "contract_version": "CONTRACT-004",
+    "os": "linux",
+    "arch": "amd64",
+    "recorded_at": "2026-05-27T20:43:36Z",
+    "recorder_version": "1.0.0"
+  }
+}

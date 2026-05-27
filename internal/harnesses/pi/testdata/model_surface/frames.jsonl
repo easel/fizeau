@@ -1,0 +1,1 @@
+{"seq": 3, "t_ms": 200, "size": {"rows": 24, "cols": 80}, "text": ["provider           model             context  max-out  thinking  images", "google-gemini-cli  gemini-2.5-flash  1.0M     65.5K    yes       yes", "google-gemini-cli  gemini-2.5-pro    1.0M     65.5K    yes       yes"], "cursor": {"row": 2, "col": 0}, "raw_start": 0, "raw_end": 210, "parser_offset": 210}

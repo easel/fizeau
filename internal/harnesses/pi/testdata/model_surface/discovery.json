@@ -1,0 +1,12 @@
+{
+  "source": "cli:list-models",
+  "status": "ok",
+  "models": ["gemini-2.5-flash", "gemini-2.5-pro"],
+  "reasoning_levels": ["off", "minimal", "low", "medium", "high", "xhigh"],
+  "captured_at": "2026-05-27T20:43:36Z",
+  "freshness_window": "24h",
+  "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
+  "metadata": {
+    "detail": "pi --list-models returned a concrete provider/model table; thinking levels come from the documented --thinking CLI surface"
+  }
+}

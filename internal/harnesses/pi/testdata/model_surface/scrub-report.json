@@ -1,0 +1,7 @@
+{
+  "redaction_rules": [],
+  "environment_removed": [],
+  "secret_pattern_hits": 0,
+  "intentionally_preserved_fields": [],
+  "scrub_detail": "pi --list-models output contains no secrets; all environment variables removed per cassette policy"
+}

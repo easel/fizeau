@@ -1,0 +1,14 @@
+{
+  "seq": 5,
+  "t_ms": 400,
+  "exit": {
+    "code": 0
+  },
+  "duration_ms": 400,
+  "metadata": {},
+  "usage": {},
+  "cost_usd": 0.0,
+  "routing_actual": "pi",
+  "session_log_path": "",
+  "final_text": "provider           model             context  max-out  thinking  images\ngoogle-gemini-cli  gemini-2.5-flash  1.0M     65.5K    yes       yes\ngoogle-gemini-cli  gemini-2.5-pro    1.0M     65.5K    yes       yes"
+}
