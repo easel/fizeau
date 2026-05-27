@@ -301,34 +301,228 @@ Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 **BEFORE Snapshot**
 
 ```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
 ```
+
+Timestamp: `2026-05-27T06:20:36Z` (UTC)
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via --print flag):
 ```
-[Captured turn output will be filled here]
+Design a simple in-memory cache with get and put operations. Include expiration handling.
 ```
 
 Claude response:
 ```
-[Captured response will be filled here]
+The write needs approval that isn't granted, and on reflection this is a design task — dropping files into this large production module may not be what you want. So here's the complete design inline. If you'd like it committed as a package (I'd suggest `internal/cache/`), just say so and approve the write.
+
+## Design
+
+A thread-safe, generic in-memory cache with per-entry TTL.
+
+**Key decisions:**
+- **Generics** (`K comparable, V any`) — type-safe, no `interface{}` boxing.
+- **Lazy expiration** — `Get` checks the expiry on read and deletes if stale. This guarantees expired values are *never* returned, with zero background cost.
+- **Optional janitor** — lazy eviction alone leaks memory for keys that are written once and never read again. An opt-in background goroutine reclaims them. You pay for it only if you ask for it.
+- **Injectable clock** (`now func() time.Time`) — makes expiration testable without `time.Sleep`.
+- **Absolute expiry per entry** (store `expiresAt`, not a duration) — so a slow `Get` can't extend an entry's life.
+
+## Implementation
+
+```go
+// Package cache provides a simple, thread-safe, in-memory key/value cache
+// with per-entry expiration (TTL). Expired entries are removed lazily on
+// access; an optional background janitor reclaims expired-but-untouched ones.
+package cache
+
+import (
+	"sync"
+	"time"
+)
+
+// entry holds a value and its absolute expiry. Zero expiresAt = never expires.
+type entry[V any] struct {
+	value     V
+	expiresAt time.Time
+}
+
+func (e entry[V]) expired(now time.Time) bool {
+	return !e.expiresAt.IsZero() && now.After(e.expiresAt)
+}
+
+// Cache is a concurrency-safe in-memory cache. Construct one with New.
+type Cache[K comparable, V any] struct {
+	mu         sync.Mutex
+	items      map[K]entry[V]
+	defaultTTL time.Duration   // 0 = entries don't expire by default
+	now        func() time.Time // time source; swappable for tests
+	stop       chan struct{}
+	stopOnce   sync.Once
+}
+
+type Option[K comparable, V any] func(*Cache[K, V])
+
+// WithDefaultTTL sets the TTL applied by Put. ttl <= 0 disables default expiry.
+func WithDefaultTTL[K comparable, V any](ttl time.Duration) Option[K, V] {
+	return func(c *Cache[K, V]) { c.defaultTTL = ttl }
+}
+
+// WithCleanupInterval starts a janitor that periodically evicts expired
+// entries. Callers that enable it must call Close.
+func WithCleanupInterval[K comparable, V any](interval time.Duration) Option[K, V] {
+	return func(c *Cache[K, V]) {
+		if interval <= 0 {
+			return
+		}
+		c.stop = make(chan struct{})
+		go c.janitor(interval)
+	}
+}
+
+func New[K comparable, V any](opts ...Option[K, V]) *Cache[K, V] {
+	c := &Cache[K, V]{items: make(map[K]entry[V]), now: time.Now}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// Get returns the unexpired value for key, or (zero, false). Expired entries
+// are deleted on access.
+func (c *Cache[K, V]) Get(key K) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	e, ok := c.items[key]
+	if !ok {
+		var zero V
+		return zero, false
+	}
+	if e.expired(c.now()) {
+		delete(c.items, key)
+		var zero V
+		return zero, false
+	}
+	return e.value, true
+}
+
+// Put stores value under key using the default TTL.
+func (c *Cache[K, V]) Put(key K, value V) { c.PutWithTTL(key, value, c.defaultTTL) }
+
+// PutWithTTL stores value under key, expiring after ttl. ttl <= 0 = never.
+func (c *Cache[K, V]) PutWithTTL(key K, value V, ttl time.Duration) {
+	var expiresAt time.Time
+	if ttl > 0 {
+		expiresAt = c.now().Add(ttl)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items[key] = entry[V]{value: value, expiresAt: expiresAt}
+}
+
+func (c *Cache[K, V]) Delete(key K) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.items, key)
+}
+
+// Len reports unexpired entries, evicting expired ones it encounters.
+func (c *Cache[K, V]) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.evictExpiredLocked(c.now())
+	return len(c.items)
+}
+
+// Close stops the janitor if one was started. Safe to call repeatedly.
+func (c *Cache[K, V]) Close() {
+	c.stopOnce.Do(func() {
+		if c.stop != nil {
+			close(c.stop)
+		}
+	})
+}
+
+func (c *Cache[K, V]) janitor(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			c.mu.Lock()
+			c.evictExpiredLocked(c.now())
+			c.mu.Unlock()
+		case <-c.stop:
+			return
+		}
+	}
+}
+
+func (c *Cache[K, V]) evictExpiredLocked(now time.Time) {
+	for k, e := range c.items {
+		if e.expired(now) {
+			delete(c.items, k)
+		}
+	}
+}
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+## Usage
+
+```go
+c := cache.New[string, int](cache.WithDefaultTTL[string, int](5 * time.Minute))
+c.Put("answer", 42)
+if v, ok := c.Get("answer"); ok {
+	fmt.Println(v) // 42
+}
+c.PutWithTTL("short", 1, time.Second) // overrides default TTL for this key
+```
+
+## Testing expiration without sleeping
+
+Because the clock is a field, tests advance time deterministically:
+
+```go
+func TestExpiration(t *testing.T) {
+	now := time.Unix(0, 0)
+	c := cache.New[string, int]()
+	c.now = func() time.Time { return now } // same-package test
+
+	c.PutWithTTL("k", 1, time.Minute)
+	if _, ok := c.Get("k"); !ok {
+		t.Fatal("want present before expiry")
+	}
+	now = now.Add(2 * time.Minute)
+	if _, ok := c.Get("k"); ok {
+		t.Fatal("want expired after TTL")
+	}
+}
+```
+
+## Trade-offs & extensions
+
+- **No size bound.** Adding an **LRU eviction** policy (cap entries, evict least-recently-used) is the most common next step — wire a `container/list` for recency ordering alongside the map.
+- **Global mutex.** Fine for most workloads; under heavy contention, shard by key hash into N sub-caches each with their own lock.
+- **`Get` takes a write lock** (to delete expired entries). If reads vastly dominate and expiries are rare, an `RWMutex` with a deferred-delete path can help — but measure first.
+
+Want me to commit this as `internal/cache/` with a full `cache_test.go`, or adapt it to a different language?
+```
+
+Completion time: `2026-05-27T06:22:32Z` (duration: `111` seconds)
 
 **AFTER Snapshot**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
 ```
+
+Timestamp: `2026-05-27T06:23:46Z` (UTC)
 
 **Run 3 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- Verdict: `subscription-confirmed` (BEFORE and AFTER both report subscription; refresh-delay (70s) ≥ 60s; measurements follow protocol)
+- Operator attestation: No concurrent Claude sessions from this account during measurement window 2026-05-27T06:20:36Z–2026-05-27T06:23:46Z. Isolated from PTY+hooks measurement window.
 
 ---
 
