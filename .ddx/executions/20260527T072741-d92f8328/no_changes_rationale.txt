@@ -1,0 +1,2 @@
+status: blocked
+reason: go test ./... -count=1 is blocked by pre-existing repository-wide failures outside this bead scope (capability_matrix doc assertions and /tmp no space during full compilation), while the changed claude-tui and anthropic packages are green under targeted tests.
