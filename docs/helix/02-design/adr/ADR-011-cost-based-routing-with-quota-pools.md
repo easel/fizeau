@@ -175,6 +175,45 @@ The quota window rule is therefore "available now," not "save for later."
 This keeps routing deterministic and avoids a scheduler hidden inside the
 router. Per-tenant, per-key, and priority reservation behavior is future scope.
 
+### OpenRouter Credit-Balance Probe as a Quota Signal
+
+OpenRouter accounts carry a prepaid credit balance; when credits are exhausted,
+subsequent requests fail with HTTP 429. To detect exhaustion before costly
+dispatch attempts, `service_openrouter_credit.go` implements a synchronous
+credit-balance probe that runs once per provider per routing pass and caches
+the result within a freshness window.
+
+**Probe semantics:**
+
+- **Freshness TTL**: `DefaultOpenrouterCreditProbeTTL = 10 * time.Minute`. Cached
+  balance readings remain fresh for 10 minutes; after expiration, the next
+  routing pass issues a new `/api/v1/credits` request. Concurrent routing calls
+  coalesce on a single in-flight probe via per-provider single-flight signaling.
+- **Gating threshold**: `DefaultOpenrouterCreditBalanceThresholdUSD = 0.50`. When
+  a cached balance is below this floor, the provider's quota pool is treated as
+  exhausted for ranking purposes. Operators may override per-provider via
+  `ServiceProviderEntry.CreditBalanceThresholdUSD`.
+- **Failure-mode classification**: The probe classifies failures as either
+  `credential_invalid` (HTTP 401/403, key rejected) or `provider_unreachable`
+  (transport error, 5xx, or other non-2xx). Credential failures persist in the
+  cache and are surfaced as `FilterReasonCredentialInvalid` to routing. Provider
+  unreachability is cached with a soft fail-open semantic: the entry blocks
+  routing only until the TTL elapses or a subsequent probe succeeds, allowing
+  transient network failures to self-heal without persistent blackout.
+- **Quota-pool integration**: The probe result feeds into `openrouterProbeMaps()`
+  which returns `openrouterProbeProjection`:
+  - `CreditExhausted`: map of providers with balance < threshold, dropping them
+    from unpinned automatic candidate sets.
+  - `CredentialInvalid`: map of providers with rejected credentials, surfaced as
+    a distinct filter reason so operators can diagnose key rotation or revocation.
+  - `ProviderUnreachable`: map of transient probe failures, included in trace
+    output but not blocking routing (fail-open until next probe).
+
+The credit probe integrates into the quota signal priority order defined by this
+ADR: it augments HTTP response header signals (rate-limit, quota-exhausted) by
+probing the account state before request dispatch, reducing wasted attempts when
+credit is genuinely exhausted.
+
 ### Token Estimate Source
 
 The token estimate source for v1 is the request itself plus a coarse heuristic:
