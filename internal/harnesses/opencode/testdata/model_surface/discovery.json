@@ -1,0 +1,12 @@
+{
+  "source": "cli:opencode models",
+  "status": "ok",
+  "models": ["opencode/gpt-5.4", "opencode/claude-sonnet-4-6", "opencode/minimax-m2.5-free"],
+  "reasoning_levels": ["minimal", "low", "medium", "high", "max"],
+  "captured_at": "2026-05-27T20:36:47Z",
+  "freshness_window": "24h",
+  "staleness_behavior": "stale model discovery evidence requires authenticated CLI refresh before capability promotion",
+  "metadata": {
+    "detail": "opencode models returns provider/model pairs; authenticated CLI refresh updates available models"
+  }
+}

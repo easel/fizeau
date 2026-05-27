@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/pty/cassette"
 )
 
 const openCodeModelDiscoveryFreshnessWindow = 24 * time.Hour
@@ -92,6 +93,30 @@ func readOpenCodeVerboseModelEvidence(ctx context.Context, binary string, args .
 		return nil, fmt.Errorf("opencode models --verbose: %w", err)
 	}
 	return parseOpenCodeVerboseModelEvidence(string(out))
+}
+
+// ReadOpenCodeModelDiscoveryFromCassette reads model discovery data from a recorded
+// cassette directory. The cassette must follow ADR-002 schema v1.
+func ReadOpenCodeModelDiscoveryFromCassette(dir string) (harnesses.ModelDiscoverySnapshot, error) {
+	reader, err := cassette.Open(dir)
+	if err != nil {
+		return harnesses.ModelDiscoverySnapshot{}, err
+	}
+	if rec := reader.Discovery(); rec != nil && len(rec.Models) > 0 {
+		return snapshotFromDiscoveryRecord(*rec), nil
+	}
+	text := reader.Final().FinalText
+	if text == "" {
+		frames := reader.Frames()
+		if len(frames) > 0 {
+			text = strings.Join(frames[len(frames)-1].Text, "\n")
+		}
+	}
+	snapshot := opencodeDiscoveryFromText(text, "cassette")
+	if len(snapshot.Models) == 0 {
+		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("no models found in opencode model cassette")
+	}
+	return snapshot, nil
 }
 
 func opencodeDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {
@@ -374,4 +399,32 @@ func countOpenCodeCostEvidence(evidence []openCodeModelEvidence) int {
 		}
 	}
 	return count
+}
+
+// discoveryRecord converts a ModelDiscoverySnapshot to a cassette DiscoveryRecord.
+func discoveryRecord(snapshot harnesses.ModelDiscoverySnapshot) cassette.DiscoveryRecord {
+	return cassette.DiscoveryRecord{
+		Source:            snapshot.Source,
+		Status:            "ok",
+		Models:            append([]string(nil), snapshot.Models...),
+		ReasoningLevels:   append([]string(nil), snapshot.ReasoningLevels...),
+		CapturedAt:        snapshot.CapturedAt.UTC().Format(time.RFC3339),
+		FreshnessWindow:   snapshot.FreshnessWindow,
+		StalenessBehavior: "stale model discovery evidence requires authenticated CLI refresh before capability promotion",
+		Metadata:          map[string]any{"detail": snapshot.Detail},
+	}
+}
+
+// snapshotFromDiscoveryRecord converts a cassette DiscoveryRecord to a ModelDiscoverySnapshot.
+func snapshotFromDiscoveryRecord(rec cassette.DiscoveryRecord) harnesses.ModelDiscoverySnapshot {
+	capturedAt, _ := time.Parse(time.RFC3339, rec.CapturedAt)
+	detail, _ := rec.Metadata["detail"].(string)
+	return harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      capturedAt,
+		Models:          append([]string(nil), rec.Models...),
+		ReasoningLevels: append([]string(nil), rec.ReasoningLevels...),
+		Source:          rec.Source,
+		FreshnessWindow: rec.FreshnessWindow,
+		Detail:          detail,
+	}
 }
