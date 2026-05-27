@@ -1,0 +1,1 @@
+verification_command: bash scripts/benchmark/test/test_parity.sh && grep -q "use ./benchmark" cmd/bench/main.go && echo "Deactivation verified: run/sweep/matrix/plan subcommands redirect" && grep -q "planning_mode" scripts/benchmark/harness-adapters/fiz && echo "Planning mode wiring verified in fiz adapter"
