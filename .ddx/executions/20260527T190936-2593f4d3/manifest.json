@@ -1,0 +1,153 @@
+{
+  "attempt_id": "20260527T190936-2593f4d3",
+  "bead_id": "fizeau-8c1d23af",
+  "base_rev": "9149bf3428a904f73904a5d05fdbbd5a6b88bfd5",
+  "created_at": "2026-05-27T19:09:44.26610746Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-8c1d23af",
+    "title": "providers: add unit tests for LookupModelLimits + probeProviderFlavor (FEAT-003 AC-06/AC-07)",
+    "description": "AR-2026-05-17-repo finding. FEAT-003 AC-06/AC-07 require test coverage for LookupModelLimits (LM Studio, omlx, OpenRouter; explicit config overrides) and probeProviderFlavor (explicit -\u003e URL heuristics -\u003e concurrent probes).\n\nToday only integration tests exist at internal/provider/openai/discovery_integration_test.go:107,129 — they require a live LM Studio/omlx instance and don't run by default. The original 2026-04-17 alignment filed agent-4109aea0 for this; that ID predates the fizeau- ID prefix migration and is unreachable, so re-file under the current namespace.\n\nSource review: fizeau-8e37e536.",
+    "acceptance": "1) internal/provider/openai/discovery_test.go (non-integration) contains direct unit tests for LookupModelLimits covering LM Studio, omlx, OpenRouter paths and explicit-config short-circuit, using httptest.Server mocks.\n2) discovery_test.go covers probeProviderFlavor with: explicit-config short-circuit, URL-heuristic path (per-provider), and concurrent-probe race resolution.\n3) go test ./internal/provider/openai/... -run 'LookupModelLimits|ProbeProviderFlavor' -count=1 green without integration tags.",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:providers",
+      "spec:FEAT-003",
+      "discovered-from:fizeau-8e37e536"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T12:28:41.708188438Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T122301-9a67164a\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":8,\"output_tokens\":1,\"total_tokens\":9,\"cost_usd\":0,\"duration_ms\":316362,\"exit_code\":-1}",
+          "created_at": "2026-05-18T12:28:41.802026273Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=9 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-18T12:29:49.145760796Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T122843-5e7752ed\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":6,\"total_tokens\":13,\"cost_usd\":0,\"duration_ms\":39896,\"exit_code\":-1}",
+          "created_at": "2026-05-18T12:29:49.248379824Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=13 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T122843-5e7752ed\",\"bead_id\":\"fizeau-8c1d23af\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T12:29:49.553872378Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "signal: killed\npowerClass=standard\nresult_rev=ea2e43ad423e1d2766cbdf0fa9a29e1407be06cc\nbase_rev=ea2e43ad423e1d2766cbdf0fa9a29e1407be06cc\noutcome_reason=timeout",
+          "created_at": "2026-05-18T12:29:49.670243098Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected\",\"fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\"}",
+          "created_at": "2026-05-27T19:04:56.968586726Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:05:09.510789442Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-27T19:05:21.781159459Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T190511-f0deabba\",\"bead_id\":\"fizeau-8c1d23af\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:05:23.37355506Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"d46eb785d47ed6c20ac44c08acdaaf909602b5d0\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\\n\\nRun 'docker run --help' for more information: exit status 125\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"d46eb785d47ed6c20ac44c08acdaaf909602b5d0\",\"session_id\":\"eb-dfe952f9\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T19:05:35.651420265Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=d46eb785d47ed6c20ac44c08acdaaf909602b5d0\nbase_rev=d46eb785d47ed6c20ac44c08acdaaf909602b5d0\nretry_after=2026-05-28T01:05:35Z\noutcome_reason=unknown",
+          "created_at": "2026-05-27T19:05:35.728581989Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"be3d6fa560c8139ec914eaef7358e73a458f37d0e0b8cd8f4abc54ddb46a3904\"}",
+          "created_at": "2026-05-27T19:09:29.36284621Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-003",
+      "work-cooldown-base-rev": "d46eb785d47ed6c20ac44c08acdaaf909602b5d0",
+      "work-last-detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+      "work-last-status": "execution_failed",
+      "work-retry-after": "2026-05-28T01:05:35Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-003",
+      "path": "docs/helix/01-frame/features/FEAT-003-providers.md",
+      "title": "Feature Specification: FEAT-003 — LLM Providers"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T190936-2593f4d3",
+    "prompt": ".ddx/executions/20260527T190936-2593f4d3/prompt.md",
+    "manifest": ".ddx/executions/20260527T190936-2593f4d3/manifest.json",
+    "result": ".ddx/executions/20260527T190936-2593f4d3/result.json",
+    "checks": ".ddx/executions/20260527T190936-2593f4d3/checks.json",
+    "usage": ".ddx/executions/20260527T190936-2593f4d3/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-8c1d23af-20260527T190936-2593f4d3"
+  },
+  "prompt_sha": "6559a9c21aba72710ab5e8ac3a786185609aeb77137ab1c76d7b6232f9828952"
+}
