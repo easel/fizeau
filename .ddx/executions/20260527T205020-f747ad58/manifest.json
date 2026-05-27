@@ -1,0 +1,54 @@
+{
+  "attempt_id": "20260527T205020-f747ad58",
+  "bead_id": "fizeau-d1629a81",
+  "base_rev": "155c987b6bdb4d3c9afdd4d5da281b827d901cee",
+  "created_at": "2026-05-27T20:50:24.37562721Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d1629a81",
+    "title": "harness: delete default*ModelDiscovery + HarnessConfig.Models — runtime = live PTY only",
+    "description": "After the cassette-record sub-beads land (those cassettes are test fixtures only — see parent fizeau-89eca738), delete the runtime static fallbacks:\n\n- defaultCodexModelDiscovery() at internal/harnesses/codex/model_discovery.go:20\n- defaultClaudeModelDiscovery() at internal/harnesses/claude/model_discovery.go:27\n- defaultGeminiModelDiscovery() at internal/harnesses/gemini/model_discovery.go:20\n- HarnessConfig.Models field + all five hardcoded literal initializers at internal/harnesses/registry.go:21,52,72,101,131\n\nRewire each harness's runtime DefaultModelSnapshot() (in contract004.go) to drive the live TUI via the existing ReadXModelDiscoveryViaPTY helper, wrapped in an ADR-012 per-source TTL cache. On PTY failure or timeout return (zero, ErrModelDiscoveryEvidenceMissing) — never substitute a cassette or a Go literal in production code paths.\n\nService consumers (agentcli/models.go, service_execute.go, service_models.go, service_routing.go, service_routestatus.go, internal/serviceimpl/catalog_helpers.go) must surface the error rather than masking it.",
+    "acceptance": "1) grep -rn 'defaultCodexModelDiscovery\\|defaultClaudeModelDiscovery\\|defaultGeminiModelDiscovery' internal/harnesses/ --include=*.go returns zero hits in production (non _test.go) files.\n2) grep -n 'Models:\\s*\\[\\]string{' internal/harnesses/registry.go returns zero hits; the Models field is also gone from the HarnessConfig struct.\n3) Each harness's runtime DefaultModelSnapshot() in contract004.go uses ReadXModelDiscoveryViaPTY (cached per ADR-012) — never a cassette read; never a Go literal.\n4) A new sentinel ErrModelDiscoveryEvidenceMissing is exported from internal/harnesses; runtime PTY failure returns this error.\n5) Cassette readers (ReadXModelDiscoveryFromCassette) remain but are referenced only from _test.go files and harness_integration drift tests.\n6) Service consumers surface the model-unknown / harness-broken error path; no silent substitution.\n7) go test ./... -count=1 green.",
+    "parent": "fizeau-89eca738",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:refactor",
+      "area:harness",
+      "spec:CONTRACT-004",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode result: json: cannot unmarshal number into Go struct field .tractability of type string\",\"fingerprint\":\"4b6fe2e51df8846a632a6ffb960c3cc553273a3f422199975f0a6018508ec79a\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4b6fe2e51df8846a632a6ffb960c3cc553273a3f422199975f0a6018508ec79a\"}",
+          "created_at": "2026-05-27T20:50:14.424634996Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "CONTRACT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260527T205020-f747ad58",
+    "prompt": ".ddx/executions/20260527T205020-f747ad58/prompt.md",
+    "manifest": ".ddx/executions/20260527T205020-f747ad58/manifest.json",
+    "result": ".ddx/executions/20260527T205020-f747ad58/result.json",
+    "checks": ".ddx/executions/20260527T205020-f747ad58/checks.json",
+    "usage": ".ddx/executions/20260527T205020-f747ad58/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-d1629a81-20260527T205020-f747ad58"
+  },
+  "prompt_sha": "d8b61c9feff5c75fc643e8309fc0de0ac7dd00ca09ca26d4c312a95e057da200"
+}
