@@ -388,3 +388,182 @@ func TestModelDiscoveryFromRecordedCLISurface(t *testing.T) {
 		t.Fatalf("models: got %v, want %v", snapshot.Models, want)
 	}
 }
+
+// TestRunner_Execute_ProcessGroupCleanupOnSuccess verifies that the process
+// group is cleaned up after successful completion (not just on cancellation).
+func TestRunner_Execute_ProcessGroupCleanupOnSuccess(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	script := `#!/bin/sh
+cat <<'EOF'
+{"type":"message","role":"assistant","content":"test","delta":true}
+{"type":"result","status":"success","stats":{"input_tokens":1,"output_tokens":1}}
+EOF
+`
+	f, err := os.CreateTemp("", "fake-gemini-cleanup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(script); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{
+		Binary:   f.Name(),
+		BaseArgs: []string{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test"})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	var finalEv *harnesses.FinalData
+	for ev := range ch {
+		if ev.Type == harnesses.EventTypeFinal {
+			var fd harnesses.FinalData
+			if err := json.Unmarshal(ev.Data, &fd); err != nil {
+				t.Errorf("unmarshal final: %v", err)
+			}
+			finalEv = &fd
+		}
+	}
+
+	if finalEv == nil {
+		t.Fatal("no final event received")
+	}
+	if finalEv.Status != "success" {
+		t.Errorf("expected status=success, got %q", finalEv.Status)
+	}
+}
+
+// TestRunner_Execute_TimeoutKillsProcessGroup verifies that timeout triggers
+// process group termination with escalation.
+func TestRunner_Execute_TimeoutKillsProcessGroup(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	script := `#!/bin/sh
+# Sleep longer than the timeout
+sleep 10
+`
+	f, err := os.CreateTemp("", "fake-gemini-timeout-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(script); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{
+		Binary:   f.Name(),
+		BaseArgs: []string{},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
+		Prompt:  "test",
+		Timeout: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	var finalEv *harnesses.FinalData
+	for ev := range ch {
+		if ev.Type == harnesses.EventTypeFinal {
+			var fd harnesses.FinalData
+			if err := json.Unmarshal(ev.Data, &fd); err != nil {
+				t.Errorf("unmarshal final: %v", err)
+			}
+			finalEv = &fd
+		}
+	}
+
+	if finalEv == nil {
+		t.Fatal("no final event received")
+	}
+	if finalEv.Status != "timed_out" {
+		t.Errorf("expected status=timed_out, got %q", finalEv.Status)
+	}
+}
+
+// TestRunner_Execute_ContextCancellationKillsProcessGroup verifies that context
+// cancellation triggers process group termination.
+func TestRunner_Execute_ContextCancellationKillsProcessGroup(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	script := `#!/bin/sh
+# Sleep until cancelled
+sleep 10
+`
+	f, err := os.CreateTemp("", "fake-gemini-cancel-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(script); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{
+		Binary:   f.Name(),
+		BaseArgs: []string{},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test"})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	// Cancel context after a short delay
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	var finalEv *harnesses.FinalData
+	for ev := range ch {
+		if ev.Type == harnesses.EventTypeFinal {
+			var fd harnesses.FinalData
+			if err := json.Unmarshal(ev.Data, &fd); err != nil {
+				t.Errorf("unmarshal final: %v", err)
+			}
+			finalEv = &fd
+		}
+	}
+
+	if finalEv == nil {
+		t.Fatal("no final event received")
+	}
+	if finalEv.Status != "cancelled" {
+		t.Errorf("expected status=cancelled, got %q", finalEv.Status)
+	}
+}

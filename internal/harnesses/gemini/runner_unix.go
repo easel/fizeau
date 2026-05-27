@@ -5,6 +5,7 @@ package gemini
 import (
 	osexec "os/exec"
 	"syscall"
+	"time"
 )
 
 func setProcessGroupAttr(attr *syscall.SysProcAttr) {
@@ -21,4 +22,6 @@ func killProcessGroup(cmd *osexec.Cmd) {
 		return
 	}
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 }

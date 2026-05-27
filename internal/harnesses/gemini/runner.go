@@ -236,6 +236,8 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	if err := cmd.Start(); err != nil {
 		return nil, -1, "", err, "failed"
 	}
+	defer killProcessGroup(cmd)
+	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "gemini", cmd)
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "gemini")
 	if progressLog != nil {
@@ -271,20 +273,15 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 		defer close(stop)
 	}
 
-	cancelDone := make(chan struct{})
-	go func() {
-		defer close(cancelDone)
-		select {
-		case <-ctx.Done():
-			killProcessGroup(cmd)
-		case <-stdoutReady:
-		}
-	}()
+	// Wait for stdout to be fully read; context cancellation also wakes us up.
+	// Either way, the defer ensures process group is killed on function exit.
+	select {
+	case <-ctx.Done():
+	case <-stdoutReady:
+	}
 
-	<-stdoutReady
 	<-stderrDone
 	runErr = cmd.Wait()
-	<-cancelDone
 	stderr = stderrBuf.String()
 
 	switch {

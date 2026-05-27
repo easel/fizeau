@@ -283,6 +283,8 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if err := cmd.Start(); err != nil {
 		return nil, -1, "", err, "failed"
 	}
+	defer killProcessGroup(cmd)
+	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "claude", cmd)
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "claude")
 	if progressLog != nil {
@@ -355,31 +357,17 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 		defer close(stop)
 	}
 
-	// Cancellation watchdog: when the parent ctx is done, signal the
-	// process group and let cmd.Wait() pick up the exit. The defer on
-	// runCtx already calls cancel; this goroutine just escalates to
-	// SIGTERM/SIGKILL on the group so PTY children don't survive.
-	cancelDone := make(chan struct{})
-	go func() {
-		defer close(cancelDone)
-		select {
-		case <-ctx.Done():
-			killProcessGroup(cmd)
-			select {
-			case <-stdoutDone:
-			case <-time.After(2 * time.Second):
-				forceKillProcessGroup(cmd)
-			}
-		case <-stdoutDone:
-		}
-	}()
+	// Wait for stdout to be fully read; context cancellation also wakes us up.
+	// Either way, the defer ensures process group is killed on function exit.
+	select {
+	case <-ctx.Done():
+	case <-stdoutDone:
+	}
 
-	<-stdoutDone
 	<-stderrDone
 	<-parseDone
 	<-mirrorDone
 	runErr = cmd.Wait()
-	<-cancelDone
 	stderr = stderrBuf.String()
 
 	// Classify exit.
@@ -432,19 +420,37 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 	}
 	setProcessGroup(cmd)
 
-	stdoutBytes, err := cmd.Output()
-	stderrBytes := ""
-	var exitErr *osexec.ExitError
-	if errors.As(err, &exitErr) {
-		stderrBytes = string(exitErr.Stderr)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, -1, "", err, "failed"
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, -1, "", err, "failed"
 	}
 
-	if err != nil {
+	if err := cmd.Start(); err != nil {
+		return nil, -1, "", err, "failed"
+	}
+	defer killProcessGroup(cmd)
+	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "claude", cmd)
+
+	stdoutBytes, _ := io.ReadAll(stdoutPipe)
+	stderrBytes, _ := io.ReadAll(stderrPipe)
+	runErr := cmd.Wait()
+
+	stderrBytesStr := string(stderrBytes)
+	var exitErr *osexec.ExitError
+	if errors.As(runErr, &exitErr) {
+		stderrBytesStr = string(exitErr.Stderr)
+	}
+
+	if runErr != nil {
 		ec := -1
 		if exitErr != nil {
 			ec = exitErr.ExitCode()
 		}
-		return nil, ec, stderrBytes, err, "failed"
+		return nil, ec, stderrBytesStr, runErr, "failed"
 	}
 
 	text := strings.TrimSpace(string(stdoutBytes))
@@ -461,10 +467,10 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 		select {
 		case out <- ev:
 		case <-ctx.Done():
-			return nil, 0, stderrBytes, ctx.Err(), "cancelled"
+			return nil, 0, stderrBytesStr, ctx.Err(), "cancelled"
 		}
 	}
-	return &streamAggregate{FinalText: text}, 0, stderrBytes, nil, "success"
+	return &streamAggregate{FinalText: text}, 0, stderrBytesStr, nil, "success"
 }
 
 func (r *Runner) buildArgs(base []string, req harnesses.ExecuteRequest) []string {

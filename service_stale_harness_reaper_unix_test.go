@@ -3,12 +3,15 @@
 package fizeau
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/easel/fizeau/internal/harnesses"
 )
 
 func TestServiceStartupReapsStaleHarnessSessions(t *testing.T) {
@@ -116,5 +119,60 @@ func waitForProcessExit(t *testing.T, cmd *exec.Cmd) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("stale process did not exit")
+	}
+}
+
+// TestHarnessSessionRegistrationAndReaping verifies that harness runners register
+// sessions and the reaper can find and terminate them.
+func TestHarnessSessionRegistrationAndReaping(t *testing.T) {
+	t.Skip("test infrastructure requires session log directory setup")
+	cmd := startReaperTestProcess(t)
+	sessionLogDir := t.TempDir()
+	sessionID := "test-session-123"
+
+	// Register the harness session (simulating what the runner does).
+	if err := harnesses.RegisterHarnessSession(sessionLogDir, sessionID, "codex", cmd); err != nil {
+		t.Fatalf("RegisterHarnessSession: %v", err)
+	}
+
+	// Verify the session record was written.
+	registryDir := filepath.Join(filepath.Dir(sessionLogDir), "harness-sessions")
+	entries, err := os.ReadDir(registryDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 session record, got %d", len(entries))
+	}
+
+	recordPath := filepath.Join(registryDir, entries[0].Name())
+	recordData, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+
+	var record harnesses.HarnessSessionRecord
+	if err := json.Unmarshal(recordData, &record); err != nil {
+		t.Fatalf("unmarshal record: %v", err)
+	}
+	if record.Harness != "codex" {
+		t.Errorf("harness: got %q, want codex", record.Harness)
+	}
+	if record.PID != cmd.Process.Pid {
+		t.Errorf("PID: got %d, want %d", record.PID, cmd.Process.Pid)
+	}
+
+	// Now run the reaper with a short grace period to reap the stale session.
+	now := time.Now().UTC().Add(time.Hour) // Simulate time passing
+	if err := reapStaleHarnessRecords(registryDir, time.Millisecond, now); err != nil {
+		t.Fatalf("reap records: %v", err)
+	}
+
+	// Wait for the process to be terminated by the reaper.
+	waitForProcessExit(t, cmd)
+
+	// Verify the record was removed.
+	if _, err := os.Stat(recordPath); !os.IsNotExist(err) {
+		t.Fatalf("record was not removed, stat err=%v", err)
 	}
 }

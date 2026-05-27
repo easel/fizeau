@@ -5,6 +5,7 @@ package claude
 import (
 	osexec "os/exec"
 	"syscall"
+	"time"
 )
 
 // setProcessGroupAttr puts the child process in its own process group so
@@ -13,21 +14,23 @@ func setProcessGroupAttr(attr *syscall.SysProcAttr) {
 	attr.Setpgid = true
 }
 
-// killProcessGroup signals SIGTERM to the entire process group of cmd.
-// Best-effort: missing process / already-exited cases are ignored. This is
-// the orphan-reaping path used on ctx.Done().
+// killProcessGroup signals SIGTERM to the entire process group of cmd,
+// escalating to SIGKILL after a bounded grace period. Best-effort: missing
+// process / already-exited cases are ignored.
 func killProcessGroup(cmd *osexec.Cmd) {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
 	if err != nil {
-		// Fall back to direct signal on the leader.
 		_ = cmd.Process.Signal(syscall.SIGTERM)
+		time.Sleep(100 * time.Millisecond)
+		_ = cmd.Process.Kill()
 		return
 	}
-	// Negative pid -> entire process group.
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 }
 
 func forceKillProcessGroup(cmd *osexec.Cmd) {

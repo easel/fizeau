@@ -222,6 +222,8 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if err := cmd.Start(); err != nil {
 		return nil, -1, "", err, "failed"
 	}
+	defer killProcessGroup(cmd)
+	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "opencode", cmd)
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "opencode")
 	if progressLog != nil {
@@ -269,21 +271,16 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 		defer close(stop)
 	}
 
-	cancelDone := make(chan struct{})
-	go func() {
-		defer close(cancelDone)
-		select {
-		case <-runCtx.Done():
-			killProcessGroup(cmd)
-		case <-stdoutDone:
-		}
-	}()
+	// Wait for stdout to be fully read; context cancellation also wakes us up.
+	// Either way, the defer ensures process group is killed on function exit.
+	select {
+	case <-runCtx.Done():
+	case <-stdoutDone:
+	}
 
-	<-stdoutDone
 	<-stderrDone
 	<-parseDone
 	runErr = cmd.Wait()
-	<-cancelDone
 	stderr = stderrBuf.String()
 
 	switch {
