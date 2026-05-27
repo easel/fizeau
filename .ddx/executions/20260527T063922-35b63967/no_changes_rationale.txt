@@ -1,0 +1,51 @@
+status: blocked
+reason: Cannot reconcile `--print mode measurements` section due to missing empirical evidence for Runs 1 and 2.
+
+DETAILS:
+The bead requests audit and reconciliation of the `--print mode measurements` section
+in docs/helix/02-design/billing-observation-claude-tui.md with these ACs:
+
+1. TestPrintModeExactlyThreeRuns: ✓ Present (Run 1, Run 2, Run 3)
+2. TestPrintModeSixSnapshots: ⚠ Structurally present but incomplete
+3. TestPrintModeAllTurnOutputsPresent: ✗ BLOCKED - Runs 1 and 2 missing turn output
+4. TestPrintModeAllSnapshotTimestampsPresent: ✗ BLOCKED - Runs 1 and 2 have only placeholders
+5. TestPrintModeAllAfterRefreshDelaysVerified: ✗ BLOCKED - Runs 1 and 2 missing completion times
+6. TestPrintModeWholeWindowSingleAccountAttested: ⚠ Partially blocked
+
+MISSING EVIDENCE:
+
+Run 1: --print Mode
+- BEFORE snapshot: placeholder only
+- Turn output: "Captured turn output will be filled here" (no actual data)
+- Completion timestamp: placeholder only
+- AFTER snapshot: placeholder only
+- Analysis verdict: cannot determine
+
+Run 2: --print Mode
+- BEFORE snapshot: placeholder only
+- Turn output: "Captured turn output will be filled here" (no actual data)
+- Completion timestamp: placeholder only
+- AFTER snapshot: placeholder only
+- Analysis verdict: cannot determine
+
+Run 3: --print Mode
+- BEFORE snapshot: ✓ 2026-05-27T06:20:36Z with subscription mode
+- Turn output: ✓ Complete cache design output present
+- Completion timestamp: ✓ 2026-05-27T06:22:32Z (111s)
+- AFTER snapshot: ✓ 2026-05-27T06:23:46Z with subscription mode
+- Refresh-delay verification: ✓ 74s >= 60s safety margin
+- Analysis verdict: ✓ subscription-confirmed
+
+BLOCKING REASON:
+Per the bead instructions: "Do not invent missing measurement data; if evidence is missing,
+mark the bead blocked and name the missing run evidence."
+
+Runs 1 and 2 contain only placeholder text and cannot be reconciled without actual empirical
+measurement data. The measurement window, account attestation, and verdict determination
+cannot be completed without all three runs.
+
+ACTION REQUIRED:
+The measurement campaign for Runs 1 and 2 must be executed and recorded in the document before
+this bead can proceed to completion. These runs were mentioned as sibling bead fizeau-cc0dd5b2
+in the parent methodology document, but their results have not yet been captured in the
+`--print mode measurements` section.

@@ -1,0 +1,79 @@
+{
+  "attempt_id": "20260527T063922-35b63967",
+  "bead_id": "fizeau-33a2ad0f",
+  "base_rev": "fd4e907b33d8766fd973d5be01445b50d7b81430",
+  "created_at": "2026-05-27T06:39:28.312410027Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-33a2ad0f",
+    "title": "claude-tui/gate: reconcile `claude --print` measurement section",
+    "description": "PROBLEM: ADR-013's economic premise requires the `--print mode measurements` section to show exactly three complete empirical runs. Even after individual captures are added, the section still needs an aggregate reconciliation proving the parent verification requirements across all runs.\n\nROOT CAUSE: docs/helix/02-design/billing-observation-claude-tui.md:1 uses the `--print mode measurements` placeholder as the source of truth, but no aggregate check confirms exactly three labeled runs, six snapshots, three outputs, timestamp coverage, refresh-delay compliance, and whole-window single-account attestation.\n\nPROPOSED FIX: Dependency ID: fizeau-a45dafe6. Governing artifact: ADR-013. Audit only the `--print mode measurements` section of docs/helix/02-design/billing-observation-claude-tui.md. Normalize labels to exactly `Run 1`, `Run 2`, and `Run 3`; remove accidental duplicate empty placeholders; verify each run has BEFORE and AFTER `/usage` snapshots, full turn output, wall-clock snapshot timestamps, completion timestamp, and proof that AFTER was captured at refresh-delay + safety margin, \u003e=60s post-completion. Add or tighten a single-account attestation covering the full `--print` measurement window. Do not invent missing measurement data; if evidence is missing, mark the bead blocked and name the missing run evidence.\n\nNON-SCOPE: PTY+hooks measurements, delta computation, verdict determination, ADR-013 disposition, methodology authoring, new `claude --print` captures unless replacing explicitly missing or malformed evidence is operator-approved.\n\nAC:\n1) TestPrintModeExactlyThreeRuns: doc's `--print mode measurements` section contains exactly three labeled runs: Run 1, Run 2, and Run 3.\n2) TestPrintModeSixSnapshots: the three runs contain exactly six `/usage` snapshot blocks, one BEFORE and one AFTER per run.\n3) TestPrintModeAllTurnOutputsPresent: each of the three runs has captured turn output.\n4) TestPrintModeAllSnapshotTimestampsPresent: every `/usage` snapshot has a wall-clock timestamp.\n5) TestPrintModeAllAfterRefreshDelaysVerified: every AFTER snapshot timestamp is \u003e= that run's completion-time + documented refresh-delay safety margin and \u003e=60s post-completion.\n6) TestPrintModeWholeWindowSingleAccountAttested: the section attests no concurrent claude activity from the same account across the full `--print` measurement window.\n\nGATES: `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "1) TestPrintModeExactlyThreeRuns\n2) TestPrintModeSixSnapshots\n3) TestPrintModeAllTurnOutputsPresent\n4) TestPrintModeAllSnapshotTimestampsPresent\n5) TestPrintModeAllAfterRefreshDelaysVerified\n6) TestPrintModeWholeWindowSingleAccountAttested\nGates: `go test ./...`, `lefthook run pre-commit`.",
+    "parent": "fizeau-cc0dd5b2",
+    "labels": [
+      "helix",
+      "phase:discover",
+      "kind:experiment",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "gate:promotion"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-21T03:41:50.905503159Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-21T03:41:59.313172396Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260521T034152-8e2755e1\",\"bead_id\":\"fizeau-33a2ad0f\",\"estimated_difficulty\":\"easy\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"cheap\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-21T03:42:00.621006022Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=easy powerClass=cheap note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"85b446de197a137ca677ec2377e6f19753e37f7e\",\"classification\":\"transport\",\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\\n\\nRun 'docker run --help' for more information: exit status 125\",\"rationale\":\"Attempt died in harness setup, not execution: docker-clone failed because the bind mount source /home/erik/.local/share/claude/versions/2.1.146 does not exist. No work ran (duration 20ms, result_rev==base_rev), so this is an environment/infrastructure fault unrelated to bead content. Release the claim and retry once the missing claude version path is present.\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"85b446de197a137ca677ec2377e6f19753e37f7e\",\"session_id\":\"eb-daf1524d\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-21T03:42:24.843111967Z",
+          "kind": "bead-quality.triage",
+          "source": "ddx work",
+          "summary": "transport: release_claim_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.146\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=cheap\nresult_rev=85b446de197a137ca677ec2377e6f19753e37f7e\nbase_rev=85b446de197a137ca677ec2377e6f19753e37f7e\noutcome_reason=transport",
+          "created_at": "2026-05-21T03:42:24.879810018Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T063922-35b63967",
+    "prompt": ".ddx/executions/20260527T063922-35b63967/prompt.md",
+    "manifest": ".ddx/executions/20260527T063922-35b63967/manifest.json",
+    "result": ".ddx/executions/20260527T063922-35b63967/result.json",
+    "checks": ".ddx/executions/20260527T063922-35b63967/checks.json",
+    "usage": ".ddx/executions/20260527T063922-35b63967/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-clone-fizeau-33a2ad0f-20260527T063922-35b63967"
+  },
+  "prompt_sha": "ff08ce6848811ca5789215bb5bd8f9db4e1954b66fbacfecff67aedd4489b85c"
+}
