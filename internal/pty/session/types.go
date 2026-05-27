@@ -202,6 +202,7 @@ type sessionImpl interface {
 	close() error
 	kill() error
 	wait() ExitStatus
+	pid() int
 }
 
 var (
@@ -221,6 +222,11 @@ func (s *Session) Size() Size {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.size
+}
+
+// Pid returns the process ID of the underlying PTY process.
+func (s *Session) Pid() (int, error) {
+	return s.impl.pid(), nil
 }
 
 // SendBytes writes literal bytes to the PTY and records an input event.

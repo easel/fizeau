@@ -46,6 +46,10 @@ func (f *fakeImpl) wait() ExitStatus {
 	return f.status
 }
 
+func (f *fakeImpl) pid() int {
+	return 12345
+}
+
 func newFakeSession(clock Clock, impl *fakeImpl) *Session {
 	start := clock.Now()
 	readDone := make(chan struct{})

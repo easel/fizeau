@@ -164,3 +164,10 @@ func (u *unixImpl) wait() ExitStatus {
 	}
 	return status
 }
+
+func (u *unixImpl) pid() int {
+	if u.cmd.Process == nil {
+		return -1
+	}
+	return u.cmd.Process.Pid
+}

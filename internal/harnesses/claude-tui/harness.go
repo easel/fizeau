@@ -63,8 +63,52 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	startTime := time.Now()
 	seq := int64(0)
 
-	// Emit events based on the request; for now, emit a Final event
-	// indicating that the harness is not fully implemented.
+	// Get or create a pooled session for this workdir
+	workdir := req.WorkDir
+	if workdir == "" {
+		workdir = "."
+	}
+
+	s, err := getOrCreateSession(
+		ctx,
+		"claude",
+		nil,
+		workdir,
+		nil,
+		session.Size{Rows: 50, Cols: 220},
+	)
+	if err != nil {
+		seq++
+		eventChan <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: seq,
+			Time:     time.Now(),
+			Data: marshalData(harnesses.FinalData{
+				Status:     "error",
+				DurationMS: time.Since(startTime).Milliseconds(),
+				ExitCode:   1,
+			}),
+		}
+		return
+	}
+
+	// Issue /clear between turns to reset session state
+	if err := clearSession(s, "❯", 5); err != nil {
+		seq++
+		eventChan <- harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Sequence: seq,
+			Time:     time.Now(),
+			Data: marshalData(harnesses.FinalData{
+				Status:     "error",
+				DurationMS: time.Since(startTime).Milliseconds(),
+				ExitCode:   1,
+			}),
+		}
+		return
+	}
+
+	// Emit a Final event indicating successful session reuse
 	seq++
 	eventChan <- harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
