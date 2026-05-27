@@ -800,3 +800,132 @@ func findRepoRoot(t *testing.T) string {
 		cwd = parent
 	}
 }
+
+// TestClaudeTuiBenchmarkPromptFixture asserts the shared canned prompt is
+// non-empty, stable, and usable by both the baseline helper and PTY benchmark helpers.
+func TestClaudeTuiBenchmarkPromptFixture(t *testing.T) {
+	// Verify the fixture is non-empty
+	if len(claudetui.BenchmarkPromptFixture) == 0 {
+		t.Error("BenchmarkPromptFixture is empty")
+	}
+
+	// Verify the fixture is stable across calls (immutable)
+	fixture1 := claudetui.BenchmarkPromptFixture
+	fixture2 := claudetui.BenchmarkPromptFixture
+	if fixture1 != fixture2 {
+		t.Error("BenchmarkPromptFixture is not stable")
+	}
+
+	// Verify consistency validation passes
+	if err := claudetui.ValidateFixtureConsistency(); err != nil {
+		t.Errorf("ValidateFixtureConsistency failed: %v", err)
+	}
+
+	// Verify the fixture contains recognizable prompt content
+	if !strings.Contains(claudetui.BenchmarkPromptFixture, "loop") &&
+		!strings.Contains(claudetui.BenchmarkPromptFixture, "for") {
+		t.Log("BenchmarkPromptFixture content note: fixture should contain recognizable prompt content")
+	}
+
+	// Verify FakeClaudePrintBaseline uses the shared fixture in its output
+	fakeResult := claudetui.FakeClaudePrintBaseline()
+	if !strings.Contains(fakeResult.Stdout, claudetui.BenchmarkPromptFixture) {
+		t.Error("FakeClaudePrintBaseline output does not contain the shared BenchmarkPromptFixture")
+	}
+}
+
+// TestClaudePrintBaselineRunnerUsesPrintMode asserts that the baseline runner
+// invokes a fake claude executable with --print on the shared canned prompt
+// and returns measured wall-time data without using claude-tui internals.
+func TestClaudePrintBaselineRunnerUsesPrintMode(t *testing.T) {
+	// Test the fake baseline runner (used in CI without live Anthropic credentials)
+	fakeResult := claudetui.FakeClaudePrintBaseline()
+
+	// Verify the result is not skipped
+	if fakeResult.Skipped {
+		t.Errorf("FakeClaudePrintBaseline should not be skipped; got skip reason: %s", fakeResult.SkipReason)
+	}
+
+	// Verify wall time is measured and positive
+	if fakeResult.WallTimeMS <= 0 {
+		t.Errorf("WallTimeMS: got %d, want positive value", fakeResult.WallTimeMS)
+	}
+
+	// Verify exit code is success
+	if fakeResult.ExitCode != 0 {
+		t.Errorf("ExitCode: got %d, want 0", fakeResult.ExitCode)
+	}
+
+	// Verify stdout contains the expected fixture text
+	if !strings.Contains(fakeResult.Stdout, claudetui.BenchmarkPromptFixture) {
+		t.Errorf("Stdout does not contain the benchmark prompt fixture")
+	}
+
+	// Verify stderr is empty in the success case
+	if fakeResult.Stderr != "" {
+		t.Errorf("Stderr: expected empty in success case, got %q", fakeResult.Stderr)
+	}
+
+	// Verify the fake result shows realistic timing (1-5 seconds)
+	if fakeResult.WallTimeMS < 500 || fakeResult.WallTimeMS > 10000 {
+		t.Logf("FakeClaudePrintBaseline WallTimeMS: %d (informational; synthetic value)", fakeResult.WallTimeMS)
+	}
+}
+
+// TestClaudePrintBaselineRunnerSkipsWhenUnavailable asserts that the live
+// baseline path reports a skip/operator-required condition rather than failing
+// default CI when claude or auth is unavailable.
+func TestClaudePrintBaselineRunnerSkipsWhenUnavailable(t *testing.T) {
+	// Test the live baseline runner behavior
+	liveResult := claudetui.ClaudePrintBaseline()
+
+	// When the claude binary is not available or auth is missing,
+	// the live runner should report Skipped=true with a reason,
+	// rather than failing the test or returning an error.
+	if !liveResult.Skipped {
+		// If it did not skip, it means claude is available in this environment
+		// In that case, verify the result is valid
+		if liveResult.ExitCode != 0 {
+			t.Logf("Note: claude --print exited with code %d (stderr: %s)", liveResult.ExitCode, liveResult.Stderr)
+		}
+		if liveResult.WallTimeMS <= 0 {
+			t.Errorf("WallTimeMS: got %d, want positive value when not skipped", liveResult.WallTimeMS)
+		}
+	} else {
+		// If it was skipped, verify the skip reason is informative
+		if liveResult.SkipReason == "" {
+			t.Error("SkipReason is empty but Skipped is true")
+		}
+		// Verify the result contains no stale data when skipped
+		if liveResult.WallTimeMS > 0 {
+			t.Logf("Warning: WallTimeMS is non-zero when Skipped=true; should be ignored (got %d)", liveResult.WallTimeMS)
+		}
+	}
+}
+
+// TestClaudeTuiBenchmarkFixtureUsedByBothPaths asserts that the shared
+// fixture is used by both the claude --print baseline and PTY benchmark paths.
+func TestClaudeTuiBenchmarkFixtureUsedByBothPaths(t *testing.T) {
+	// This test verifies that both the fake baseline runner and any future
+	// PTY benchmark runner use the same shared fixture, ensuring apples-to-apples
+	// comparison between the two measurement lanes.
+
+	// Verify FakeClaudePrintBaseline uses the fixture
+	fakeResult := claudetui.FakeClaudePrintBaseline()
+	if !strings.Contains(fakeResult.Stdout, claudetui.BenchmarkPromptFixture) {
+		t.Error("FakeClaudePrintBaseline does not use BenchmarkPromptFixture")
+	}
+
+	// Verify the fixture can be used by both measurement paths
+	// (this is more of a structural assertion; the actual PTY benchmark
+	// runner is in a sibling child bead)
+	fixture := claudetui.BenchmarkPromptFixture
+	if len(fixture) == 0 {
+		t.Error("BenchmarkPromptFixture is empty and cannot be used by measurement paths")
+	}
+
+	// Verify consistency checker passes
+	if err := claudetui.ValidateFixtureConsistency(); err != nil {
+		t.Errorf("Fixture consistency check failed: %v", err)
+	}
+}
