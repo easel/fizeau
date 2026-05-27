@@ -3232,3 +3232,15 @@
 {"event":"release","lock_name":"index.lock","operation":"index.add","holder_pid":683951,"acquired_at":"2026-05-27T19:08:12.91108552Z","released_at":"2026-05-27T19:08:12.946797027Z","duration_ms":35}
 {"event":"acquire","lock_name":"index.lock","operation":"index.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:12.962153601Z"}
 {"event":"release","lock_name":"index.lock","operation":"index.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:12.962153601Z","released_at":"2026-05-27T19:08:17.335516024Z","duration_ms":4373}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:12.88719464Z","released_at":"2026-05-27T19:08:21.824308648Z","duration_ms":8937}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T19:08:34.491969787Z"}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T19:08:34.491969787Z","released_at":"2026-05-27T19:08:34.513990672Z","duration_ms":22}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.025892942Z"}
+{"event":"acquire","lock_name":"index.lock","operation":"index.add","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.166169228Z"}
+{"event":"release","lock_name":"index.lock","operation":"index.add","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.166169228Z","released_at":"2026-05-27T19:08:38.210237749Z","duration_ms":44}
+{"event":"acquire","lock_name":"index.lock","operation":"index.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.228148732Z"}
+{"event":"release","lock_name":"index.lock","operation":"index.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.228148732Z","released_at":"2026-05-27T19:08:41.193650557Z","duration_ms":2965}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:38.025892942Z","released_at":"2026-05-27T19:08:41.193802265Z","duration_ms":3167}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:41.292460731Z"}
+{"event":"release","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683951,"acquired_at":"2026-05-27T19:08:41.292460731Z","released_at":"2026-05-27T19:08:41.316999983Z","duration_ms":24}
+{"event":"acquire","lock_name":"tracker.lock","operation":"tracker.commit","holder_pid":683355,"acquired_at":"2026-05-27T19:09:20.425077163Z"}
