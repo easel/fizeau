@@ -1,0 +1,22 @@
+{
+  "bead_id": "fizeau-d048a9f9",
+  "attempt_id": "20260527T191217-e84abd74",
+  "base_rev": "02b2dce07538ffd8bddd1c037c82ba4404caed0b",
+  "result_rev": "02b2dce07538ffd8bddd1c037c82ba4404caed0b",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+  "session_id": "eb-f077a78c",
+  "duration_ms": 31,
+  "exit_code": 1,
+  "error": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+  "project_root": "/home/erik/Projects/fizeau",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260527T191217-e84abd74",
+  "prompt_file": ".ddx/executions/20260527T191217-e84abd74/prompt.md",
+  "manifest_file": ".ddx/executions/20260527T191217-e84abd74/manifest.json",
+  "result_file": ".ddx/executions/20260527T191217-e84abd74/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-27T19:12:27.436408436Z",
+  "finished_at": "2026-05-27T19:12:27.467637736Z"
+}
