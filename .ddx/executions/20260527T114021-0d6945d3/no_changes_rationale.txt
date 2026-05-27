@@ -1,0 +1,17 @@
+status: open
+reason: Parent bead decomposed into 9 child beads per Step 0 size check
+orchestrator_action: decompose
+child_beads:
+  - fizeau-4cb07023 (A1: harbor-runner image)
+  - fizeau-53a360a1 (A2: shell adapters + CONTRACT.md + runtime-probe)
+  - fizeau-fe87a3ac (A3: bash runner skeleton + --plan)
+  - fizeau-a2fd070b (A4: execution loop + retry)
+  - fizeau-86f89221 (A5: concurrency + signals)
+  - fizeau-25209a13 (A6: budget)
+  - fizeau-9c53ac4e (A7: agent-leak fix + planning_mode)
+  - fizeau-f7c4e686 (A8: parity fixtures + diff.sh)
+  - fizeau-f7c4e686 (A9: Go runner deactivation)
+
+dependency_notes: |
+  A3 depends on A1,A2; A4 depends on A3; A5,A6,A8 depend on A4;
+  A8 also depends on A5,A6; A7 depends on A2; A9 depends on A4,A8
