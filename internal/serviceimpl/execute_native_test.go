@@ -82,6 +82,13 @@ func TestExecuteNativeRemovesBenchmarkPresetPlanning(t *testing.T) {
 	}
 }
 
+// TestExecuteNative_NoPlanningModeLeak is the acceptance-criteria test alias
+// for TestExecuteNativeRemovesBenchmarkPresetPlanning. It verifies that
+// ToolPreset=="benchmark" does not force PlanningMode on.
+func TestExecuteNative_NoPlanningModeLeak(t *testing.T) {
+	TestExecuteNativeRemovesBenchmarkPresetPlanning(t)
+}
+
 // ServiceExecuteRequest is the API request shape for Execute
 type ServiceExecuteRequest struct {
 	Prompt       string

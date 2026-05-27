@@ -85,6 +85,33 @@ func TestBenchMainRedirectsExecutionSubcommands(t *testing.T) {
 	}
 }
 
+// TestBenchMatrix_RedirectExit2 is the acceptance-criteria test that verifies
+// the matrix subcommand redirects to the bash runner with exit code 2.
+func TestBenchMatrix_RedirectExit2(t *testing.T) {
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	code := run([]string{"matrix"})
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	// Read captured stderr
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	stderr := buf.String()
+
+	if code != 2 {
+		t.Errorf("run([matrix]) exit code = %d, want 2", code)
+	}
+
+	if !strings.Contains(stderr, "use ./benchmark") {
+		t.Errorf("run([matrix]) stderr does not contain 'use ./benchmark', got: %q", stderr)
+	}
+}
+
 func TestBenchMainListingSubcommandsStillWork(t *testing.T) {
 	// Get repo root: two directories up from cmd/bench/
 	repoRoot := filepath.Join("..", "..")

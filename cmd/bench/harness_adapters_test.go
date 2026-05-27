@@ -163,6 +163,114 @@ func TestHarnessAdaptersMalformedInput(t *testing.T) {
 	}
 }
 
+// Test_planning_mode_field_drives_plan verifies that the fiz adapter appends
+// --plan to the command when sampling.planning_mode is true.
+func Test_planning_mode_field_drives_plan(t *testing.T) {
+	// Test case 1: planning_mode = false, should not include --plan
+	fixture1 := map[string]interface{}{
+		"id": "test-no-planning",
+		"provider": map[string]interface{}{
+			"type":        "openai-compat",
+			"model":       "gpt-4",
+			"base_url":    "http://localhost",
+			"api_key_env": "OPENAI_API_KEY",
+		},
+		"sampling": map[string]interface{}{
+			"planning_mode": false,
+		},
+	}
+
+	fixture1JSON, _ := json.Marshal(fixture1)
+	output1, err1 := runShellAdapter(t, "fiz", "command", string(fixture1JSON))
+	if err1 != nil {
+		t.Fatalf("fiz adapter failed: %v", err1)
+	}
+
+	var spec1 map[string]interface{}
+	if err := json.Unmarshal([]byte(output1), &spec1); err != nil {
+		t.Fatalf("fiz output is not valid JSON: %v", err)
+	}
+
+	// Verify --plan is NOT in the command
+	if cmdArray, ok := spec1["command"].([]interface{}); ok {
+		for _, arg := range cmdArray {
+			if arg == "--plan" {
+				t.Errorf("planning_mode=false: expected no --plan in command, but found it")
+			}
+		}
+	}
+
+	// Test case 2: planning_mode = true, should include --plan
+	fixture2 := map[string]interface{}{
+		"id": "test-with-planning",
+		"provider": map[string]interface{}{
+			"type":        "openai-compat",
+			"model":       "gpt-4",
+			"base_url":    "http://localhost",
+			"api_key_env": "OPENAI_API_KEY",
+		},
+		"sampling": map[string]interface{}{
+			"planning_mode": true,
+		},
+	}
+
+	fixture2JSON, _ := json.Marshal(fixture2)
+	output2, err2 := runShellAdapter(t, "fiz", "command", string(fixture2JSON))
+	if err2 != nil {
+		t.Fatalf("fiz adapter failed: %v", err2)
+	}
+
+	var spec2 map[string]interface{}
+	if err := json.Unmarshal([]byte(output2), &spec2); err != nil {
+		t.Fatalf("fiz output is not valid JSON: %v", err)
+	}
+
+	// Verify --plan IS in the command
+	found := false
+	if cmdArray, ok := spec2["command"].([]interface{}); ok {
+		for _, arg := range cmdArray {
+			if arg == "--plan" {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("planning_mode=true: expected --plan in command, but not found")
+	}
+
+	// Test case 3: planning_mode not specified, should not include --plan (default false)
+	fixture3 := map[string]interface{}{
+		"id": "test-no-mode-field",
+		"provider": map[string]interface{}{
+			"type":        "openai-compat",
+			"model":       "gpt-4",
+			"base_url":    "http://localhost",
+			"api_key_env": "OPENAI_API_KEY",
+		},
+	}
+
+	fixture3JSON, _ := json.Marshal(fixture3)
+	output3, err3 := runShellAdapter(t, "fiz", "command", string(fixture3JSON))
+	if err3 != nil {
+		t.Fatalf("fiz adapter failed: %v", err3)
+	}
+
+	var spec3 map[string]interface{}
+	if err := json.Unmarshal([]byte(output3), &spec3); err != nil {
+		t.Fatalf("fiz output is not valid JSON: %v", err)
+	}
+
+	// Verify --plan is NOT in the command (defaults to false)
+	if cmdArray, ok := spec3["command"].([]interface{}); ok {
+		for _, arg := range cmdArray {
+			if arg == "--plan" {
+				t.Errorf("planning_mode not specified: expected no --plan in command, but found it")
+			}
+		}
+	}
+}
+
 // TestHarnessAdaptersInstallCommand verifies that install commands can be generated.
 func TestHarnessAdaptersInstallCommand(t *testing.T) {
 	adapters := []string{
