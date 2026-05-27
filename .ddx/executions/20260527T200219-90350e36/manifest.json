@@ -1,0 +1,146 @@
+{
+  "attempt_id": "20260527T200219-90350e36",
+  "bead_id": "fizeau-d1d64691",
+  "base_rev": "c9c58f4130dfc812c5146522529f12e1f50a3c62",
+  "created_at": "2026-05-27T20:02:24.269761686Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d1d64691",
+    "title": "bench-pr-A5: agent-leak fix + planning_mode schema, Go-runner deactivati: part 2",
+    "description": "PROBLEM\nParent bead fizeau-7b72beec is too broad for one execution pass. This child owns part 2 of 2 of that parent scope.\n\nROOT CAUSE\nPROBLEM: (a) Benchmark runs silently enable planning mode because ToolPreset==\"benchmark\" forces PlanningMode; (b) the Go runner is still the live entrypoint; (c) we must prove the bash runner produces equivalent cells before retiring the Go runner.\n\nROOT CAUSE: internal/serviceimpl/execute_native.go:265 reads `PlanningMode: req.PlanningMode || req.ToolPreset == \"benchmark\"`, leaking planning mode into every benchmark agent. cmd/bench/main.go still dispatches execution subcommands (matrix, sweep, run, plan) to the Go runner. There is no parity harness.\n\nPROPOSED FIX:\n- Agent-leak: delete the `|| req.ToolPreset == \"benchmark\"` clause at internal/serviceimpl/execute_native.go:265. Add `sampling.planning_mode: bool` (default false) to the profile YAML schema; update harness-adapters/fiz (from A2) to read it and append `--plan` when true. Find profiles relying on the preset via `rg -l 'preset.*benchmark|FIZEAU_PRESET' scripts/benchmark/profiles/` and add `sampling.planning_mode: true` to each.\n- Deactivation: modify cmd/bench/main.go to short-circuit execution subcommands (matrix, sweep, run, plan) with the redirect 'use ./benchmark — see scripts/benchmark/README.md' and exit 2; listing subcommands (profiles, bench-sets) stay functional until PR F.\n- Parity (ORDER REQUIRED — capture must precede the deactivation commit): run the Go runner against canary (sindri-lucebox + tb-2-1-canary, 3 reps) and commit 3 representative cell reports to scripts/benchmark/testdata/parity/go-runner/; run the bash runner (A3+A4) against the same canary and commit cells to scripts/benchmark/testdata/parity/bash-runner/; add scripts/benchmark/testdata/parity/diff.sh (bash + jq) reporting field divergence outside an allowlist (cell-id, timestamps, paths, and NEW fields such as harbor_runner_image_digest, model_server.commit).\n\nNON-SCOPE: harbor image (A1); shell adapter creation (A2, this only wires planning_mode into fiz); runner core (A3); concurrency/budget (A4); plus parent out-of-scope: cell-report.schema.json (PR B), tasks_from/task_executor schema (PR C), Node collector (PR D), Node importers (PR E), deleting cmd/bench (PR F), docs (PR G).\n\nGOVERNING ARTIFACT: plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDENCIES: A3 and A4 (bash runner must produce cells for parity and for the deactivation redirect to be safe); A2 (fiz adapter exists). Satisfies parent AC4, AC6, A\n...[truncated]\n\nPROPOSED FIX\nImplement only this child acceptance slice:\n- Implement the remaining bounded slice of the parent bead.\n\nNON-SCOPE\nDo not implement parent acceptance criteria assigned to sibling child beads. Preserve every parent non-scope constraint unless this child explicitly narrows it.",
+    "acceptance": "1. Implement the remaining bounded slice of the parent bead.\n2. lefthook run pre-commit passes.",
+    "parent": "fizeau-7b72beec",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "piece:A5-goleak-deactivation-parity",
+      "decomposed"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"unknown classification \\\"refinable\\\": expected one of ready, needs_refine, needs_split, operator_required, system_unready\",\"fingerprint\":\"02553f0ef79948438d572808ca581f572282a55519385a869e44cfbcb8713efe\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"02553f0ef79948438d572808ca581f572282a55519385a869e44cfbcb8713efe\"}",
+          "created_at": "2026-05-27T19:03:36.730856537Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:03:49.525208511Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-27T19:04:02.594351229Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T190351-c97e3985\",\"bead_id\":\"fizeau-d1d64691\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:04:04.717437848Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"099b26a504c3eb8b591ed61a88d9417a18d68527\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\\n\\nRun 'docker run --help' for more information: exit status 125\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"099b26a504c3eb8b591ed61a88d9417a18d68527\",\"session_id\":\"eb-45e0be99\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T19:04:17.46994317Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=099b26a504c3eb8b591ed61a88d9417a18d68527\nbase_rev=099b26a504c3eb8b591ed61a88d9417a18d68527\nretry_after=2026-05-28T01:04:17Z\noutcome_reason=unknown",
+          "created_at": "2026-05-27T19:04:17.542428974Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (new dirty paths: .ddx/beads.jsonl.tmp-683355-d3175e5b, .ddx/beads.lock/acquired_at, .ddx/beads.lock/pid, .ddx/executions/20260527T190633-3fb7d777/embedded/git-bin/git, .ddx/executions/20260527T190633-3fb7d777/embedded/git-global.cfg, .ddx/executions/20260527T190633-3fb7d777/embedded/git-local-private.cfg, .ddx/executions/20260527T190633-3fb7d777/manifest.json, .ddx/executions/20260527T190633-3fb7d777/prompt.md, .ddx/executions/20260527T190633-3fb7d777/result.json; changed existing dirty paths: .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"4aad5d036f2166f21aa9ec1d670d71371bd96cc12e145d213765495519ed9362\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4aad5d036f2166f21aa9ec1d670d71371bd96cc12e145d213765495519ed9362\"}",
+          "created_at": "2026-05-27T19:07:44.31953317Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-27T19:08:10.840141613Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[],\"requested_min_power\":5}",
+          "created_at": "2026-05-27T19:08:23.114345927Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260527T190812-4b58139b\",\"bead_id\":\"fizeau-d1d64691\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-27T19:08:24.945445459Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"48063145ff41843d5d0e7400e192758515c56d75\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \\\"bind\\\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\\n\\nRun 'docker run --help' for more information: exit status 125\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"48063145ff41843d5d0e7400e192758515c56d75\",\"session_id\":\"eb-26f19972\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-27T19:08:37.86676001Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125\npowerClass=standard\nresult_rev=48063145ff41843d5d0e7400e192758515c56d75\nbase_rev=48063145ff41843d5d0e7400e192758515c56d75\nretry_after=2026-05-28T01:08:37Z\noutcome_reason=unknown",
+          "created_at": "2026-05-27T19:08:37.951898978Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode readiness classification result: json: cannot unmarshal array into Go struct field preClaimIntakePromptRewrite.rewrite.acceptance of type string\",\"fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\"}",
+          "created_at": "2026-05-27T20:02:12.282731686Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "work-cooldown-base-rev": "48063145ff41843d5d0e7400e192758515c56d75",
+      "work-last-detail": "docker-clone attempt failed: docker: Error response from daemon: invalid mount config for type \"bind\": bind source path does not exist: /home/erik/.local/share/claude/versions/2.1.152\n\nRun 'docker run --help' for more information: exit status 125",
+      "work-last-status": "execution_failed",
+      "work-retry-after": "2026-05-28T01:08:37Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260527T200219-90350e36",
+    "prompt": ".ddx/executions/20260527T200219-90350e36/prompt.md",
+    "manifest": ".ddx/executions/20260527T200219-90350e36/manifest.json",
+    "result": ".ddx/executions/20260527T200219-90350e36/result.json",
+    "checks": ".ddx/executions/20260527T200219-90350e36/checks.json",
+    "usage": ".ddx/executions/20260527T200219-90350e36/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-d1d64691-20260527T200219-90350e36"
+  },
+  "prompt_sha": "35c6e3413d2597f5d8c2ab0c806d74b008569de543e3d5e9efc6948bcada4f50"
+}
