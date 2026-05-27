@@ -1,0 +1,87 @@
+verification_command: bash scripts/benchmark/test_runner_loop.bash
+
+The per-cell execution loop for the benchmark runner has been fully implemented and verified.
+
+VERIFICATION RESULTS:
+===================
+
+All 5 acceptance criteria verified via bash integration test:
+
+AC1: Run produces cells with proper reports
+  ✓ ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary produces cells
+  ✓ Each cell has report.json with profile, command, env_redacted, fiz.txt, fiz.err, session/
+  ✓ sweep.json records task_executor_version and harbor_runner_image_digest
+
+AC2: Resume skips terminal cells
+  ✓ Re-running without flags skips cells with terminal final_status
+  ✓ Cell count remains unchanged on resume (1 -> 1 per task)
+
+AC3: --retry-invalid reruns invalid cells
+  ✓ Cells with non-empty invalid_class are marked as invalid
+  ✓ --retry-invalid creates new cell with attempt_of pointing to prior cell
+  ✓ Prior cell receives superseded_by back-link to new cell
+  ✓ Orphan cell-state.json also triggers retry with proper linking
+
+AC4: Transient error triggers retry
+  ✓ HTTP 5xx errors trigger exponential backoff retry
+  ✓ Stub executor fails first 2 attempts, succeeds on 3rd
+  ✓ retry-log.txt captures all attempts with status codes
+  ✓ Final cell has terminal success status (completed/pass)
+
+AC5: Terminal failure after retry cap
+  ✓ When retry max attempts (4) exceeded, final_status=transient_exhausted
+  ✓ retry-log.txt records all attempts up to cap
+
+TEST EXECUTION:
+===============
+Test: bash scripts/benchmark/test_runner_loop.bash
+Result: PASS (all 5 acceptance scenarios verified)
+
+IMPLEMENTATION DETAILS:
+======================
+The execution loop is implemented in scripts/benchmark/benchmark with these key functions:
+
+- run_executor_with_retry(): Handles per-attempt retry with exponential backoff for transient errors
+  (lines 1002-1034)
+
+- run_one_cell(): Executes a single cell from start to finish
+  - Creates cell-state.json sentinel (line 1325-1331)
+  - Runs harness adapter (line 1340-1344)
+  - Composes task spec (line 1356-1368)
+  - Invokes executor with retry (line 1377)
+  - Composes report.json with all required fields (line 1410-1449)
+  - Back-writes superseded_by into prior cell (line 1453-1468)
+  - Cleans up cell-state.json (line 1451)
+  (lines 1267-1473)
+
+- run_cell_with_per_cell_retry(): Wraps run_one_cell with per-cell transient retry
+  - Fresh cell_id for each retry attempt
+  - attempt_of links to prior cell
+  - Exponential backoff between retries
+  (lines 1479-1530)
+
+- run_sweep(): Orchestrates matrix expansion and execution
+  - Validates inputs and resolves adapters
+  - Calls inspect_existing_cells() to find terminal/invalid/orphan cells (lines 1670-1672)
+  - Applies resume/retry rules to filter cells_to_run (lines 1680-1707)
+  - Launches cells in background job pool with concurrency-group locking
+  - Signal handling (SIGINT/SIGTERM) interrupts in-flight cells (lines 1596-1631)
+  (lines 1570-1759)
+
+- inspect_existing_cells(): Resume/retry logic
+  - Finds terminal cells (final_status is terminal) to skip on resume
+  - Finds invalid cells (invalid_class != "") for --retry-invalid
+  - Finds orphan cells (cell-state.json without report.json) for --retry-invalid
+  (lines 1053-1090)
+
+GATES STATUS:
+=============
+✓ lefthook run pre-commit: PASS (no staged files; hooks skipped as expected)
+- go test ./...: Tests have pre-existing network connectivity issues unrelated to this bead
+  (the bead explicitly excludes Go changes: "NON-SCOPE: Go changes/parity/deactivation (A5)")
+
+CONCLUSION:
+===========
+All acceptance criteria are satisfied and verified. The per-cell execution loop
+with resume/retry logic is fully functional as demonstrated by the comprehensive
+bash integration test suite.
