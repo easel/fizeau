@@ -1,0 +1,2 @@
+status: open
+reason: `CGO_ENABLED=1 go test ./... -race` fails in unrelated pre-existing tests, so the repo's pre-push gate cannot pass yet; retry after the baseline is repaired.
