@@ -42,6 +42,15 @@ cell_id="$(basename "$cell_dir")"
 model="$(jq -r '.env.FIZEAU_MODEL // ""' <<<"$spec")"
 dry_run="${HARBOR_TASK_EXECUTOR_DRY_RUN:-0}"
 
+# Compute task executor version (sha256 of this script)
+task_executor_version="$(sha256sum "$0" | awk '{print $1}')"
+
+# Get harbor runner image digest
+harbor_runner_image_digest=""
+if command -v docker >/dev/null 2>&1; then
+  harbor_runner_image_digest="$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null || echo "")"
+fi
+
 if [[ -z "$task_id" || -z "$tasks_dir" || -z "$cell_dir" || -z "$plugin" ]]; then
   echo "harbor: task-spec missing one of {task_id, tasks_dir, cell_dir, harbor_plugin}" >&2
   exit 2
@@ -109,8 +118,10 @@ if [[ "${HARBOR_TASK_EXECUTOR_DRY_RUN:-0}" == "1" ]]; then
     --arg image "$image" \
     --arg task "$task_id" \
     --arg plugin "$plugin" \
+    --arg te_version "$task_executor_version" \
+    --arg image_digest "$harbor_runner_image_digest" \
     --argjson argv "$(printf '%s\n' "${docker_args[@]}" | jq -R . | jq -s .)" \
-    '{dry_run:true, image:$image, task_id:$task, harbor_plugin:$plugin, docker_argv:$argv}' \
+    '{dry_run:true, image:$image, task_id:$task, harbor_plugin:$plugin, task_executor_version:$te_version, harbor_runner_image_digest:$image_digest, docker_argv:$argv}' \
     >"$result_path"
   cat "$result_path"
   exit 0
@@ -126,8 +137,10 @@ if [[ ! -s "$result_path" ]]; then
     --arg task "$task_id" \
     --arg image "$image" \
     --arg plugin "$plugin" \
+    --arg te_version "$task_executor_version" \
+    --arg image_digest "$harbor_runner_image_digest" \
     --argjson exit_code "$status" \
-    '{task_id:$task, image:$image, harbor_plugin:$plugin, exit_code:$exit_code, status:"missing_result"}' \
+    '{task_id:$task, image:$image, harbor_plugin:$plugin, task_executor_version:$te_version, harbor_runner_image_digest:$image_digest, exit_code:$exit_code, status:"missing_result"}' \
     >"$result_path"
 fi
 

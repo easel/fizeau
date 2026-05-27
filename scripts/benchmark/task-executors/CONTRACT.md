@@ -92,9 +92,13 @@ Fields:
 
 3. Harbor writes job artifacts under `/output`, and the executor writes
    a top-level `result.json` summary into `cell_dir`.
-4. The executor exits with docker's exit code. If Harbor crashed without
+4. The executor records provenance into `result.json`:
+   - `task_executor_version`: SHA256 hash of the executor script (for reproducibility)
+   - `harbor_runner_image_digest`: Docker image ID of the runner image
+   These fields are included in all result.json writes (successful, dry-run, or missing_result).
+5. The executor exits with docker's exit code. If Harbor crashed without
    producing a usable summary, the executor writes a stub
-   `{task_id, image, harbor_plugin, exit_code, status:"missing_result"}`
+   `{task_id, image, harbor_plugin, task_executor_version, harbor_runner_image_digest, exit_code, status:"missing_result"}`
    so the runner can classify the cell.
 
 ## Dry-run mode
