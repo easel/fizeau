@@ -1,0 +1,25 @@
+{
+  "ran": true,
+  "changed_docs": [
+    "docs/helix/02-design/solution-designs/SD-009-benchmark-mode.md",
+    "docs/helix/02-design/solution-designs/SD-010-harness-matrix-benchmark.md"
+  ],
+  "findings": [
+    {
+      "file": "docs/helix/02-design/solution-designs/SD-009-benchmark-mode.md",
+      "line": 654,
+      "rule_id": "prose.specificity.actor_action",
+      "severity": "advisory",
+      "rationale": "The sentence says something enables or supports work without naming the actor, action, artifact, or boundary.",
+      "suggested_edit": "Name the actor, action, artifact, or boundary that makes the statement concrete."
+    },
+    {
+      "file": "docs/helix/02-design/solution-designs/SD-010-harness-matrix-benchmark.md",
+      "line": 684,
+      "rule_id": "prose.specificity.actor_action",
+      "severity": "advisory",
+      "rationale": "The sentence says something enables or supports work without naming the actor, action, artifact, or boundary.",
+      "suggested_edit": "Name the actor, action, artifact, or boundary that makes the statement concrete."
+    }
+  ]
+}
