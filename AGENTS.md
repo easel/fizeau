@@ -93,6 +93,11 @@ Defined event types (all must be emitted at the right time):
 - `EventLLMDelta` — per streaming chunk (inside `consumeStream`)
 - `EventLLMResponse` — after each provider call
 - `EventToolCall` — per tool execution
+- `EventOverride` — mirrors service-stream override events for routing-quality metrics tracking (ADR-006 §5)
+- `EventRejectedOverride` — mirrors service-stream rejected_override events for routing-quality metrics tracking
+- `EventReasoningStall` — emitted when reasoning stall timeout is reached during streaming
+- `EventPlanningTurn` — after the planning LLM call completes when `Request.PlanningMode` is enabled
+- `EventToolCallLoopPivot` — when the agent detects an identical tool-call loop and has pivot budget available
 - `EventSessionEnd` — once at end of `Run`
 
 ## Compaction
