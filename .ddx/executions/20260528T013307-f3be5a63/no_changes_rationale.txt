@@ -1,0 +1,1 @@
+verification_command: bats scripts/benchmark/tests/adapters.bats scripts/benchmark/tests/build_label.bats scripts/benchmark/tests/runtime_probe.bats
