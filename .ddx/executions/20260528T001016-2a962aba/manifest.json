@@ -1,0 +1,91 @@
+{
+  "attempt_id": "20260528T001016-2a962aba",
+  "bead_id": "fizeau-dee51a91",
+  "base_rev": "4d15f4ed8e30891e06e9bf8dfd42d58ce9a21bb9",
+  "created_at": "2026-05-28T00:10:22.709883658Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-dee51a91",
+    "title": "bench-runner: banner SD-009 and SD-010 with ADR-016 + bash-runner pointer",
+    "description": "AR-2026-05-17-repo finding. SD-009 and SD-010 still title themselves around benchmark mode / harness matrix without flagging the move from fiz-bench (Go) to ./benchmark (bash) orchestration.",
+    "acceptance": "Both SD-009 and SD-010 carry a top-of-document banner referring readers to ADR-016 and plan-2026-05-15-benchmark-runner-simplification.md.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:bench",
+      "spec:SD-009",
+      "discovered-from:fizeau-a15106ab",
+      "governing:plan-2026-05-15-benchmark-runner-simplification"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-omlx\",\"resolved_model\":\"Qwen3.6-27B-MLX-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-18T13:58:11.171287961Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"Qwen3.6-27B-MLX-8bit\",\"actual_power\":5,\"actual_provider\":\"grendel-omlx\",\"attempt_id\":\"20260518T135757-73256818\",\"bead_id\":\"fizeau-dee51a91\",\"estimated_difficulty\":\"easy\",\"rejected_route_pins\":null,\"requested_power_class\":\"cheap\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T13:58:11.384765426Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=easy powerClass=cheap model=Qwen3.6-27B-MLX-8bit harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1235/v1/chat/completions\\\": dial tcp 100.97.179.68:1235: i/o timeout\",\"harness\":\"fiz\",\"model\":\"Qwen3.6-27B-MLX-8bit\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel-omlx\"}",
+          "created_at": "2026-05-18T13:58:11.489751578Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel-omlx model=Qwen3.6-27B-MLX-8bit connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1235/v1/chat/completions\": dial tcp 100.97.179.68:1235: i/o timeout\npowerClass=cheap\nresult_rev=333b806a90c38d6f806edb8408513d5be4a6a112\nbase_rev=333b806a90c38d6f806edb8408513d5be4a6a112\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T13:58:11.519231134Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "spec-id": "SD-009",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T13:58:11Z",
+          "count": 1,
+          "model": "Qwen3.6-27B-MLX-8bit",
+          "provider": "grendel-omlx",
+          "reason": "provider_connectivity"
+        }
+      ],
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:40Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "SD-009",
+      "path": "docs/helix/02-design/solution-designs/SD-009-benchmark-mode.md",
+      "title": "Solution Design: SD-009 — Fizeau Benchmark Mode and Terminal-Bench Evaluation Plan"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T001016-2a962aba",
+    "prompt": ".ddx/executions/20260528T001016-2a962aba/prompt.md",
+    "manifest": ".ddx/executions/20260528T001016-2a962aba/manifest.json",
+    "result": ".ddx/executions/20260528T001016-2a962aba/result.json",
+    "checks": ".ddx/executions/20260528T001016-2a962aba/checks.json",
+    "usage": ".ddx/executions/20260528T001016-2a962aba/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-dee51a91-20260528T001016-2a962aba"
+  },
+  "prompt_sha": "74d3911ed1fd6174ce94e7d18b809f845675c853680f92f78862d3be6b72c9b3"
+}
