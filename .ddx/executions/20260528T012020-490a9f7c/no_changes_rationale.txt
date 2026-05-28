@@ -1,0 +1,67 @@
+status: proposed
+reason: Architectural decision needed on how to resolve Go import cycle constraints that prevent moving service methods to internal/serviceimpl while maintaining root package stability and ADR-008 compliance.
+
+FINDING:
+
+The bead requests moving 17 service-related files to internal/serviceimpl. Technical investigation reveals an architectural constraint:
+
+Files contain TWO types of code:
+1. SERVICE METHODS (cannot be moved): `func (s *service) Execute(...)`, `func (s *service) RouteStatus(...)`, etc.
+   - Must remain in root package (receiver type defined in root)
+   - Use root package types: ServiceExecuteRequest, RouteDecision, ServiceEvent, ServiceProviderEntry, ServiceOptions, etc.
+
+2. PURE HELPERS (can be moved): Functions that don't define methods
+   - example: projectQuotaStatus(), effectiveReasoning(), defaultHarnessInstances()
+   - No dependency on root types in 4 files: service_harness_instances.go, service_policies.go, service_projection.go, service_reasoning.go
+   - Others mix methods and helpers, or use root types
+
+THE IMPORT CYCLE PROBLEM:
+
+If service methods are moved to serviceimpl:
+  root package → imports → serviceimpl  (for SessionHub, Runtime, etc.)
+  serviceimpl → needs → root types (ServiceExecuteRequest, RouteDecision, etc.)
+  Result: Forbidden circular import
+
+THREE POSSIBLE SOLUTIONS:
+
+A. REFACTOR IN PLACE (recommended for immediate progress):
+   - Keep methods in root
+   - Extract pure helpers to serviceimpl
+   - Root methods call serviceimpl helpers via narrow seams
+   - Matches pattern from prior commit d50feacb
+
+B. SERVICE STRUCT MOVEMENT (requires API surface change):
+   - Move service struct + methods to serviceimpl/service
+   - Root package constructs via serviceimpl.New()
+   - Root package returns FizeauService interface
+   - Breaks: Root-level method signatures become private/wrapped
+
+C. COMMON TYPES PACKAGE (requires reorganization):
+   - Extract root types to shared internal package
+   - Both root and serviceimpl import from it
+   - Enables full file movement
+   - Requires CONTRACT-003 compliance review
+
+RECOMMENDATION:
+
+This bead should be reinterpreted as:
+
+PHASE 1 (This execution): Refactor execute/runtime mechanics in-place
+- Keep service methods in root
+- Extract implementation logic to serviceimpl/execute*, serviceimpl/routing*, etc.
+- Root methods become thin facades that call serviceimpl helpers
+- Achieves ADR-008 goal: "concrete implementation behind internal packages"
+- Maintains "root package stability"
+
+This aligns with recent work (commit d50feacb) which extracted serviceimpl/catalog_helpers.go while keeping service_models.go in root.
+
+The allowlist test should NOT be modified for this approach - test passes unchanged.
+
+OPERATOR DECISION NEEDED:
+
+Which interpretation of "move files" should guide slice 2?
+- A. Refactor in place (keep methods in root, extract helpers)
+- B. Move structs/methods (requires refactoring service construction)
+- C. Create common types package (requires architectural review)
+
+Request: guidance on which approach aligns with ADR-008 intent for slices 2-5.

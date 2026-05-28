@@ -1,0 +1,191 @@
+{
+  "attempt_id": "20260528T012020-490a9f7c",
+  "bead_id": "fizeau-f5830dd8",
+  "base_rev": "fe0b3c37c5853a74711826d55e9acb728580cb36",
+  "created_at": "2026-05-28T01:20:24.991925236Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f5830dd8",
+    "title": "repo-structure: slice 2 - move execute/runtime mechanics to internal/serviceimpl",
+    "description": "Move execute/runtime mechanics per ADR-008. Move metadata_billing.go, service_execute.go, service_execute_dispatch.go, service_harness_instances.go, service_model_resolution.go, service_models.go, service_native_provider.go, service_policies.go, service_projection.go, service_providers.go, service_reasoning.go, service_refresh_scheduler.go, service_routing.go, service_snapshot.go, service_status.go, and service_stale_harness_reaper*.go files to internal/serviceimpl along with their white-box tests. Maintain root package stability and keep allowlist test passing.",
+    "labels": [
+      "helix",
+      "phase:implementation",
+      "kind:refactor",
+      "area:repo-structure",
+      "spec:ADR-008"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T00:38:28.542187216Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T00:39:08.246669188Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T003836-a09ad288\",\"bead_id\":\"fizeau-f5830dd8\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T00:39:10.201494298Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T00:39:10.33941174Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=227d71326aeadd209064cc3cb14e7f37ca50ffeb\nbase_rev=227d71326aeadd209064cc3cb14e7f37ca50ffeb\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T00:39:10.3817107Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode readiness classification result: json: cannot unmarshal array into Go struct field preClaimIntakePromptRewrite.rewrite.acceptance of type string\",\"fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\"}",
+          "created_at": "2026-05-28T00:40:40.577477503Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260528T004051-ffa32620\",\"bead_id\":\"fizeau-f5830dd8\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T00:48:23.339280359Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=open\nreason=Architectural design clarification required before proceeding PROBLEM ANALYSIS: The bead requests moving 17 service_*.go files from root package to internal/serviceimpl. This creates a fundamental architectural challenge: Files to move include: - service_execute.go (defines 9 methods on root service struct) - service_routing.go (defines 18 methods on root service struct) - service_models.go, service_providers.go, and 13 others with similar coupling to root types The challenge: 1. These files define methods on the root's \"service\" struct or heavily reference public types (ServiceExecuteRequest, RouteDecision, BillingModel, etc.) 2. Root's service.go imports internal/serviceimpl for serviceimpl.Runtime 3. Moving these files to internal/serviceimpl creates circular import: root → internal/serviceimpl → root RECOMMENDED SOLUTION (per ADR-008 §2): \"If an implementation move exposes a cycle, the fix is to introduce smaller implementation-local interfaces or adapter functions, not to make the root package absorb implementation code again.\" Phased approach: 1. Extract implementation logic from each of the 17 files into internal/serviceimpl functions that DON'T import root types (accept/return strings, []byte, or implementation-neutral types) 2. Keep minimal wrapper functions/methods in root that adapt public types to/from internal types 3. Delete files from root only after wrapping is complete 4. Update service_root_facade_allowlist_test.go (already modified to remove these 17 files) 5. Move white-box test files to internal/serviceimpl package_test.go Pattern reference: See commit 5e6b833b (slice 1) - service_progress.go refactoring WORK REQUIRED: - 17 files × refactoring + wrapping + moving - ~50+ test files moving/refactoring - Validation that public API (FizeauService interface) remains unchanged - Full test suite validation for no behavioral regressions This is achievable but requires substantial careful refactoring to avoid breaking the public contract while achieving the internal boundary goal.\nsuggested_action=retry with a smart agent",
+          "created_at": "2026-05-28T00:48:23.432759283Z",
+          "kind": "no_changes_autonomous_retry",
+          "source": "ddx work",
+          "summary": "no_changes_autonomous_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: open\nreason: Architectural design clarification required before proceeding\n\nPROBLEM ANALYSIS:\nThe bead requests moving 17 service_*.go files from root package to internal/serviceimpl. This creates a fundamental architectural challenge:\n\nFiles to move include:\n- service_execute.go (defines 9 methods on root service struct)\n- service_routing.go (defines 18 methods on root service struct)\n- service_models.go, service_providers.go, and 13 others with similar coupling to root types\n\nThe challenge:\n1. These files define methods on the root's \"service\" struct or heavily reference public types (ServiceExecuteRequest, RouteDecision, BillingModel, etc.)\n2. Root's service.go imports internal/serviceimpl for serviceimpl.Runtime\n3. Moving these files to internal/serviceimpl creates circular import: root → internal/serviceimpl → root\n\nRECOMMENDED SOLUTION (per ADR-008 §2):\n\"If an implementation move exposes a cycle, the fix is to introduce smaller implementation-local interfaces or adapter functions, not to make the root package absorb implementation code again.\"\n\nPhased approach:\n1. Extract implementation logic from each of the 17 files into internal/serviceimpl functions that DON'T import root types (accept/return strings, []byte, or implementation-neutral types)\n2. Keep minimal wrapper functions/methods in root that adapt public types to/from internal types\n3. Delete files from root only after wrapping is complete\n4. Update service_root_facade_allowlist_test.go (already modified to remove these 17 files)\n5. Move white-box test files to internal/serviceimpl package_test.go\n\nPattern reference: See commit 5e6b833b (slice 1) - service_progress.go refactoring\n\nWORK REQUIRED:\n- 17 files × refactoring + wrapping + moving\n- ~50+ test files moving/refactoring\n- Validation that public API (FizeauService interface) remains unchanged\n- Full test suite validation for no behavioral regressions\n\nThis is achievable but requires substantial careful refactoring to avoid breaking the public contract while achieving the internal boundary goal.\nresult_rev=3d37f0d6aeabebb87940aa32e2481e3c82a11e60\nbase_rev=3d37f0d6aeabebb87940aa32e2481e3c82a11e60\nretry_after=2026-05-28T00:53:23Z\noutcome_reason=no_changes",
+          "created_at": "2026-05-28T00:48:23.575172333Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected\",\"fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8cca69d13ca3aa9a57249b1b86fb0045335c39878a22e755f9f98a79eb000f23\"}",
+          "created_at": "2026-05-28T00:54:03.174109772Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T00:54:44.075140136Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T005411-fb5e4ee4\",\"bead_id\":\"fizeau-f5830dd8\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T00:54:45.646257642Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"keep_open_for_autonomous_retry\",\"actual_power\":5,\"count\":2,\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"model\":\"qwen3.5-27b\",\"provider\":\"bragi\",\"reason\":\"provider_connectivity\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T00:54:45.714472003Z",
+          "kind": "provider_connectivity.auto_retry",
+          "source": "ddx work",
+          "summary": "repeated provider connectivity failure kept open for autonomous retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T00:54:45.782769947Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=46a3eb7b18a26a782395ce9daa8a5c6d41bb69fe\nbase_rev=46a3eb7b18a26a782395ce9daa8a5c6d41bb69fe\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T00:54:45.81363988Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode readiness classification result: json: cannot unmarshal array into Go struct field preClaimIntakePromptRewrite.rewrite.acceptance of type string\",\"fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\"}",
+          "created_at": "2026-05-28T01:20:11.785938488Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "ADR-008",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-28T00:54:45Z",
+          "count": 2,
+          "endpoint": "http://bragi:1234/v1/chat/completions",
+          "model": "qwen3.5-27b",
+          "provider": "bragi",
+          "reason": "provider_connectivity",
+          "timeout_class": "bad gateway"
+        }
+      ],
+      "work-last-detail": "Architectural design clarification required before proceeding PROBLEM ANALYSIS: The bead requests moving 17 service_*.go files from root package to internal/serviceimpl. This creates a fundamental architectural challenge: Files to move include: - service_execute.go (defines 9 methods on root service struct) - service_routing.go (defines 18 methods on root service struct) - service_models.go, service_providers.go, and 13 others with similar coupling to root types The challenge: 1. These files define methods on the root's \"service\" struct or heavily reference public types (ServiceExecuteRequest, RouteDecision, BillingModel, etc.) 2. Root's service.go imports internal/serviceimpl for serviceimpl.Runtime 3. Moving these files to internal/serviceimpl creates circular import: root → internal/serviceimpl → root RECOMMENDED SOLUTION (per ADR-008 §2): \"If an implementation move exposes a cycle, the fix is to introduce smaller implementation-local interfaces or adapter functions, not to make the root package absorb implementation code again.\" Phased approach: 1. Extract implementation logic from each of the 17 files into internal/serviceimpl functions that DON'T import root types (accept/return strings, []byte, or implementation-neutral types) 2. Keep minimal wrapper functions/methods in root that adapt public types to/from internal types 3. Delete files from root only after wrapping is complete 4. Update service_root_facade_allowlist_test.go (already modified to remove these 17 files) 5. Move white-box test files to internal/serviceimpl package_test.go Pattern reference: See commit 5e6b833b (slice 1) - service_progress.go refactoring WORK REQUIRED: - 17 files × refactoring + wrapping + moving - ~50+ test files moving/refactoring - Validation that public API (FizeauService interface) remains unchanged - Full test suite validation for no behavioral regressions This is achievable but requires substantial careful refactoring to avoid breaking the public contract while achieving the internal boundary goal.",
+      "work-last-status": "no_changes_autonomous_retry",
+      "work-no-changes-count": 1,
+      "work-retry-after": "2026-05-28T00:53:23Z",
+      "work-smart-retry": true,
+      "work-smart-retry-reason": "Architectural design clarification required before proceeding PROBLEM ANALYSIS: The bead requests moving 17 service_*.go files from root package to internal/serviceimpl. This creates a fundamental architectural challenge: Files to move include: - service_execute.go (defines 9 methods on root service struct) - service_routing.go (defines 18 methods on root service struct) - service_models.go, service_providers.go, and 13 others with similar coupling to root types The challenge: 1. These files define methods on the root's \"service\" struct or heavily reference public types (ServiceExecuteRequest, RouteDecision, BillingModel, etc.) 2. Root's service.go imports internal/serviceimpl for serviceimpl.Runtime 3. Moving these files to internal/serviceimpl creates circular import: root → internal/serviceimpl → root RECOMMENDED SOLUTION (per ADR-008 §2): \"If an implementation move exposes a cycle, the fix is to introduce smaller implementation-local interfaces or adapter functions, not to make the root package absorb implementation code again.\" Phased approach: 1. Extract implementation logic from each of the 17 files into internal/serviceimpl functions that DON'T import root types (accept/return strings, []byte, or implementation-neutral types) 2. Keep minimal wrapper functions/methods in root that adapt public types to/from internal types 3. Delete files from root only after wrapping is complete 4. Update service_root_facade_allowlist_test.go (already modified to remove these 17 files) 5. Move white-box test files to internal/serviceimpl package_test.go Pattern reference: See commit 5e6b833b (slice 1) - service_progress.go refactoring WORK REQUIRED: - 17 files × refactoring + wrapping + moving - ~50+ test files moving/refactoring - Validation that public API (FizeauService interface) remains unchanged - Full test suite validation for no behavioral regressions This is achievable but requires substantial careful refactoring to avoid breaking the public contract while achieving the internal boundary goal.",
+      "work-smart-retry-suggested-action": "retry with a smart agent",
+      "work-suggested-action": "retry with a smart agent"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-008",
+      "path": "docs/helix/02-design/adr/ADR-008-service-package-and-transcript-boundaries.md",
+      "title": "ADR-008: Service Package and Transcript Boundaries"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T012020-490a9f7c",
+    "prompt": ".ddx/executions/20260528T012020-490a9f7c/prompt.md",
+    "manifest": ".ddx/executions/20260528T012020-490a9f7c/manifest.json",
+    "result": ".ddx/executions/20260528T012020-490a9f7c/result.json",
+    "checks": ".ddx/executions/20260528T012020-490a9f7c/checks.json",
+    "usage": ".ddx/executions/20260528T012020-490a9f7c/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-f5830dd8-20260528T012020-490a9f7c"
+  },
+  "prompt_sha": "98d2552b0ea05d8b7fe965a0c5b1f1519c004697b7eb4533a17db93693e57384"
+}
