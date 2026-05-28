@@ -2,12 +2,16 @@ package claudetui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
@@ -24,6 +28,13 @@ const claudettuiQuotaFreshness = 15 * time.Minute
 // account refresh cadence matches quota.
 const claudettuiAccountFreshness = claudettuiQuotaFreshness
 
+// modelDiscoveryTTL is the freshness window for model discovery cache per ADR-012.
+const modelDiscoveryTTL = 24 * time.Hour
+
+// modelDiscoveryRefreshDeadline is the maximum time a model discovery probe
+// is expected to take, per ADR-012.
+const modelDiscoveryRefreshDeadline = 60 * time.Second
+
 // supportedLimitIDs is the stable public set of Windows[].LimitID values
 // claude-tui's quota probe emits. Must match claude's set.
 // Mirrored in doc.go for human readers.
@@ -37,6 +48,28 @@ var supportedLimitIDs = []string{
 // supportedAliases is the stable public set of family aliases
 // ResolveModelAlias recognizes. Mirrored in doc.go for human readers.
 var supportedAliases = []string{"sonnet", "opus", "haiku"}
+
+// modelDiscoveryCache is the per-process instance for model discovery caching
+// per ADR-012. It is initialized once at package load time.
+var modelDiscoveryCache *discoverycache.Cache
+
+// modelDiscoveryCacheSource is the Source descriptor for the cache.
+var modelDiscoveryCacheSource = discoverycache.Source{
+	Tier:            "discovery",
+	Name:            "claude-tui",
+	TTL:             modelDiscoveryTTL,
+	RefreshDeadline: modelDiscoveryRefreshDeadline,
+}
+
+func init() {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = "/tmp"
+	}
+	modelDiscoveryCache = &discoverycache.Cache{
+		Root: filepath.Join(cacheDir, "fizeau"),
+	}
+}
 
 // refreshGroup serializes concurrent RefreshQuota / RefreshAccount calls
 // across all *Harness instances. Per CONTRACT-004 invariant #6 Harnesses are
@@ -396,6 +429,37 @@ func accountPlan(account *harnesses.AccountInfo) string {
 // Both claude and claude-tui use the same /usage output format, so they share the same parser.
 func parseClaudeTuiUsageOutput(text string) ([]harnesses.QuotaWindow, *harnesses.AccountInfo) {
 	return anthropic.ParseClaudeUsageOutput(text)
+}
+
+// modelDiscoveryRefresher is the live PTY probe used by DefaultModelSnapshot.
+// It is a package-level variable so tests can swap it via
+// SetModelDiscoveryRefresherForTest without spawning the claude binary.
+// The default delegates to readClaudeTuiModelDiscoveryViaPTY and encodes the result.
+var modelDiscoveryRefresher discoverycache.Refresher = func(ctx context.Context) ([]byte, error) {
+	snapshot, err := readClaudeTuiModelDiscoveryViaPTY(ctx, modelDiscoveryRefreshDeadline)
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshot.Models) == 0 {
+		return nil, harnesses.ErrModelDiscoveryEvidenceMissing
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal model discovery snapshot: %w", err)
+	}
+	return data, nil
+}
+
+// SetModelDiscoveryRefresherForTest swaps the package-level PTY probe used by
+// DefaultModelSnapshot and returns a restore function. Production code MUST NOT
+// call this — it exists so tests can inject deterministic PTY responses while
+// exercising the real cache I/O inside DefaultModelSnapshot.
+func SetModelDiscoveryRefresherForTest(fn discoverycache.Refresher) func() {
+	prev := modelDiscoveryRefresher
+	modelDiscoveryRefresher = fn
+	return func() {
+		modelDiscoveryRefresher = prev
+	}
 }
 
 // Compile-time interface satisfaction assertions per CONTRACT-004.

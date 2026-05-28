@@ -1,0 +1,34 @@
+{
+  "id": "model-discovery-test-cassette",
+  "harness_name": "claude-tui",
+  "command": "/model",
+  "recorded_at": "2026-05-27T00:00:00Z",
+  "records": [
+    {
+      "type": "discovery",
+      "source": "pty",
+      "status": "ok",
+      "captured_at": "2026-05-27T00:00:00Z",
+      "freshness_window": "24h",
+      "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
+      "models": [
+        "claude-opus-4-1",
+        "claude-opus-4-5",
+        "claude-sonnet-4-1",
+        "claude-sonnet-4-6",
+        "claude-haiku-3-5",
+        "sonnet",
+        "opus",
+        "haiku"
+      ],
+      "reasoning_levels": [
+        "basic",
+        "standard",
+        "extended"
+      ],
+      "metadata": {
+        "detail": "model discovery from claude TUI /model command"
+      }
+    }
+  ]
+}
