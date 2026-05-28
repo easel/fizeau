@@ -1,0 +1,99 @@
+{
+  "attempt_id": "20260528T000231-a7fbd4d8",
+  "bead_id": "fizeau-283bcb8c",
+  "base_rev": "cba9eea185ad397bc7397def23a47a5cd418af85",
+  "created_at": "2026-05-28T00:02:36.674580465Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-283bcb8c",
+    "title": "claude-tui/step7: ModelDiscoveryHarness — live PTY only (no static fallback)",
+    "description": "Implement DefaultModelSnapshot / ResolveModelAlias / SupportedAliases.\n\nDefaultModelSnapshot MUST drive the live TUI via the PTY transport — exactly like the no-static-fallback chain (fizeau-89eca738) is doing for the existing harnesses. No Go-literal fallback. On PTY failure: return ErrModelDiscoveryEvidenceMissing. The result is cached per ADR-012 (per-source on-disk cache).\n\nA cassette is recorded under internal/harnesses/claude-tui/testdata/model_surface/ — but ONLY as a test fixture. Runtime hits live PTY.",
+    "acceptance": "1) DefaultModelSnapshot drives /model PTY (or equivalent TUI affordance) live; result is cached per ADR-012 (internal/discoverycache); returns ErrModelDiscoveryEvidenceMissing on PTY failure.\n2) Timeout behavior: live PTY discovery has a configurable timeout (default 30s); on timeout, returns ErrModelDiscoveryEvidenceMissing with a wrapped context.DeadlineExceeded; tested with a hanging synthetic PTY.\n3) ADR-012 single-flight: concurrent DefaultModelSnapshot calls coalesce to one PTY probe via the discoverycache layer; verified by a goroutine race test that counts probe invocations.\n4) Stale-cache refresh: after TTL expiry the next snapshot triggers a refresh via live PTY; verified by a test that fast-forwards the clock past TTL and observes a fresh probe.\n5) ResolveModelAlias resolves any family alias the live snapshot exposes; returns ErrAliasNotResolvable for out-of-set names.\n6) SupportedAliases returns the canonical family list (sonnet, opus, haiku) per ADR-013's known surface.\n7) internal/harnesses/claude-tui/testdata/model_surface/ cassette exists as a test fixture (recorded via live PTY against an authenticated claude); replay-only test asserts the parser yields a non-empty snapshot.\n8) grep -n 'defaultClaudeTuiModelDiscovery\\|Models:[[:space:]]*\\[\\]string{' internal/harnesses/claude-tui/ returns zero hits — no static fallback.\n9) Conformance suite passes; go test ./internal/harnesses/claude-tui/... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:feature",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:CONTRACT-004",
+      "principle:no-static-fallback"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T00:00:37.933426258Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T00:01:13.626050635Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T000044-d90e5140\",\"bead_id\":\"fizeau-283bcb8c\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":[\"harness\"],\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T00:01:15.149571135Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T00:01:15.293802405Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=cbf5a6408a9e3b0e75a2f8dbb999fc7e9ee09c1e\nbase_rev=cbf5a6408a9e3b0e75a2f8dbb999fc7e9ee09c1e\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T00:01:15.324439688Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "spec-id": "CONTRACT-004",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-28T00:01:15Z",
+          "count": 1,
+          "endpoint": "http://bragi:1234/v1/chat/completions",
+          "model": "qwen3.5-27b",
+          "provider": "bragi",
+          "reason": "provider_connectivity",
+          "timeout_class": "bad gateway"
+        }
+      ]
+    }
+  },
+  "governing": [
+    {
+      "id": "CONTRACT-004",
+      "path": "docs/helix/02-design/contracts/CONTRACT-004-harness-implementation.md",
+      "title": "CONTRACT-004: Harness Implementation Contract"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T000231-a7fbd4d8",
+    "prompt": ".ddx/executions/20260528T000231-a7fbd4d8/prompt.md",
+    "manifest": ".ddx/executions/20260528T000231-a7fbd4d8/manifest.json",
+    "result": ".ddx/executions/20260528T000231-a7fbd4d8/result.json",
+    "checks": ".ddx/executions/20260528T000231-a7fbd4d8/checks.json",
+    "usage": ".ddx/executions/20260528T000231-a7fbd4d8/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-283bcb8c-20260528T000231-a7fbd4d8"
+  },
+  "prompt_sha": "d241581b8dea98a7c08b7430781dffa5215bff28320fbebc03e6ec0d494315fa"
+}
