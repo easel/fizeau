@@ -8,6 +8,15 @@ ddx:
     - benchmark-baseline-2026-04-08
 ---
 
+> **⚠️ IMPORTANT (2026-05-16)**: The benchmark runner architecture changed on 2026-05-16. 
+> This document describes the original benchmark-mode framework and execution model.
+> See [ADR-016: Cells Are Self-Describing Evidence](../adr/ADR-016-cells-are-self-describing-evidence.md) 
+> and [plan-2026-05-15-benchmark-runner-simplification.md](../plan-2026-05-15-benchmark-runner-simplification.md) 
+> for the current architecture: the shift from `fiz-bench` (Go harness) to `./benchmark` (bash orchestration),
+> the elimination of lanes/recipes/comparison-groups, and the transition to profile-only authoring.
+
+---
+
 ## Reference Implementations
 
 - **ForgeCode** (patch-based editing): `https://github.com/antinomyhq/forgecode`

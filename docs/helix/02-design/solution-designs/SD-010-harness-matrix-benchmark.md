@@ -9,6 +9,15 @@ ddx:
     - harness-matrix-plan-2026-04-29   # plan v7 (codex peer review v6)
 ---
 
+> **⚠️ IMPORTANT (2026-05-16)**: The benchmark runner architecture changed on 2026-05-16. 
+> This document describes the original multi-harness matrix design framework.
+> See [ADR-016: Cells Are Self-Describing Evidence](../adr/ADR-016-cells-are-self-describing-evidence.md) 
+> and [plan-2026-05-15-benchmark-runner-simplification.md](../plan-2026-05-15-benchmark-runner-simplification.md) 
+> for the current architecture: the shift from `fiz-bench` (Go harness) to `./benchmark` (bash orchestration),
+> the elimination of lanes/recipes/comparison-groups, and the transition to profile-only authoring.
+
+---
+
 # Solution Design: SD-010 — Multi-Harness × Model Matrix Benchmark
 
 **Bead**: agent-fab7feae (Author SD-010 — Multi-Harness × Model Matrix Benchmark)
