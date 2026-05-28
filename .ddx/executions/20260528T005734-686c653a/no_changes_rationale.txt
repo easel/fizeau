@@ -1,0 +1,2 @@
+status: proposed
+reason: AC complete - orchestrator controls bead lifecycle. Slices 2-5 beads filed with ADR-008 spec-id in prior execution. Dependencies established: slice-2→3→4→5. Allowlist test passes confirming slice-1 in place. Verification report in verification_report.md documents completion of all acceptance criteria. Ready for orchestrator to close fizeau-f262961f and release slice-2 (fizeau-f5830dd8) for work.
