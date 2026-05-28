@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260528T003836-a09ad288",
+  "bead_id": "fizeau-f5830dd8",
+  "base_rev": "227d71326aeadd209064cc3cb14e7f37ca50ffeb",
+  "created_at": "2026-05-28T00:38:42.428836772Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f5830dd8",
+    "title": "repo-structure: slice 2 - move execute/runtime mechanics to internal/serviceimpl",
+    "description": "Move execute/runtime mechanics per ADR-008. Move metadata_billing.go, service_execute.go, service_execute_dispatch.go, service_harness_instances.go, service_model_resolution.go, service_models.go, service_native_provider.go, service_policies.go, service_projection.go, service_providers.go, service_reasoning.go, service_refresh_scheduler.go, service_routing.go, service_snapshot.go, service_status.go, and service_stale_harness_reaper*.go files to internal/serviceimpl along with their white-box tests. Maintain root package stability and keep allowlist test passing.",
+    "labels": [
+      "helix",
+      "phase:implementation",
+      "kind:refactor",
+      "area:repo-structure",
+      "spec:ADR-008"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T00:38:28.542187216Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "ADR-008"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-008",
+      "path": "docs/helix/02-design/adr/ADR-008-service-package-and-transcript-boundaries.md",
+      "title": "ADR-008: Service Package and Transcript Boundaries"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T003836-a09ad288",
+    "prompt": ".ddx/executions/20260528T003836-a09ad288/prompt.md",
+    "manifest": ".ddx/executions/20260528T003836-a09ad288/manifest.json",
+    "result": ".ddx/executions/20260528T003836-a09ad288/result.json",
+    "checks": ".ddx/executions/20260528T003836-a09ad288/checks.json",
+    "usage": ".ddx/executions/20260528T003836-a09ad288/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-f5830dd8-20260528T003836-a09ad288"
+  },
+  "prompt_sha": "a6542b494f13661575ff74400111cb4fe3a8717419debf48fc432c9ec29d6137"
+}
