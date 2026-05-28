@@ -1,0 +1,80 @@
+{
+  "attempt_id": "20260528T000208-610f08d9",
+  "bead_id": "fizeau-5551f116",
+  "base_rev": "84f689d831dceda4ff0a14d294515ee753689776",
+  "created_at": "2026-05-28T00:02:13.403371052Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5551f116",
+    "title": "workbench: add ADR-016 compatibility banner to SD-015",
+    "description": "AR-2026-05-17-repo currency check (cf. AR-2026-05-15-benchmark-model-browser). ADR-016 (cells-as-self-describing-evidence, 2026-05-16) landed after SD-015 was written. SD-015 needs a top-of-document banner stating: cells now embed resolved profile snapshots, profile-YAML joins and PROFILE_ALIASES are retired, existing Parquet artifacts remain backward-compatible.\n\nSource review: fizeau-a880e449.",
+    "acceptance": "SD-015 carries an ADR-016 compatibility banner with the three bullets above plus a pointer to ADR-016.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:docs",
+      "area:workbench",
+      "spec:SD-015",
+      "discovered-from:fizeau-a880e449"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-5551f116\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:30:16.762336334Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"infrastructure\",\"decode_warnings\":[{\"field\":\"classification\",\"warning\":\"unknown classification\",\"raw_excerpt\":\"infrastructure\"}],\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-2347026493.lock' write error. Out of diskspace: exit status 128\",\"malformed\":true,\"rationale\":\"pre-execute checkpoint failed writing to /tmp due to out-of-disk-space; transient host infrastructure issue unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:30:26.737242807Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "unusable triage classification: infrastructure"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-2347026493.lock' write error. Out of diskspace: exit status 128",
+          "created_at": "2026-05-18T13:30:26.768289195Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl)\",\"fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\"}",
+          "created_at": "2026-05-28T00:02:02.110562515Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "SD-015",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:27:04Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "SD-015",
+      "path": "docs/helix/02-design/solution-designs/SD-015-benchmark-workbench.md",
+      "title": "Solution Design: SD-015 - Benchmark Workbench"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T000208-610f08d9",
+    "prompt": ".ddx/executions/20260528T000208-610f08d9/prompt.md",
+    "manifest": ".ddx/executions/20260528T000208-610f08d9/manifest.json",
+    "result": ".ddx/executions/20260528T000208-610f08d9/result.json",
+    "checks": ".ddx/executions/20260528T000208-610f08d9/checks.json",
+    "usage": ".ddx/executions/20260528T000208-610f08d9/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-5551f116-20260528T000208-610f08d9"
+  },
+  "prompt_sha": "5e8ebfbeba3ccdc651409fe28b5ec9866eee070a94f89ae89cc95b72f04c60aa"
+}

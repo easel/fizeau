@@ -1,0 +1,45 @@
+{
+  "bead_id": "fizeau-5551f116",
+  "attempt_id": "20260528T000208-610f08d9",
+  "base_rev": "84f689d831dceda4ff0a14d294515ee753689776",
+  "result_rev": "2d610995815894ef6cefd3affbe34781b4079087",
+  "implementation_rev": "2d610995815894ef6cefd3affbe34781b4079087",
+  "landed_branch": "master",
+  "outcome": "preserved",
+  "status": "preserved_needs_review",
+  "detail": "evidence commit failed: commit evidence: git commit: \u001b[38;2;56;56;56m╭─────────────────────\u001b[m\u001b[38;2;56;56;56m───────────────────╮\u001b[m\n\u001b[38;2;56;56;56m│\u001b[m 🥊 lefthook  v2.1.8  hook:  \u001b[1mpre-commit\u001b[m \u001b[38;2;56;56;56m│\u001b[m\n\u001b[38;2;56;56;56m╰─────────────────────\u001b[m\u001b[38;2;56;56;56m───────────────────╯\u001b[m\n┃  vet ❯ \ngo vet ./...\nopen /Users/erik/Projects/ddx-land-finalize-2542808901/cmd/bench/plan.go: cannot allocate memory\nmake: *** [Makefile:119: vet] Error 1\n\nexit status 2\n┃  fmt ❯ \n\n\u001b[38;2;56;56;56m  ────────────────────────────────────\u001b[m\nsummary: (done in 1.50 seconds)\n✔️ fmt (1.33 seconds)\n🥊 vet (0.45 seconds): exit status 1",
+  "orchestrator_status": "preserved_needs_review",
+  "reason": "evidence commit failed: commit evidence: git commit: \u001b[38;2;56;56;56m╭─────────────────────\u001b[m\u001b[38;2;56;56;56m───────────────────╮\u001b[m\n\u001b[38;2;56;56;56m│\u001b[m 🥊 lefthook  v2.1.8  hook:  \u001b[1mpre-commit\u001b[m \u001b[38;2;56;56;56m│\u001b[m\n\u001b[38;2;56;56;56m╰─────────────────────\u001b[m\u001b[38;2;56;56;56m───────────────────╯\u001b[m\n┃  vet ❯ \ngo vet ./...\nopen /Users/erik/Projects/ddx-land-finalize-2542808901/cmd/bench/plan.go: cannot allocate memory\nmake: *** [Makefile:119: vet] Error 1\n\nexit status 2\n┃  fmt ❯ \n\n\u001b[38;2;56;56;56m  ────────────────────────────────────\u001b[m\nsummary: (done in 1.50 seconds)\n✔️ fmt (1.33 seconds)\n🥊 vet (0.45 seconds): exit status 1",
+  "preserve_ref": "refs/ddx/iterations/fizeau-5551f116/20260528T000208-610f08d9-cba9eea185ad",
+  "candidate_ref": "refs/ddx/iterations/20260528T000208-610f08d9/0",
+  "required_exec_summary": "skipped",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260528T000208-610f08d9",
+      "result_rev": "2d610995815894ef6cefd3affbe34781b4079087",
+      "implementer_route": {
+        "harness": "claude",
+        "model": "haiku"
+      },
+      "review_result": {},
+      "final_decision": "success"
+    }
+  ],
+  "harness": "claude",
+  "model": "haiku",
+  "session_id": "eb-812a9b34",
+  "duration_ms": 47736,
+  "tokens": 2823,
+  "cost_usd": 0.07544239999999999,
+  "exit_code": 0,
+  "project_root": "/home/erik/Projects/fizeau",
+  "execution_dir": ".ddx/executions/20260528T000208-610f08d9",
+  "prompt_file": ".ddx/executions/20260528T000208-610f08d9/prompt.md",
+  "manifest_file": ".ddx/executions/20260528T000208-610f08d9/manifest.json",
+  "result_file": ".ddx/executions/20260528T000208-610f08d9/result.json",
+  "usage_file": ".ddx/executions/20260528T000208-610f08d9/usage.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-28T00:02:13.410626436Z",
+  "finished_at": "2026-05-28T00:03:01.147006258Z"
+}
