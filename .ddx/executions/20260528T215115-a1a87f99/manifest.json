@@ -1,0 +1,90 @@
+{
+  "attempt_id": "20260528T215115-a1a87f99",
+  "bead_id": "fizeau-f97c0efa",
+  "base_rev": "99ba2ed15a6ccafb69f81a47e9f71c6d9e1f2988",
+  "created_at": "2026-05-28T21:51:19.713104767Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f97c0efa",
+    "title": "concerns: apply go-std lint reconciliation (path A restore linters OR path B amend concern override)",
+    "description": "PROBLEM: .ddx/plugins/helix/workflows/concerns/go-std/practices.md declares a golangci-lint baseline (govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic) that is not reflected in .golangci.yml (which enables only misspell). The Makefile partially compensates via go vet, gosec, govulncheck, go test -race pre-push. Repo state is internally inconsistent — this bead resolves it.\n\nROOT CAUSE: Same as parent (AR Open Decisions §1, fizeau-a1b61f00). The sibling audit bead produces the gap mapping; this bead acts on it by selecting and executing exactly one resolution path.\n\nPROPOSED FIX: Consume the audit artifact produced by the sibling bead, choose exactly one path, and execute it end to end:\n  Path A — In .golangci.yml (linters block), restore the declared set (add govet, staticcheck, ineffassign, unconvert, gosec, gocritic; keep misspell). Carry forward exclusions verbatim from the audit (AC4 of sibling). Wire `golangci-lint run ./...` into the pre-push gate (lefthook.yml pre-push stage) and/or any existing CI workflow file under .github/workflows that mirrors Makefile lint targets.\n  Path B — Add an override paragraph to docs/helix/01-frame/concerns.md §go-std that ratifies the Makefile-driven equivalents. The paragraph must name each of the seven declared linters and the specific Makefile target / tool that replaces it (1:1, using the audit mapping), and state why each substitution is accepted.\n\nNON-SCOPE: Do not execute both paths. Do not modify the upstream .ddx/plugins/helix/workflows/concerns/go-std/practices.md — overrides belong in the project's docs/helix/01-frame/concerns.md. Do not re-produce the audit mapping; consume the sibling bead's output. Do not introduce new linters beyond the declared baseline.\n\nGOVERNING ARTIFACTS: AR-2026-05-17-repo open decision §1 (fizeau-a1b61f00); .ddx/plugins/helix/workflows/concerns/go-std/practices.md; docs/helix/01-frame/concerns.md; .golangci.yml; Makefile; lefthook.yml.\n\nDEPENDENCIES: Sibling audit bead (go-std-lint-audit mapping artifact) must be merged before this bead is executable.\n\nVERIFICATION: Exactly one path executed; chosen artifact internally consistent with practices.md and with current Makefile/.golangci.yml state; pre-push gate green; if path A, golangci-lint run is clean on HEAD.",
+    "acceptance": "AC1 (TestGoStdReconciliationPathSelected): Exactly one path (A or B) is taken; the PR body records the choice and cites the audit row(s) that justify it.\nAC2a Path A (TestGolangciConfigEnablesDeclaredBaseline): If path A, .golangci.yml's linters block enables govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic; exclusions are present verbatim from the sibling audit (AC4); `golangci-lint run ./...` exits 0 on current HEAD.\nAC2b Path A CI wiring (TestGolangciInPrePushGate): If path A, `lefthook run pre-push` invokes golangci-lint (or the equivalent .github/workflows file is updated) and the gate is green.\nAC3b Path B (TestConcernsOverrideNamesEachReplacement): If path B, docs/helix/01-frame/concerns.md §go-std contains an override paragraph that names each of the seven declared linters and the specific Makefile target/tool replacing it; no declared linter is unaddressed; rationale matches audit gap notes.\nAC4 Internal consistency (TestGoStdArtifactInternallyConsistent): After the change, no contradiction remains between .golangci.yml, Makefile, lefthook.yml, and docs/helix/01-frame/concerns.md §go-std (cross-references resolve).\nAC5 Gates: `go test ./... -race` passes; `lefthook run pre-push` passes; under path A additionally `golangci-lint run ./...` exits 0; under path B the override paragraph passes any markdown lint configured in lefthook.",
+    "parent": "fizeau-397e9e0d",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:decision",
+      "area:concerns",
+      "spec:go-std",
+      "discovered-from:fizeau-a1b61f00"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:56:32.252764227Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T135542-711bc821\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":79,\"output_tokens\":2903,\"total_tokens\":2982,\"cost_usd\":0.0956835,\"duration_ms\":47446,\"exit_code\":0}",
+          "created_at": "2026-05-18T13:56:32.288354542Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2982 cost_usd=0.0957 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T135542-711bc821\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:56:32.544526913Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=blocked\nreason=Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).\nsuggested_action=recheck the external blocker and move status to open when cleared",
+          "created_at": "2026-05-18T13:56:32.601000843Z",
+          "kind": "no_changes_blocked",
+          "source": "ddx work",
+          "summary": "no_changes_blocked"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: blocked\nreason: Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).\nresult_rev=9d14f67489b5b81ae41f19c7bdbf2920c182238d\nbase_rev=9d14f67489b5b81ae41f19c7bdbf2920c182238d\noutcome_reason=no_changes",
+          "created_at": "2026-05-18T13:56:32.654259774Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl)\",\"fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\"}",
+          "created_at": "2026-05-28T21:49:50.790402146Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "work-last-detail": "Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).",
+      "work-last-status": "no_changes_blocked",
+      "work-no-changes-count": 1,
+      "work-suggested-action": "recheck the external blocker and move status to open when cleared"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260528T215115-a1a87f99",
+    "prompt": ".ddx/executions/20260528T215115-a1a87f99/prompt.md",
+    "manifest": ".ddx/executions/20260528T215115-a1a87f99/manifest.json",
+    "result": ".ddx/executions/20260528T215115-a1a87f99/result.json",
+    "checks": ".ddx/executions/20260528T215115-a1a87f99/checks.json",
+    "usage": ".ddx/executions/20260528T215115-a1a87f99/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-f97c0efa-20260528T215115-a1a87f99"
+  },
+  "prompt_sha": "c7b2a32705bd697ec1407a2c49eb2fb9df4bdbc904dd001374241d9287f4f7c0"
+}
