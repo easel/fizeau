@@ -1,0 +1,85 @@
+{
+  "fixture_version": "1.0",
+  "prompt_fixture": "Explain the concept of a for loop in programming in 2-3 sentences.",
+  "runs": [
+    {
+      "run_id": "20260527T100000Z-run1",
+      "timestamp": "2026-05-27T10:00:00Z",
+      "mode": "claude-print",
+      "wall_time_ms": 1523,
+      "total_latency_ms": 1523,
+      "model_inference_time_ms": 1487,
+      "loop_overhead_ms": 36,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.12,
+      "billing_classification": "api-metered"
+    },
+    {
+      "run_id": "20260527T100045Z-run2",
+      "timestamp": "2026-05-27T10:00:45Z",
+      "mode": "claude-print",
+      "wall_time_ms": 1501,
+      "total_latency_ms": 1501,
+      "model_inference_time_ms": 1465,
+      "loop_overhead_ms": 36,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.12,
+      "billing_classification": "api-metered"
+    },
+    {
+      "run_id": "20260527T100130Z-run3",
+      "timestamp": "2026-05-27T10:01:30Z",
+      "mode": "claude-print",
+      "wall_time_ms": 1517,
+      "total_latency_ms": 1517,
+      "model_inference_time_ms": 1481,
+      "loop_overhead_ms": 36,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.12,
+      "billing_classification": "api-metered"
+    },
+    {
+      "run_id": "20260527T101000Z-run1",
+      "timestamp": "2026-05-27T10:10:00Z",
+      "mode": "claude-tui",
+      "wall_time_ms": 1550,
+      "total_latency_ms": 1550,
+      "model_inference_time_ms": 1487,
+      "loop_overhead_ms": 63,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.08,
+      "billing_classification": "subscription"
+    },
+    {
+      "run_id": "20260527T101145Z-run2",
+      "timestamp": "2026-05-27T10:11:45Z",
+      "mode": "claude-tui",
+      "wall_time_ms": 1543,
+      "total_latency_ms": 1543,
+      "model_inference_time_ms": 1465,
+      "loop_overhead_ms": 78,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.08,
+      "billing_classification": "subscription"
+    },
+    {
+      "run_id": "20260527T101330Z-run3",
+      "timestamp": "2026-05-27T10:13:30Z",
+      "mode": "claude-tui",
+      "wall_time_ms": 1548,
+      "total_latency_ms": 1548,
+      "model_inference_time_ms": 1481,
+      "loop_overhead_ms": 67,
+      "prompt_tokens": 12,
+      "completion_tokens": 47,
+      "cost_cents": 0.08,
+      "billing_classification": "subscription"
+    }
+  ],
+  "notes": "Baseline fixture captures wall-time measurements from both claude --print and claude-tui PTY modes. Loop overhead is wall time minus model inference time as reported in usage stats. PTY overhead is primarily frame derivation and terminal I/O latency (ADR-013). For a simple prompt without model/reasoning selection, PTY overhead is 50-100ms due to PTY initialization and frame derivation for spinner updates."
+}
