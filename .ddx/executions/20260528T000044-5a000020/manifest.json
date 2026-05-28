@@ -1,0 +1,80 @@
+{
+  "attempt_id": "20260528T000044-5a000020",
+  "bead_id": "fizeau-b064ffc0",
+  "base_rev": "2417ce0f42041efe2b89904dd52d305794b02b60",
+  "created_at": "2026-05-28T00:00:59.46608123Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-b064ffc0",
+    "title": "agent-loop: document EventPlanningTurn in AGENTS.md (and FEAT-001 if in-scope)",
+    "description": "AR-2026-05-17-repo finding. AGENTS.md §Event emission enumerates 8 ServiceEvent types but internal/core/agent.go:219 declares EventPlanningTurn (emitted at internal/core/loop.go:226 when req.PlanningMode=true). Either document the event in AGENTS.md (preferred if planning is a kept feature) or extract planning to an explicit feature spec.\n\nSource review: fizeau-584abce2.",
+    "acceptance": "Either AGENTS.md §Event emission lists EventPlanningTurn with a one-line description of when it fires, OR the planning code path is gated behind a documented build tag/experimental marker. grep for 'EventPlanningTurn' in AGENTS.md returns at least one hit.",
+    "labels": [
+      "helix",
+      "phase:frame",
+      "kind:docs",
+      "area:agent-loop",
+      "spec:FEAT-001",
+      "discovered-from:fizeau-584abce2"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-b064ffc0\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:29:33.515934687Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"infrastructure\",\"decode_warnings\":[{\"field\":\"classification\",\"warning\":\"unknown classification\",\"raw_excerpt\":\"infrastructure\"}],\"detail\":\"pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4006646136.lock' write error. Out of diskspace: exit status 128\",\"malformed\":true,\"rationale\":\"pre-execute-bead checkpoint failed due to out-of-diskspace writing git index lock file in /tmp; transient host infrastructure issue unrelated to bead content\",\"recommended_action\":\"release_claim_retry\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-18T13:29:44.187939352Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "unusable triage classification: infrastructure"
+        },
+        {
+          "actor": "erik",
+          "body": "pre-execute-bead checkpoint: initializing checkpoint index: fatal: sha1 file '/tmp/ddx-pre-dispatch-index-4006646136.lock' write error. Out of diskspace: exit status 128",
+          "created_at": "2026-05-18T13:29:44.223663373Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T00:00:38.040488125Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-001",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:27:02Z"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-001",
+      "path": "docs/helix/01-frame/features/FEAT-001-agent-loop.md",
+      "title": "Feature Specification: FEAT-001 — Agent Loop"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T000044-5a000020",
+    "prompt": ".ddx/executions/20260528T000044-5a000020/prompt.md",
+    "manifest": ".ddx/executions/20260528T000044-5a000020/manifest.json",
+    "result": ".ddx/executions/20260528T000044-5a000020/result.json",
+    "checks": ".ddx/executions/20260528T000044-5a000020/checks.json",
+    "usage": ".ddx/executions/20260528T000044-5a000020/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-b064ffc0-20260528T000044-5a000020"
+  },
+  "prompt_sha": "380d5b4219230109497a66f7ac696225db9af87d2f64c3217cd0fe9476af9711"
+}
