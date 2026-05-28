@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260528T150402-9661ffb3",
+  "bead_id": "fizeau-8b09722c",
+  "base_rev": "9550b839759fc4fc9faf6927bd9ca015399012f3",
+  "created_at": "2026-05-28T15:04:07.581840377Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-8b09722c",
+    "title": "harness discovery leaks gemini CLI processes: probe spawns gemini and never reaps it (orphaned process-group leak)",
+    "description": "PROBLEM: Harness discovery / quota probing spawns the gemini CLI on essentially every ddx work / ddx run startup (discovery probes all installed agent CLIs), and the spawned gemini process is NOT reaped — it reparents to init (ppid=1) and lingers for many hours. Observed on the dogfooding box: 123 leaked gemini agents aged 16-26h consuming ~31GB of swap, even though gemini is NOT used for real work and GEMINI_API_KEY is unset. Killing them dropped swap 35G-\u003e4.2G.\nROOT CAUSE: gemini is in PreferenceOrder (internal/harnesses/registry.go:6) and registered (registry.go:82-87, DefaultModel gemini-2.5-flash). The gemini harness discovery/quota path (internal/harnesses/gemini/model_discovery.go, quota_pty.go, runner.go) spawns gemini via PTY for model/quota discovery and does not terminate/reap the spawned process group on completion/timeout. progress_mirror.go:65 references a 'stale-harness reaper' for orphaned process groups, but it is not catching these discovery/quota probes. ddx's own integration test documents the leak: cli/internal/integration/lock_contention_test.go:226-229 (in the ddx repo) notes 'ddx work harness discovery probes whatever agent CLIs are installed (codex/claude/gemini), and at least one (gemini) [lingers] ... racing t.TempDir cleanup'.\nPROPOSED FIX: (a) do NOT probe/discover a harness that is unconfigured/uncredentialed (skip gemini when GEMINI_API_KEY is unset / not enabled) so it is never spawned; and (b) ensure the discovery/quota PTY probe sets a process group (Setpgid) and kills it on completion AND timeout, wired into the stale-harness reaper. Apply the same guarantee to other PTY-probed harnesses.\nNON-SCOPE: removing the gemini harness; ddx-side test cleanup.",
+    "acceptance": "1. With GEMINI_API_KEY unset (and gemini not explicitly enabled), a harness-discovery/quota-probe pass spawns NO gemini process: a test runs discovery and asserts no orphaned/lingering gemini afterward.\n2. When a harness IS probed via PTY, the probe runs in its own process group that is killed on completion and on timeout; a test asserts the probe child is reaped (no orphan).\n3. go test ./internal/harnesses/... green\n4. CI / pre-commit passes.",
+    "labels": [
+      "kind:bug",
+      "reliability",
+      "area:harnesses",
+      "area:discovery",
+      "observed-failure",
+      "review:codex+opus"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Problem is well-documented with production-observed failure: 123 orphaned gemini processes aged 16-26h consuming ~31GB swap. Root cause path is clearly traced through PreferenceOrder → discovery/quota probes → unreaped PTY spawns. Proposed fix (skip unconfigured harnesses + implement process group management) is concrete and actionable. Acceptance criteria are testable. Bead is executable as written; some implementation details (interaction with stale-harness reaper, enumeration of affected harnesses, timeout mechanism) require code inspection but do not block an implementation attempt.\",\"fingerprint\":\"832bc1210fded03ed2601d58105703221d7a9576caa7cc6f33ac3fc491e3c896\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"832bc1210fded03ed2601d58105703221d7a9576caa7cc6f33ac3fc491e3c896\"}",
+          "created_at": "2026-05-28T15:03:01.138515933Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260528T150402-9661ffb3",
+    "prompt": ".ddx/executions/20260528T150402-9661ffb3/prompt.md",
+    "manifest": ".ddx/executions/20260528T150402-9661ffb3/manifest.json",
+    "result": ".ddx/executions/20260528T150402-9661ffb3/result.json",
+    "checks": ".ddx/executions/20260528T150402-9661ffb3/checks.json",
+    "usage": ".ddx/executions/20260528T150402-9661ffb3/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-8b09722c-20260528T150402-9661ffb3"
+  },
+  "prompt_sha": "8e5244455e8dd8ce84b3de693d49aa9714e811915505cd0e8df3b5de54581c1f"
+}
