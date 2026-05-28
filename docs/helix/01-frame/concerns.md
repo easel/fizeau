@@ -16,6 +16,7 @@
 - **testing** — Multi-layer testing with property-based, fuzz, and E2E coverage (areas: all)
 - **hugo-hextra** — Hugo + Hextra microsite surface (areas: ui)
 - **python-uv** — Python benchmark-data pipeline execution discipline (areas: data)
+- **o11y-otel** — OpenTelemetry observability and cost tracking (areas: lib, cli)
 
 ## Project Overrides
 
@@ -180,3 +181,33 @@
   regenerate or verify the data feed with
   `uv run --with PyYAML --with pyarrow --with duckdb python scripts/website/build-benchmark-data.py`
   or `make benchmark-data`.
+
+### o11y-otel
+
+- **Scope**: Core library instrumentation (lib area) and CLI (cli area). The
+  library implements CONTRACT-001 OTel conformance for agent runs, LLM calls,
+  and tool execution. Benchmark pipelines (data) and the Hugo site (ui) do not
+  emit OTel spans; they remain orthogonal to this concern.
+- **Span taxonomy**: Every library `Execute` call emits one root `invoke_agent`
+  span. Every provider request attempt emits a `chat` span with model, provider,
+  token usage (input, output, cached), and cost fields per CONTRACT-001. Every
+  tool execution emits an `execute_tool` span with tool name, arguments, results,
+  and execution status.
+- **JSONL and OTel duality**: JSONL session logs remain the replay artifact
+  (full prompt bodies, tool call details, session state). OTel spans are the
+  canonical analytics surface (structured attributes, metrics, trace context
+  propagation). A harness may emit both simultaneously.
+- **Cost handling**: Use provider-reported cost when available. Fall back to
+  gateway-reported cost, then explicitly configured pricing for the resolved
+  provider/model pair. Record unknown cost explicitly; do not guess from stale
+  price tables. Per CONTRACT-001, cost precedence is: provider-reported →
+  gateway-reported → configured → unknown.
+- **Testing**: Conformance tests verify that every agent execution path emits
+  the required span taxonomy, identity fields (`ddx.harness.name`,
+  `ddx.session.id`, turn/attempt indices), provider/model fields, token usage,
+  and cost source/amount. Load tests verify that OTel overhead remains < 5%
+  against baseline execution time.
+- **Expected local quality gates**: Changes to the agent loop, provider
+  implementations, or tool execution must verify CONTRACT-001 conformance via
+  the harness capability matrix and integration tests that capture spans
+  alongside JSONL logs.
