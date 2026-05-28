@@ -1,0 +1,22 @@
+{
+  "bead_id": "fizeau-4d81d3f0",
+  "attempt_id": "20260528T005328-eaf1ba36",
+  "base_rev": "d658a4126f74520b9f958b458c50b0405e1b5e58",
+  "result_rev": "d658a4126f74520b9f958b458c50b0405e1b5e58",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "ResolveRoute: no viable routing candidate for pins min_power=6: 17 candidates rejected",
+  "session_id": "eb-abed0309",
+  "duration_ms": 9043,
+  "exit_code": 1,
+  "error": "ResolveRoute: no viable routing candidate for pins min_power=6: 17 candidates rejected",
+  "project_root": "/home/erik/Projects/fizeau",
+  "failure_mode": "blocked_by_passthrough_constraint",
+  "execution_dir": ".ddx/executions/20260528T005328-eaf1ba36",
+  "prompt_file": ".ddx/executions/20260528T005328-eaf1ba36/prompt.md",
+  "manifest_file": ".ddx/executions/20260528T005328-eaf1ba36/manifest.json",
+  "result_file": ".ddx/executions/20260528T005328-eaf1ba36/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-28T00:53:36.156990463Z",
+  "finished_at": "2026-05-28T00:53:45.200239355Z"
+}
