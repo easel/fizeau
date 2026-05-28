@@ -13,14 +13,15 @@ ddx:
 **Status:** Accepted
 **Owner:** Fizeau Team
 
-> **Update 2026-05-16**: ADR-016 changes the cell schema — each
-> `report.json` now embeds the full resolved profile snapshot. The
-> workbench data pipeline (`scripts/website/build-benchmark-data.py`)
-> reads embedded metadata; the `PROFILE_ALIASES` / `EXCLUDED_PROFILES`
-> tables and profile-YAML joins are retired. Existing Parquet artifacts
-> remain compatible; backfill ensures historical cells expose embedded
-> metadata identical to the current join output. See
-> `docs/helix/02-design/plan-2026-05-15-benchmark-runner-simplification.md`.
+## ADR-016 Compatibility
+
+> **ADR-016** (Cells Are Self-Describing Evidence) introduced changes that affect SD-015:
+>
+> - Cells now embed resolved profile snapshots at write time; profile YAMLs are no longer join targets
+> - Profile-YAML joins and `PROFILE_ALIASES` are retired; historical renaming machinery is no longer needed
+> - Existing Parquet artifacts remain backward-compatible; backfill ensures historical cells expose metadata identical to current output
+>
+> See [ADR-016: Cells Are Self-Describing Evidence](../../adr/ADR-016-cells-are-self-describing-evidence.md).
 
 ## Summary
 
