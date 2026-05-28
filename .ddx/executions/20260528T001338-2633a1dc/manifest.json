@@ -1,0 +1,45 @@
+{
+  "attempt_id": "20260528T001338-2633a1dc",
+  "bead_id": "fizeau-89cd91a4",
+  "base_rev": "8c828b1262b754a4c27c3bfa26247b871389f900",
+  "created_at": "2026-05-28T00:13:43.690842714Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-89cd91a4",
+    "title": "claude-tui/step9: performance ratchet vs claude — wall-time-per-turn + cost-per-task comparison",
+    "description": "concerns.md (testing concern §Performance ratchets) requires \u003c1ms loop overhead and \u003c10ms beyond inference per agent-loop iteration. ADR-013 also flags performance as a known concern: frame-derived parsing is more expensive than stream-json JSONL parsing on long turns. This bead lands the comparison.\n\nWORK:\n- Add a claude-tui lane to scripts/benchmark/ that runs the same prompt against claude --print and PTY+hooks-driven claude.\n- Capture per-turn wall time, total prompt-to-final latency, loop overhead (turn-time minus model-inference time as reported in usage), and reported cost (subscription vs metered).\n- Persist a benchmark fixture under benchmark-results/claude-tui-ratchet/ with the comparison.\n- Add a unit test that asserts the loop-overhead ratchet: claude-tui's measured overhead per turn (excluding model time) is within the documented bound (\u003c10ms per testing concern, OR \u003c2x claude --print baseline, whichever is looser).\n\nNON-SCOPE: long-turn benchmark scenarios (covered by general benchmark suite); subscription-vs-API cost computation (covered by GATE fizeau-a45dafe6 + benchmark cost reporting).",
+    "acceptance": "1) scripts/benchmark/ has a claude-tui lane that runs equivalent prompts against claude (--print baseline) and claude-tui (PTY+hooks).\n2) Benchmark output captures per-turn wall time, total latency, loop overhead, and reported cost (with billing classification per the cost concern).\n3) benchmark-results/claude-tui-ratchet/ contains a baseline fixture with at least three runs of each mode.\n4) A go test asserts the loop-overhead ratchet from the testing concern: claude-tui per-turn overhead beyond inference is \u003c10ms OR within 2x of claude --print baseline (whichever is looser); test failure includes the measured values so regressions are diagnosable.\n5) The ratchet test runs in CI by default (not behind a build tag) using a recorded fixture; live benchmark runs are opt-in via a harness_integration tag.\n6) go test ./scripts/benchmark/... -count=1 green; go test ./... -count=1 green.",
+    "parent": "fizeau-9b3b85df",
+    "labels": [
+      "helix",
+      "phase:build",
+      "kind:test",
+      "area:harness",
+      "harness:claude-tui",
+      "spec:ADR-013",
+      "concern:performance-ratchets"
+    ],
+    "metadata": {
+      "spec-id": "ADR-013"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-013",
+      "path": "docs/helix/02-design/adr/ADR-013-claude-tui-pty-harness-fork.md",
+      "title": "ADR-013: `claude-tui` PTY Harness as a Fork of `claude`"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T001338-2633a1dc",
+    "prompt": ".ddx/executions/20260528T001338-2633a1dc/prompt.md",
+    "manifest": ".ddx/executions/20260528T001338-2633a1dc/manifest.json",
+    "result": ".ddx/executions/20260528T001338-2633a1dc/result.json",
+    "checks": ".ddx/executions/20260528T001338-2633a1dc/checks.json",
+    "usage": ".ddx/executions/20260528T001338-2633a1dc/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-89cd91a4-20260528T001338-2633a1dc"
+  },
+  "prompt_sha": "dcbad6b075cfc5fb68022dfe87717ac17f8e7a5a452b83e517945584ad81e1d7"
+}
