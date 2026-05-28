@@ -1,0 +1,83 @@
+{
+  "attempt_id": "20260528T000711-df0f9c7d",
+  "bead_id": "fizeau-eeb8202a",
+  "base_rev": "5330e2b6cbd8cad99cb5b14206acafebc03edc6d",
+  "created_at": "2026-05-28T00:07:15.925468881Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-eeb8202a",
+    "title": "concerns: declare o11y-otel as active concern in concerns.md (or document explicit deferral)",
+    "description": "AR-2026-05-17-repo finding. PRD P1-8 lists OpenTelemetry as a P1 capability; CONTRACT-001 governs OTel conformance; the o11y-otel concern workflow exists at .ddx/plugins/helix/workflows/concerns/o11y-otel/. docs/helix/01-frame/concerns.md does not list o11y-otel under Active Concerns, even though the implementation is conformant. Decide: activate (with any needed Fizeau-shape overrides) or document deferral.\n\nSource review: fizeau-a1b61f00.",
+    "acceptance": "docs/helix/01-frame/concerns.md either lists o11y-otel under Active Concerns (with project overrides covering Fizeau's library shape) and adds the concern's quality gates to the appropriate area, OR contains an explicit deferral note stating why o11y-otel is dormant despite P1 PRD status.",
+    "labels": [
+      "helix",
+      "phase:frame",
+      "kind:docs",
+      "area:concerns",
+      "spec:CONTRACT-001",
+      "discovered-from:fizeau-a1b61f00"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-18T13:57:17.99811221Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"grendel\",\"attempt_id\":\"20260518T135704-a70a830e\",\"bead_id\":\"fizeau-eeb8202a\",\"estimated_difficulty\":\"easy\",\"rejected_route_pins\":null,\"requested_power_class\":\"cheap\",\"requested_profile\":\"cheap\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-18T13:57:18.214366637Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=easy powerClass=cheap model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"error\":\"agent: provider error: openai: Post \\\"http://grendel:1234/v1/chat/completions\\\": dial tcp 100.97.179.68:1234: i/o timeout\",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"grendel\"}",
+          "created_at": "2026-05-18T13:57:18.30007676Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=grendel model=qwen3.5-27b connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: Post \"http://grendel:1234/v1/chat/completions\": dial tcp 100.97.179.68:1234: i/o timeout\npowerClass=cheap\nresult_rev=89b050744aa220582dbecca82189bb0d71baf87f\nbase_rev=89b050744aa220582dbecca82189bb0d71baf87f\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-18T13:57:18.329545775Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        }
+      ],
+      "spec-id": "CONTRACT-001",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-18T13:57:18Z",
+          "count": 1,
+          "model": "qwen3.5-27b",
+          "provider": "grendel",
+          "reason": "provider_connectivity"
+        }
+      ],
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:14Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260528T000711-df0f9c7d",
+    "prompt": ".ddx/executions/20260528T000711-df0f9c7d/prompt.md",
+    "manifest": ".ddx/executions/20260528T000711-df0f9c7d/manifest.json",
+    "result": ".ddx/executions/20260528T000711-df0f9c7d/result.json",
+    "checks": ".ddx/executions/20260528T000711-df0f9c7d/checks.json",
+    "usage": ".ddx/executions/20260528T000711-df0f9c7d/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-eeb8202a-20260528T000711-df0f9c7d"
+  },
+  "prompt_sha": "482184b58b8b3cfceea8d8c36821272a69c6c0818d3db52aec03163533b91cb0"
+}
