@@ -1,0 +1,103 @@
+{
+  "attempt_id": "20260528T004051-ffa32620",
+  "bead_id": "fizeau-f5830dd8",
+  "base_rev": "3d37f0d6aeabebb87940aa32e2481e3c82a11e60",
+  "created_at": "2026-05-28T00:40:57.382771917Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f5830dd8",
+    "title": "repo-structure: slice 2 - move execute/runtime mechanics to internal/serviceimpl",
+    "description": "Move execute/runtime mechanics per ADR-008. Move metadata_billing.go, service_execute.go, service_execute_dispatch.go, service_harness_instances.go, service_model_resolution.go, service_models.go, service_native_provider.go, service_policies.go, service_projection.go, service_providers.go, service_reasoning.go, service_refresh_scheduler.go, service_routing.go, service_snapshot.go, service_status.go, and service_stale_harness_reaper*.go files to internal/serviceimpl along with their white-box tests. Maintain root package stability and keep allowlist test passing.",
+    "labels": [
+      "helix",
+      "phase:implementation",
+      "kind:refactor",
+      "area:repo-structure",
+      "spec:ADR-008"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T00:38:28.542187216Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T00:39:08.246669188Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T003836-a09ad288\",\"bead_id\":\"fizeau-f5830dd8\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T00:39:10.201494298Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T00:39:10.33941174Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=227d71326aeadd209064cc3cb14e7f37ca50ffeb\nbase_rev=227d71326aeadd209064cc3cb14e7f37ca50ffeb\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T00:39:10.3817107Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode readiness classification result: json: cannot unmarshal array into Go struct field preClaimIntakePromptRewrite.rewrite.acceptance of type string\",\"fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\"}",
+          "created_at": "2026-05-28T00:40:40.577477503Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "ADR-008",
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-28T00:39:10Z",
+          "count": 1,
+          "endpoint": "http://bragi:1234/v1/chat/completions",
+          "model": "qwen3.5-27b",
+          "provider": "bragi",
+          "reason": "provider_connectivity",
+          "timeout_class": "bad gateway"
+        }
+      ]
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-008",
+      "path": "docs/helix/02-design/adr/ADR-008-service-package-and-transcript-boundaries.md",
+      "title": "ADR-008: Service Package and Transcript Boundaries"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260528T004051-ffa32620",
+    "prompt": ".ddx/executions/20260528T004051-ffa32620/prompt.md",
+    "manifest": ".ddx/executions/20260528T004051-ffa32620/manifest.json",
+    "result": ".ddx/executions/20260528T004051-ffa32620/result.json",
+    "checks": ".ddx/executions/20260528T004051-ffa32620/checks.json",
+    "usage": ".ddx/executions/20260528T004051-ffa32620/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-f5830dd8-20260528T004051-ffa32620"
+  },
+  "prompt_sha": "6ca786fd30b65412baef04ab5d23d453b4c3949662ce6771d9058dff1113f2b6"
+}
