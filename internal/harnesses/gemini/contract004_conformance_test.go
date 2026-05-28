@@ -1,9 +1,12 @@
 package gemini_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/gemini"
 	"github.com/easel/fizeau/internal/harnesses/harnesstest"
 )
@@ -40,6 +43,28 @@ func TestGeminiRunnerAccountHarnessConformance(t *testing.T) {
 func TestGeminiRunnerModelDiscoveryHarnessConformance(t *testing.T) {
 	isolateGeminiRunnerEnv(t)
 	harnesstest.RunModelDiscoveryHarnessConformance(t, &gemini.Runner{})
+}
+
+// TestRefreshQuotaSkipsProbeWhenUnauthenticated verifies that RefreshQuota
+// returns QuotaUnavailable without spawning a PTY probe when gemini is not
+// authenticated (GEMINI_API_KEY unset, no ~/.gemini config).
+// AC #1: With GEMINI_API_KEY unset, no gemini process spawned during discovery.
+func TestRefreshQuotaSkipsProbeWhenUnauthenticated(t *testing.T) {
+	isolateGeminiRunnerEnv(t)
+	runner := &gemini.Runner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	status, err := runner.RefreshQuota(ctx)
+	if err != nil {
+		t.Errorf("RefreshQuota: %v", err)
+	}
+	if status.State != harnesses.QuotaUnavailable {
+		t.Errorf("expected QuotaUnavailable, got %s", status.State)
+	}
+	if status.Reason != "gemini not configured or authenticated" {
+		t.Errorf("expected 'gemini not configured or authenticated' reason, got %q", status.Reason)
+	}
 }
 
 // isolateGeminiRunnerEnv pins HOME to a temp dir, points the quota cache

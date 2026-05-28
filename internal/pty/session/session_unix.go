@@ -46,6 +46,8 @@ func Start(ctx context.Context, command string, args []string, workdir string, e
 		cmd.Env = append(os.Environ(), env...)
 	}
 
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: size.Rows, Cols: size.Cols})
 	if err != nil {
 		cancel()

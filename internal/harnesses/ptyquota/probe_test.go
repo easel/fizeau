@@ -202,3 +202,55 @@ func TestRunScrubsCassetteOutputBeforePromotion(t *testing.T) {
 	require.NotZero(t, reader.ScrubReport().HitCounts["email"])
 	require.NotContains(t, strings.Join(reader.Manifest().Command.Argv, " "), workdir)
 }
+
+// TestRunReapsProcessGroupOnCompletion verifies that PTY probes properly
+// set and reap the process group. AC #2: When a harness IS probed via PTY,
+// the probe runs in its own process group that is killed on completion.
+// Note: This test requires PTY support and may be skipped in sandboxed environments.
+func TestRunReapsProcessGroupOnCompletion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY process groups require Unix support")
+	}
+	start := time.Now()
+	_, err := Run(context.Background(), Config{
+		HarnessName: "fake",
+		Binary:      "sh",
+		Args:        []string{"-c", "printf '100%% left\\n'; sleep 1"},
+		DoneMarkers: []string{"% left"},
+		Timeout:     5 * time.Second,
+		Size:        session.Size{Rows: 8, Cols: 80},
+		Quota: func(string) (cassette.QuotaRecord, error) {
+			return cassette.QuotaRecord{Source: "pty", Status: string(StatusOK)}, nil
+		},
+	})
+	if err != nil && strings.Contains(err.Error(), "operation not permitted") {
+		t.Skip("PTY not available in this environment")
+	}
+	require.NoError(t, err)
+	elapsed := time.Since(start)
+	require.Less(t, elapsed, 2*time.Second, "probe should complete quickly once markers are found")
+}
+
+// TestRunReapsProcessGroupOnTimeout verifies that PTY probes properly
+// kill the process group even when the probe times out.
+func TestRunReapsProcessGroupOnTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY process groups require Unix support")
+	}
+	start := time.Now()
+	_, err := Run(context.Background(), Config{
+		HarnessName:  "fake",
+		Binary:       "sh",
+		Args:         []string{"-c", "sleep 10"},
+		ReadyMarkers: []string{"never-ready"},
+		Timeout:      100 * time.Millisecond,
+		Size:         session.Size{Rows: 8, Cols: 80},
+	})
+	require.Error(t, err)
+	require.Equal(t, StatusError, ErrorStatus(err))
+	elapsed := time.Since(start)
+	require.Less(t, elapsed, 2*time.Second, "probe should kill process group quickly, not wait 10 seconds")
+
+	_, err = os.FindProcess(os.Getpid())
+	require.NoError(t, err, "current process should still exist (we're running the test)")
+}

@@ -92,6 +92,16 @@ func (r *Runner) RefreshQuota(ctx context.Context) (harnesses.QuotaStatus, error
 // Probe failure is folded into State=QuotaUnavailable.
 func (r *Runner) refreshQuotaLocked(ctx context.Context) harnesses.QuotaStatus {
 	now := time.Now()
+	auth := readAuthEvidence(now)
+	if !auth.Authenticated {
+		return harnesses.QuotaStatus{
+			Source:            "auth",
+			CapturedAt:        now.UTC(),
+			State:             harnesses.QuotaUnavailable,
+			RoutingPreference: harnesses.RoutingPreferenceUnknown,
+			Reason:            "gemini not configured or authenticated",
+		}
+	}
 	timeout := geminiQuotaFreshness
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
@@ -122,12 +132,11 @@ func (r *Runner) refreshQuotaLocked(ctx context.Context) harnesses.QuotaStatus {
 			Reason:            reason,
 		}
 	}
-	account := readAuthEvidence(now).Account
 	snap := geminiQuotaSnapshot{
 		CapturedAt: now.UTC(),
 		Windows:    windows,
 		Source:     "pty",
-		Account:    account,
+		Account:    auth.Account,
 	}
 	if path, pathErr := geminiQuotaCachePath(); pathErr == nil {
 		_ = writeGeminiQuota(path, snap)
