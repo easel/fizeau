@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import types
@@ -312,6 +313,43 @@ class FizeauAgentTest(unittest.TestCase):
         self.assertEqual(trajectory["final_metrics"]["total_prompt_tokens"], 12)
         self.assertEqual(trajectory["final_metrics"]["total_completion_tokens"], 5)
         self.assertEqual(trajectory["final_metrics"]["total_cost_usd"], 0.25)
+
+
+class TestHarborAgentInstall(unittest.TestCase):
+    """Verifies shell adapter install-spec harbor_plugin values match Python import paths."""
+
+    EXPECTED_PLUGINS: dict[str, str | None] = {
+        "fiz": "scripts.benchmark.harbor_agent:FizeauAgent",
+        "claude": "scripts.benchmark.harbor_adapters.claude:ClaudeAgent",
+        "codex": "scripts.benchmark.harbor_adapters.codex:CodexAgent",
+        "opencode": "scripts.benchmark.harbor_adapters.opencode:OpencodeAgent",
+        "pi": "scripts.benchmark.harbor_adapters.pi:PiAgent",
+        "cost-probe": None,
+        "noop": None,
+        "dumb-script": None,
+    }
+
+    def _adapter_dir(self) -> Path:
+        return Path(__file__).parent / "harness-adapters"
+
+    def test_install_harbor_plugins_match_expected(self) -> None:
+        for adapter_name, expected_plugin in self.EXPECTED_PLUGINS.items():
+            with self.subTest(adapter=adapter_name):
+                adapter_path = self._adapter_dir() / adapter_name
+                result = subprocess.run(
+                    [str(adapter_path), "install", "/tmp/fake-artifact"],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    result.returncode, 0, f"{adapter_name} install failed: {result.stderr}"
+                )
+                install_spec = json.loads(result.stdout)
+                self.assertEqual(
+                    install_spec.get("harbor_plugin"),
+                    expected_plugin,
+                    f"{adapter_name}: expected harbor_plugin={expected_plugin!r}",
+                )
 
 
 if __name__ == "__main__":
