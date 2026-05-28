@@ -378,13 +378,48 @@ func marshalData(data interface{}) json.RawMessage {
 }
 
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness.
-// Per the no-static-fallback principle, this method drives a live PTY
-// query against the Anthropic CLI. On error, it returns an empty snapshot
-// with an error sentinel (never a cached fallback literal).
+// Per the no-static-fallback principle and ADR-012, this method reads from
+// the discovery cache (which may be stale) and triggers a background refresh
+// if needed. It never returns a static literal. On cache miss with refresh
+// failure, returns ErrModelDiscoveryEvidenceMissing.
 func (h *Harness) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
-	snapshot, err := readClaudeTuiModelDiscoveryViaPTY(context.Background(), 30*time.Second)
+	// Read from cache (may be stale, never blocks on IO)
+	res, err := modelDiscoveryCache.Read(modelDiscoveryCacheSource)
 	if err != nil {
 		return emptyModelSnapshot, err
+	}
+
+	var snapshot harnesses.ModelDiscoverySnapshot
+	if res.Data != nil {
+		if err := json.Unmarshal(res.Data, &snapshot); err != nil {
+			// Cache corruption; trigger a refresh
+			modelDiscoveryCache.MaybeRefresh(modelDiscoveryCacheSource, modelDiscoveryRefresher)
+			return emptyModelSnapshot, fmt.Errorf("cache corruption: %w", err)
+		}
+		// Return the snapshot regardless of freshness; MaybeRefresh will
+		// update stale data in the background per ADR-012 Algorithm 6.
+		if len(snapshot.Models) > 0 {
+			modelDiscoveryCache.MaybeRefresh(modelDiscoveryCacheSource, modelDiscoveryRefresher)
+			return snapshot, nil
+		}
+	}
+
+	// Cache miss or empty snapshot; try to refresh synchronously.
+	if err := modelDiscoveryCache.MaybeRefreshSync(modelDiscoveryCacheSource, modelDiscoveryRefresher); err != nil {
+		// Refresh failed; return error
+		return emptyModelSnapshot, fmt.Errorf("model discovery refresh failed: %w", err)
+	}
+
+	// Refresh succeeded; read the freshly written data
+	res, err = modelDiscoveryCache.Read(modelDiscoveryCacheSource)
+	if err != nil {
+		return emptyModelSnapshot, err
+	}
+	if res.Data == nil {
+		return emptyModelSnapshot, harnesses.ErrModelDiscoveryEvidenceMissing
+	}
+	if err := json.Unmarshal(res.Data, &snapshot); err != nil {
+		return emptyModelSnapshot, fmt.Errorf("failed to decode refreshed model discovery: %w", err)
 	}
 	if len(snapshot.Models) == 0 {
 		return emptyModelSnapshot, harnesses.ErrModelDiscoveryEvidenceMissing
