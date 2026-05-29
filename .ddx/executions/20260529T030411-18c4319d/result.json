@@ -1,0 +1,22 @@
+{
+  "bead_id": "fizeau-f97c0efa",
+  "attempt_id": "20260529T030411-18c4319d",
+  "base_rev": "4c16ea645933396de7c2273f0ded6ea8b392c038",
+  "result_rev": "4c16ea645933396de7c2273f0ded6ea8b392c038",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default",
+  "session_id": "eb-36cd6c8c",
+  "duration_ms": 186384,
+  "exit_code": 1,
+  "error": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default",
+  "project_root": "/Users/erik/Projects/fizeau",
+  "failure_mode": "no_viable_provider",
+  "execution_dir": ".ddx/executions/20260529T030411-18c4319d",
+  "prompt_file": ".ddx/executions/20260529T030411-18c4319d/prompt.md",
+  "manifest_file": ".ddx/executions/20260529T030411-18c4319d/manifest.json",
+  "result_file": ".ddx/executions/20260529T030411-18c4319d/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-29T03:04:15.297641056Z",
+  "finished_at": "2026-05-29T03:07:21.681837762Z"
+}
