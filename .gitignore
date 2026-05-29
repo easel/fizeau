@@ -33,6 +33,7 @@ website/resources/
 .ddx/run-state.json
 .ddx/run-state/
 .ddx/executions/
+.ddx/harness-sessions/
 .ddx/.execute-bead-wt-agent-*/
 .ddx/workers/
 .helix/
