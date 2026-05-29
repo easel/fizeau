@@ -24,6 +24,24 @@ var (
 	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
 
+// claudeTrustInterstitial answers Claude Code's "Do you trust the files in
+// this folder?" onboarding dialog, which appears whenever the CLI is launched
+// in a not-yet-trusted directory — including every fresh execute-bead worktree.
+// The dialog pre-selects "Yes, I trust this folder", so Enter accepts it; the
+// driver then proceeds to the normal ready prompt. Without this, PTY model
+// discovery (and quota probes) stall on the dialog and time out with zero
+// models, making the harness unroutable.
+func claudeTrustInterstitial() ptyquota.Interstitial {
+	return ptyquota.Interstitial{
+		Name: "claude-folder-trust",
+		Match: func(screen string) bool {
+			return strings.Contains(screen, "trust the files in this folder") ||
+				strings.Contains(screen, "trust this folder")
+		},
+		Send: []byte("\r"),
+	}
+}
+
 func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
 	cfg := quotaPTYOptions{binary: "claude"}
 	for _, opt := range opts {
@@ -33,17 +51,18 @@ func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOptio
 	}
 	var snapshot harnesses.ModelDiscoverySnapshot
 	_, err := ptyquota.Run(context.Background(), ptyquota.Config{
-		HarnessName:  "claude",
-		Binary:       cfg.binary,
-		Args:         cfg.args,
-		Workdir:      cfg.workdir,
-		Env:          cfg.env,
-		Command:      "/model\r",
-		ReadyMarkers: []string{"❯", "> "},
-		DoneWhen:     claudeModelDiscoveryComplete,
-		Timeout:      timeout,
-		Size:         session.Size{Rows: 50, Cols: 220},
-		CassetteDir:  cfg.cassetteDir,
+		HarnessName:   "claude",
+		Binary:        cfg.binary,
+		Args:          cfg.args,
+		Workdir:       cfg.workdir,
+		Env:           cfg.env,
+		Command:       "/model\r",
+		ReadyMarkers:  []string{"❯", "> "},
+		Interstitials: []ptyquota.Interstitial{claudeTrustInterstitial()},
+		DoneWhen:      claudeModelDiscoveryComplete,
+		Timeout:       timeout,
+		Size:          session.Size{Rows: 50, Cols: 220},
+		CassetteDir:   cfg.cassetteDir,
 		Discovery: func(text string) (cassette.DiscoveryRecord, error) {
 			snapshot = claudeDiscoveryFromText(text, "pty")
 			if len(snapshot.Models) == 0 {

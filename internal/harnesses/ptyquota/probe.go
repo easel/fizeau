@@ -91,6 +91,26 @@ type Config struct {
 	CassetteDir string
 	Quota       func(string) (cassette.QuotaRecord, error)
 	Discovery   func(string) (cassette.DiscoveryRecord, error)
+
+	// Interstitials are transient prompts that can appear before the ready
+	// marker or before completion — e.g. Claude Code's "Do you trust the
+	// files in this folder?" dialog when the harness is launched in a
+	// not-yet-trusted directory (every fresh execute-bead worktree). When the
+	// emulated screen matches an interstitial, the driver sends its response
+	// once and keeps waiting for the real ready/done markers, so a blocking
+	// prompt no longer stalls discovery/quota probes into a timeout.
+	Interstitials []Interstitial
+}
+
+// Interstitial is a prompt/response pair the driver auto-handles while waiting.
+type Interstitial struct {
+	// Name uniquely identifies the interstitial so it is answered at most once.
+	Name string
+	// Match reports whether the current screen is showing this prompt.
+	Match func(screen string) bool
+	// Send is the byte sequence written to the PTY to dismiss the prompt
+	// (e.g. "\r" to accept the highlighted default).
+	Send []byte
 }
 
 type Result struct {
@@ -214,9 +234,38 @@ type runState struct {
 	scrubber  *cassette.Scrubber
 	report    cassette.ScrubReport
 	done      chan struct{}
+
+	interstitials []Interstitial
+	answered      map[string]bool
+}
+
+// processInterstitials answers any matching, not-yet-answered interstitial
+// prompt exactly once. It returns true when it sent a response this tick, in
+// which case the caller skips ready/done marker matching until the screen
+// redraws past the prompt. Must be called with r.mu unlocked (sendBytes locks).
+func (r *runState) processInterstitials(screen string) bool {
+	acted := false
+	for _, it := range r.interstitials {
+		if it.Match == nil || it.Name == "" {
+			continue
+		}
+		if r.answered[it.Name] {
+			continue
+		}
+		if it.Match(screen) {
+			if r.answered == nil {
+				r.answered = make(map[string]bool)
+			}
+			r.answered[it.Name] = true
+			_ = r.sendBytes(it.Send)
+			acted = true
+		}
+	}
+	return acted
 }
 
 func (r *runState) drive(ctx context.Context, cfg Config) (Result, error) {
+	r.interstitials = cfg.Interstitials
 	if len(cfg.ReadyMarkers) > 0 {
 		if err := r.waitForAnyText(ctx, cfg.ReadyMarkers...); err != nil {
 			return Result{}, err
@@ -307,9 +356,14 @@ func (r *runState) waitForAnyText(ctx context.Context, markers ...string) error 
 		if unsupportedAccountText(screen) {
 			return &ProbeError{Status: StatusUnavailable, Reason: "quota probe account state is unsupported"}
 		}
-		for _, marker := range markers {
-			if ready && strings.Contains(screen, marker) {
-				return nil
+		// Answer any blocking interstitial (e.g. folder-trust dialog) before
+		// treating a marker as "ready" — the prompt's own glyphs can otherwise
+		// false-match a ready marker and the command lands in the dialog.
+		if !r.processInterstitials(screen) {
+			for _, marker := range markers {
+				if ready && strings.Contains(screen, marker) {
+					return nil
+				}
 			}
 		}
 		select {
@@ -344,8 +398,10 @@ func (r *runState) waitForText(ctx context.Context, allMarkers, anyMarkers []str
 		if unsupportedAccountText(screen) {
 			return &ProbeError{Status: StatusUnavailable, Reason: "quota probe account state is unsupported"}
 		}
-		if ready && containsAllAndAny(screen, allMarkers, anyMarkers) && (doneWhen == nil || doneWhen(screen)) {
-			return nil
+		if !r.processInterstitials(screen) {
+			if ready && containsAllAndAny(screen, allMarkers, anyMarkers) && (doneWhen == nil || doneWhen(screen)) {
+				return nil
+			}
 		}
 		select {
 		case <-ctx.Done():

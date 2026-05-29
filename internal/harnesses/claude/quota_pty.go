@@ -92,17 +92,18 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 	var windows []harnesses.QuotaWindow
 	var account *harnesses.AccountInfo
 	result, err := ptyquota.Run(ctx, ptyquota.Config{
-		HarnessName:  "claude",
-		Binary:       cfg.binary,
-		Args:         cfg.args,
-		Workdir:      cfg.workdir,
-		Env:          cfg.env,
-		Command:      "/usage\r",
-		ReadyMarkers: []string{"❯", "> "},
-		DoneWhen:     claudeUsageComplete,
-		Timeout:      timeout,
-		Size:         session.Size{Rows: 50, Cols: 220},
-		CassetteDir:  cfg.cassetteDir,
+		HarnessName:   "claude",
+		Binary:        cfg.binary,
+		Args:          cfg.args,
+		Workdir:       cfg.workdir,
+		Env:           cfg.env,
+		Command:       "/usage\r",
+		ReadyMarkers:  []string{"❯", "> "},
+		Interstitials: []ptyquota.Interstitial{claudeTrustInterstitial()},
+		DoneWhen:      claudeUsageComplete,
+		Timeout:       timeout,
+		Size:          session.Size{Rows: 50, Cols: 220},
+		CassetteDir:   cfg.cassetteDir,
 		Quota: func(text string) (cassette.QuotaRecord, error) {
 			windows, account = parseClaudeUsageOutput(text)
 			if len(windows) == 0 {
