@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/discoverycache"
+	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/provider/utilization"
 	"github.com/easel/fizeau/internal/runtimesignals"
 	"github.com/easel/fizeau/internal/serverinstance"
@@ -642,6 +646,125 @@ func TestListModels_harnessFilter(t *testing.T) {
 		}
 		if info.Billing != BillingModelSubscription {
 			t.Errorf("gemini model Billing = %q, want subscription: %#v", info.Billing, info)
+		}
+	}
+}
+
+// stubSubscriptionHarnessLookPath makes the given binaries discoverable via the
+// registry's LookPath seam and reports every other binary as missing, so the
+// test is hermetic regardless of which CLIs are installed on the host.
+func stubSubscriptionHarnessLookPath(svc *service, available ...string) {
+	set := make(map[string]struct{}, len(available))
+	for _, name := range available {
+		set[name] = struct{}{}
+	}
+	svc.registry.LookPath = func(file string) (string, error) {
+		if _, ok := set[file]; ok {
+			return "/usr/local/bin/" + file, nil
+		}
+		return "", exec.ErrNotFound
+	}
+}
+
+// stubSubprocessHarnessModelIDs replaces the package-level model-ID resolver
+// with a hermetic map for the duration of the test, so the subscription-tier
+// surface does not depend on launching real CLIs via PTY (which requires an
+// interactive TTY unavailable in CI/sandboxes).
+func stubSubprocessHarnessModelIDs(t *testing.T, byHarness map[string][]string) {
+	t.Helper()
+	prev := subprocessHarnessModelIDs
+	t.Cleanup(func() { subprocessHarnessModelIDs = prev })
+	subprocessHarnessModelIDs = func(name string, _ harnesses.HarnessConfig) []string {
+		return byHarness[name]
+	}
+}
+
+func TestListModelsUnfilteredIncludesAvailableSubscriptionTiers(t *testing.T) {
+	// ServiceConfig with NO configured providers: the provider-backed snapshot
+	// is empty, exercising the regression where unfiltered ListModels returned
+	// zero models even though subscription CLIs are on PATH.
+	sc := &fakeServiceConfig{
+		providers:   map[string]ServiceProviderEntry{},
+		names:       nil,
+		defaultName: "",
+	}
+	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
+	stubSubscriptionHarnessLookPath(svc, "claude", "codex")
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"claude": {"opus-4.7", "sonnet-4.6"},
+		"codex":  {"gpt-5.4"},
+	})
+
+	infos, err := svc.ListModels(context.Background(), ModelFilter{})
+	if err != nil {
+		t.Fatalf("ListModels unfiltered: %v", err)
+	}
+	if len(infos) == 0 {
+		t.Fatalf("want subscription-harness tiers in unfiltered inventory, got 0")
+	}
+
+	byHarness := map[string]int{}
+	for _, info := range infos {
+		if info.Harness == "" {
+			t.Errorf("model %q missing Harness", info.ID)
+		}
+		byHarness[info.Harness]++
+	}
+	if byHarness["claude"] == 0 {
+		t.Errorf("want claude subscription tiers in unfiltered inventory, got none: %v", modelInfoDebug(infos))
+	}
+	if byHarness["codex"] == 0 {
+		t.Errorf("want codex subscription tiers in unfiltered inventory, got none: %v", modelInfoDebug(infos))
+	}
+
+	// Power metadata must be populated so the caller's escalation ladder is
+	// non-empty (the original no-viable-floor failure mode).
+	var sawPower bool
+	for _, info := range infos {
+		if info.Harness == "claude" && info.Billing != BillingModelSubscription {
+			t.Errorf("claude model %q Billing = %q, want subscription", info.ID, info.Billing)
+		}
+		if info.Power > 0 {
+			sawPower = true
+		}
+	}
+	if !sawPower {
+		t.Errorf("want at least one subscription tier with Power metadata populated, got %v", modelInfoDebug(infos))
+	}
+}
+
+func TestListModelsFilteredByHarnessUnchanged(t *testing.T) {
+	svc := newTestService(t, ServiceOptions{})
+	stubSubscriptionHarnessLookPath(svc, "claude", "codex", "gemini")
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"claude": {"opus-4.7", "sonnet-4.6"},
+		"codex":  {"gpt-5.4"},
+		"gemini": {"gemini-2.5-pro"},
+	})
+
+	for _, harness := range []string{"claude", "codex", "gemini"} {
+		filtered, err := svc.ListModels(context.Background(), ModelFilter{Harness: harness})
+		if err != nil {
+			t.Fatalf("ListModels harness=%s: %v", harness, err)
+		}
+		// The shared tier-building helper must produce byte-for-byte identical
+		// output to the harness-pinned path.
+		cfg, ok := svc.registry.Get(harness)
+		if !ok {
+			t.Fatalf("registry missing %s", harness)
+		}
+		cat, _ := modelcatalog.Default()
+		want := svc.subscriptionHarnessTierModels(harness, cfg, cat)
+		if !reflect.DeepEqual(filtered, want) {
+			t.Fatalf("harness=%s filtered output changed:\n got %#v\nwant %#v", harness, filtered, want)
+		}
+		if len(filtered) == 0 {
+			t.Fatalf("want harness-native models for harness=%s", harness)
+		}
+		for _, info := range filtered {
+			if info.Provider != harness || info.Harness != harness {
+				t.Errorf("harness=%s unexpected model: %#v", harness, info)
+			}
 		}
 	}
 }

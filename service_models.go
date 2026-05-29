@@ -42,20 +42,77 @@ func (s *service) ListModels(ctx context.Context, filter ModelFilter) ([]ModelIn
 	if err != nil {
 		return nil, err
 	}
-	return s.listModelsFromSnapshot(ctx, sc, cat, snapshot, filter), nil
+	out := s.listModelsFromSnapshot(ctx, sc, cat, snapshot, filter)
+	// Provider-backed models come only from the configured providers block. When
+	// those endpoints are unreachable (or none are configured) the snapshot is
+	// empty, which would leave callers with no routing floor even though
+	// subscription CLI harnesses (claude/codex/gemini) may be available on PATH.
+	// Append the available subscription-harness tiers so the unfiltered inventory
+	// always reflects every reachable surface.
+	out = append(out, s.availableSubscriptionHarnessModels(filter, out)...)
+	return out, nil
+}
+
+// availableSubscriptionHarnessModels enumerates the subprocess subscription
+// harnesses (claude/codex/gemini etc.) that are available on the system and
+// returns their tier ModelInfos. It honors filter.Provider, excludes the
+// embedded "fiz" harness, HTTP-only providers, and test-only harnesses, and
+// dedups against harnesses already represented in the provider-backed output.
+func (s *service) availableSubscriptionHarnessModels(filter ModelFilter, existing []ModelInfo) []ModelInfo {
+	represented := make(map[string]struct{}, len(existing))
+	for _, info := range existing {
+		represented[info.Harness] = struct{}{}
+		represented[info.Provider] = struct{}{}
+	}
+	cat, _ := modelcatalog.Default()
+	var out []ModelInfo
+	for _, st := range s.registry.Discover() {
+		if !st.Available {
+			continue
+		}
+		name := st.Name
+		if filter.Provider != "" && filter.Provider != name {
+			continue
+		}
+		if _, ok := represented[name]; ok {
+			continue
+		}
+		cfg, ok := s.registry.Get(name)
+		if !ok {
+			continue
+		}
+		if name == "fiz" || cfg.TestOnly || cfg.IsHTTPProvider || harnessRunsInProcessOrHTTP(cfg) {
+			continue
+		}
+		out = append(out, s.subscriptionHarnessTierModels(name, cfg, cat)...)
+		represented[name] = struct{}{}
+	}
+	return out
 }
 
 func (s *service) listModelsForSubprocessHarness(filter ModelFilter) []ModelInfo {
 	name := harnesses.ResolveHarnessAlias(filter.Harness)
 	cfg, ok := s.registry.Get(name)
-	modelIDs := subprocessHarnessModelIDs(name, cfg)
-	if !ok || harnessRunsInProcessOrHTTP(cfg) || len(modelIDs) == 0 {
+	if !ok || harnessRunsInProcessOrHTTP(cfg) {
 		return nil
 	}
 	if filter.Provider != "" && filter.Provider != name {
 		return nil
 	}
 	cat, _ := modelcatalog.Default()
+	return s.subscriptionHarnessTierModels(name, cfg, cat)
+}
+
+// subscriptionHarnessTierModels builds the tier ModelInfos for a single
+// subprocess subscription harness, drawing model IDs from the harness's
+// documented CLI surface and cross-referencing the model catalog for power,
+// cost, and context metadata. It returns nil when the harness exposes no model
+// IDs. Shared by the harness-pinned ListModels path and the unfiltered path.
+func (s *service) subscriptionHarnessTierModels(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []ModelInfo {
+	modelIDs := subprocessHarnessModelIDs(name, cfg)
+	if len(modelIDs) == 0 {
+		return nil
+	}
 	out := make([]ModelInfo, 0, len(modelIDs))
 	for i, id := range modelIDs {
 		info := ModelInfo{
@@ -81,7 +138,11 @@ func (s *service) listModelsForSubprocessHarness(filter ModelFilter) []ModelInfo
 	return out
 }
 
-func subprocessHarnessModelIDs(name string, cfg harnesses.HarnessConfig) []string {
+// subprocessHarnessModelIDs resolves the documented CLI model surface for a
+// subprocess harness. It is a package-level variable so tests can substitute a
+// hermetic model list in environments without an interactive TTY for PTY-based
+// discovery; production always uses serviceimpl.SubprocessHarnessModelIDs.
+var subprocessHarnessModelIDs = func(name string, cfg harnesses.HarnessConfig) []string {
 	return serviceimpl.SubprocessHarnessModelIDs(name, cfg)
 }
 

@@ -2,6 +2,7 @@ package fizeau
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/easel/fizeau/internal/harnesses"
@@ -12,9 +13,16 @@ type testServiceOption func(*service)
 func newTestService(t testing.TB, opts ServiceOptions, options ...testServiceOption) *service {
 	t.Helper()
 
+	registry := harnesses.NewRegistry()
+	// Default to reporting no subprocess CLI binaries on PATH so the test
+	// service's harness discovery is hermetic regardless of which agent CLIs are
+	// installed on the host. Tests that need a harness discoverable override
+	// registry.LookPath themselves (see stubSubscriptionHarnessLookPath).
+	registry.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+
 	svc := &service{
 		opts:             opts,
-		registry:         harnesses.NewRegistry(),
+		registry:         registry,
 		harnessInstances: defaultHarnessInstances(),
 	}
 	for _, option := range options {
