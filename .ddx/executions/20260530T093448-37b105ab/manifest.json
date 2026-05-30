@@ -1,0 +1,67 @@
+{
+  "attempt_id": "20260530T093448-37b105ab",
+  "bead_id": "fizeau-4f5acc2c",
+  "base_rev": "6299f6ac21f5ec07396e955581600ba4c44247c9",
+  "created_at": "2026-05-30T09:34:53.952201053Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-4f5acc2c",
+    "title": "bench-pr-A3: per-cell execution loop, report.json composition, budget halting, per-cell retry",
+    "description": "PROBLEM: With the runner front end (A2) and adapters/image (A1) in place, the runner must actually run cells: invoke the harness adapter and task executor, compose report.json, enforce the cost budget, and retry transient failures. This is the body of the run loop.\n\nROOT CAUSE:\n- cmd/bench/matrix.go (~2232 LOC) owns the execution loop, report composition, and budget logic being ported to bash.\n\nPROPOSED FIX:\n- Per-cell loop in scripts/benchmark/benchmark: write cell-state.json sentinel; invoke harness-adapters/\u003cname\u003e command \u003c profile.json -\u003e command-spec.json; compose task-spec; invoke task-executors/\u003cname\u003e \u003c task-spec.json (writes cell_dir/result.json); compose cell_dir/report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/; copy task_executor_version + harbor_runner_image_digest from \u003cout\u003e/sweep.json into each cell; delete cell-state.json on clean close.\n- Resume: if cell_dir/report.json exists with a terminal final_status, skip. --force-rerun ignores. --retry-invalid reruns cells with non-empty invalid_class OR an orphan cell-state.json.\n- Budget: at cell close compute cost_usd_at_run_time from profile.pricing x token streams; accumulate into \u003cout\u003e/budget.json; before the next cell, halt when the cap is hit. Skipped cells get final_status=budget_halted placeholders (process_outcome=setup_failed, with a 'note' field).\n- Per-cell retry: bounded exponential backoff for transient errors (connection refused, 5xx, EOF parse). Write attempt_of: into the new cell and back-write superseded_by: into the prior closed cell (the one permitted mutation of a closed cell).\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); adapters + image (A1); flock/setsid/job-pool concurrency and SIGINT/SIGTERM handling (A4); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: A2 (and transitively A1). BLOCKS: A4.\n\nACCEPTANCE (satisfies parent AC2 and AC3):\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary runs the canary and produces cells under bench/results/fiz-tools-v1/cells/; each cell has report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/. TestRunProducesCellReports. (parent AC2)\n2. Re-running without --force-rerun skips cells whose report.json has a terminal final_status; --retry-invalid reruns invalid/orphan cells. TestResumeAndRetryInvalid.\n3. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted (process_outcome=setup_failed, note set). TestBudgetHaltPlaceholder. (parent AC3)\n4. A transient adapter failure yields a retry cell carrying attempt_of: and a superseded_by: back-written into the prior cell. TestPerCellRetryLinks.\nGATES: bats scripts/benchmark/test passes; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent AC2 and AC3 hold; acceptance 1-4 pass; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A3",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260530T085834-18b44c2e\",\"bead_id\":\"fizeau-4f5acc2c\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-30T09:29:04Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-30T09:29:34.00672083Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T09:29:37.075099229Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260530T085840-8872fb2a/0\",\"cycle_index\":0,\"attempt_id\":\"20260530T085840-8872fb2a\",\"base_rev\":\"5313f04e0760ad533cbe2865390253afad12ffd6\",\"result_rev\":\"5f2f6b85a349eff06fe6303da531c3c1d476b704\"}",
+          "created_at": "2026-05-30T09:29:37.120879581Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        }
+      ],
+      "work-consecutive-wedges": {
+        "at": "2026-05-30T09:29:34Z",
+        "count": 1,
+        "last_reason": "progress_watchdog"
+      }
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T093448-37b105ab",
+    "prompt": ".ddx/executions/20260530T093448-37b105ab/prompt.md",
+    "manifest": ".ddx/executions/20260530T093448-37b105ab/manifest.json",
+    "result": ".ddx/executions/20260530T093448-37b105ab/result.json",
+    "checks": ".ddx/executions/20260530T093448-37b105ab/checks.json",
+    "usage": ".ddx/executions/20260530T093448-37b105ab/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-4f5acc2c-20260530T093448-37b105ab"
+  },
+  "prompt_sha": "4a7019871d0ccef4cbd9320b4ffd3f8d229501f4a61b261cfafdfa1c67b0f0fb"
+}
