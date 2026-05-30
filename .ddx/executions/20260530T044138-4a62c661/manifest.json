@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260530T044138-4a62c661",
+  "bead_id": "fizeau-8b30d386",
+  "base_rev": "27706a13716644982ea42fd373f6d5212d4f3063",
+  "created_at": "2026-05-30T04:41:43.836428855Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-8b30d386",
+    "title": "routing: escalate policy ladder instead of returning no-viable-candidate when the policy band is empty",
+    "description": "PROBLEM: Unpinned routing can return `no viable routing candidate: N candidates rejected` (NoViableCandidateError, internal/routing/engine.go:369-371) when the requested policy band has zero eligible candidates at that moment — even though eligible, dispatchable candidates exist in an adjacent band (e.g. a healthy subscription harness sitting in the smart band while the request is at the default band). Observed 2026-05-28: with the local fleet down, an unpinned `ddx run` returned \"16 candidates rejected\" rather than selecting an available claude/codex tier.\n\nROOT CAUSE: the NoViableCandidateError path does not invoke the existing policy-escalation ladder. `EscalatePolicyLadder` (internal/routing/routehealth/routing_helpers.go:83-120) and `ShouldEscalateOnError` (:124) exist and implement cheap→default→smart escalation, but are not wired into the unpinned no-viable path, so a healthy candidate one band away is missed. Per spec (docs/routing/index.md:17-22, docs/routing/policies.md): unpinned routing should \"select the best-scoring viable auto-routable model from the snapshot\"; an empty requested band with viable candidates elsewhere should escalate, not hard-fail.\n\nPROPOSED FIX: on NoViableCandidateError for an UNPINNED request, attempt the cheap→default→smart ladder via the existing EscalatePolicyLadder/ShouldEscalateOnError before returning the error. Hard-pinned requests must NOT escalate (they fail with candidate evidence per docs/routing/index.md:31-33).\n\nNON-SCOPE: no change to within-band scoring; no change to hard-pin failure semantics; does not cover the separate default_provider native-path failover (tracked in fizeau-e71ba414).",
+    "acceptance": "1. New test TestUnpinnedEscalatesWhenBandEmpty (internal/routing): with eligible candidates only in the smart band and an unpinned request resolved at the default policy, routing escalates and resolves to the smart-band candidate (no NoViableCandidateError).\n2. New test TestHardPinDoesNotEscalate: an unsatisfiable --model/--provider/--harness pin still returns the error with attempted-route + candidate evidence (no escalation).\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./internal/routing/... green.\n4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "spec:FEAT-004",
+      "cross-ref:no-viable-provider",
+      "cross-ref:fizeau-e71ba414"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260530T044138-4a62c661",
+    "prompt": ".ddx/executions/20260530T044138-4a62c661/prompt.md",
+    "manifest": ".ddx/executions/20260530T044138-4a62c661/manifest.json",
+    "result": ".ddx/executions/20260530T044138-4a62c661/result.json",
+    "checks": ".ddx/executions/20260530T044138-4a62c661/checks.json",
+    "usage": ".ddx/executions/20260530T044138-4a62c661/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-8b30d386-20260530T044138-4a62c661"
+  },
+  "prompt_sha": "575b2d7e4388f397e7ab2414c3a5164a27250b803fc8951e2a5273f514b27988"
+}
