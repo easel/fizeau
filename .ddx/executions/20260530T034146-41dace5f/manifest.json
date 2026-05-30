@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260530T034146-41dace5f",
+  "bead_id": "fizeau-e71ba414",
+  "base_rev": "d716a659618c43f27c7ccdba48252240306c4463",
+  "created_at": "2026-05-30T03:41:51.66097176Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e71ba414",
+    "title": "routing: fail over to available candidates when default_provider endpoint is unreachable (no route_resolution_timeout)",
+    "description": "PROBLEM: For an unpinned request (no --harness/--provider/--model), when `default_provider` names an endpoint that is unreachable (e.g. local lmstudio down → 502 / connection refused), routing stalls and fails with `route_resolution_timeout: route resolution exceeded 1m0s` instead of failing over to other available candidates (e.g. subscription harnesses claude/codex). Observed 2026-05-28 when the local model fleet was down: all three project workers (ddx/fizeau/helix) could not execute.\n\nROOT CAUSE: selectConfiguredNativeProvider (service_native_provider.go:80-86) returns the configured DefaultProviderName() unconditionally for the `req.Provider==\"\" \u0026\u0026 wantedType==\"\"` branch, with NO dispatchability/health check. The dead endpoint is then pinned and the route stalls until the 1m timeout. Per spec (docs/routing/index.md:15) hard gates are limited to explicit user constraints and dispatchability — a known-unreachable default_provider is a dispatchability failure, not an implicit pin.\n\nPROPOSED FIX: in selectConfiguredNativeProvider (or its caller in service_native_provider.go / service_routing.go), consult the same reachability signals the engine uses (ProviderUnreachable / ProbeUnreachable). When the default provider is known-unreachable, skip the native-default selection and fall through to engine auto-routing so an available candidate (subscription harness or other reachable provider) is selected.\n\nNON-SCOPE: do not change candidate scoring; do not change default_provider behavior when the default IS reachable; do not touch the catalog.",
+    "acceptance": "1. New test TestDefaultProviderFailsOverWhenUnreachable (fizeau, service_native_provider/service_routing package): given default_provider set to an unreachable endpoint AND an available subscription-harness candidate, ResolveRoute selects the available candidate (not the dead default) and returns no error / no timeout.\n2. TestDefaultProviderUsedWhenReachable (new or existing): when the default provider IS reachable, it is still selected for the unpinned native path (no behavior regression).\n3. ResolveRoute returns no route_resolution_timeout whenever at least one dispatchable candidate exists.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./... green.\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "prevention:fleet-down-20260528"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260530T034146-41dace5f",
+    "prompt": ".ddx/executions/20260530T034146-41dace5f/prompt.md",
+    "manifest": ".ddx/executions/20260530T034146-41dace5f/manifest.json",
+    "result": ".ddx/executions/20260530T034146-41dace5f/result.json",
+    "checks": ".ddx/executions/20260530T034146-41dace5f/checks.json",
+    "usage": ".ddx/executions/20260530T034146-41dace5f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-e71ba414-20260530T034146-41dace5f"
+  },
+  "prompt_sha": "67b75d719b2f51c88bead00629f6ab8b395589988e9f673ba5c23d3645740e46"
+}
