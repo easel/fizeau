@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260530T100519-9ab7d487",
+  "bead_id": "fizeau-9de0eef7",
+  "base_rev": "de7444b58dbf2c42becde209770c8f3f5c877b18",
+  "created_at": "2026-05-30T10:05:24.125282799Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9de0eef7",
+    "title": "bench-pr-A4: concurrency (flock/setsid/job-pool, in-flight state) + signal handling (SIGINT/SIGTERM)",
+    "description": "PROBLEM: The bash runner must run cells concurrently with per-group locking and a bounded job pool, track in-flight cells across hosts, and shut down cleanly on signals — stopping harbor-runner containers and marking interrupted cells. Without this the runner cannot match the Go runner's parallelism or interrupt safety.\n\nROOT CAUSE:\n- cmd/bench/matrix.go (~2232 LOC) owns the concurrency-group locking, process-group management, and interrupt handling being ported to bash.\n\nPROPOSED FIX:\n- Concurrency: flock per concurrency-group at ${FIZEAU_BENCH_STATE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/fizeau-benchmark}/locks/\u003cgroup\u003e.lock; setsid for each cell process group; background-job pool capped by --jobs.\n- Concurrent-cells state: ${FIZEAU_BENCH_STATE_DIR}/\u003chostname\u003e/in-flight.json. Under flock, append this cell at start, read current count into the cell, remove at close; prune stale (dead-PID) entries at next read.\n- Signals: trap SIGINT/SIGTERM. Stop accepting new cells; SIGTERM each in-flight cell's process group and `docker stop` each in-flight harbor-runner container; wait 30s then SIGKILL; write final_status=interrupted (process_outcome=killed, no metrics) to in-flight cells; exit non-zero.\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); execution loop / report / budget / retry (A3); adapters + image (A1); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: A3 (and transitively A2, A1).\n\nACCEPTANCE (satisfies parent AC5):\n1. SIGTERM to a mid-sweep ./benchmark marks in-flight cells final_status=interrupted, `docker stop`s their harbor-runner containers, and the runner exits non-zero. Verify: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary \u0026 sleep 5; kill -TERM $!; wait; jq .final_status bench/results/.../report.json. TestSigtermMarksInterruptedStopsContainers. (parent AC5)\n2. Per-group flock serializes cells in the same concurrency-group while distinct groups run in parallel up to --jobs. TestConcurrencyGroupLockAndJobPool.\n3. in-flight.json gains an entry at cell start, records the live count, and is pruned of dead-PID entries on the next read. TestInFlightStatePruning.\nGATES: bats scripts/benchmark/test passes; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent AC5 holds; acceptance 1-3 pass; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A4",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T100519-9ab7d487",
+    "prompt": ".ddx/executions/20260530T100519-9ab7d487/prompt.md",
+    "manifest": ".ddx/executions/20260530T100519-9ab7d487/manifest.json",
+    "result": ".ddx/executions/20260530T100519-9ab7d487/result.json",
+    "checks": ".ddx/executions/20260530T100519-9ab7d487/checks.json",
+    "usage": ".ddx/executions/20260530T100519-9ab7d487/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-9de0eef7-20260530T100519-9ab7d487"
+  },
+  "prompt_sha": "ca89e06997359213282475b050a51a835d3be3d68126173ca65c72a5e069c156"
+}
