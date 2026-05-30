@@ -1,0 +1,35 @@
+{
+  "attempt_id": "20260530T102319-68e0f812",
+  "bead_id": "fizeau-a708f886",
+  "base_rev": "2476b6ce01937defc7a19bc51b5b95211bc798e6",
+  "created_at": "2026-05-30T10:23:24.601325186Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a708f886",
+    "title": "bench-pr-A5: agent-leak fix + planning_mode + Go runner deactivation + parity fixtures/diff.sh",
+    "description": "PROBLEM: Three cutover items: (a) the benchmark tool-preset leaks PlanningMode into the agent, which must move to an explicit profile field; (b) the Go runner's execution subcommands must redirect to ./benchmark; (c) we must prove the bash runner matches the Go runner on a committed canary before deactivation merges.\n\nROOT CAUSE:\n- internal/serviceimpl/execute_native.go:265 reads `PlanningMode: req.PlanningMode || req.ToolPreset == \"benchmark\"`, leaking planning mode whenever the benchmark preset is used.\n- cmd/bench/main.go dispatches execution subcommands (matrix, sweep, run, plan) into the retiring Go runner.\n\nPROPOSED FIX:\n- Delete the `|| req.ToolPreset == \"benchmark\"` clause at internal/serviceimpl/execute_native.go:265.\n- Add sampling.planning_mode: bool (default false) to the profile YAML schema; harness-adapters/fiz reads it and appends --plan to the command when true. Spike: `rg -l 'preset.*benchmark|FIZEAU_PRESET' scripts/benchmark/profiles/` and add sampling.planning_mode: true to each profile that relied on the preset.\n- Modify cmd/bench/main.go to short-circuit execution subcommands (matrix, sweep, run, plan) with the one-line redirect 'use ./benchmark — see scripts/benchmark/README.md' and exit 2; listing subcommands (profiles, bench-sets) stay functional until PR F.\n- Parity: BEFORE this child's deactivation commit, run the Go runner against canary (sindri-lucebox + tb-2-1-canary, 3 reps) and commit 3 representative cell reports to scripts/benchmark/testdata/parity/go-runner/. During this child, run the bash runner on the same canary and commit cells to scripts/benchmark/testdata/parity/bash-runner/. Add scripts/benchmark/testdata/parity/diff.sh (bash + jq) reporting field divergence outside an allowlist (cell-id, timestamps, paths, NEW fields: harbor_runner_image_digest, model_server.commit, etc.).\n\nNON-SCOPE: bash runner front end (A2); execution loop/budget/retry (A3); concurrency/signals (A4); adapters + image (A1); deleting cmd/bench entirely (PR F). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR G docs. Governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: A4 (working bash runner incl. signals) and transitively A3, A2, A1. Parity capture (go-runner fixtures) must precede this child's deactivation commit.\n\nACCEPTANCE (satisfies parent AC4, AC6, AC7):\n1. scripts/benchmark/testdata/parity/diff.sh against the committed go-runner fixtures is clean per the allowlist. TestParityDiffClean. (parent AC4)\n2. `fiz-bench matrix 2\u003e\u00261 | grep -q 'use ./benchmark'; test $? -eq 0` — and the command exits 2. TestGoRunnerRedirectExit2. (parent AC6)\n3. `grep -n 'ToolPreset == \"benchmark\"' internal/serviceimpl/execute_native.go` returns nothing. TestNoToolPresetBenchmarkLeak. (parent AC7)\n4. A profile with sampling.planning_mode: true causes harness-adapters/fiz to emit a command containing --plan; default false omits it. TestPlanningModeProfileField.\nGATES: `go test ./...` passes; bats scripts/benchmark/test passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent AC4, AC6, AC7 hold; acceptance 1-4 pass; go test ./..., bats, and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "kind:fix",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A5",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T102319-68e0f812",
+    "prompt": ".ddx/executions/20260530T102319-68e0f812/prompt.md",
+    "manifest": ".ddx/executions/20260530T102319-68e0f812/manifest.json",
+    "result": ".ddx/executions/20260530T102319-68e0f812/result.json",
+    "checks": ".ddx/executions/20260530T102319-68e0f812/checks.json",
+    "usage": ".ddx/executions/20260530T102319-68e0f812/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-a708f886-20260530T102319-68e0f812"
+  },
+  "prompt_sha": "f58421ec6b4ee308973c05be2375f5cb6f7b5b755c2a6e01a1a7cebbe1fe9499"
+}
