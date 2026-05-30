@@ -38,7 +38,8 @@ func (s *service) resolveConfiguredNativeProvider(req ServiceExecuteRequest) nat
 	if sc == nil {
 		return nativeProviderResolution{}
 	}
-	name, entry, ok := selectConfiguredNativeProvider(sc, req)
+	unreachableProviders := s.getUnreachableProvidersForNativeResolution()
+	name, entry, ok := selectConfiguredNativeProviderWithReachability(sc, req, unreachableProviders)
 	if !ok {
 		return nativeProviderResolution{}
 	}
@@ -53,6 +54,10 @@ func (s *service) resolveConfiguredNativeProvider(req ServiceExecuteRequest) nat
 }
 
 func selectConfiguredNativeProvider(sc ServiceConfig, req ServiceExecuteRequest) (string, ServiceProviderEntry, bool) {
+	return selectConfiguredNativeProviderWithReachability(sc, req, nil)
+}
+
+func selectConfiguredNativeProviderWithReachability(sc ServiceConfig, req ServiceExecuteRequest, unreachableProviders map[string]bool) (string, ServiceProviderEntry, bool) {
 	if req.Provider != "" {
 		if entry, ok := sc.Provider(req.Provider); ok {
 			return req.Provider, entry, true
@@ -80,6 +85,9 @@ func selectConfiguredNativeProvider(sc ServiceConfig, req ServiceExecuteRequest)
 	if req.Provider == "" && wantedType == "" {
 		name := sc.DefaultProviderName()
 		if name == "" {
+			return "", ServiceProviderEntry{}, false
+		}
+		if unreachableProviders != nil && unreachableProviders[name] {
 			return "", ServiceProviderEntry{}, false
 		}
 		entry, ok := sc.Provider(name)
@@ -242,4 +250,23 @@ func nativeModelReasoningWireMap() map[string]string {
 		}
 	}
 	return out
+}
+
+func (s *service) getUnreachableProvidersForNativeResolution() map[string]bool {
+	if s == nil || s.providerProbe == nil {
+		return nil
+	}
+	unreachable := make(map[string]bool)
+	if s.opts.ServiceConfig == nil {
+		return unreachable
+	}
+	for _, name := range s.opts.ServiceConfig.ProviderNames() {
+		if r, ok := s.providerProbe.LastProbe(name, ""); ok && !r.LastProbeSuccess {
+			unreachable[name] = true
+		}
+	}
+	if len(unreachable) == 0 {
+		return nil
+	}
+	return unreachable
 }

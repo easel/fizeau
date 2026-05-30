@@ -2141,3 +2141,35 @@ func TestOpenrouterValidKeyPassesCredentialGate(t *testing.T) {
 		t.Fatalf("openrouter candidate gated by credential_missing despite well-formed key: %#v", *candidate)
 	}
 }
+
+func TestDefaultProviderSkippedWhenUnreachable(t *testing.T) {
+	sc := &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"lmstudio": {Type: "test", BaseURL: "http://127.0.0.1:9999/v1", ServerInstance: "127.0.0.1:9999", Model: "model-a"},
+		},
+		names:       []string{"lmstudio"},
+		defaultName: "lmstudio",
+	}
+	unreachable := map[string]bool{"lmstudio": true}
+	name, entry, ok := selectConfiguredNativeProviderWithReachability(sc, ServiceExecuteRequest{}, unreachable)
+	if ok {
+		t.Fatalf("selectConfiguredNativeProviderWithReachability returned ok=true with unreachable default provider, got name=%q entry=%#v", name, entry)
+	}
+}
+
+func TestDefaultProviderUsedWhenReachable(t *testing.T) {
+	sc := &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"lmstudio": {Type: "test", BaseURL: "http://127.0.0.1:9999/v1", ServerInstance: "127.0.0.1:9999", Model: "model-a"},
+		},
+		names:       []string{"lmstudio"},
+		defaultName: "lmstudio",
+	}
+	name, entry, ok := selectConfiguredNativeProviderWithReachability(sc, ServiceExecuteRequest{}, nil)
+	if !ok {
+		t.Fatalf("selectConfiguredNativeProviderWithReachability returned ok=false with reachable default provider")
+	}
+	if name != "lmstudio" || entry.Model != "model-a" {
+		t.Fatalf("selectConfiguredNativeProviderWithReachability returned name=%q entry.Model=%q, want lmstudio/model-a", name, entry.Model)
+	}
+}
