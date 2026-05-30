@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260530T072646-652f5db2",
+  "bead_id": "fizeau-6fc8957a",
+  "base_rev": "b5884536c241cf1e0fd46e55ac582abb38c4b4c4",
+  "created_at": "2026-05-30T07:26:51.775261227Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6fc8957a",
+    "title": "bench-pr-A1: fizeau-harbor-runner image + shell harness/task-executor adapters + CONTRACTs + runtime-probe",
+    "description": "PROBLEM: The host needs Python today because the Go runner puts repo root on the host PYTHONPATH so Harbor can import scripts.benchmark.harbor_adapters.*. We must move Harbor + its plugins into a Docker image and provide shell adapters so the host only needs bash + Node + Docker. This child delivers the containerized Harbor runtime and the shell adapter layer the bash runner (A2/A3) will call; it ships NO runner control flow.\n\nROOT CAUSE:\n- cmd/bench/matrix.go:1105 injects repo root onto host PYTHONPATH for Harbor imports (host Python coupling).\n- cmd/bench/matrix.go:1015-1025 invokes claude/codex via --agent-import-path inside the Go process.\n- scripts/benchmark/harness_adapters/{fiz,opencode,pi,cost_probe,noop,dumb_script}.py are host-Python reference implementations that must be ported to shell.\n\nPROPOSED FIX:\n- scripts/benchmark/Dockerfile.harbor-runner: FROM python:3.12-slim; pip install harbor-bench==\u003cpinned\u003e (fall back to pip install git+https://github.com/laude-institute/... if git-only — confirm with a 5-min spike); COPY harbor_adapters/ + harbor_agent.py to /app; ENV PYTHONPATH=/app; WORKDIR /app; ENTRYPOINT [\"harbor\"].\n- scripts/benchmark/build-harbor-runner.sh: docker build tagging fizeau-harbor-runner:latest with an image-content-sha label = sha256(harbor_adapters/ + harbor_agent.py + Dockerfile.harbor-runner).\n- scripts/benchmark/harness-adapters/{fiz,claude,codex,opencode,pi,cost-probe,noop,dumb-script}: bash ports of the Python adapters. Each is executable, carries a '# SUMMARY:' header line, and supports two subcommands: `\u003cname\u003e install \u003cagent-artifact-path\u003e` -\u003e install-spec.json {install_command, artifact_source, binary_path, harbor_plugin}; `\u003cname\u003e command` (profile JSON on stdin) -\u003e command-spec.json {command, env, secret_env_keys}. harbor_plugin names the Python class Harbor loads (e.g. scripts.benchmark.harbor_adapters.fiz:FizeauAgent).\n- scripts/benchmark/task-executors/harbor: bash wrapper that reads task-spec.json on stdin and runs `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $cell_dir:/output -v $tasks_dir:/tasks:ro -e FIZEAU_API_KEY -e FIZEAU_BASE_URL -e FIZEAU_MODEL fizeau-harbor-runner:latest run --agent-import-path $harbor_plugin --task-id $task_id --output /output ...`, writing cell_dir/result.json. Emits task_executor_version + harbor_runner_image_digest for the sweep record.\n- scripts/benchmark/runtime-probe.sh: case on profile.metadata.runtime with one arm each for lucebox, llamacpp, vllm, omlx, ds4, rapid-mlx; curl + jq each runtime's HTTP endpoint and emit model_server JSON {name, version, commit, endpoint}.\n- scripts/benchmark/task-executors/CONTRACT.md and scripts/benchmark/harness-adapters/CONTRACT.md document the JSON shapes and the '# SUMMARY:' convention.\n\nNON-SCOPE: bash runner arg parsing/matrix/--plan (A2); per-cell execution loop, budget, retry (A3); concurrency + signal handling (A4); the Go agent-leak fix, Go runner deactivation, and parity fixtures/diff.sh (A5). Also out of scope per parent: cell-report.schema.json (PR B); tasks_from/task_executor bench-set schema (PR C); Node collector (PR D); Node importers (PR E); deleting cmd/bench (PR F); docs (PR G). Preserve governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: none (foundational). BLOCKS: A2, A3, A5.\n\nACCEPTANCE:\n1. build-harbor-runner.sh builds fizeau-harbor-runner:latest and stamps an image-content-sha label equal to sha256(harbor_adapters/ + harbor_agent.py + Dockerfile.harbor-runner); re-running with no content change is a no-op rebuild. TestHarborImageShaLabel.\n2. Each of the 8 harness-adapters is executable, has a '# SUMMARY:' header, and `\u003cname\u003e command` \u003c profile.json emits valid command-spec.json {command,env,secret_env_keys}. TestHarnessAdapterCommandSpec.\n3. `\u003cname\u003e install \u003cpath\u003e` emits valid install-spec.json {install_command,artifact_source,binary_path,harbor_plugin} with harbor_plugin naming a Harbor-loadable class. TestHarnessAdapterInstallSpec.\n4. task-executors/harbor reads task-spec.json on stdin, docker-runs the harbor-runner image, and writes a well-formed cell_dir/result.json. TestHarborTaskExecutorResult.\n5. runtime-probe.sh has a case arm for each of lucebox, llamacpp, vllm, omlx, ds4, rapid-mlx and emits model_server JSON {name,version,commit,endpoint}. TestRuntimeProbeBackends.\n6. Both CONTRACT.md files exist and document the JSON shapes and '# SUMMARY:' convention. TestContractDocsExist.\nGATES: bats scripts/benchmark/test passes; `go test ./...` passes (no Go regression); `lefthook run pre-commit` passes.",
+    "acceptance": "Acceptance 1-6 in the description pass; bats scripts/benchmark/test, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A1",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T072646-652f5db2",
+    "prompt": ".ddx/executions/20260530T072646-652f5db2/prompt.md",
+    "manifest": ".ddx/executions/20260530T072646-652f5db2/manifest.json",
+    "result": ".ddx/executions/20260530T072646-652f5db2/result.json",
+    "checks": ".ddx/executions/20260530T072646-652f5db2/checks.json",
+    "usage": ".ddx/executions/20260530T072646-652f5db2/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-6fc8957a-20260530T072646-652f5db2"
+  },
+  "prompt_sha": "e7278bab0bfd6c2119d17a9a33e0f1f741d8e357a3dba079fd4faab822429fcf"
+}
