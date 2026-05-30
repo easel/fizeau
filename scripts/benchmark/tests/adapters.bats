@@ -59,6 +59,41 @@ BENCHMARK_SCRIPT="${SCRIPT_DIR}/benchmark"
   echo "$cmd_spec" | jq -re '.command[0]' | grep -q '/installed-agent/fiz'
 }
 
+# AC4: planning_mode: true in sampling causes --plan flag
+@test "TestPlanningModeProfileField: planning_mode adds --plan to command" {
+  local profile_json='{"id":"test-plan","provider":{"type":"openai-compat","model":"test-model","base_url":"http://127.0.0.1:1/test","api_key_env":"TEST_KEY"},"sampling":{"temperature":0.0,"reasoning":"","planning_mode":true},"limits":{"max_output_tokens":1024,"context_tokens":8192}}'
+
+  local cmd_spec
+  cmd_spec=$(echo "$profile_json" | "$ADAPTERS_DIR/fiz" command)
+
+  # Valid JSON
+  echo "$cmd_spec" | jq . >/dev/null
+
+  # Check that --plan is in the command array
+  echo "$cmd_spec" | jq -e '.command[] | select(. == "--plan")' >/dev/null
+
+  # Check that FIZEAU_PLANNING_MODE env var is set
+  echo "$cmd_spec" | jq -e '.env.FIZEAU_PLANNING_MODE' >/dev/null
+  echo "$cmd_spec" | jq -e '.env.FIZEAU_PLANNING_MODE | select(. == "1")' >/dev/null
+}
+
+# AC4: planning_mode: false (default) does NOT add --plan flag
+@test "TestPlanningModeProfileField: planning_mode default omits --plan" {
+  local profile_json='{"id":"test-no-plan","provider":{"type":"openai-compat","model":"test-model","base_url":"http://127.0.0.1:1/test","api_key_env":"TEST_KEY"},"sampling":{"temperature":0.0,"reasoning":""},"limits":{"max_output_tokens":1024,"context_tokens":8192}}'
+
+  local cmd_spec
+  cmd_spec=$(echo "$profile_json" | "$ADAPTERS_DIR/fiz" command)
+
+  # Valid JSON
+  echo "$cmd_spec" | jq . >/dev/null
+
+  # Check that --plan is NOT in the command array
+  ! echo "$cmd_spec" | jq -e '.command[] | select(. == "--plan")' >/dev/null
+
+  # Check that FIZEAU_PLANNING_MODE env var is NOT set
+  ! echo "$cmd_spec" | jq -e '.env.FIZEAU_PLANNING_MODE' >/dev/null
+}
+
 # AC3: claude install emits correct harbor_plugin.
 @test "Test_AdapterContract_claude" {
   local artifact="/tmp/test-artifact"
