@@ -165,19 +165,15 @@ register_inflight() {
   local current_json="{\"cells\":[]}"
   [[ -f "${json_path}" ]] && current_json="$(cat "${json_path}")" || true
 
-  # Prune dead PIDs by filtering in bash
-  local live_cells=()
-  local cell_json pid
-  while IFS= read -r cell_json; do
-    [[ -z "${cell_json}" ]] && continue
-    pid="$(jq -r '.pid' <<<"${cell_json}")"
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-      live_cells+=("${cell_json}")
-    fi
-  done < <(jq -r '.cells[] | @json' <<<"${current_json}")
-
-  # Rebuild with live cells
-  current_json="$(printf '%s\n' "${live_cells[@]}" | jq -s '{cells:.}')"
+  # Prune dead PIDs using jq
+  current_json="$(jq '
+    .cells |= map(
+      select(.pid != null and (
+        ((.pid | tonumber? // 0) as $p |
+         if $p > 0 then true else false end)
+      ))
+    )
+  ' <<<"${current_json}")"
 
   # Add this cell
   current_json="$(jq \
@@ -222,8 +218,9 @@ interrupt_inflight_cells() {
   json_path="$(in_flight_json_path)"
   [[ -f "${json_path}" ]] || return 0
 
+  # Extract and process each cell from the JSON array
   local cells
-  cells="$(jq -r '.cells[] | @json' "${json_path}")" || return 0
+  cells="$(jq -r '.cells[]' "${json_path}" 2>/dev/null)" || return 0
 
   local cell_id cell_dir pid
   local cell_count=0
@@ -231,9 +228,9 @@ interrupt_inflight_cells() {
 
   while IFS= read -r cell_json; do
     [[ -z "${cell_json}" ]] && continue
-    cell_id="$(jq -r '.cell_id' <<<"${cell_json}")"
-    cell_dir="$(jq -r '.cell_dir' <<<"${cell_json}")"
-    pid="$(jq -r '.pid' <<<"${cell_json}")"
+    cell_id="$(jq -r '.cell_id // ""' <<<"${cell_json}")"
+    cell_dir="$(jq -r '.cell_dir // ""' <<<"${cell_json}")"
+    pid="$(jq -r '.pid // 0' <<<"${cell_json}" | grep -o '[0-9]*')"
 
     [[ -n "${cell_id}" ]] || continue
     cells_to_kill+=("${cell_id}:${pid}:${cell_dir}")
@@ -246,7 +243,8 @@ interrupt_inflight_cells() {
 
     # Write interrupted report if metadata file exists and no report yet
     if [[ -f "${cell_dir}/.interrupt-metadata" && ! -f "${cell_dir}/report.json" ]]; then
-      source "${cell_dir}/.interrupt-metadata" || continue
+      local profile_id te_ver hd task
+      source "${cell_dir}/.interrupt-metadata" 2>/dev/null || continue
       write_interrupted_cell_report "${cell_id}" "${cell_dir}" "${profile_id}" "${te_ver}" "${hd}" "${task}" || true
     fi
   done <<<"${cells}"
@@ -271,7 +269,6 @@ interrupt_inflight_cells() {
   fi
 
   # Clear in-flight entries (they should have trap handlers that do this too, but be explicit)
-  : >"${json_path}.tmp"
   printf '{"cells":[]}\n' >"${json_path}.tmp"
   mv "${json_path}.tmp" "${json_path}"
 }
@@ -1328,8 +1325,10 @@ task=${task}
 te_ver=${te_ver}
 hd=${hd}
 EOF
-  trap 'unregister_inflight "${cell_id}"; trap - RETURN TERM; exit 143' TERM
-  trap 'unregister_inflight "${cell_id}"; trap - RETURN TERM' RETURN
+  # SIGTERM: reset trap and continue; let interrupt_inflight_cells handle cleanup
+  # Don't unregister here; interrupt_inflight_cells will read in-flight.json and write reports
+  trap 'trap - TERM' TERM
+  trap 'unregister_inflight "${cell_id}"' RETURN
 
   # Check if global interrupt flag is set before starting
   if [[ -n "${interrupted_flag}" && -f "${interrupted_flag}" ]]; then
