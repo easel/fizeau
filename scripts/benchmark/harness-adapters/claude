@@ -25,7 +25,7 @@ cmd_install() {
     --arg src "$artifact" \
     --arg bin "$binary" \
     --arg cmd "install -m 0755 $artifact $binary" \
-    --arg plugin "scripts.benchmark.harbor_adapters.claude:ClaudeAgent" \
+    --arg plugin "harbor_adapters.claude:ClaudeAgent" \
     '{install_command:$cmd, artifact_source:$src, binary_path:$bin, harbor_plugin:$plugin}'
 }
 

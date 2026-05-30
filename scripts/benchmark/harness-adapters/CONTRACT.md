@@ -17,7 +17,7 @@ cost-probe   noop         dumb-script
 
 `fiz` is the native harness. `claude`, `codex`, `opencode`, `pi` are
 wrapper harnesses; their `command` returns env consumed by the matching
-`scripts.benchmark.harbor_adapters.<name>:<Name>Agent` class inside the
+`harbor_adapters.<name>:<Name>Agent` class inside the
 `fizeau-harbor-runner` container. `cost-probe`, `noop`, `dumb-script` are
 calibration adapters that do not call any model.
 
@@ -53,7 +53,7 @@ fast and side-effect-free.
   "install_command":  "install -m 0755 /path/to/fiz /installed-agent/fiz",
   "artifact_source":  "/path/to/fiz",
   "binary_path":      "/installed-agent/fiz",
-  "harbor_plugin":    "scripts.benchmark.harbor_agent:FizeauAgent"
+  "harbor_plugin":    "harbor_agent:FizeauAgent"
 }
 ```
 

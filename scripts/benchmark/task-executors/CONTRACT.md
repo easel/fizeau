@@ -30,7 +30,7 @@ Every executor file starts with a single `# SUMMARY:` line on line 2
   "task_id":         "patch-build-script",
   "tasks_dir":       "/home/erik/Projects/fizeau/external/terminal-bench/tasks",
   "cell_dir":        "/home/erik/.../cells/terminal-bench-2-1/patch-build-script/20260516T103045Z-a4c1",
-  "harbor_plugin":   "scripts.benchmark.harbor_agent:FizeauAgent",
+  "harbor_plugin":   "harbor_agent:FizeauAgent",
   "image":           "fizeau-harbor-runner:latest",
   "env": {
     "FIZEAU_BASE_URL": "http://vidar:1234/v1",

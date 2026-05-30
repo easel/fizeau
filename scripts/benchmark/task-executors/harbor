@@ -11,7 +11,7 @@ task-spec.json fields (see scripts/benchmark/task-executors/CONTRACT.md):
   task_id         string  TerminalBench task id
   tasks_dir       string  host dir holding task definitions; bind-mounted at /tasks (ro)
   cell_dir        string  host dir for cell artifacts; bind-mounted at /output (rw)
-  harbor_plugin   string  e.g. "scripts.benchmark.harbor_agent:FizeauAgent"
+  harbor_plugin   string  e.g. "harbor_agent:FizeauAgent"
   image           string  default "fizeau-harbor-runner:latest"
   env             object  env to forward into the container
   secret_env_keys [str]   subset of env keys whose values are secrets (redacted in logs)

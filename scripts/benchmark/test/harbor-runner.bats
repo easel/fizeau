@@ -32,7 +32,7 @@ teardown() {
     \"task_id\": \"test-task\",
     \"tasks_dir\": \"$TASKS_DIR\",
     \"cell_dir\": \"$CELL_DIR\",
-    \"harbor_plugin\": \"scripts.benchmark.harbor_agent:FizeauAgent\",
+    \"harbor_plugin\": \"harbor_agent:FizeauAgent\",
     \"image\": \"fizeau-harbor-runner:latest\",
     \"env\": {
       \"FIZEAU_MODEL\": \"test-model\"
@@ -83,7 +83,7 @@ teardown() {
     \"task_id\": \"test-task\",
     \"tasks_dir\": \"$TASKS_DIR\",
     \"cell_dir\": \"$CELL_DIR\",
-    \"harbor_plugin\": \"scripts.benchmark.harbor_agent:FizeauAgent\",
+    \"harbor_plugin\": \"harbor_agent:FizeauAgent\",
     \"image\": \"fizeau-harbor-runner:latest\",
     \"env\": {
       \"FIZEAU_MODEL\": \"test-model\",
