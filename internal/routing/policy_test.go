@@ -198,3 +198,62 @@ func candidateByProvider(candidates []Candidate, provider string) (Candidate, bo
 	}
 	return Candidate{}, false
 }
+
+func TestUnpinnedEscalatesWhenBandEmpty(t *testing.T) {
+	in := Inputs{Harnesses: []HarnessEntry{
+		{
+			Name:                "codex",
+			Surface:             "codex",
+			CostClass:           "medium",
+			IsSubscription:      true,
+			AutoRoutingEligible: true,
+			Available:           true,
+			QuotaOK:             true,
+			SubscriptionOK:      true,
+			ExactPinSupport:     true,
+			DefaultModel:        "frontier",
+			SupportsTools:       true,
+		},
+	}}
+
+	dec, err := Resolve(Request{Policy: "default"}, in)
+	if err != nil {
+		t.Fatalf("Resolve with escalation: %v", err)
+	}
+	if dec.Harness != "codex" {
+		t.Fatalf("Harness=%q, want codex", dec.Harness)
+	}
+	if dec.Model != "frontier" {
+		t.Fatalf("Model=%q, want frontier", dec.Model)
+	}
+}
+
+func TestHardPinDoesNotEscalate(t *testing.T) {
+	in := Inputs{Harnesses: []HarnessEntry{
+		{
+			Name:                "codex",
+			Surface:             "codex",
+			CostClass:           "medium",
+			IsSubscription:      true,
+			AutoRoutingEligible: true,
+			Available:           true,
+			QuotaOK:             true,
+			SubscriptionOK:      true,
+			ExactPinSupport:     true,
+			DefaultModel:        "frontier",
+			SupportsTools:       true,
+		},
+	}}
+
+	_, err := Resolve(Request{Policy: "default", Provider: "nonexistent-provider"}, in)
+	if err == nil {
+		t.Fatalf("expected hard-pinned request with nonexistent provider to fail, got success")
+	}
+	var typed *NoViableCandidateError
+	if !errors.As(err, &typed) {
+		t.Fatalf("errors.As NoViableCandidateError: got %T %v", err, err)
+	}
+	if typed.Provider != "nonexistent-provider" {
+		t.Fatalf("NoViableCandidateError.Provider=%q, want nonexistent-provider", typed.Provider)
+	}
+}

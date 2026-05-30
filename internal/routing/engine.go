@@ -790,6 +790,22 @@ func Resolve(req Request, in Inputs) (*Decision, error) {
 			Rejected:    len(out),
 		}
 	}
+
+	// For unpinned requests with no viable candidates at the current policy,
+	// attempt escalation to the next policy in the ladder before returning
+	// the error. Hard-pinned requests (with Model/Provider/Harness) must not
+	// escalate — they fail with the original no-viable error.
+	if isUnpinnedRequest(req) {
+		nextPolicy := nextPolicyInLadder(req.Policy)
+		if nextPolicy != "" {
+			probe := req
+			probe.Policy = nextPolicy
+			if dec, err := Resolve(probe, in); err == nil && dec != nil && dec.Harness != "" {
+				return dec, nil
+			}
+		}
+	}
+
 	return &Decision{Candidates: out}, noViableCandidateError(req, len(out))
 }
 
@@ -929,6 +945,29 @@ func noViableCandidateError(req Request, rejected int) *NoViableCandidateError {
 		MinPower: req.MinPower,
 		MaxPower: req.MaxPower,
 	}
+}
+
+// isUnpinnedRequest reports whether the request lacks all hard pins (Model,
+// Provider, Harness). Unpinned requests are eligible for policy-ladder
+// escalation when the requested policy has no viable candidates.
+func isUnpinnedRequest(req Request) bool {
+	return req.Model == "" && req.Provider == "" && canonicalHarnessPin(req.Harness) == ""
+}
+
+// nextPolicyInLadder returns the next policy in PolicyEscalationLadder after
+// the current policy, or "" if current is the last policy or not in the ladder.
+func nextPolicyInLadder(current string) string {
+	startIdx := -1
+	for i, policy := range PolicyEscalationLadder {
+		if policy == current {
+			startIdx = i
+			break
+		}
+	}
+	if startIdx < 0 || startIdx+1 >= len(PolicyEscalationLadder) {
+		return ""
+	}
+	return PolicyEscalationLadder[startIdx+1]
 }
 
 func canonicalPolicy(policy string) (string, error) {
