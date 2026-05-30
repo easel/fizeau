@@ -1,0 +1,1142 @@
+{
+  "attempt_id": "20260530T024014-1321213f",
+  "bead_id": "fizeau-f97c0efa",
+  "base_rev": "6b2be277a808c42d62091a301e373a66952e8aab",
+  "created_at": "2026-05-30T02:40:19.827992152Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-f97c0efa",
+    "title": "concerns: apply go-std lint reconciliation (path A restore linters OR path B amend concern override)",
+    "description": "PROBLEM: .ddx/plugins/helix/workflows/concerns/go-std/practices.md declares a golangci-lint baseline (govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic) that is not reflected in .golangci.yml (which enables only misspell). The Makefile partially compensates via go vet, gosec, govulncheck, go test -race pre-push. Repo state is internally inconsistent — this bead resolves it.\n\nROOT CAUSE: Same as parent (AR Open Decisions §1, fizeau-a1b61f00). The sibling audit bead produces the gap mapping; this bead acts on it by selecting and executing exactly one resolution path.\n\nPROPOSED FIX: Consume the audit artifact produced by the sibling bead, choose exactly one path, and execute it end to end:\n  Path A — In .golangci.yml (linters block), restore the declared set (add govet, staticcheck, ineffassign, unconvert, gosec, gocritic; keep misspell). Carry forward exclusions verbatim from the audit (AC4 of sibling). Wire `golangci-lint run ./...` into the pre-push gate (lefthook.yml pre-push stage) and/or any existing CI workflow file under .github/workflows that mirrors Makefile lint targets.\n  Path B — Add an override paragraph to docs/helix/01-frame/concerns.md §go-std that ratifies the Makefile-driven equivalents. The paragraph must name each of the seven declared linters and the specific Makefile target / tool that replaces it (1:1, using the audit mapping), and state why each substitution is accepted.\n\nNON-SCOPE: Do not execute both paths. Do not modify the upstream .ddx/plugins/helix/workflows/concerns/go-std/practices.md — overrides belong in the project's docs/helix/01-frame/concerns.md. Do not re-produce the audit mapping; consume the sibling bead's output. Do not introduce new linters beyond the declared baseline.\n\nGOVERNING ARTIFACTS: AR-2026-05-17-repo open decision §1 (fizeau-a1b61f00); .ddx/plugins/helix/workflows/concerns/go-std/practices.md; docs/helix/01-frame/concerns.md; .golangci.yml; Makefile; lefthook.yml.\n\nDEPENDENCIES: Sibling audit bead (go-std-lint-audit mapping artifact) must be merged before this bead is executable.\n\nVERIFICATION: Exactly one path executed; chosen artifact internally consistent with practices.md and with current Makefile/.golangci.yml state; pre-push gate green; if path A, golangci-lint run is clean on HEAD.",
+    "acceptance": "AC1 (TestGoStdReconciliationPathSelected): Exactly one path (A or B) is taken; the PR body records the choice and cites the audit row(s) that justify it.\nAC2a Path A (TestGolangciConfigEnablesDeclaredBaseline): If path A, .golangci.yml's linters block enables govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic; exclusions are present verbatim from the sibling audit (AC4); `golangci-lint run ./...` exits 0 on current HEAD.\nAC2b Path A CI wiring (TestGolangciInPrePushGate): If path A, `lefthook run pre-push` invokes golangci-lint (or the equivalent .github/workflows file is updated) and the gate is green.\nAC3b Path B (TestConcernsOverrideNamesEachReplacement): If path B, docs/helix/01-frame/concerns.md §go-std contains an override paragraph that names each of the seven declared linters and the specific Makefile target/tool replacing it; no declared linter is unaddressed; rationale matches audit gap notes.\nAC4 Internal consistency (TestGoStdArtifactInternallyConsistent): After the change, no contradiction remains between .golangci.yml, Makefile, lefthook.yml, and docs/helix/01-frame/concerns.md §go-std (cross-references resolve).\nAC5 Gates: `go test ./... -race` passes; `lefthook run pre-push` passes; under path A additionally `golangci-lint run ./...` exits 0; under path B the override paragraph passes any markdown lint configured in lefthook.",
+    "parent": "fizeau-397e9e0d",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:decision",
+      "area:concerns",
+      "spec:go-std",
+      "discovered-from:fizeau-a1b61f00"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T13:56:32.252764227Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T135542-711bc821\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":79,\"output_tokens\":2903,\"total_tokens\":2982,\"cost_usd\":0.0956835,\"duration_ms\":47446,\"exit_code\":0}",
+          "created_at": "2026-05-18T13:56:32.288354542Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=2982 cost_usd=0.0957 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T135542-711bc821\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T13:56:32.544526913Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=blocked\nreason=Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).\nsuggested_action=recheck the external blocker and move status to open when cleared",
+          "created_at": "2026-05-18T13:56:32.601000843Z",
+          "kind": "no_changes_blocked",
+          "source": "ddx work",
+          "summary": "no_changes_blocked"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: blocked\nreason: Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).\nresult_rev=9d14f67489b5b81ae41f19c7bdbf2920c182238d\nbase_rev=9d14f67489b5b81ae41f19c7bdbf2920c182238d\noutcome_reason=no_changes",
+          "created_at": "2026-05-18T13:56:32.654259774Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl)\",\"fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e050f98fd02ceb82376ad67098871ad3c20e9b729038d4a1358c77a0d9132996\"}",
+          "created_at": "2026-05-28T21:49:50.790402146Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T21:54:46.97856082Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T215115-a1a87f99\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T21:54:48.701656513Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T21:54:48.815223374Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=99ba2ed15a6ccafb69f81a47e9f71c6d9e1f2988\nbase_rev=99ba2ed15a6ccafb69f81a47e9f71c6d9e1f2988\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T21:54:48.848498376Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T22:06:03.991605953Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T22:06:09Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T22:06:09.796587174Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T22:07:09.94481839Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T22:10:35.702053456Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T22:10:35.744051597Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T22:22:34.058047488Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T22:22:40Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T22:22:40.058742787Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T22:23:40.253929501Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T22:27:05.165229381Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T22:27:05.208126107Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T22:38:48.767523708Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T22:38:54Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T22:38:54.392126888Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T22:39:54.544899806Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T22:43:12.238527465Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T22:43:12.28141701Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T22:54:41.975567054Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T22:54:47Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T22:54:47.610897788Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T22:55:47.772826037Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T22:59:04.064768522Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T22:59:04.11476177Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T23:09:34.571023602Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-28T23:12:55.641244115Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260528T230940-526eeccf\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T23:12:56.947751843Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"keep_open_for_autonomous_retry\",\"actual_power\":5,\"count\":2,\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"model\":\"qwen3.5-27b\",\"provider\":\"bragi\",\"reason\":\"provider_connectivity\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T23:12:57.017460115Z",
+          "kind": "provider_connectivity.auto_retry",
+          "source": "ddx work",
+          "summary": "repeated provider connectivity failure kept open for autonomous retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-28T23:12:57.079062061Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=a15590dd93a097057567f699e2328749fd027f9c\nbase_rev=a15590dd93a097057567f699e2328749fd027f9c\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-28T23:12:57.107263619Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T23:24:24.463186409Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T23:24:30Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T23:24:30.1690259Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T23:25:30.302696163Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T23:28:46.335556379Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T23:28:46.396557118Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T23:40:12.830146262Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T23:40:18Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T23:40:18.533583452Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T23:41:18.670904556Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-28T23:44:35.501161542Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-28T23:44:35.545609711Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-28T23:56:10.315627745Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-28T23:56:16Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-28T23:56:16.508728594Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-28T23:57:16.671830132Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T00:00:46.387937027Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T00:00:46.442546688Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T00:13:07.232659209Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-29T00:16:52.972087623Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"requested_min_power\":6,\"actual_power\":5}",
+          "created_at": "2026-05-29T00:20:31.795550599Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260529T001654-88a13f41\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T00:20:33.376585966Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"keep_open_for_autonomous_retry\",\"actual_power\":5,\"count\":3,\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"model\":\"qwen3.5-27b\",\"provider\":\"bragi\",\"reason\":\"provider_connectivity\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-29T00:20:33.448735043Z",
+          "kind": "provider_connectivity.auto_retry",
+          "source": "ddx work",
+          "summary": "repeated provider connectivity failure kept open for autonomous retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-29T00:20:33.567487562Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=bfbebe81dc8675994027421025e6144ad1ac6603\nbase_rev=bfbebe81dc8675994027421025e6144ad1ac6603\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-29T00:20:33.596855859Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T00:32:10.824734349Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T00:32:17Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T00:32:17.268692124Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T00:33:17.427892575Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T00:36:53.906594482Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T00:36:53.952800906Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T00:49:28.842410437Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T00:49:35Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T00:49:35.474575594Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T00:50:35.658666342Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T00:54:14.599708692Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T00:54:14.649619207Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T01:06:52.574777103Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T01:06:59Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T01:06:59.530149668Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T01:07:59.702227845Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T01:11:28.479613138Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T01:11:28.524202155Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T01:23:15.922655645Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"bragi\",\"resolved_model\":\"qwen3.5-27b\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-29T01:26:44.89494627Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=bragi model=qwen3.5-27b"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"fiz\",\"actual_model\":\"qwen3.5-27b\",\"actual_power\":5,\"actual_provider\":\"bragi\",\"attempt_id\":\"20260529T012322-2009e069\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T01:26:46.328847382Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=qwen3.5-27b harness=fiz"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"action\":\"keep_open_for_autonomous_retry\",\"actual_power\":5,\"count\":4,\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"model\":\"qwen3.5-27b\",\"provider\":\"bragi\",\"reason\":\"provider_connectivity\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-29T01:26:46.390945327Z",
+          "kind": "provider_connectivity.auto_retry",
+          "source": "ddx work",
+          "summary": "repeated provider connectivity failure kept open for autonomous retry"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"actual_power\":5,\"detail\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"endpoint\":\"http://bragi:1234/v1/chat/completions\",\"error\":\"agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway \",\"harness\":\"fiz\",\"model\":\"qwen3.5-27b\",\"outcome_reason\":\"provider_connectivity\",\"provider\":\"bragi\",\"timeout_class\":\"bad gateway\"}",
+          "created_at": "2026-05-29T01:26:46.449654192Z",
+          "kind": "route-failure",
+          "source": "ddx work",
+          "summary": "provider=bragi model=qwen3.5-27b endpoint=http://bragi:1234/v1/chat/completions (bad gateway) connectivity failure"
+        },
+        {
+          "actor": "erik",
+          "body": "agent: provider error: openai: POST \"http://bragi:1234/v1/chat/completions\": 502 Bad Gateway \npowerClass=standard\nresult_rev=0fa09c6d1d107e4f9ac210c5ad7680cdf58f3043\nbase_rev=0fa09c6d1d107e4f9ac210c5ad7680cdf58f3043\noutcome_reason=provider_connectivity",
+          "created_at": "2026-05-29T01:26:46.479234374Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T01:37:38.357403376Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T01:37:44Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T01:37:44.547516746Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T01:38:44.693592376Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T01:42:05.596575441Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T01:42:05.632838034Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T01:53:47.362310513Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T01:53:53Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T01:53:53.44156687Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T01:54:53.601602756Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T01:58:12.853752591Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T01:58:12.900218172Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: POST \\\"http://bragi:1234/v1/chat/completions\\\": 502 Bad Gateway\",\"fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c63725637a9913ddce00e011be60eea8b2b81be343ece9ea787ea628b79ef89d\"}",
+          "created_at": "2026-05-29T02:09:54.096631088Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"agent-loop-1780004653963075694\",\"bead_id\":\"fizeau-f97c0efa\",\"diagnosis\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"last_activity_at\":\"2026-05-29T02:10:00Z\",\"reason\":\"route_resolution_timeout\",\"timeout\":\"1m0s\"}",
+          "created_at": "2026-05-29T02:10:00.401496688Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "route_resolution_timeout"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T02:11:00.564346943Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"base_rev\":\"\",\"classification\":\"\",\"decode_warnings\":[{\"field\":\"output\",\"warning\":\"empty output\"}],\"detail\":\"route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\",\"malformed\":true,\"rationale\":\"\",\"recommended_action\":\"\",\"result_rev\":\"\",\"session_id\":\"\",\"status\":\"execution_failed\",\"suggested_amendments\":[],\"suggested_followup_beads\":[]}",
+          "created_at": "2026-05-29T02:14:23.781177052Z",
+          "kind": "bead-quality.triage-warning",
+          "source": "ddx work",
+          "summary": "empty output"
+        },
+        {
+          "actor": "erik",
+          "body": "route resolution exceeded 1m0s; released lease and flagged for operator attention (no auto-retry)\noutcome_reason=route_resolution_timeout",
+          "created_at": "2026-05-29T02:14:23.819560247Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2093 tokens with tools=false at policy default\",\"fingerprint\":\"a1d7b2b031fd6e0fc5a48389772c70320fa63b70a09d3e84d7a832fe7cebe5e6\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"a1d7b2b031fd6e0fc5a48389772c70320fa63b70a09d3e84d7a832fe7cebe5e6\"}",
+          "created_at": "2026-05-29T03:02:08.468294069Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T03:07:22.323420055Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T03:07:23.713387384Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T030411-18c4319d\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T03:07:23.749398771Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=4c16ea645933396de7c2273f0ded6ea8b392c038\nbase_rev=4c16ea645933396de7c2273f0ded6ea8b392c038\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T03:07:23.79233291Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2122 tokens with tools=false at policy default\",\"fingerprint\":\"da28f299001d2aa0ce8bfb32d6a5e1e70f0d4a6044f6f616862c1fa1a8c77812\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"da28f299001d2aa0ce8bfb32d6a5e1e70f0d4a6044f6f616862c1fa1a8c77812\"}",
+          "created_at": "2026-05-29T03:17:26.038833238Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T03:22:43.816225512Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T03:22:45.296786128Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T031928-39e6e61c\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T03:22:45.337524903Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=f49c220376b2d167ae8344e6d68f977a5644d7f4\nbase_rev=f49c220376b2d167ae8344e6d68f977a5644d7f4\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T03:22:45.377325844Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2122 tokens with tools=false at policy default\",\"fingerprint\":\"da28f299001d2aa0ce8bfb32d6a5e1e70f0d4a6044f6f616862c1fa1a8c77812\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"da28f299001d2aa0ce8bfb32d6a5e1e70f0d4a6044f6f616862c1fa1a8c77812\"}",
+          "created_at": "2026-05-29T03:33:22.975871003Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T03:36:43.397043233Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T03:36:44.793719496Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T033329-4997d8c4\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T03:36:44.824088983Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=f6ebb8687b7ab123cfda1d0e90391f07f3226db2\nbase_rev=f6ebb8687b7ab123cfda1d0e90391f07f3226db2\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T03:36:44.86113055Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2151 tokens with tools=false at policy default\",\"fingerprint\":\"4207176b180e975ae22462944e6b3e9e462124184167d54fdb6d44df0d1972a7\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4207176b180e975ae22462944e6b3e9e462124184167d54fdb6d44df0d1972a7\"}",
+          "created_at": "2026-05-29T03:47:19.709445624Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T03:50:45.710085381Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T03:50:47.402265904Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T034726-2c2d383a\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T03:50:47.440091302Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=c09315013115fabe830be5d88a6f2dbb107181c9\nbase_rev=c09315013115fabe830be5d88a6f2dbb107181c9\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T03:50:47.490772776Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2181 tokens with tools=false at policy default\",\"fingerprint\":\"178c467b909eafa13ff37b6111ec7a317f38fc8f040b84c1ae4e435680abd173\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"178c467b909eafa13ff37b6111ec7a317f38fc8f040b84c1ae4e435680abd173\"}",
+          "created_at": "2026-05-29T04:01:30.435774447Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T04:04:51.76027259Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T04:04:53.227804433Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T040137-af7998d6\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T04:04:53.267596787Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=adebc3e7491b7ad0952b013dad39173a3fd3ad95\nbase_rev=adebc3e7491b7ad0952b013dad39173a3fd3ad95\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T04:04:53.317095971Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2210 tokens with tools=false at policy default\",\"fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\"}",
+          "created_at": "2026-05-29T06:59:48.014529994Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2210 tokens with tools=false at policy default\",\"fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\"}",
+          "created_at": "2026-05-29T07:07:35.351992982Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T07:13:18.36049659Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T07:13:20.437148071Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T070939-eebfeb2a\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T07:13:20.479258071Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=0e433356b975ff061c877b652d16d02a48fc8083\nbase_rev=0e433356b975ff061c877b652d16d02a48fc8083\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T07:13:20.568329776Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2210 tokens with tools=false at policy default\",\"fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\"}",
+          "created_at": "2026-05-29T07:29:55.81631645Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T07:35:37.605891831Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T07:35:39.397525672Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T073200-573a92ae\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T07:35:39.432591319Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=e66bb42d1e9efaee29d4c74d367ec40dc690cf67\nbase_rev=e66bb42d1e9efaee29d4c74d367ec40dc690cf67\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T07:35:39.475713004Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: ResolveRoute: no live provider supports prompt of 2210 tokens with tools=false at policy default\",\"fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"f98257cc7866d9eaccd701d24cfb5dd6278fa4d76048bfe29eb6e4984220a21b\"}",
+          "created_at": "2026-05-29T20:32:25.013383801Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-29T20:38:04.990664027Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "erik",
+          "body": "{\"detail\":\"ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\",\"harness\":\"\",\"model\":\"\",\"reason\":\"routing\"}",
+          "created_at": "2026-05-29T20:38:06.700799584Z",
+          "kind": "disruption_detected",
+          "source": "ddx work",
+          "summary": "routing"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"\",\"actual_model\":\"\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260529T203429-ff006917\",\"bead_id\":\"fizeau-f97c0efa\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":true,\"routing_intent_note\":\"actual route facts unavailable\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-29T20:38:06.733198611Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard note=actual route facts unavailable"
+        },
+        {
+          "actor": "erik",
+          "body": "ResolveRoute: no live provider supports prompt of 2522 tokens with tools=false at policy default\npowerClass=standard\nresult_rev=9a7fa051fa52fd66cc53b90ed12cd75abb975c0e\nbase_rev=9a7fa051fa52fd66cc53b90ed12cd75abb975c0e\noutcome_reason=no_viable_provider",
+          "created_at": "2026-05-29T20:38:06.766400012Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "execution_failed"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"sibling audit bead output required as decision input: Bead is well-structured with clear binary choice (Path A or B), specific and testable acceptance criteria, and explicit non-scope boundaries. However, it is blocked by an unavailable sibling dependency — the audit bead that produces the gap mapping required to inform the path decision. Once that artifact is merged, either path becomes straightforward to execute. Prior dispatch attempts failed due to provider routing constraints (2522 tokens, tools=false, standard power class); future dispatch should use appropriate power class for decision+implementation work.\",\"fingerprint\":\"380c73b180c2b19a397526224f21ebda6490775ba248850f2b502e8ea91bf9da\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"380c73b180c2b19a397526224f21ebda6490775ba248850f2b502e8ea91bf9da\"}",
+          "created_at": "2026-05-30T02:38:08.457986507Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        }
+      ],
+      "work-failed-routes": [
+        {
+          "actual_power": 5,
+          "at": "2026-05-29T01:26:46Z",
+          "count": 4,
+          "endpoint": "http://bragi:1234/v1/chat/completions",
+          "model": "qwen3.5-27b",
+          "provider": "bragi",
+          "reason": "provider_connectivity",
+          "timeout_class": "bad gateway"
+        }
+      ],
+      "work-last-detail": "Sibling audit bead (fizeau-6d71a41f) failed to produce the go-std-lint-audit mapping artifact. This bead explicitly depends on the mapping to choose between path A (restore linters) and path B (amend override). The audit bead timed out during execution (attempt 20260518T135432-f0dfbc30). Cannot proceed until the sibling audit bead succeeds and produces docs/helix/01-frame/concerns/go-std-lint-audit.md or equivalent artifact with the declared linter → current coverage → gap mapping (AC4 of sibling).",
+      "work-last-status": "no_changes_blocked",
+      "work-no-changes-count": 1,
+      "work-suggested-action": "recheck the external blocker and move status to open when cleared"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T024014-1321213f",
+    "prompt": ".ddx/executions/20260530T024014-1321213f/prompt.md",
+    "manifest": ".ddx/executions/20260530T024014-1321213f/manifest.json",
+    "result": ".ddx/executions/20260530T024014-1321213f/result.json",
+    "checks": ".ddx/executions/20260530T024014-1321213f/checks.json",
+    "usage": ".ddx/executions/20260530T024014-1321213f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-f97c0efa-20260530T024014-1321213f"
+  },
+  "prompt_sha": "ac9dd9a5a3b8fd04b8068ef61efde05cc3da249435d0079def895ec056b9c119"
+}
