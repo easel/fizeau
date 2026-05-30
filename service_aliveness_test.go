@@ -587,7 +587,7 @@ models:
 	close(blocked)
 }
 
-func TestRouter_DeadLocalProvider_FallsThroughToSubscription(t *testing.T) {
+func TestDefaultProviderFailsOverWhenUnreachable(t *testing.T) {
 	configureFreshCodexQuotaForRouting(t)
 	cacheRoot := t.TempDir()
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
@@ -638,7 +638,20 @@ models:
 		t.Fatalf("route hot path invoked aliveness prober for %s", provider)
 		return false
 	})
-	makeOnlyCodexSubprocessAvailable(svc)
+	stubSubscriptionHarnessLookPath(svc, "codex")
+	prevAutoRouting := subprocessHarnessAutoRoutingModels
+	t.Cleanup(func() { subprocessHarnessAutoRoutingModels = prevAutoRouting })
+	subprocessHarnessAutoRoutingModels = func(name string, _ harnesses.HarnessConfig) []string {
+		if name == "codex" {
+			return []string{"gpt-5.5"}
+		}
+		return nil
+	}
+	prevResolveAlias := resolveSubprocessModelAlias
+	t.Cleanup(func() { resolveSubprocessModelAlias = prevResolveAlias })
+	resolveSubprocessModelAlias = func(_, model string) string {
+		return model
+	}
 	svc.providerProbe.RecordProbe("grendel", "", false, time.Now().UTC())
 
 	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "default"})

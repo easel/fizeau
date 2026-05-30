@@ -146,11 +146,11 @@ var subprocessHarnessModelIDs = func(name string, cfg harnesses.HarnessConfig) [
 	return serviceimpl.SubprocessHarnessModelIDs(name, cfg)
 }
 
-func subprocessHarnessAutoRoutingModels(name string, cfg harnesses.HarnessConfig) []string {
+var subprocessHarnessAutoRoutingModels = func(name string, cfg harnesses.HarnessConfig) []string {
 	return serviceimpl.SubprocessHarnessAutoRoutingModels(name, cfg)
 }
 
-func resolveSubprocessModelAlias(harness, model string) string {
+var resolveSubprocessModelAlias = func(harness, model string) string {
 	return serviceimpl.ResolveSubprocessModelAlias(harness, model)
 }
 

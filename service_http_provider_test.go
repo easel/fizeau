@@ -143,6 +143,35 @@ func TestResolveConfiguredNativeProviderSelectionOrder(t *testing.T) {
 	})
 }
 
+func TestResolveConfiguredNativeProviderSkipsUnreachableDefaultProbe(t *testing.T) {
+	sc := &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"lmstudio": {
+				Type:           "lmstudio",
+				BaseURL:        "http://grendel.invalid/v1",
+				ServerInstance: "grendel",
+				Model:          "model-a",
+				Endpoints: []ServiceProviderEndpoint{{
+					Name:           "desk-a",
+					BaseURL:        "http://grendel.invalid/v1",
+					ServerInstance: "desk-a",
+				}},
+			},
+		},
+		names:       []string{"lmstudio"},
+		defaultName: "lmstudio",
+	}
+	svc := newResolveRouteProbeTestService(t, sc, func(context.Context, string, string) bool {
+		return false
+	})
+	svc.providerProbe.RecordProbe("lmstudio", "desk-a", false, time.Now().UTC())
+
+	got := svc.resolveConfiguredNativeProvider(ServiceExecuteRequest{})
+	if got.Provider != nil || got.Name != "" || got.Entry.Model != "" {
+		t.Fatalf("resolveConfiguredNativeProvider returned %#v, want zero value when default provider probe is unreachable", got)
+	}
+}
+
 func TestExecuteHTTPProviderHarnessNoMatchDiagnostic(t *testing.T) {
 	sc := &fakeServiceConfig{
 		providers: map[string]ServiceProviderEntry{

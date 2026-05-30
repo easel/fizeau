@@ -257,13 +257,8 @@ func (s *service) getUnreachableProvidersForNativeResolution() map[string]bool {
 		return nil
 	}
 	unreachable := make(map[string]bool)
-	if s.opts.ServiceConfig == nil {
-		return unreachable
-	}
-	for _, name := range s.opts.ServiceConfig.ProviderNames() {
-		if r, ok := s.providerProbe.LastProbe(name, ""); ok && !r.LastProbeSuccess {
-			unreachable[name] = true
-		}
+	for name := range s.probeUnreachableProviders(time.Now().UTC()) {
+		unreachable[name] = true
 	}
 	if len(unreachable) == 0 {
 		return nil
