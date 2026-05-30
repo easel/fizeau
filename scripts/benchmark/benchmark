@@ -1406,13 +1406,18 @@ EOF
     fi
   fi
 
-  local final_status invalid_class
+  # error_class is surfaced to the report top level only for failed executions
+  # so run_cell_with_per_cell_retry can decide whether to mint a retry cell.
+  # Successful cells never carry error_class, so they are never re-run.
+  local final_status invalid_class error_class
+  error_class=""
   if [[ ${exec_status} -eq 0 ]]; then
     final_status="$(jq -r '.final_status // .status // "completed"' <<<"${result_json}")"
     invalid_class="$(jq -r '.invalid_class // ""' <<<"${result_json}")"
   else
     final_status="transient_exhausted"
     invalid_class=""
+    error_class="$(jq -r '.error_class // ""' <<<"${result_json}")"
   fi
 
   [[ -f "${cell_dir}/fiz.txt" ]] || : >"${cell_dir}/fiz.txt"
@@ -1444,6 +1449,7 @@ EOF
     --arg hd "${hd}" \
     --arg rep "${rep_str}" \
     --arg attempt_of "${attempt_of}" \
+    --arg error_class "${error_class}" \
     --argjson cost "${cost_usd}" \
     '{
        task_id:$task_id,
@@ -1463,7 +1469,9 @@ EOF
        cost_usd_at_run_time:$cost,
        task_executor_version:$te_ver,
        harbor_runner_image_digest:$hd
-     } | if $attempt_of != "" then . + {attempt_of:$attempt_of} else . end')"
+     }
+     | if $attempt_of != "" then . + {attempt_of:$attempt_of} else . end
+     | if $error_class != "" then . + {error_class:$error_class} else . end')"
 
   printf '%s\n' "${report}" >"${cell_dir}/report.json.tmp"
   mv "${cell_dir}/report.json.tmp" "${cell_dir}/report.json"
