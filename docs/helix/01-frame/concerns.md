@@ -30,6 +30,43 @@
 - **HTTP client**: Use provider SDKs (`openai-go`, `anthropic-sdk-go`) directly.
   No custom HTTP client abstraction.
 
+#### Quality Gates Linter Override
+
+The declared baseline in `.ddx/plugins/helix/workflows/concerns/go-std/practices.md` (lines 36–42)
+lists seven individual linters: `govet`, `staticcheck`, `ineffassign`, `misspell`, `unconvert`, `gosec`, and `gocritic`.
+This project uses equivalent tooling via the Makefile and pre-push gates (Makefile:138, lefthook.yml pre-push),
+which provides comparable quality assurance:
+
+1. **govet** — Enforced via `make vet` (Makefile:119), invoked in pre-push (lefthook.yml:14).
+   Maps to `go vet ./...`; detects vet-eligible issues.
+
+2. **staticcheck** — Out of scope for automated CI enforcement. Dead-code and style checks are surfaced
+   via IDE analysis (`gopls` staticcheck integration) and manual code review. This trades
+   automated CI strictness for developer autonomy in flagging complex style questions.
+
+3. **ineffassign** — Out of scope for automated CI enforcement. Unused-assignment detection is surfaced
+   via IDE analysis and manual code review. Developer responsibility to catch assignment redundancy
+   in change reviews.
+
+4. **misspell** — Enforced via `make lint-go` (Makefile:114), which runs `golangci-lint run`
+   with misspell enabled (`.golangci.yml:9`), invoked in pre-push (lefthook.yml:19).
+
+5. **unconvert** — Out of scope for automated CI enforcement. Unnecessary-conversion detection is
+   surfaced via IDE analysis and manual code review. Conversion clarity is checked informally.
+
+6. **gosec** — Enforced via `make gosec` (Makefile:133, lines 132–133), invoked in pre-push (lefthook.yml:20).
+   Detects hardcoded secrets, unsafe functions, and injection vectors with project-level
+   exclusions for `.claude/` and `.ddx/` (non-product code).
+
+7. **gocritic** — Out of scope for automated CI enforcement. Code critique (style, performance, correctness)
+   is surfaced via IDE analysis and manual code review. Best-practice suggestions are handled
+   contextually, not via a global linter.
+
+This approach prioritizes maintainability and developer experience while preserving critical gates
+(format, vet, gosec, vulnerability scan) that are enforced pre-push. The four out-of-scope linters
+(staticcheck, ineffassign, unconvert, gocritic) are available in IDE environments where developers
+can evaluate them contextually without blocking CI.
+
 ### testing
 
 - **Property-based testing**: Use `pgregory.net/rapid` for property-based tests
