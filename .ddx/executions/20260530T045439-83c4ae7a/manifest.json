@@ -1,0 +1,57 @@
+{
+  "attempt_id": "20260530T045439-83c4ae7a",
+  "bead_id": "fizeau-397e9e0d",
+  "base_rev": "b24d95796cc41164b4785daf8ff22ea9101cc107",
+  "created_at": "2026-05-30T04:54:44.940011964Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-397e9e0d",
+    "title": "concerns: reconcile .golangci.yml with declared go-std lint baseline (decide: restore linters vs amend concern)",
+    "description": "AR-2026-05-17-repo finding. .ddx/plugins/helix/workflows/concerns/go-std/practices.md declares a golangci-lint baseline that includes govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic. The repo's .golangci.yml enables only misspell. Makefile runs go vet, gosec, govulncheck, go test -race pre-push, which provides partial coverage but is not what the concern names.\n\nResolution: open decision (see AR Open Decisions §1). Either restore the declared linters to .golangci.yml or amend the go-std concern override in docs/helix/01-frame/concerns.md to ratify the Makefile-driven path.\n\nSource review: fizeau-a1b61f00.",
+    "acceptance": "Either (a) .golangci.yml enables the declared go-std linter set with the project's accepted exclusions, AND golangci-lint runs in CI; or (b) docs/helix/01-frame/concerns.md §go-std contains an override paragraph documenting the Makefile-driven equivalent and naming each tool that replaces each declared linter. The artifact is internally consistent.",
+    "labels": [
+      "helix",
+      "phase:design",
+      "kind:decision",
+      "area:concerns",
+      "spec:go-std",
+      "discovered-from:fizeau-a1b61f00"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"(a) .golangci.yml enables the declared go-std linter set with the project's accepted exclusions, AND golangci-lint runs in CI\",\"coverage\":\"child 2 AC2a (TestGolangciConfigEnablesDeclaredBaseline) covers the enabled set and exclusions; child 2 AC2b (TestGolangciInPrePushGate) covers CI wiring; child 1 AC4 (TestGoStdLintAuditEnumeratesExclusions) supplies the exclusion list consumed verbatim\"},{\"parent_ac\":\"(b) docs/helix/01-frame/concerns.md §go-std contains an override paragraph documenting the Makefile-driven equivalent and naming each tool that replaces each declared linter\",\"coverage\":\"child 2 AC3b (TestConcernsOverrideNamesEachReplacement); child 1 AC1–AC3 supply the 1:1 mapping that the override paragraph must name\"},{\"parent_ac\":\"The artifact is internally consistent\",\"coverage\":\"child 2 AC4 (TestGoStdArtifactInternallyConsistent) and AC5 gates (go test -race, lefthook pre-push, conditional golangci-lint run)\"}],\"child_ids\":[\"fizeau-6d71a41f\",\"fizeau-f97c0efa\"],\"rationale\":\"Split into (1) a non-mutating audit that produces the linter→mechanism mapping required to make the open decision and (2) a resolution bead that executes whichever path the audit justifies. Two children rather than three (one per path) keeps the mutually exclusive paths in a single executable unit, so one PR delivers the reconciliation and the audit dependency is explicit. The audit is independently mergeable (no behavior change) and unblocks the decision; the resolution bead consumes the audit's exclusion list and gap notes verbatim. Test* symbols are named per AC; gates are `go test ./... -race` and `lefthook run pre-push` per repo Makefile, with `golangci-lint run ./...` added under path A.\"}",
+          "created_at": "2026-05-18T13:36:59.244199955Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-6d71a41f, fizeau-f97c0efa"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"resolution path is specified and unambiguous: Problem and done criteria are well-stated. The implementation of either path (restore .golangci.yml or override docs) is straightforward once chosen. However, the core work is an open decision between two equally viable resolutions with no guidance criteria. Dependencies exist but their relevance is not explained. An operator must decide direction before execution can proceed.\",\"fingerprint\":\"c7c76bbcc02edf106bb4bed03187d3d71d388b4753d7688386d8705d6a1f3893\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"c7c76bbcc02edf106bb4bed03187d3d71d388b4753d7688386d8705d6a1f3893\"}",
+          "created_at": "2026-05-30T04:54:30.329640754Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        }
+      ],
+      "spec-id": "go-std",
+      "work-last-detail": "landing worktree has staged changes after waiting 2s:\nfatal: .git/index: index file smaller than expected",
+      "work-last-status": "preclaim-hook-failed",
+      "work-retry-after": "2026-05-18T01:26:38Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260530T045439-83c4ae7a",
+    "prompt": ".ddx/executions/20260530T045439-83c4ae7a/prompt.md",
+    "manifest": ".ddx/executions/20260530T045439-83c4ae7a/manifest.json",
+    "result": ".ddx/executions/20260530T045439-83c4ae7a/result.json",
+    "checks": ".ddx/executions/20260530T045439-83c4ae7a/checks.json",
+    "usage": ".ddx/executions/20260530T045439-83c4ae7a/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-397e9e0d-20260530T045439-83c4ae7a"
+  },
+  "prompt_sha": "fb8134587ee664ba1fcbc5cd900512c37f97befaf9c9ce818e06958ec6c87b0e"
+}

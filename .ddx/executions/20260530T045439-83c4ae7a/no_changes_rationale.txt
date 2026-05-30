@@ -1,0 +1,22 @@
+verification_command: bash .ddx/executions/20260530T045439-83c4ae7a/verify_linter_override.sh
+
+RESOLUTION: Bead acceptance criteria is already satisfied via option (b).
+
+The go-std linter override has been properly documented in docs/helix/01-frame/concerns.md
+(§ Project Overrides → go-std → Quality Gates Linter Override, lines 33–68).
+
+The override:
+  • Documents all 7 declared linters from the go-std baseline (practices.md)
+  • Maps each linter to its Makefile-driven equivalent or ratifies "out of scope" decisions
+  • References accurate Makefile targets (vet, lint-go, gosec)
+  • References accurate lefthook.yml pre-push gates
+  • Explains the rationale: prioritize maintainability + developer autonomy (IDE-surfaced linters)
+    while preserving critical gates (format, vet, gosec, vulnerability scan)
+
+Verification:
+  ✓ All 7 linters (govet, staticcheck, ineffassign, misspell, unconvert, gosec, gocritic) documented
+  ✓ All Makefile targets and lefthook.yml references verified
+  ✓ Artifact is internally consistent
+  ✓ Override fully ratifies the Makefile-driven path
+
+No code changes required; the artifact satisfies the acceptance criteria in its current state.
