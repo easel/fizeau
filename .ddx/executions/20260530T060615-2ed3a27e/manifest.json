@@ -1,0 +1,128 @@
+{
+  "attempt_id": "20260530T060615-2ed3a27e",
+  "bead_id": "fizeau-e71ba414",
+  "base_rev": "4f3cf9fd10e5c19738cc98cd030bbcd30a7f0c7d",
+  "created_at": "2026-05-30T06:06:20.337668798Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-e71ba414",
+    "title": "routing: fail over to available candidates when default_provider endpoint is unreachable (no route_resolution_timeout)",
+    "description": "PROBLEM: For an unpinned request (no --harness/--provider/--model), when `default_provider` names an endpoint that is unreachable (e.g. local lmstudio down → 502 / connection refused), routing stalls and fails with `route_resolution_timeout: route resolution exceeded 1m0s` instead of failing over to other available candidates (e.g. subscription harnesses claude/codex). Observed 2026-05-28 when the local model fleet was down: all three project workers (ddx/fizeau/helix) could not execute.\n\nROOT CAUSE: selectConfiguredNativeProvider (service_native_provider.go:80-86) returns the configured DefaultProviderName() unconditionally for the `req.Provider==\"\" \u0026\u0026 wantedType==\"\"` branch, with NO dispatchability/health check. The dead endpoint is then pinned and the route stalls until the 1m timeout. Per spec (docs/routing/index.md:15) hard gates are limited to explicit user constraints and dispatchability — a known-unreachable default_provider is a dispatchability failure, not an implicit pin.\n\nPROPOSED FIX: in selectConfiguredNativeProvider (or its caller in service_native_provider.go / service_routing.go), consult the same reachability signals the engine uses (ProviderUnreachable / ProbeUnreachable). When the default provider is known-unreachable, skip the native-default selection and fall through to engine auto-routing so an available candidate (subscription harness or other reachable provider) is selected.\n\nNON-SCOPE: do not change candidate scoring; do not change default_provider behavior when the default IS reachable; do not touch the catalog.",
+    "acceptance": "1. New test TestDefaultProviderFailsOverWhenUnreachable (fizeau, service_native_provider/service_routing package): given default_provider set to an unreachable endpoint AND an available subscription-harness candidate, ResolveRoute selects the available candidate (not the dead default) and returns no error / no timeout.\n2. TestDefaultProviderUsedWhenReachable (new or existing): when the default provider IS reachable, it is still selected for the unpinned native path (no behavior regression).\n3. ResolveRoute returns no route_resolution_timeout whenever at least one dispatchable candidate exists.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./... green.\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "prevention:fleet-down-20260528",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T04:07:50.537030561Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T034146-41dace5f\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":10,\"output_tokens\":95,\"total_tokens\":105,\"cost_usd\":1.6021562499999995,\"duration_ms\":1557751,\"exit_code\":0}",
+          "created_at": "2026-05-30T04:07:50.583220606Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=105 cost_usd=1.6022 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260530T034146-41dace5f\",\"bead_id\":\"fizeau-e71ba414\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-30T04:07:54.619900654Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-30T04:07:54.717092031Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-30T04:07:54.793792257Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=d716a659618c43f27c7ccdba48252240306c4463\nbase_rev=d716a659618c43f27c7ccdba48252240306c4463\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-30T04:07:54.82785602Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead identifies specific code location (selectConfiguredNativeProvider, service_native_provider.go:80-86), root cause (missing reachability checks on default provider), and concrete fix strategy (consult ProviderUnreachable/ProbeUnreachable signals to skip dead defaults). Acceptance criteria are testable and specific: two new tests with clear setup (unreachable default + available subscription candidate), regression test (reachable default still used), timeout guarantee, build/lint pass. Incident context (2026-05-28 fleet outage), spec reference (FEAT-004, docs/routing/index.md:15), and non-scope (no scoring changes, no catalog changes) are explicit. However, prior attempt produced no_changes with no_evidence_produced—agent may have failed to locate signals, misunderstood the fix, or hit a silent blocker. Bead is executable as written; no rewrite required.\",\"fingerprint\":\"5d537ab348a273f9fb40cca3373c2a7c25fedf10b8be8615de5694ba1ca8d2b8\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"5d537ab348a273f9fb40cca3373c2a7c25fedf10b8be8615de5694ba1ca8d2b8\"}",
+          "created_at": "2026-05-30T05:26:15.247892717Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260530T052615-18b44098\",\"bead_id\":\"fizeau-e71ba414\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-30T05:56:45Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-30T05:57:15.316258974Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T05:57:16.836809795Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T052622-e970b4e8\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":7,\"output_tokens\":2,\"total_tokens\":9,\"cost_usd\":0,\"duration_ms\":1847549,\"exit_code\":-1}",
+          "created_at": "2026-05-30T05:57:16.875430821Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=9 model=haiku"
+        }
+      ],
+      "spec-id": "FEAT-004",
+      "work-no-changes-count": 1
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260530T060615-2ed3a27e",
+    "prompt": ".ddx/executions/20260530T060615-2ed3a27e/prompt.md",
+    "manifest": ".ddx/executions/20260530T060615-2ed3a27e/manifest.json",
+    "result": ".ddx/executions/20260530T060615-2ed3a27e/result.json",
+    "checks": ".ddx/executions/20260530T060615-2ed3a27e/checks.json",
+    "usage": ".ddx/executions/20260530T060615-2ed3a27e/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-e71ba414-20260530T060615-2ed3a27e"
+  },
+  "prompt_sha": "e41cc2395eb98e4916cc11691f30801822b63f2c998a688c6d2ba66e5cd36ab7"
+}
