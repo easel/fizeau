@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260530T041216-2c219e04",
+  "bead_id": "fizeau-6506be18",
+  "base_rev": "2ac43eb8e396fb25b2c948996a32a540b5203b34",
+  "created_at": "2026-05-30T04:12:22.169280436Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6506be18",
+    "title": "routing: ListModels(unfiltered) must enumerate available subscription-harness tiers",
+    "description": "PROBLEM (proven via reproducer 2026-05-29): when configured `providers:` are all down, `ddx work` fails beads with `no viable routing floor for inferred powerClass standard`. ROOT CAUSE: ddx builds its power-escalation ladder from `svc.ListModels(ModelFilter{})` (unfiltered). fizeau service_models.go:25-46 assembles unfiltered ListModels ONLY from the configured providers block; subscription-harness tiers (claude/codex/gemini) are returned ONLY when filter.Harness is set (service_models.go:26-27). So with local providers down, the unfiltered snapshot is empty → ddx ladder empty → resolvePowerFloor(PowerStandard) returns hasPowerFloor=false → route-unavailable, even though claude/codex are available. PROPOSED FIX: unfiltered ListModels should also enumerate available subscription-harness tiers via the existing path it uses for the filtered case (listModelsForSubprocessHarness / catalogTierModelsForHarnessSurface, service_routing.go:746-751), so the snapshot/ladder reflect available harnesses. NON-SCOPE: do not change filtered ListModels semantics; do not change scoring.",
+    "acceptance": "1. New test TestListModelsUnfilteredIncludesAvailableSubscriptionTiers (fizeau): with no reachable HTTP providers but claude/codex available on PATH, ListModels(ModelFilter{}) returns the subscription-harness tiers (non-empty, with power metadata).\n2. TestListModelsFilteredUnchanged: filtered-by-harness behavior is unchanged.\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./... green.\n4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "prevention:fleet-down-20260528"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260530T041216-2c219e04",
+    "prompt": ".ddx/executions/20260530T041216-2c219e04/prompt.md",
+    "manifest": ".ddx/executions/20260530T041216-2c219e04/manifest.json",
+    "result": ".ddx/executions/20260530T041216-2c219e04/result.json",
+    "checks": ".ddx/executions/20260530T041216-2c219e04/checks.json",
+    "usage": ".ddx/executions/20260530T041216-2c219e04/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-6506be18-20260530T041216-2c219e04"
+  },
+  "prompt_sha": "4a007d54ef403b26e48cf29f4747368a3ca080dd8d8c3814b8735c9c0aa8bbc9"
+}
