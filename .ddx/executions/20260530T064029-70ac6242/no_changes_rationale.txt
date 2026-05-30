@@ -1,0 +1,2 @@
+status: open
+reason: `go test ./...` is still red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota); the routing regression tests for this bead pass, but the full suite is not green yet.
