@@ -132,6 +132,12 @@ func testClaudeModelDiscovery() harnesses.ModelDiscoverySnapshot {
 }
 
 func claudeModelDiscoveryComplete(text string) bool {
+	// NOTE: ideally this would wait for the full /model picker so every tier is
+	// scraped, but fizeau's VT10x emulated screen only surfaces the highlighted
+	// default line reliably (the rest of the picker overlay is not captured), so
+	// requiring the footer/cheapest tier here times out. Completing on the first
+	// parsed model keeps discovery working (at minimum the default tier); full
+	// multi-tier capture needs emulator/overlay work (tracked separately).
 	return len(parseClaudeModels(text)) > 0
 }
 

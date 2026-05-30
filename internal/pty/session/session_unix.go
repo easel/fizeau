@@ -46,7 +46,14 @@ func Start(ctx context.Context, command string, args []string, workdir string, e
 		cmd.Env = append(os.Environ(), env...)
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Do NOT set Setpgid here. creack/pty sets Setsid=true (and Setctty=true),
+	// which makes the child a session AND process-group leader. Calling
+	// setpgid(2) on a session leader fails with EPERM on Linux, so combining
+	// Setpgid with the PTY's Setsid makes pty.StartWithSize return
+	// "fork/exec: operation not permitted" and every PTY discovery/quota probe
+	// silently yields zero models. The child already has its own process group
+	// via Setsid, and kill() reaps it via Getpgid + killProcessGroup, so
+	// no explicit Setpgid is needed. (regression from fizeau-8b09722c)
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: size.Rows, Cols: size.Cols})
 	if err != nil {
