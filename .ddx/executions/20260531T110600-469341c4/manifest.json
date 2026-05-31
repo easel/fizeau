@@ -1,0 +1,95 @@
+{
+  "attempt_id": "20260531T110600-469341c4",
+  "bead_id": "fizeau-6a429b80",
+  "base_rev": "5139b92e59752cc557e933cb0b3224571149eda2",
+  "created_at": "2026-05-31T11:06:05.859121237Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6a429b80",
+    "title": "bench-pr-A2: bash runner skeleton — arg parsing, subcommand dispatch, matrix expansion, --plan",
+    "description": "PROBLEM: The runner is a 2232-LOC Go program (cmd/bench/matrix.go). It must be replaced by a bash runner at scripts/benchmark/benchmark. This child delivers the runner's front end: argument parsing, subcommand dispatch, YAML reading, matrix expansion, and --plan dry-run. It executes NO cells (that is A3) and owns NO concurrency/signal logic (A4).\n\nROOT CAUSE:\n- cmd/bench/matrix.go (~2232 LOC) is the monolith being retired; its host PYTHONPATH coupling (cmd/bench/matrix.go:1105) is what forces the rewrite.\n\nPROPOSED FIX:\n- scripts/benchmark/benchmark (new bash script, no extension):\n  - Dispatch: ./benchmark \u003csubcommand\u003e with profiles | bench-sets | task-executors | harness-adapters | validate | preflight | (no subcommand = run mode).\n  - Run-mode flags: --profile P[,P2] --bench-set B[,B2] [--plan] [--force-rerun] [--retry-invalid] [--reps N] [--jobs N] [--max-cost-usd X] [--out DIR]. Parse all; flags consumed by later children (A3/A4) are accepted but may be inert here.\n  - Read profile / bench-set / concurrency-group YAML via `yq -o=json`.\n  - Matrix expansion: profile x task x rep -\u003e ordered cell list. Resolve `tasks_from:` references (path relative to the bench-set file) and inline `tasks:` lists. Default task_executor to harbor when framework == terminal-bench (PR C finalizes the schema).\n  - preflight: rebuild fizeau-harbor-runner via build-harbor-runner.sh only when the cached image label != current content sha (uses A1).\n  - --plan: print the expanded matrix and exit, creating NO files and building NO Docker images.\n\nNON-SCOPE: per-cell execution loop / report.json composition / budget / retry (A3); concurrency + signals (A4); Go agent-leak fix, Go deactivation, parity (A5); adapters + image (A1, consumed not built here). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: A1. BLOCKS: A3, A4, A5.\n\nACCEPTANCE (satisfies parent AC1):\n1. ./scripts/benchmark/benchmark --plan --profile sindri-lucebox --bench-set tb-2-1-canary prints the expanded matrix, creates NO files, and builds NO Docker images. TestPlanPrintsMatrixNoSideEffects.\n2. Matrix expansion resolves both `tasks_from:` (relative to the bench-set file) and inline `tasks:` and produces an ordered profile x task x rep cell list. TestMatrixExpandTasksFromAndInline.\n3. Listing subcommands (profiles, bench-sets, task-executors, harness-adapters) emit their inventories and exit 0. TestListSubcommands.\n4. preflight rebuilds the harbor-runner image only on label mismatch, else no-op. TestPreflightRebuildOnShaMismatch.\nGATES: bats scripts/benchmark/test passes; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent AC1 holds; acceptance 1-4 pass; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A2",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T08:54:01.087382748Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T083823-7f60f1c1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":212,\"total_tokens\":221,\"cost_usd\":0.4536404,\"duration_ms\":932329,\"exit_code\":0}",
+          "created_at": "2026-05-30T08:54:01.122212665Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=221 cost_usd=0.4536 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260530T083823-7f60f1c1\",\"bead_id\":\"fizeau-6a429b80\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-30T08:54:05.084257623Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-30T08:54:05.174574642Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-30T08:54:05.236699818Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=fc1b00b739b3285957e467d667aea62f01de050c\nbase_rev=fc1b00b739b3285957e467d667aea62f01de050c\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-30T08:54:05.268154531Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"unknown classification \\\"refinable\\\": expected one of ready, needs_refine, needs_split, operator_required, system_unready\",\"fingerprint\":\"02553f0ef79948438d572808ca581f572282a55519385a869e44cfbcb8713efe\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"02553f0ef79948438d572808ca581f572282a55519385a869e44cfbcb8713efe\"}",
+          "created_at": "2026-05-31T11:05:55.034361272Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "work-no-changes-count": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T110600-469341c4",
+    "prompt": ".ddx/executions/20260531T110600-469341c4/prompt.md",
+    "manifest": ".ddx/executions/20260531T110600-469341c4/manifest.json",
+    "result": ".ddx/executions/20260531T110600-469341c4/result.json",
+    "checks": ".ddx/executions/20260531T110600-469341c4/checks.json",
+    "usage": ".ddx/executions/20260531T110600-469341c4/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-6a429b80-20260531T110600-469341c4"
+  },
+  "prompt_sha": "6ad20ea42161ba9d15c5a276b8e71d70898e1458d3bdec5692d16d50a149c2e5"
+}
