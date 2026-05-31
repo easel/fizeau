@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260531T162402-ecfd1440",
+  "bead_id": "fizeau-1c89bce4",
+  "base_rev": "d8489736f5848f34fe9693bc8ba07a8a968fe059",
+  "created_at": "2026-05-31T16:24:07.786963743Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-1c89bce4",
+    "title": "routing P1: routing kill-switch / safe-mode (force known-good simple policy)",
+    "description": "Config/env to force simple policy (default-middle, single genuine-failure escalation, no economics, no local mixin); bypass Phase 2+ logic. See docs/helix/01-frame/features/FEAT-004-model-routing.md 'Addendum: tiered, quota-aware routing' for the normative model + failure-classification table.",
+    "acceptance": "1. routing.safe_mode forces simple policy. 2. test: safe-mode == simple policy regardless of quota/local. 3. go test ./internal/routing/... green. 4. lefthook passes.",
+    "parent": "fizeau-2908cdfa",
+    "labels": [
+      "area:routing",
+      "kind:safety",
+      "spec:FEAT-004",
+      "phase:1"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T162402-ecfd1440",
+    "prompt": ".ddx/executions/20260531T162402-ecfd1440/prompt.md",
+    "manifest": ".ddx/executions/20260531T162402-ecfd1440/manifest.json",
+    "result": ".ddx/executions/20260531T162402-ecfd1440/result.json",
+    "checks": ".ddx/executions/20260531T162402-ecfd1440/checks.json",
+    "usage": ".ddx/executions/20260531T162402-ecfd1440/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-1c89bce4-20260531T162402-ecfd1440"
+  },
+  "prompt_sha": "cca6f613c686d72f12252a57f467b48740dcd5ac92969c78c45fdd6d3ff6cc97"
+}
