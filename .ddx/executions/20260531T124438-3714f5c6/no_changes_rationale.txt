@@ -1,0 +1,54 @@
+verification_command: go test ./cmd/bench/ -run '^(TestRunProducesCellReports|TestResumeAndRetryInvalid|TestBudgetHaltPlaceholder|TestPerCellRetryLinks)$' -count=1
+
+# Rationale (not a bare no-changes claim — see verification_command above, exits 0 from repo cwd)
+#
+# Bead fizeau-4f5acc2c (bench-pr-A3) asks for the per-cell execution loop,
+# report.json composition, budget halting, and per-cell retry in the bash
+# runner scripts/benchmark/benchmark. At base rev 49c6416d this work is ALREADY
+# IMPLEMENTED AND COMMITTED — it landed incrementally via sibling beads (e.g.
+# fizeau-65d84a79 added budget accounting, fizeau-95d38581 added per-cell retry).
+# git status is clean; no further code change is needed or appropriate.
+#
+# All four enumerated acceptance criteria are provably satisfied by the named
+# tests, which exercise the bash runner end-to-end (HARBOR_TASK_EXECUTOR_DRY_RUN=1):
+#   AC1 TestRunProducesCellReports  — cells under cells/terminal-bench-2-1/ each
+#       with report.json embedding profile, command, env_redacted, fiz.txt,
+#       fiz.err, session/, + task_executor_version & harbor_runner_image_digest
+#       copied from sweep.json; cell-state.json deleted on terminal close.
+#   AC2 TestResumeAndRetryInvalid   — resume skips terminal cells; --force-rerun
+#       mints fresh cells; --retry-invalid reruns invalid/orphan cells; new cell
+#       links via attempt_of and prior cell back-written with superseded_by.
+#   AC3 TestBudgetHaltPlaceholder   — --max-cost-usd cap produces budget_halted
+#       placeholders (process_outcome=setup_failed, note references --max-cost-usd);
+#       budget.json carries max_cost_usd/total_cost_usd/halted.
+#   AC4 TestPerCellRetryLinks       — transient adapter failure yields a retry
+#       cell carrying attempt_of with superseded_by back-written into the prior cell.
+#
+# In-scope gates verified green in this attempt:
+#   - go test ./cmd/bench/ (all four A3 tests)            PASS (-count=1, 12.5s)
+#   - bats scripts/benchmark/test/*.bats                  PASS (10/10)
+#   - go test ./cmd/bench ./scripts/benchmark             PASS
+#   - go build ./...                                      PASS
+#   - make fmt-check / make vet (lefthook pre-commit)     PASS
+#
+# Whole-repo `go test ./...` has FAILURES, but they are PRE-EXISTING and
+# OUT-OF-SCOPE for A3 (the tree is byte-identical to base rev 49c6416d, so the
+# bench work cannot have introduced them), and environment-dependent in this
+# sandboxed worktree:
+#   - github.com/easel/fizeau (root): route-resolution tests elapse ~21s and the
+#     package times out at 10m with net/http persistConn hanging on unreachable
+#     network endpoints (TestResolveRoute_*, TestExecute_RouteResolution*,
+#     TestRouter_AllProvidersDead_FailsFast, TestListModels_billingSetForProviderModels).
+#   - internal/harnesses: codex capability-matrix tests fail on an empty model
+#     catalog (TestExecuteHarnessPolicyDefaultSelectsCodexSupportedModel,
+#     TestHarnessCapabilityMatrixSupportedLimitIDsMatch/codex).
+#   - internal/harnesses/ptyquota: TestRunScrubsCassetteOutputBeforePromotion —
+#     PTY quota probe exits before expected output (environment).
+# These live in routing / harness / pty packages, none of which are named in this
+# bead's scope. The bead's NON-SCOPE explicitly reserves Go routing/harness/parity
+# work for A5 and other PRs, and the execution contract forbids modifying files
+# outside the bead's named scope. Fixing them here would be out-of-scope and could
+# not be done without network access this worktree lacks.
+#
+# The verification_command above is the canonical, deterministic, self-contained
+# proof that ACs 1-4 hold; it returns exit 0 from the repo root.

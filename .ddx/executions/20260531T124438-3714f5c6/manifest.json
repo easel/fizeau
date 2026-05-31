@@ -1,0 +1,119 @@
+{
+  "attempt_id": "20260531T124438-3714f5c6",
+  "bead_id": "fizeau-4f5acc2c",
+  "base_rev": "49c6416de44a305e151d9819fc3fd0d890a650d8",
+  "created_at": "2026-05-31T12:44:43.381229316Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-4f5acc2c",
+    "title": "bench-pr-A3: per-cell execution loop, report.json composition, budget halting, per-cell retry",
+    "description": "PROBLEM: With the runner front end (A2) and adapters/image (A1) in place, the runner must actually run cells: invoke the harness adapter and task executor, compose report.json, enforce the cost budget, and retry transient failures. This is the body of the run loop.\n\nROOT CAUSE:\n- cmd/bench/matrix.go (~2232 LOC) owns the execution loop, report composition, and budget logic being ported to bash.\n\nPROPOSED FIX:\n- Per-cell loop in scripts/benchmark/benchmark: write cell-state.json sentinel; invoke harness-adapters/\u003cname\u003e command \u003c profile.json -\u003e command-spec.json; compose task-spec; invoke task-executors/\u003cname\u003e \u003c task-spec.json (writes cell_dir/result.json); compose cell_dir/report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/; copy task_executor_version + harbor_runner_image_digest from \u003cout\u003e/sweep.json into each cell; delete cell-state.json on clean close.\n- Resume: if cell_dir/report.json exists with a terminal final_status, skip. --force-rerun ignores. --retry-invalid reruns cells with non-empty invalid_class OR an orphan cell-state.json.\n- Budget: at cell close compute cost_usd_at_run_time from profile.pricing x token streams; accumulate into \u003cout\u003e/budget.json; before the next cell, halt when the cap is hit. Skipped cells get final_status=budget_halted placeholders (process_outcome=setup_failed, with a 'note' field).\n- Per-cell retry: bounded exponential backoff for transient errors (connection refused, 5xx, EOF parse). Write attempt_of: into the new cell and back-write superseded_by: into the prior closed cell (the one permitted mutation of a closed cell).\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); adapters + image (A1); flock/setsid/job-pool concurrency and SIGINT/SIGTERM handling (A4); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact plan-2026-05-15-benchmark-runner-simplification.\n\nDEPENDS ON: A2 (and transitively A1). BLOCKS: A4.\n\nACCEPTANCE (satisfies parent AC2 and AC3):\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary runs the canary and produces cells under bench/results/fiz-tools-v1/cells/; each cell has report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/. TestRunProducesCellReports. (parent AC2)\n2. Re-running without --force-rerun skips cells whose report.json has a terminal final_status; --retry-invalid reruns invalid/orphan cells. TestResumeAndRetryInvalid.\n3. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted (process_outcome=setup_failed, note set). TestBudgetHaltPlaceholder. (parent AC3)\n4. A transient adapter failure yields a retry cell carrying attempt_of: and a superseded_by: back-written into the prior cell. TestPerCellRetryLinks.\nGATES: bats scripts/benchmark/test passes; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent AC2 and AC3 hold; acceptance 1-4 pass; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-11e9c095",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A3",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260530T085834-18b44c2e\",\"bead_id\":\"fizeau-4f5acc2c\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-30T09:29:04Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-30T09:29:34.00672083Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T09:29:37.075099229Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260530T085840-8872fb2a/0\",\"cycle_index\":0,\"attempt_id\":\"20260530T085840-8872fb2a\",\"base_rev\":\"5313f04e0760ad533cbe2865390253afad12ffd6\",\"result_rev\":\"5f2f6b85a349eff06fe6303da531c3c1d476b704\"}",
+          "created_at": "2026-05-30T09:29:37.120879581Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T10:00:58.226704543Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T093448-37b105ab\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":166,\"total_tokens\":175,\"cost_usd\":0.64741135,\"duration_ms\":1563999,\"exit_code\":0}",
+          "created_at": "2026-05-30T10:00:58.265935467Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=175 cost_usd=0.6474 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260530T093448-37b105ab\",\"bead_id\":\"fizeau-4f5acc2c\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-30T10:01:02.243499673Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-30T10:01:02.341191314Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-30T10:01:02.415978944Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=6299f6ac21f5ec07396e955581600ba4c44247c9\nbase_rev=6299f6ac21f5ec07396e955581600ba4c44247c9\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-30T10:01:02.447864475Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"ac_map\":[{\"parent_ac\":\"1: TestRunProducesCellReports — canary run produces cells with report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/ (parent AC2)\",\"coverage\":\"A3a AC1 (TestRunProducesCellReports; bats Test_run_produces_cells, Test_report_has_embedded_fields; test_runner_loop.bash)\"},{\"parent_ac\":\"2: TestResumeAndRetryInvalid — re-run without --force-rerun skips terminal cells; --retry-invalid reruns invalid/orphan cells\",\"coverage\":\"A3b AC1 (resume/skip + --force-rerun; bats Test_resume_skips_terminal_cell) and A3b AC2 (--retry-invalid invalid/orphan with attempt_of/superseded_by; bats Test_retry_invalid_reruns)\"},{\"parent_ac\":\"3: TestBudgetHaltPlaceholder — --max-cost-usd produces a budget_halted cell (process_outcome=setup_failed, note set) (parent AC3)\",\"coverage\":\"A3c AC1 (TestBudgetHaltPlaceholder; budget.json accumulation + halt placeholders; existing TestBenchmarkBudgetHalt structure assertion)\"},{\"parent_ac\":\"4: TestPerCellRetryLinks — transient failure yields a retry cell with attempt_of: and a superseded_by: back-written into the prior cell\",\"coverage\":\"A3d AC1 (TestPerCellRetryLinks; bounded backoff, retry-log.txt, attempt_of/superseded_by link chain)\"},{\"parent_ac\":\"GATES: bats scripts/benchmark/test passes; go test ./... passes; lefthook run pre-commit passes\",\"coverage\":\"Replicated verbatim as the GATES line of every child (A3a, A3b, A3c, A3d); each child must independently leave all three green\"}],\"child_ids\":[\"fizeau-99c78c29\",\"fizeau-6666be72\",\"fizeau-65d84a79\",\"fizeau-95d38581\"],\"rationale\":\"The parent bead bundled four orthogonal capabilities of the run loop (it had already accumulated a no_changes failure as a single unit). I split along the four named Test* symbols, which already exist as stubs/scaffolding in cmd/bench/runner_a3_test.go, scripts/benchmark/tests/runner.bats, and scripts/benchmark/test_runner_loop.bash, so each child maps 1:1 to a parent acceptance criterion and an existing test surface. A3a (core loop + report.json composition) is the foundation that A3b (resume/retry-invalid), A3c (budget), and A3d (per-cell transient retry) each build on independently — three parallel siblings after one prerequisite, keeping each child small enough to land as its own commit. The attempt_of/superseded_by link-writing helper is touched by both A3b (invalid/orphan path) and A3d (transient path); I assigned the helper's home to A3a's report composition surface and noted the shared dependency in both children so neither silently re-implements it. Every parent non-scope item (A1, A2, A4, A5, and PR B–G), the governing artifact, the DEPENDS ON A2/transitive A1 and BLOCKS A4 dependency IDs, and the three-gate verification requirement are preserved in each child verbatim.\"}",
+          "created_at": "2026-05-31T11:17:33.688026372Z",
+          "kind": "triage-decomposed",
+          "source": "ddx work",
+          "summary": "decomposed into fizeau-99c78c29, fizeau-6666be72, fizeau-65d84a79, fizeau-95d38581"
+        }
+      ],
+      "work-no-changes-count": 1
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T124438-3714f5c6",
+    "prompt": ".ddx/executions/20260531T124438-3714f5c6/prompt.md",
+    "manifest": ".ddx/executions/20260531T124438-3714f5c6/manifest.json",
+    "result": ".ddx/executions/20260531T124438-3714f5c6/result.json",
+    "checks": ".ddx/executions/20260531T124438-3714f5c6/checks.json",
+    "usage": ".ddx/executions/20260531T124438-3714f5c6/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-4f5acc2c-20260531T124438-3714f5c6"
+  },
+  "prompt_sha": "80067fce940a00ff0b4f33d9462ced72ac36026beef966ae233fdc779659a230"
+}
