@@ -1,0 +1,63 @@
+{
+  "attempt_id": "20260531T114621-40554510",
+  "bead_id": "fizeau-65d84a79",
+  "base_rev": "4fdbd15e8859b5761edc3425f81b8f6cba372a18",
+  "created_at": "2026-05-31T11:46:28.53148887Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 7
+  },
+  "bead": {
+    "id": "fizeau-65d84a79",
+    "title": "bench-pr-A3c: cost budget accounting + budget_halted placeholders",
+    "description": "PROBLEM: A sweep must stop spending once a USD cap is hit and must record why each un-run cell was skipped. Without budget accounting --max-cost-usd is inert and a sweep can overspend; without halted placeholders the skipped cells are indistinguishable from never-scheduled work.\n\nROOT CAUSE:\n- Budget logic ported from cmd/bench/matrix.go: the pre-cell and post-cell halt checks at cmd/bench/matrix.go:806 and cmd/bench/matrix.go:933 (set ProcessOutcome=\"budget_halted\"), the budget fields at cmd/bench/matrix.go:128-129 (BudgetUSD/PerRunBudgetUSD), and the final_status mapping at cmd/bench/matrix.go:1929.\n- Bash anchors: the declared-but-unimplemented helpers budget_path / init_budget / append_budget_cell / budget_is_halted / write_budget_halted_cell (scripts/benchmark/benchmark:131-137) and the --max-cost-usd flag parsed by A2 (scripts/benchmark/benchmark:300-303). An existing Go probe TestBenchmarkBudgetHalt (cmd/bench/runner_a3_test.go:168) asserts budget.json structure (max_cost_usd/total_cost_usd/halted).\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- At each cell close, compute cost_usd_at_run_time = profile.pricing applied to the cell's token streams; accumulate into \u003cout\u003e/budget.json (fields: max_cost_usd, total_cost_usd, halted).\n- Before scheduling the next cell, halt when total_cost_usd \u003e= max_cost_usd (cap \u003e 0).\n- Cells skipped due to the halt get final_status=budget_halted placeholder reports with process_outcome=setup_failed and a 'note' field explaining the budget cut.\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); adapters + image (A1); core per-cell loop + report.json composition (A3a, prerequisite); resume/skip + --retry-invalid (A3b); per-cell transient retry + supersede links (A3d); flock/setsid/job-pool concurrency and SIGINT/SIGTERM handling (A4); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact: docs/helix/02-design/plan-2026-05-15-benchmark-runner-simplification.md.\n\nDEPENDS ON: A3a (and transitively A2, A1). BLOCKS: A4.\n\nACCEPTANCE (satisfies parent A3 AC3 and grandparent AC3):\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary --max-cost-usd 0.01 produces at least one cell with final_status=budget_halted (process_outcome=setup_failed, note set), and writes/updates \u003cout\u003e/budget.json with max_cost_usd/total_cost_usd/halted. TestBudgetHaltPlaceholder (cmd/bench/runner_a3_test.go) and the existing TestBenchmarkBudgetHalt budget.json structure assertion remain green.\nGATES: bats scripts/benchmark/test (and scripts/benchmark/tests/runner.bats) pass; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent A3 AC3 and grandparent AC3 hold; acceptance 1 passes; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-4f5acc2c",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A3c",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"fingerprint\":\"fc17c6d2a8e4e40ede44eb3c72069e25883d10d223c84fb446fce720c395c8aa\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fc17c6d2a8e4e40ede44eb3c72069e25883d10d223c84fb446fce720c395c8aa\"}",
+          "created_at": "2026-05-31T11:45:33.314323405Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-31T11:45:56.500329299Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"requested_min_power\":6,\"actual_power\":5}",
+          "created_at": "2026-05-31T11:46:19.514581329Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T114621-40554510",
+    "prompt": ".ddx/executions/20260531T114621-40554510/prompt.md",
+    "manifest": ".ddx/executions/20260531T114621-40554510/manifest.json",
+    "result": ".ddx/executions/20260531T114621-40554510/result.json",
+    "checks": ".ddx/executions/20260531T114621-40554510/checks.json",
+    "usage": ".ddx/executions/20260531T114621-40554510/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-65d84a79-20260531T114621-40554510"
+  },
+  "prompt_sha": "b46a0d1c7f706324945afe87e989da00cc6eabea0f2cf7ec6e35b49fa97c6677"
+}
