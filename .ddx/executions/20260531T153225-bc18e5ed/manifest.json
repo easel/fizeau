@@ -1,0 +1,660 @@
+{
+  "attempt_id": "20260531T153225-bc18e5ed",
+  "bead_id": "fizeau-6506be18",
+  "base_rev": "d16eafa45a0c241aedc4631e546661893d7f1063",
+  "created_at": "2026-05-31T15:32:30.765417759Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-6506be18",
+    "title": "routing: ListModels(unfiltered) must enumerate available subscription-harness tiers",
+    "description": "PROBLEM (proven via reproducer 2026-05-29): when configured `providers:` are all down, `ddx work` fails beads with `no viable routing floor for inferred powerClass standard`. ROOT CAUSE: ddx builds its power-escalation ladder from `svc.ListModels(ModelFilter{})` (unfiltered). fizeau service_models.go:25-46 assembles unfiltered ListModels ONLY from the configured providers block; subscription-harness tiers (claude/codex/gemini) are returned ONLY when filter.Harness is set (service_models.go:26-27). So with local providers down, the unfiltered snapshot is empty → ddx ladder empty → resolvePowerFloor(PowerStandard) returns hasPowerFloor=false → route-unavailable, even though claude/codex are available. PROPOSED FIX: unfiltered ListModels should also enumerate available subscription-harness tiers via the existing path it uses for the filtered case (listModelsForSubprocessHarness / catalogTierModelsForHarnessSurface, service_routing.go:746-751), so the snapshot/ladder reflect available harnesses. NON-SCOPE: do not change filtered ListModels semantics; do not change scoring.",
+    "acceptance": "1. New test TestListModelsUnfilteredIncludesAvailableSubscriptionTiers (fizeau): with no reachable HTTP providers but claude/codex available on PATH, ListModels(ModelFilter{}) returns the subscription-harness tiers (non-empty, with power metadata).\n2. TestListModelsFilteredUnchanged: filtered-by-harness behavior is unchanged.\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./... green.\n4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "kind:bug",
+      "kind:reliability",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "prevention:fleet-down-20260528",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T04:37:02.616601987Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T041216-2c219e04\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":211,\"total_tokens\":220,\"cost_usd\":0.6633914499999999,\"duration_ms\":1478861,\"exit_code\":0}",
+          "created_at": "2026-05-30T04:37:02.659393366Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=220 cost_usd=0.6634 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260530T041216-2c219e04\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-30T04:37:07.011434796Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-30T04:37:07.108918876Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-30T04:37:07.184371017Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=2ac43eb8e396fb25b2c948996a32a540b5203b34\nbase_rev=2ac43eb8e396fb25b2c948996a32a540b5203b34\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-30T04:37:07.224203774Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-30T07:00:20.502296518Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260530T064029-70ac6242\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"input_tokens\":4933087,\"output_tokens\":20885,\"total_tokens\":4953972,\"cost_usd\":0,\"duration_ms\":1185721,\"exit_code\":0}",
+          "created_at": "2026-05-30T07:00:20.542595241Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=4953972 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"codex\",\"actual_model\":\"gpt-5.4-mini\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260530T064029-70ac6242\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-30T07:00:22.326240579Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=gpt-5.4-mini harness=codex"
+        },
+        {
+          "actor": "erik",
+          "body": "status=open\nreason=`go test ./...` is still red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota); the routing regression tests for this bead pass, but the full suite is not green yet.\nsuggested_action=retry with a smart agent",
+          "created_at": "2026-05-30T07:00:22.41908435Z",
+          "kind": "no_changes_autonomous_retry",
+          "source": "ddx work",
+          "summary": "no_changes_autonomous_retry"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: open\nreason: `go test ./...` is still red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota); the routing regression tests for this bead pass, but the full suite is not green yet.\nresult_rev=c4176fc55110a8fcde390449104634b4b3eac523\nbase_rev=c4176fc55110a8fcde390449104634b4b3eac523\nretry_after=2026-05-30T07:05:22Z\noutcome_reason=no_changes",
+          "created_at": "2026-05-30T07:00:22.515410535Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Problem is well-defined with root cause analysis, exact file references (service_models.go:25-46, service_routing.go:746-751), and concrete solution (integrate listModelsForSubprocessHarness into unfiltered ListModels). Acceptance criteria are specific and testable. Prior attempts confirm the fix direction is sound; completion was blocked by pre-existing test failures in unrelated packages (agentcli, harnesses/ptyquota), not by the fix itself.\",\"fingerprint\":\"8b3e446c755579f35ef35ba49c33284981897129be437f89a6482c03624ae5a3\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8b3e446c755579f35ef35ba49c33284981897129be437f89a6482c03624ae5a3\"}",
+          "created_at": "2026-05-30T10:47:51.768086313Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl, .ddx/metrics/locks.jsonl, internal/serviceimpl/catalog_helpers.go, service_adr005_test.go, service_routestatus_test.go)\",\"fingerprint\":\"2e14caddec3c7cd3fd081afff191ae8db6afdbd8f3f1a01693fb6ecf8eca0153\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"2e14caddec3c7cd3fd081afff191ae8db6afdbd8f3f1a01693fb6ecf8eca0153\"}",
+          "created_at": "2026-05-31T10:08:34.250811983Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: .ddx/beads.jsonl, .ddx/metrics/locks.jsonl)\",\"fingerprint\":\"fb642936933f1fa8d155bfe2e70447e9b33a0ed0264c11d6a44493843c664c5f\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fb642936933f1fa8d155bfe2e70447e9b33a0ed0264c11d6a44493843c664c5f\"}",
+          "created_at": "2026-05-31T10:12:29.764478488Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is well-scoped, executable, and clear. Problem is proven (reproducer 2026-05-29), root cause is specific (service_models.go:25-46 vs service_routing.go:746-751), and fix approach references existing code paths. Acceptance criteria are precise: two named tests with explicit harness-availability preconditions, plus suite green. Prior attempts show bead's own tests passed (routing regression tests green), but full suite had failures in unrelated packages (agentcli, internal/harnesses, ptyquota). Those failures appear external to this fix—likely pre-existing or introduced by other concurrent work—not blockers for attempting this bead. Recommend attempt; suite failures should be triaged separately if they persist.\",\"fingerprint\":\"83bee1f9fc2a52fa6934025c7565a25f5cdc724fdfdc3a98d66902e9af295d43\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"83bee1f9fc2a52fa6934025c7565a25f5cdc724fdfdc3a98d66902e9af295d43\"}",
+          "created_at": "2026-05-31T10:21:08.605567685Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260531T102108-18b49f44\",\"bead_id\":\"fizeau-6506be18\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-31T10:51:38Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-31T10:52:08.659194603Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T10:52:09.513237663Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider="
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T11:05:06.538467029Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T105312-40e79890\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":16,\"output_tokens\":656,\"total_tokens\":672,\"cost_usd\":0.5235164000000001,\"duration_ms\":709438,\"exit_code\":0}",
+          "created_at": "2026-05-31T11:05:06.569089647Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=672 cost_usd=0.5235 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T105312-40e79890\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T11:05:08.417022027Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T11:05:08.487546803Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T11:05:08.542355708Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=b64d99c0da7ac9c3769d8178cb89d9aadcb03972\nbase_rev=b64d99c0da7ac9c3769d8178cb89d9aadcb03972\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T11:05:08.571130618Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is well-specified with concrete root cause, file/line evidence (service_models.go:25-46, service_routing.go:746-751), and testable AC. Routing regression tests pass in prior attempts, proving the fix is viable. However, all 3 prior attempts failed due to AC #3 blocker: 'go test ./...' is red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota). The fix itself works, but acceptance criteria includes external blocker (full test suite green) that prevents merge.\",\"fingerprint\":\"4acbf269a8d844e064536b8557d44e30df2ff7e61525c4f9912b92617e5030fb\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4acbf269a8d844e064536b8557d44e30df2ff7e61525c4f9912b92617e5030fb\"}",
+          "created_at": "2026-05-31T11:50:53.891536737Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T12:19:29.366155186Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T115100-0963215f\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":179,\"total_tokens\":188,\"cost_usd\":0.7422733499999999,\"duration_ms\":1704239,\"exit_code\":0}",
+          "created_at": "2026-05-31T12:19:29.398434395Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=188 cost_usd=0.7423 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T115100-0963215f\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T12:19:33.241221085Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T12:19:33.30180759Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T12:19:33.357905767Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=5e816b6b8cac3c4f5d3686917afdd4fdde178a1f\nbase_rev=5e816b6b8cac3c4f5d3686917afdd4fdde178a1f\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T12:19:33.388951227Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is atomic, clear, and well-specified. Problem is proven reproducible (2026-05-29), root cause identified with specific code locations, and proposed fix is focused. Prior attempt #3 (2026-05-30) confirms the routing regression tests pass; the bead's logic is sound. However, the acceptance criterion 'go test ./... green' has an external blocker: pre-existing failures in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota). An agent cannot claim success unless all tests pass, and those failures are outside this bead's scope. This requires operator judgment: either relax the AC to exclude unrelated packages, fix the upstream test failures first, or investigate whether the bead's changes cascaded into those packages.\",\"fingerprint\":\"3ec02f2e9785b45c435ffe957f1d0295fa44717f066faa59f9e8874c42f28b47\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"3ec02f2e9785b45c435ffe957f1d0295fa44717f066faa59f9e8874c42f28b47\"}",
+          "created_at": "2026-05-31T13:12:04.452009726Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T13:30:37.186667378Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T131210-46d164b1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":179,\"total_tokens\":188,\"cost_usd\":0.47791370000000005,\"duration_ms\":1099580,\"exit_code\":0}",
+          "created_at": "2026-05-31T13:30:37.218869359Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=188 cost_usd=0.4779 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T131210-46d164b1\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T13:30:41.173011113Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T13:30:41.24568582Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T13:30:41.301961787Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=dfaf672560d86e0f9f825bf5452a01fb23fee0eb\nbase_rev=dfaf672560d86e0f9f825bf5452a01fb23fee0eb\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T13:30:41.330808979Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is well-specified with clearly identified root cause (service_models.go:25-46 unfiltered ListModels omits harness tiers), specific code locations, and testable acceptance criteria. Solution pattern is concrete and already exists in codebase (service_routing.go:746-751 filtered case shows approach). However, prior attempts (5 total) show consistent no_changes, and 4th attempt revealed external blocker: full test suite has unrelated failures in agentcli, internal/harnesses, ptyquota preventing AC3 completion.\",\"fingerprint\":\"8d27d1cf541b197c4f1f2d1e6d67d9efd70e1b5a17dc00ec4cd110f8b3cff100\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"8d27d1cf541b197c4f1f2d1e6d67d9efd70e1b5a17dc00ec4cd110f8b3cff100\"}",
+          "created_at": "2026-05-31T13:32:14.374329321Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T13:43:35.382730253Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T133220-5043b193\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":310,\"output_tokens\":8832,\"total_tokens\":9142,\"cost_usd\":0.47713725,\"duration_ms\":669715,\"exit_code\":0}",
+          "created_at": "2026-05-31T13:43:35.414239818Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=9142 cost_usd=0.4771 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T133220-5043b193\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T13:43:37.198962474Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T13:43:37.263343019Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T13:43:37.324583691Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=ef26b807c43b4b746e89711c603e64e80071f4fd\nbase_rev=ef26b807c43b4b746e89711c603e64e80071f4fd\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T13:43:37.353406049Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Bead is well-specified with concrete acceptance criteria, clear fix location (service_models.go:25-46), and explicit non-scope boundaries. However, 5 prior no-changes attempts with no evidence and 1 attempt blocked by unrelated test failures (agentcli, internal/harnesses, ptyquota) indicate potential implementation friction — either agent knowledge gaps, environment setup issues, or fix subtlety not apparent from description. Classifying as ready-to-dispatch because the specification is unambiguous, but marking difficulty as medium-to-hard to reflect failure pattern.\",\"fingerprint\":\"bfdde3b1c1f95ac1b977fac5a8ed07f3d6d460ee2c8476fa243f02755a1b1a5d\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"bfdde3b1c1f95ac1b977fac5a8ed07f3d6d460ee2c8476fa243f02755a1b1a5d\"}",
+          "created_at": "2026-05-31T13:44:51.354485094Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T14:06:24.549578315Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T134457-a8d9b960\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":212,\"total_tokens\":221,\"cost_usd\":0.40047315,\"duration_ms\":1280097,\"exit_code\":0}",
+          "created_at": "2026-05-31T14:06:24.586163157Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=221 cost_usd=0.4005 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T134457-a8d9b960\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T14:06:26.865531471Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T14:06:26.958490554Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T14:06:27.017009126Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=4f51689732d4a4cd6d2da26658231d4d896c85ff\nbase_rev=4f51689732d4a4cd6d2da26658231d4d896c85ff\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T14:06:27.045861808Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T14:22:12.390729514Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T140756-ad85f577\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":111,\"total_tokens\":120,\"cost_usd\":0.371137,\"duration_ms\":850119,\"exit_code\":0}",
+          "created_at": "2026-05-31T14:22:12.427789537Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=120 cost_usd=0.3711 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T140756-ad85f577\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-31T14:22:16.286873596Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T14:22:16.41399695Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T14:22:16.470587672Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=eda26385c66ea413827772b854454c67afbbf3f7\nbase_rev=eda26385c66ea413827772b854454c67afbbf3f7\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T14:22:16.499328699Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T14:38:21.401888173Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T142337-852e8bba\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":9,\"output_tokens\":337,\"total_tokens\":346,\"cost_usd\":0.6268954,\"duration_ms\":878549,\"exit_code\":0}",
+          "created_at": "2026-05-31T14:38:21.436651947Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=346 cost_usd=0.6269 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T142337-852e8bba\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T14:38:25.212531924Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T14:38:25.289801886Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T14:38:25.349145607Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=b77fc239b088649271c34d2d70da07e74cc2108b\nbase_rev=b77fc239b088649271c34d2d70da07e74cc2108b\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T14:38:25.380579758Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T14:47:37.415233155Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T143943-88e3fce1\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":226,\"output_tokens\":7618,\"total_tokens\":7844,\"cost_usd\":0.4574435,\"duration_ms\":468430,\"exit_code\":0}",
+          "created_at": "2026-05-31T14:47:37.447472303Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=7844 cost_usd=0.4574 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T143943-88e3fce1\",\"bead_id\":\"fizeau-6506be18\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T14:47:39.180029403Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T14:47:39.257106102Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T14:47:39.316085257Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=5e5b40355da00a9ab0c3e289bfbc86ff098b1070\nbase_rev=5e5b40355da00a9ab0c3e289bfbc86ff098b1070\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T14:47:39.345216919Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"attempt_id\":\"20260531T144901-18b4ade2\",\"bead_id\":\"fizeau-6506be18\",\"budget\":\"30m0s\",\"diagnosis\":\"phase-empty heartbeats (harness/model/route empty) persisted past the 30m0s budget while phase=\\\"running\\\"; released lease and flagged for operator attention\",\"last_activity_at\":\"2026-05-31T15:19:01Z\",\"reason\":\"progress_watchdog\"}",
+          "created_at": "2026-05-31T15:19:31.451687585Z",
+          "kind": "operator_attention",
+          "source": "ddx work",
+          "summary": "progress_watchdog"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"opus\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T15:19:31.880629253Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=opus"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T144907-832ecd70\",\"harness\":\"claude\",\"model\":\"opus\",\"input_tokens\":7477,\"output_tokens\":72574,\"total_tokens\":80051,\"cost_usd\":4.4621900000000005,\"duration_ms\":1819409,\"exit_code\":-1}",
+          "created_at": "2026-05-31T15:19:31.915664157Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=80051 cost_usd=4.4622 model=opus"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected (changed existing dirty paths: docs/helix/01-frame/features/FEAT-004-model-routing.md)\",\"fingerprint\":\"594d7770854ef3cc28603c90ba296f0dc553392bcb6662a807160305a2095cc1\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"594d7770854ef3cc28603c90ba296f0dc553392bcb6662a807160305a2095cc1\"}",
+          "created_at": "2026-05-31T15:21:56.964741377Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T15:23:49.816675262Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"core fix (availablesubscriptionharnessmodels + append in listmodels) present in tree: The fix described in this bead is already fully implemented. Commit 5089b0d3 (fizeau-6506be18, 2026-05-29) introduced availableSubscriptionHarnessModels and the append call in ListModels (service_models.go:46-53), plus both required tests: TestListModelsUnfilteredIncludesAvailableSubscriptionTiers (service_models_test.go:682) and TestListModelsFilteredByHarnessUnchanged (service_models_test.go:736). The acceptance criterion names TestListModelsFilteredUnchanged but the semantically equivalent test TestListModelsFilteredByHarnessUnchanged was committed by the completing bead. All 5 prior no_changes attempts are consistent with agents correctly finding nothing to implement. An agent dispatched now would produce a sixth no_changes. This bead should be closed by the operator as already satisfied by fizeau-6506be18.\",\"fingerprint\":\"1c901a76df471892f77102574c48095a9f82d7ca97902e3e5f39d00926bc24b8\",\"policy_mode\":\"warn-only\",\"reason\":\"readiness_best_effort\",\"rule_id\":\"pre_claim_intake.readiness_best_effort\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"1c901a76df471892f77102574c48095a9f82d7ca97902e3e5f39d00926bc24b8\"}",
+          "created_at": "2026-05-31T15:30:23.258604334Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "readiness_best_effort"
+        }
+      ],
+      "spec-id": "FEAT-004",
+      "work-consecutive-wedges": {
+        "at": "2026-05-31T15:19:31Z",
+        "count": 1,
+        "last_reason": "progress_watchdog"
+      },
+      "work-last-detail": "`go test ./...` is still red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota); the routing regression tests for this bead pass, but the full suite is not green yet.",
+      "work-last-status": "no_changes_autonomous_retry",
+      "work-no-changes-count": 10,
+      "work-retry-after": "2026-05-30T07:05:22Z",
+      "work-smart-retry": true,
+      "work-smart-retry-reason": "`go test ./...` is still red in unrelated packages (agentcli, internal/harnesses, internal/harnesses/ptyquota); the routing regression tests for this bead pass, but the full suite is not green yet.",
+      "work-smart-retry-suggested-action": "retry with a smart agent",
+      "work-suggested-action": "retry with a smart agent"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T153225-bc18e5ed",
+    "prompt": ".ddx/executions/20260531T153225-bc18e5ed/prompt.md",
+    "manifest": ".ddx/executions/20260531T153225-bc18e5ed/manifest.json",
+    "result": ".ddx/executions/20260531T153225-bc18e5ed/result.json",
+    "checks": ".ddx/executions/20260531T153225-bc18e5ed/checks.json",
+    "usage": ".ddx/executions/20260531T153225-bc18e5ed/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-6506be18-20260531T153225-bc18e5ed"
+  },
+  "prompt_sha": "bb6da2619323587ff723af1bc34b1190fce163890ad9e7e3f08848d9a5fdab30"
+}
