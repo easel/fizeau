@@ -1,0 +1,1 @@
+verification_command: go test ./... -run "TestListModelsUnfilteredIncludesAvailableSubscriptionTiers|TestListModelsFilteredByHarnessUnchanged" -count=1 -timeout 60s
