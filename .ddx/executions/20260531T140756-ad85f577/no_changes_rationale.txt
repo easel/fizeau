@@ -1,0 +1,1 @@
+verification_command: cd /Users/erik/Projects/fizeau && go test -run "TestListModelsUnfilteredIncludesAvailableSubscriptionTiers|TestListModelsFilteredByHarnessUnchanged" -v && lefthook run pre-commit
