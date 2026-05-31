@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260531T154025-6b6ce120",
+  "bead_id": "fizeau-3617c4ee",
+  "base_rev": "578c6913e07e074dcbfbd9d8ef8389cf4c4c4720",
+  "created_at": "2026-05-31T15:40:30.900189521Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-3617c4ee",
+    "title": "routing P0: pick single escalation owner + freeze non-owner prohibitions",
+    "description": "ONE owner for middle-\u003emax (engine ladder vs service escalatePolicyLadder vs ddx power-retry); document what the others must NOT do. See docs/helix/01-frame/features/FEAT-004-model-routing.md 'Addendum: tiered, quota-aware routing' for the normative model + failure-classification table.",
+    "acceptance": "1. ADR names the owner + prohibitions. 2. assertion/test enforces non-owners don't change tier. 3. lefthook pre-commit passes.",
+    "parent": "fizeau-2908cdfa",
+    "labels": [
+      "area:routing",
+      "kind:design",
+      "spec:FEAT-004",
+      "phase:0"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T154025-6b6ce120",
+    "prompt": ".ddx/executions/20260531T154025-6b6ce120/prompt.md",
+    "manifest": ".ddx/executions/20260531T154025-6b6ce120/manifest.json",
+    "result": ".ddx/executions/20260531T154025-6b6ce120/result.json",
+    "checks": ".ddx/executions/20260531T154025-6b6ce120/checks.json",
+    "usage": ".ddx/executions/20260531T154025-6b6ce120/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-3617c4ee-20260531T154025-6b6ce120"
+  },
+  "prompt_sha": "8bf6e072e0eef981c38a39e01f2ec7c209ab3d1c80c36c31f0ce58925c899e4e"
+}
