@@ -513,6 +513,13 @@ type Inputs struct {
 	// authentication or billing scheme.
 	ProviderEligibilityOverrides map[string]ProviderEligibilityOverride
 
+	// SafeMode, when true, forces the simple Phase-1 routing policy:
+	// default tier (middle), no local mixin, no Phase 2+ quota economics.
+	// Set via config key "routing.safe_mode" or env ROUTING_SAFE_MODE=1.
+	// Intended as a kill-switch: flip it to recover known-good routing
+	// without rebuilding or redeploying the service.
+	SafeMode bool
+
 	Now              time.Time // injected for deterministic testing; default time.Now()
 	ModelEligibility func(model string) (ModelEligibility, bool)
 
@@ -666,6 +673,14 @@ func Resolve(req Request, in Inputs) (*Decision, error) {
 	if in.Now.IsZero() {
 		in.Now = time.Now()
 	}
+
+	// Safe mode: force default (middle-tier) policy and disable local mixin.
+	// Phase 2+ quota economics and local speculative routing are bypassed
+	// regardless of what the caller requested.
+	if in.SafeMode {
+		req.Policy = "default"
+	}
+
 	policyName, err := canonicalPolicy(req.Policy)
 	if err != nil {
 		return &Decision{}, err
@@ -1424,6 +1439,14 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 					candidateReason = "policy disallows local candidates"
 					filterReason = FilterReasonPolicyFiltered
 				}
+			}
+
+			// Safe mode: no local mixin — local candidates are excluded
+			// unconditionally so only subscription/cloud routes are considered.
+			if eligible && in.SafeMode && candidateIsLocal(h, p) {
+				eligible = false
+				candidateReason = "safe_mode: local candidates disabled"
+				filterReason = FilterReasonPolicyFiltered
 			}
 			if eligible && requiresNoRemote(req) && !candidateIsLocal(h, p) {
 				eligible = false
