@@ -330,6 +330,197 @@ func TestA3Gates(t *testing.T) {
 	t.Logf("A3 gates test completed")
 }
 
+// TestRunProducesCellReports verifies that ./benchmark produces cells under
+// bench/results/fiz-tools-v1/cells/; each cell has report.json embedding
+// profile, command, env_redacted, fiz.txt, fiz.err, session/, plus
+// task_executor_version and harbor_runner_image_digest copied from sweep.json.
+// This test exercises the per-cell execution loop and report composition (A3a).
+func TestRunProducesCellReports(t *testing.T) {
+	repoRoot := benchRepoRoot(t)
+	benchmarkScript := filepath.Join(repoRoot, "scripts/benchmark/benchmark")
+	if _, err := os.Stat(benchmarkScript); err != nil {
+		t.Skipf("benchmark script not found at %s; skipping integration test", benchmarkScript)
+	}
+
+	testDir := t.TempDir()
+	outDir := filepath.Join(testDir, "results")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run benchmark with test profile and bench-set
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s"
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("benchmark output: %s", output)
+		t.Fatalf("benchmark failed: %v", err)
+	}
+
+	// Verify cells directory exists
+	cellsDir := filepath.Join(outDir, "cells", "terminal-bench-2-1")
+	entries, err := os.ReadDir(cellsDir)
+	if err != nil {
+		t.Fatalf("cells directory missing: %v", err)
+	}
+
+	if len(entries) == 0 {
+		t.Fatal("no task directories found under cells/")
+	}
+
+	// Verify sweep.json was created with required fields
+	sweepPath := filepath.Join(outDir, "sweep.json")
+	if _, err := os.Stat(sweepPath); err != nil {
+		t.Fatalf("sweep.json missing: %v", err)
+	}
+
+	sweepData, err := ioutil.ReadFile(sweepPath)
+	if err != nil {
+		t.Fatalf("failed to read sweep.json: %v", err)
+	}
+
+	var sweep struct {
+		TaskExecutorVersion string `json:"task_executor_version"`
+		HarborRunnerDigest  string `json:"harbor_runner_image_digest"`
+	}
+
+	if err := json.Unmarshal(sweepData, &sweep); err != nil {
+		t.Fatalf("failed to parse sweep.json: %v", err)
+	}
+
+	if sweep.TaskExecutorVersion == "" {
+		t.Fatal("sweep.json: task_executor_version is empty")
+	}
+	if sweep.HarborRunnerDigest == "" {
+		t.Fatal("sweep.json: harbor_runner_image_digest is empty")
+	}
+
+	// Check each cell has report.json with required fields
+	cellCount := 0
+	for _, taskEntry := range entries {
+		if !taskEntry.IsDir() {
+			continue
+		}
+		taskDir := filepath.Join(cellsDir, taskEntry.Name())
+		cellDirs, err := os.ReadDir(taskDir)
+		if err != nil {
+			t.Errorf("failed to read task dir %s: %v", taskDir, err)
+			continue
+		}
+
+		for _, cellEntry := range cellDirs {
+			if !cellEntry.IsDir() {
+				continue
+			}
+
+			cellDir := filepath.Join(taskDir, cellEntry.Name())
+			reportPath := filepath.Join(cellDir, "report.json")
+
+			// Verify report.json exists
+			if _, err := os.Stat(reportPath); err != nil {
+				t.Errorf("report.json missing in cell %s: %v", cellDir, err)
+				continue
+			}
+
+			// Parse report.json
+			reportData, err := ioutil.ReadFile(reportPath)
+			if err != nil {
+				t.Errorf("failed to read report.json: %v", err)
+				continue
+			}
+
+			var report struct {
+				CellID                  string      `json:"cell_id"`
+				Profile                 interface{} `json:"profile"`
+				Command                 []string    `json:"command"`
+				EnvRedacted             interface{} `json:"env_redacted"`
+				TaskExecutorVersion     string      `json:"task_executor_version"`
+				HarborRunnerImageDigest string      `json:"harbor_runner_image_digest"`
+				FinalStatus             string      `json:"final_status"`
+				Artifacts               struct {
+					FizTxt     string `json:"fiz_txt"`
+					FizErr     string `json:"fiz_err"`
+					SessionDir string `json:"session_dir"`
+				} `json:"artifacts"`
+			}
+
+			if err := json.Unmarshal(reportData, &report); err != nil {
+				t.Errorf("failed to parse report.json: %v", err)
+				continue
+			}
+
+			// Verify required fields
+			if report.CellID == "" {
+				t.Error("report.json: cell_id is empty")
+			}
+			if report.Profile == nil {
+				t.Error("report.json: profile is missing")
+			}
+			if len(report.Command) == 0 {
+				t.Error("report.json: command is empty")
+			}
+			if report.EnvRedacted == nil {
+				t.Error("report.json: env_redacted is missing")
+			}
+			if report.TaskExecutorVersion == "" {
+				t.Error("report.json: task_executor_version is empty")
+			}
+			if report.HarborRunnerImageDigest == "" {
+				t.Error("report.json: harbor_runner_image_digest is empty")
+			}
+			if report.HarborRunnerImageDigest != sweep.HarborRunnerDigest {
+				t.Errorf("report.json harbor_runner_image_digest mismatch: got %s, want %s",
+					report.HarborRunnerImageDigest, sweep.HarborRunnerDigest)
+			}
+
+			// Verify artifact references and files exist
+			if report.Artifacts.FizTxt != "fiz.txt" {
+				t.Errorf("report.json: artifacts.fiz_txt should be 'fiz.txt', got %s", report.Artifacts.FizTxt)
+			}
+			if _, err := os.Stat(filepath.Join(cellDir, "fiz.txt")); err != nil {
+				t.Errorf("fiz.txt missing in cell: %v", err)
+			}
+
+			if report.Artifacts.FizErr != "fiz.err" {
+				t.Errorf("report.json: artifacts.fiz_err should be 'fiz.err', got %s", report.Artifacts.FizErr)
+			}
+			if _, err := os.Stat(filepath.Join(cellDir, "fiz.err")); err != nil {
+				t.Errorf("fiz.err missing in cell: %v", err)
+			}
+
+			if report.Artifacts.SessionDir != "session" {
+				t.Errorf("report.json: artifacts.session_dir should be 'session', got %s", report.Artifacts.SessionDir)
+			}
+			if _, err := os.Stat(filepath.Join(cellDir, "session")); err != nil {
+				t.Errorf("session/ directory missing in cell: %v", err)
+			}
+
+			// Verify cell-state.json was cleaned up on terminal close
+			if _, err := os.Stat(filepath.Join(cellDir, "cell-state.json")); err == nil {
+				t.Errorf("cell-state.json should be deleted after terminal close, but exists in %s", cellDir)
+			}
+
+			cellCount++
+		}
+	}
+
+	if cellCount == 0 {
+		t.Fatal("no cells with report.json found")
+	}
+
+	t.Logf("Successfully verified %d cells with embedded profile, command, env_redacted, and artifact files", cellCount)
+}
+
 // BenchmarkSignalInterruptionManualGate is a manual test that should be run
 // separately with: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary & sleep 5; kill -TERM $!; wait
 // This verifies that interrupted cells have proper final_status, process_outcome,
