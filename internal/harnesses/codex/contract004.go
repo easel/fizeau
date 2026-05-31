@@ -268,13 +268,20 @@ func isSupportedCodexAlias(family string) bool {
 func codexQuotaStatusFromSnapshot(snap *codexQuotaSnapshot, now time.Time) harnesses.QuotaStatus {
 	decision := decideCodexQuotaRouting(snap, now, codexQuotaFreshness)
 	pref, state := mapCodexRoutingPreference(decision)
+	windows := make([]harnesses.QuotaWindow, len(snap.Windows))
+	for i, w := range snap.Windows {
+		if w.LimitID == "" {
+			w.LimitID = codexLimitIDForWindowMinutes(w.WindowMinutes)
+		}
+		windows[i] = w
+	}
 	status := harnesses.QuotaStatus{
 		Source:            snap.Source,
 		CapturedAt:        snap.CapturedAt,
 		Fresh:             decision.Fresh,
 		Age:               decision.Age,
 		State:             state,
-		Windows:           append([]harnesses.QuotaWindow(nil), snap.Windows...),
+		Windows:           windows,
 		RoutingPreference: pref,
 		Reason:            decision.Reason,
 	}

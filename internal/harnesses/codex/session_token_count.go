@@ -295,9 +295,16 @@ func codexQuotaWindowFromRaw(raw json.RawMessage) (harnesses.QuotaWindow, bool) 
 	if !ok {
 		return harnesses.QuotaWindow{}, false
 	}
+	limitID := stringFromRaw(obj["limit_id"])
+	if limitID == "" {
+		// The Codex session-token-count API does not include limit_id in its
+		// rate-limit objects. Derive a stable ID from window_minutes so that
+		// QuotaStatus windows always satisfy SupportedLimitIDs.
+		limitID = codexLimitIDForWindowMinutes(windowMinutes)
+	}
 	window := harnesses.QuotaWindow{
 		Name:          codexQuotaWindowName(windowMinutes),
-		LimitID:       stringFromRaw(obj["limit_id"]),
+		LimitID:       limitID,
 		LimitName:     stringFromRaw(obj["limit_name"]),
 		WindowMinutes: windowMinutes,
 		UsedPercent:   usedPercent,
@@ -318,6 +325,15 @@ func codexQuotaWindowName(minutes int) string {
 		return fmt.Sprintf("%dh", minutes/60)
 	}
 	return fmt.Sprintf("%dm", minutes)
+}
+
+// codexLimitIDForWindowMinutes returns the canonical LimitID for a given
+// window duration. Used when the API response omits the limit_id field.
+func codexLimitIDForWindowMinutes(minutes int) string {
+	if minutes <= 300 {
+		return "codex"
+	}
+	return "codex-weekly"
 }
 
 func stringFromRaw(raw json.RawMessage) string {
