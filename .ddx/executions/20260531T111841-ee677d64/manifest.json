@@ -1,0 +1,34 @@
+{
+  "attempt_id": "20260531T111841-ee677d64",
+  "bead_id": "fizeau-99c78c29",
+  "base_rev": "627662a66bfcce5b986d1a153c1475b67f2bfde1",
+  "created_at": "2026-05-31T11:18:46.086203723Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-99c78c29",
+    "title": "bench-pr-A3a: per-cell execution loop + report.json composition",
+    "description": "PROBLEM: With the runner front end (A2) and adapters/image (A1) in place, the runner must actually execute cells: invoke the harness adapter to produce a command-spec, compose the task-spec, invoke the task-executor, and compose a self-describing report.json per cell. Without this body the runner front end has nothing to drive. The parent A3 bead (fizeau-11e9c095 child) was too large; this child carries only the core run-and-compose path.\n\nROOT CAUSE:\n- cmd/bench/matrix.go (2244 LOC) owns the per-cell execution loop and report composition being ported to bash. Report name/struct: cmd/bench/matrix.go:37 (matrixReportName=\"report.json\") and cmd/bench/matrix.go:71 (FinalStatus). The sweep-level identifiers that each cell must embed are written by the front end at scripts/benchmark/benchmark:969 (write_sweep_json -\u003e sweep.json) and copied via task_executor_version (scripts/benchmark/benchmark:932) and harbor_runner_image_digest (scripts/benchmark/benchmark:944).\n- The bash run loop functions are declared but their bodies must be implemented: run_cell / budget_or_run_cell (scripts/benchmark/benchmark:138-148).\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- Per-cell loop: write cell-state.json sentinel into cell_dir at cell open; invoke harness-adapters/\u003cname\u003e command \u003c profile.json -\u003e command-spec.json; compose task-spec from command-spec + task metadata; invoke task-executors/\u003cname\u003e \u003c task-spec.json which writes cell_dir/result.json; compose cell_dir/report.json embedding the profile snapshot, command (argv array), env_redacted (object), fiz.txt, fiz.err, and session/.\n- Copy task_executor_version and harbor_runner_image_digest from \u003cout\u003e/sweep.json into each cell's report.json (do not recompute per cell).\n- Delete cell-state.json on clean close (terminal report.json written).\n- Cells land under bench/results/fiz-tools-v1/cells/\u003cframework-dataset\u003e/\u003ctask\u003e/*/report.json.\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); adapters + image (A1); resume/skip + --retry-invalid (sibling A3b); budget accounting + halt placeholders (sibling A3c); per-cell transient retry + supersede links (sibling A3d); flock/setsid/job-pool concurrency and SIGINT/SIGTERM handling (A4); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact: docs/helix/02-design/plan-2026-05-15-benchmark-runner-simplification.md.\n\nDEPENDS ON: A2 (and transitively A1). BLOCKS: A3b, A3c, A3d, A4.\n\nACCEPTANCE (satisfies parent A3 AC1 and grandparent AC2):\n1. ./scripts/benchmark/benchmark --profile sindri-lucebox --bench-set tb-2-1-canary runs the canary and produces cells under bench/results/fiz-tools-v1/cells/; each cell has report.json embedding profile, command, env_redacted, fiz.txt, fiz.err, session/, plus task_executor_version and harbor_runner_image_digest copied from sweep.json. TestRunProducesCellReports (cmd/bench/runner_a3_test.go); bats Test_run_produces_cells and Test_report_has_embedded_fields (scripts/benchmark/tests/runner.bats); shell driver scripts/benchmark/test_runner_loop.bash green.\nGATES: bats scripts/benchmark/test (and scripts/benchmark/tests/runner.bats) pass; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent A3 AC1 and grandparent AC2 hold; acceptance 1 passes; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-4f5acc2c",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A3a",
+      "triage:no-changes-unjustified"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T111841-ee677d64",
+    "prompt": ".ddx/executions/20260531T111841-ee677d64/prompt.md",
+    "manifest": ".ddx/executions/20260531T111841-ee677d64/manifest.json",
+    "result": ".ddx/executions/20260531T111841-ee677d64/result.json",
+    "checks": ".ddx/executions/20260531T111841-ee677d64/checks.json",
+    "usage": ".ddx/executions/20260531T111841-ee677d64/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-99c78c29-20260531T111841-ee677d64"
+  },
+  "prompt_sha": "7da7fbef83027ef5fa0cfb899da7b81ef057142271fd65b4c14a6096d019f6f7"
+}
