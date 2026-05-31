@@ -1,0 +1,23 @@
+{
+  "bead_id": "fizeau-6506be18",
+  "attempt_id": "20260530T104758-647d6775",
+  "base_rev": "1ea375d04b30cf380dce82b8ee5cbc158a6a5e09",
+  "result_rev": "1ea375d04b30cf380dce82b8ee5cbc158a6a5e09",
+  "outcome": "task_no_evidence",
+  "status": "no_evidence_produced",
+  "detail": "agent exited without a commit or no_changes_rationale.txt",
+  "reason": "agent exited without a commit or no_changes_rationale.txt",
+  "session_id": "eb-93e9427f",
+  "duration_ms": 1848230,
+  "exit_code": 0,
+  "error": "agent exited without a commit or no_changes_rationale.txt",
+  "project_root": "/Users/erik/Projects/fizeau",
+  "failure_mode": "no_evidence_produced",
+  "execution_dir": ".ddx/executions/20260530T104758-647d6775",
+  "prompt_file": ".ddx/executions/20260530T104758-647d6775/prompt.md",
+  "manifest_file": ".ddx/executions/20260530T104758-647d6775/manifest.json",
+  "result_file": ".ddx/executions/20260530T104758-647d6775/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-05-30T10:48:03.864857903Z",
+  "finished_at": "2026-05-30T11:18:52.095403875Z"
+}
