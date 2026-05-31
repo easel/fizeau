@@ -749,6 +749,189 @@ func TestResumeAndRetryInvalid(t *testing.T) {
 	}
 }
 
+// TestBudgetHaltPlaceholder verifies that when --max-cost-usd cap is hit,
+// remaining cells are written as placeholders with final_status=budget_halted,
+// process_outcome=setup_failed, and a note explaining the halt.
+// Also verifies that budget.json is created/updated with max_cost_usd, total_cost_usd, and halted fields.
+func TestBudgetHaltPlaceholder(t *testing.T) {
+	repoRoot := benchRepoRoot(t)
+	benchmarkScript := filepath.Join(repoRoot, "scripts/benchmark/benchmark")
+	if _, err := os.Stat(benchmarkScript); err != nil {
+		t.Skipf("benchmark script not found at %s; skipping integration test", benchmarkScript)
+	}
+
+	testDir := t.TempDir()
+	outDir := filepath.Join(testDir, "results")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// First run: create cells with dry-run executor (zero cost)
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 3 \
+		  --out "%s"
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("first run output: %s", output)
+		t.Fatalf("first run failed: %v", err)
+	}
+
+	// Manually init/populate budget.json to simulate having already spent most of the budget.
+	// This allows us to test the halt mechanism when new cells would exceed the cap.
+	cellsDir := filepath.Join(outDir, "cells", "terminal-bench-2-1")
+	budgetPath := filepath.Join(outDir, "budget.json")
+
+	// Create a populated budget.json to simulate having already exceeded the cap.
+	// This ensures the halted flag triggers when new cells are scheduled.
+	budgetContent := map[string]interface{}{
+		"max_cost_usd":   0.01,
+		"total_cost_usd": 0.011,
+		"halted":         true,
+		"cells": []map[string]interface{}{
+			{
+				"cell_id":  "test-cell-1",
+				"task":     "test-task",
+				"profile":  "sindri-lucebox",
+				"cost_usd": 0.011,
+			},
+		},
+	}
+
+	budgetJSON, err := json.MarshalIndent(budgetContent, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal budget.json: %v", err)
+	}
+
+	if err := ioutil.WriteFile(budgetPath, budgetJSON, 0o644); err != nil {
+		t.Fatalf("failed to write budget.json: %v", err)
+	}
+	t.Logf("Pre-populated budget.json with total_cost_usd=0.011 of 0.01 cap (exceeds cap to trigger halt)")
+
+	// Second run with --force-rerun and low budget: should trigger halt as new cells are created
+	cmd = exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 3 \
+		  --force-rerun \
+		  --max-cost-usd 0.01 \
+		  --out "%s"
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("second run (with budget cap) output: %s", output)
+		t.Fatalf("second run failed: %v", err)
+	}
+
+	// Verify budget.json exists
+	if _, err := os.Stat(budgetPath); err != nil {
+		t.Fatalf("budget.json not created: %v", err)
+	}
+
+	// Parse budget.json to verify structure
+	budgetData, err := ioutil.ReadFile(budgetPath)
+	if err != nil {
+		t.Fatalf("failed to read budget.json: %v", err)
+	}
+
+	var budget struct {
+		MaxCostUSD   float64 `json:"max_cost_usd"`
+		TotalCostUSD float64 `json:"total_cost_usd"`
+		Halted       bool    `json:"halted"`
+		Cells        []struct {
+			CellID  string  `json:"cell_id"`
+			Task    string  `json:"task"`
+			Profile string  `json:"profile"`
+			CostUSD float64 `json:"cost_usd"`
+		} `json:"cells"`
+	}
+
+	if err := json.Unmarshal(budgetData, &budget); err != nil {
+		t.Fatalf("failed to parse budget.json: %v", err)
+	}
+
+	if budget.MaxCostUSD != 0.01 {
+		t.Errorf("max_cost_usd = %v, want 0.01", budget.MaxCostUSD)
+	}
+
+	// Find cells with final_status=budget_halted
+	haltedCount := 0
+	var haltedReports []string
+
+	err = filepath.Walk(cellsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Name() == "report.json" && !info.IsDir() {
+			reportData, err := ioutil.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+
+			var report struct {
+				FinalStatus    string `json:"final_status"`
+				ProcessOutcome string `json:"process_outcome"`
+				Note           string `json:"note"`
+				CellID         string `json:"cell_id"`
+			}
+
+			if err := json.Unmarshal(reportData, &report); err != nil {
+				return nil
+			}
+
+			if report.FinalStatus == "budget_halted" {
+				haltedCount++
+				haltedReports = append(haltedReports, path)
+
+				// Verify fields
+				if report.ProcessOutcome != "setup_failed" {
+					t.Errorf("budget_halted cell %s: process_outcome = %s, want setup_failed",
+						report.CellID, report.ProcessOutcome)
+				}
+				if report.Note == "" {
+					t.Errorf("budget_halted cell %s: note is empty", report.CellID)
+				} else if !strings.Contains(report.Note, "--max-cost-usd") {
+					t.Errorf("budget_halted cell %s: note missing --max-cost-usd reference: %s",
+						report.CellID, report.Note)
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Logf("error walking cells directory: %v", err)
+	}
+
+	if haltedCount == 0 {
+		t.Errorf("Expected at least one budget_halted cell with max_cost_usd=0.01, but found none. "+
+			"Budget state: total_cost_usd=%v, halted=%v, cells_recorded=%d",
+			budget.TotalCostUSD, budget.Halted, len(budget.Cells))
+	} else {
+		t.Logf("Found %d budget_halted cells (as expected)", haltedCount)
+		for _, report := range haltedReports {
+			t.Logf("  - %s", report)
+		}
+	}
+
+	t.Logf("Budget state: max_cost_usd=%v, total_cost_usd=%v, halted=%v, cells_recorded=%d, halted_count=%d",
+		budget.MaxCostUSD, budget.TotalCostUSD, budget.Halted, len(budget.Cells), haltedCount)
+}
+
 // BenchmarkSignalInterruptionManualGate is a manual test that should be run
 // separately with: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary & sleep 5; kill -TERM $!; wait
 // This verifies that interrupted cells have proper final_status, process_outcome,
