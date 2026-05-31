@@ -1,0 +1,1 @@
+verification_command: cd /Users/erik/Projects/fizeau && timeout 10 go test github.com/easel/fizeau -timeout 5s -run "^TestListModelsUnfilteredIncludesAvailableSubscriptionTiers$|^TestListModelsFilteredByHarnessUnchanged$" -v
