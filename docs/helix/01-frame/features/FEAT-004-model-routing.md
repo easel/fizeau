@@ -307,3 +307,103 @@ formula, and routing trace construction.
 - User-authored route tables or per-request fallback chains.
 - Automatic learning from routing-quality metrics.
 - Network manifest refresh during ordinary execution.
+
+## Addendum: tiered, quota-aware routing for cost-efficient consistent progress (2026-05-31)
+
+Goal: drain queues with **consistent progress** (beads complete at a predictable
+rate without exhausting subscription quota before reset), preferring **subscription
+throughput** over wasted attempts, with **local compute as a non-blocking mixin**.
+
+### Subscription tiers (per harness)
+Each flat-rate subscription harness exposes three tiers:
+
+| tier | claude | codex | catalog power | auto-routing |
+|---|---|---|---|---|
+| low | haiku | gpt-nano | 7 | **pin-only** (`exact_pin_only`); never auto-selected |
+| **middle** | sonnet | gpt-5.4-mini | 8 | **default auto-route start** |
+| max | opus | gpt-5.5 | 10 | escalation target; (later) direct on trusted quota surplus |
+
+Cheap work belongs on **local compute**, not a weak subscription tier — a weak
+subscription tier wastes flat throughput on give-ups. Weak tiers are usable only
+when explicitly pinned.
+
+### Local models = non-blocking, speculative mixin
+Local (qwen) endpoints are slow/weak and frequently unavailable. They are NOT a
+primary tier. When healthy, a small sample of low-stakes work may be routed to them
+**speculatively** to gather usage data: isolated git worktree, hard-kill timeout at
+the checkout layer, **no durable bead claim until the result validates**, separate
+metrics namespace, never eligible for dirty/migration/refactor/fragile beads, off the
+critical path. **INVARIANT (top acceptance test): a local/unavailable/stale provider
+NEVER gates the candidate set and NEVER blocks subscription routing — provider-down is
+a clean skip, not a routing failure.**
+
+### Quota signal = best-effort telemetry, not a hard control input
+Subscription quota is observed best-effort (per-response token headers preferred over
+PTY `/usage` deltas, which are contaminated by concurrent workers + manual CLI + async
+refresh and lack reliable reset timestamps). A data-quality state machine labels each
+snapshot `fresh | stale | missing | conflicted | reset_detected`. **When quota is not
+fresh+attributable, behave conservatively: route MIDDLE, no max-start, no burn-model
+update.** Burn estimates use conservative percentiles (p75/p90), not mean, with an
+explicit cold-start prior of "unknown => scarce". (This amends "Out of Scope: automatic
+learning from routing metrics" — telemetry informs policy but thresholds remain
+operator/data-tuned, not self-learned closed-loop.)
+
+### Escalation: single owner, genuine-failure only
+There is exactly ONE owner of middle->max escalation; the other layers (fizeau engine
+ladder, service `escalatePolicyLadder`, ddx power-retry) must not independently
+escalate tier. Escalation is a single hop, fired ONLY on a typed **genuine
+implementation/capability failure** classification. A per-pool in-flight max-attempt
+cap prevents multi-worker stampede onto the max tier.
+
+### Failure-classification table (normative)
+Every attempt outcome maps to exactly one action. ddx and fizeau MUST classify
+identically against this table:
+
+| outcome | action |
+|---|---|
+| `success` / `already_satisfied` | close bead |
+| `no_changes` (agent produced nothing, rationale present) | close or unclaim per rationale; **do NOT escalate tier** |
+| genuine implementation/capability failure (tests fail after real work; AC unmet) | **escalate middle->max once** |
+| dirty worktree / partial write | clean/reset worktree, **same-tier retry** (not escalation) |
+| provider transport failure (i/o timeout, conn refused, 5xx) | **same-tier reroute** to another dispatchable candidate; no tier change |
+| quota exhausted (`retry_after`) | **global pool cooldown/sleep** until reset; not per-bead mutation, not escalation |
+| auth/config missing, toolchain/setup failure | **operator-attention** (typed bead state); do not escalate |
+| timeout / no-progress watchdog | clean + same-tier retry once, then operator-attention |
+| merge/land conflict | unclaim + retry later; not escalation |
+| max-tier genuine failure | **operator-attention** (stop escalating) |
+
+`operator-attention` = an explicit bead state transition (not a notification or an
+indefinite queue wait).
+
+### Total-subscription-exhaustion behavior
+Both subscriptions exhausted + local down => **global pool cooldown/sleep** honoring
+`retry_after`, NOT N per-bead cooldown mutations and NOT spin-polling.
+
+### Phasing (reliability first; economics last, telemetry-gated)
+- **Phase 0 - Foundations:** repo isolation + dirty-repo guard with cleanup/revert
+  contract; freeze routing replay fixtures (baseline before any change); define the
+  consistent-progress throughput metric; pick the single escalation owner and freeze
+  what the other layers must not do.
+- **Phase 1 - Boring reliable router (first slice):** low tier `exact_pin_only`;
+  default-start MIDDLE; the local-never-gates invariant + test; the failure-class
+  table + tests; the single one-hop middle->max retry on typed genuine failure with a
+  per-pool max-attempt cap; **no max-start / no quota economics yet**; kill-switch
+  to force a known-good simple policy.
+- **Phase 2 - Telemetry (best-effort):** header-based burn per (harness,tier); data-
+  quality state machine; conservative percentiles + cold-start prior; fix codex
+  `/status` probe and gate codex-pool routing on it (until then codex = unknown=scarce).
+- **Phase 3 - Quota economics (only once telemetry is trusted):** abundance gate with
+  two-threshold hysteresis (>60% enter max-start, <40% leave) + minimum dwell; requires
+  real reset timestamps; cross-pool normalized surplus after reserve + in-flight burn +
+  escalation budget, sticky primary; E[quota] escalation with double-spend buffer gated
+  on an INPUT-side difficulty signal.
+- **Phase 4 - Local mixin:** the speculative/isolated sampling above.
+- **Phase 5 - Gate-model cleanup:** collapse the ~14 ad-hoc reject gates to
+  {explicit-constraints, network-dispatchability, capability-dispatchability} + scoring,
+  behind a kill-switch, with a full gate-mapping table and replay equivalence tests.
+
+### Cross-cutting
+Concurrency model (workers-per-pool, in-flight burn reservation); route observability
+(chosen route, snapshot age/source/confidence, scarcity score, fallback reason);
+simulation/replay harness before any live routing change. All thresholds are
+data-tunable, NOT spec-locked constants.
