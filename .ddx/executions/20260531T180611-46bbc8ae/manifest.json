@@ -1,0 +1,116 @@
+{
+  "attempt_id": "20260531T180611-46bbc8ae",
+  "bead_id": "fizeau-a1b61f00",
+  "base_rev": "69185bc635e79df7c9436c00f4d4855d2a884747",
+  "created_at": "2026-05-31T18:06:16.875254555Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a1b61f00",
+    "title": "Review concerns-drift",
+    "description": "Functional-area review issue under epic fizeau-283d0ada for AR-2026-05-17-repo.",
+    "parent": "fizeau-283d0ada",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:concerns-drift"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T04:43:45.731768231Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T044225-17e43866\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":93,\"output_tokens\":4479,\"total_tokens\":4572,\"cost_usd\":0.1174072,\"duration_ms\":77648,\"exit_code\":0}",
+          "created_at": "2026-05-18T04:43:45.774505384Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=4572 cost_usd=0.1174 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"haiku\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-18T07:52:13.922800454Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260518T074859-3e45581c\",\"harness\":\"claude\",\"model\":\"haiku\",\"input_tokens\":149,\"output_tokens\":13113,\"total_tokens\":13262,\"cost_usd\":0.26258335,\"duration_ms\":184150,\"exit_code\":0}",
+          "created_at": "2026-05-18T07:52:13.985610805Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=13262 cost_usd=0.2626 model=haiku"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"haiku\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260518T074859-3e45581c\",\"bead_id\":\"fizeau-a1b61f00\",\"estimated_difficulty\":\"\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"default\"}",
+          "created_at": "2026-05-18T07:52:14.520023793Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=default powerClass=standard model=haiku harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "status=proposed\nreason=Review complete. Three concerns divergences verified and documented in concerns-drift-review.md: (1) go-std lint baseline divergence between .golangci.yml and declared practices, (2) o11y-otel not declared as active concern despite CONTRACT-001 conformance, (3) testing capability matrix not machine-checkable. Three execution issues are ready (fizeau-397e9e0d, fizeau-eeb8202a, fizeau-3b1fb0f4). Operator action needed to execute resolution issues.\nsuggested_action=review and accept, split, block, or cancel this proposed work",
+          "created_at": "2026-05-18T07:52:14.627063015Z",
+          "kind": "no_changes_operator_required",
+          "source": "ddx work",
+          "summary": "no_changes_operator_required"
+        },
+        {
+          "actor": "erik",
+          "body": "no_changes\npowerClass=standard\nrationale: status: proposed\nreason: Review complete. Three concerns divergences verified and documented in concerns-drift-review.md: (1) go-std lint baseline divergence between .golangci.yml and declared practices, (2) o11y-otel not declared as active concern despite CONTRACT-001 conformance, (3) testing capability matrix not machine-checkable. Three execution issues are ready (fizeau-397e9e0d, fizeau-eeb8202a, fizeau-3b1fb0f4). Operator action needed to execute resolution issues.\nresult_rev=7f0fe7dc901c8418f01e4a9e17654b1634ce9319\nbase_rev=7f0fe7dc901c8418f01e4a9e17654b1634ce9319\noutcome_reason=no_changes",
+          "created_at": "2026-05-18T07:52:14.711948385Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        },
+        {
+          "actor": "",
+          "body": "{\"accepted_fingerprint\":\"\",\"accepted_prompt_fingerprint\":\"\",\"from_status\":\"proposed\",\"operator_required\":true,\"prompt_fingerprint\":\"0f194e32a976a531122505b3a2a32141b49b1f8ece60b02923fb02fe9927e0a6\",\"reason\":\"set lifecycle status\",\"source\":\"ddx bead update\",\"to_status\":\"open\"}",
+          "created_at": "2026-05-31T17:47:24.142412396Z",
+          "kind": "triaged",
+          "source": "ddx bead update",
+          "summary": "operator accepted proposed bead"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"legacy classification \\\"needs_human\\\" removed by lifecycle migration; use outcome \\\"operator_required\\\"\",\"fingerprint\":\"fa1531badab79d9048a66e8de6532ddb11ab8605abef32b6c2c05a3e7c6151bc\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fa1531badab79d9048a66e8de6532ddb11ab8605abef32b6c2c05a3e7c6151bc\"}",
+          "created_at": "2026-05-31T18:06:03.836940007Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "needs-human-reason": "Review complete. Three concerns divergences verified and documented in concerns-drift-review.md: (1) go-std lint baseline divergence between .golangci.yml and declared practices, (2) o11y-otel not declared as active concern despite CONTRACT-001 conformance, (3) testing capability matrix not machine-checkable. Three execution issues are ready (fizeau-397e9e0d, fizeau-eeb8202a, fizeau-3b1fb0f4). Operator action needed to execute resolution issues.",
+      "needs-human-since": "2026-05-18T07:52:14Z",
+      "needs-human-source": "ddx work",
+      "needs-human-suggested-action": "review and accept, split, block, or cancel this proposed work",
+      "needs-human-summary": "no_changes requested operator attention",
+      "work-last-detail": "Review complete. Three concerns divergences verified and documented in concerns-drift-review.md: (1) go-std lint baseline divergence between .golangci.yml and declared practices, (2) o11y-otel not declared as active concern despite CONTRACT-001 conformance, (3) testing capability matrix not machine-checkable. Three execution issues are ready (fizeau-397e9e0d, fizeau-eeb8202a, fizeau-3b1fb0f4). Operator action needed to execute resolution issues.",
+      "work-last-status": "no_changes_operator_required",
+      "work-no-changes-count": 1,
+      "work-suggested-action": "review and accept, split, block, or cancel this proposed work"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T180611-46bbc8ae",
+    "prompt": ".ddx/executions/20260531T180611-46bbc8ae/prompt.md",
+    "manifest": ".ddx/executions/20260531T180611-46bbc8ae/manifest.json",
+    "result": ".ddx/executions/20260531T180611-46bbc8ae/result.json",
+    "checks": ".ddx/executions/20260531T180611-46bbc8ae/checks.json",
+    "usage": ".ddx/executions/20260531T180611-46bbc8ae/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-a1b61f00-20260531T180611-46bbc8ae"
+  },
+  "prompt_sha": "acd0de2c45da5ac5b16de29a940832940ffde0afa9fa5592878ad16f2e8b853a"
+}
