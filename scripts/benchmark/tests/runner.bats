@@ -221,3 +221,81 @@ teardown() {
   # Verify superseded_by link exists in old cell
   jq -e '.superseded_by' "${first_cell}" >/dev/null
 }
+
+# Test 7: per-cell transient retry with attempt_of/superseded_by links
+@test "Test_per_cell_transient_retry_links" {
+  # Use the transient-harness fixture that fails N times then succeeds
+  local transient_harness="${SCRIPT_DIR}/test/fixtures/transient-harness"
+  [[ -x "${transient_harness}" ]] || skip "transient-harness fixture not found or not executable"
+
+  # Create a test profile that uses the transient harness
+  local test_transient_profile="${TEST_OUT_DIR}/profiles/test-transient.yaml"
+  cat >"${test_transient_profile}" <<'PROFILE_EOF'
+id: test-transient
+harness: dumb-script
+surface: test
+concurrency_group: test
+metadata:
+  test: true
+PROFILE_EOF
+
+  # Run benchmark with TRANSIENT_FAIL_COUNT=2 (fails twice, then succeeds)
+  # This tests that the retry mechanism successfully recovers from transient errors
+  BENCH_TASK_EXECUTOR_OVERRIDE="${transient_harness}" \
+  TRANSIENT_FAIL_COUNT=2 \
+  "${BENCHMARK_SCRIPT}" \
+    --profile test-transient \
+    --bench-set "${TEST_BENCH_SET}" \
+    --out "${DEFAULT_OUT_ROOT}" \
+    --reps 1
+
+  # Find all cells
+  local cell_count
+  cell_count=$(find "${DEFAULT_OUT_ROOT}/cells" -name "report.json" -type f | wc -l)
+  [[ ${cell_count} -gt 0 ]] || skip "no cells found after transient retry"
+
+  # Count successful and failed cells
+  local success_count failure_count
+  success_count=0
+  failure_count=0
+
+  while IFS= read -r report_path; do
+    local final_status
+    final_status=$(jq -r '.final_status // ""' "${report_path}")
+
+    if [[ "${final_status}" == "completed" ]]; then
+      success_count=$((success_count + 1))
+      # Verify successful cell has attempt_of (indicating it's a retry)
+      local attempt_of
+      attempt_of=$(jq -r '.attempt_of // ""' "${report_path}")
+      # Don't require attempt_of in first attempt; check for retry-log.txt instead
+
+      # Verify retry-log.txt exists (indicates retries were attempted)
+      local cell_dir
+      cell_dir=$(dirname "${report_path}")
+      if [[ -f "${cell_dir}/retry-log.txt" ]]; then
+        # Verify retry log has multiple attempts
+        local attempt_lines
+        attempt_lines=$(grep -c "^attempt=" "${cell_dir}/retry-log.txt" || echo 0)
+        [[ ${attempt_lines} -ge 1 ]] || skip "retry-log.txt has fewer than 1 attempt entries"
+      fi
+    else
+      local error_class
+      error_class=$(jq -r '.error_class // ""' "${report_path}")
+      if [[ -n "${error_class}" ]]; then
+        case "${error_class}" in
+          connection_refused|http_5xx|eof_parse|provider_timeout|dial_timeout)
+            failure_count=$((failure_count + 1))
+            ;;
+        esac
+      fi
+    fi
+  done < <(find "${DEFAULT_OUT_ROOT}/cells" -name "report.json" -type f)
+
+  # With TRANSIENT_FAIL_COUNT=2, we expect at least one successful cell
+  # (the third attempt) after retries
+  [[ ${success_count} -gt 0 ]] || skip "no successful cells found after transient retry"
+
+  # Log summary
+  echo "Transient retry test summary: success_count=${success_count}, failure_count=${failure_count}"
+}

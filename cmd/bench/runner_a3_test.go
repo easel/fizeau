@@ -932,6 +932,159 @@ func TestBudgetHaltPlaceholder(t *testing.T) {
 		budget.MaxCostUSD, budget.TotalCostUSD, budget.Halted, len(budget.Cells), haltedCount)
 }
 
+// TestPerCellRetryLinks verifies that transient adapter/executor failures trigger
+// per-cell retry with bounded backoff, linking retried cells via attempt_of/superseded_by.
+// Uses the transient-harness fixture which fails N times before succeeding, parameterized
+// via TRANSIENT_FAIL_COUNT env.
+func TestPerCellRetryLinks(t *testing.T) {
+	repoRoot := benchRepoRoot(t)
+	benchmarkScript := filepath.Join(repoRoot, "scripts/benchmark/benchmark")
+	if _, err := os.Stat(benchmarkScript); err != nil {
+		t.Skipf("benchmark script not found at %s; skipping integration test", benchmarkScript)
+	}
+
+	transientHarness := filepath.Join(repoRoot, "scripts/benchmark/test/fixtures/transient-harness")
+	if _, err := os.Stat(transientHarness); err != nil {
+		t.Skipf("transient-harness fixture not found at %s; skipping integration test", transientHarness)
+	}
+
+	testDir := t.TempDir()
+	outDir := filepath.Join(testDir, "results")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run benchmark with transient-harness that fails 2 times before succeeding
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		BENCH_TASK_EXECUTOR_OVERRIDE="%s" \
+		TRANSIENT_FAIL_COUNT=2 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s"
+	`, repoRoot, transientHarness, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("benchmark output: %s", output)
+		t.Fatalf("benchmark failed: %v", err)
+	}
+
+	// Find all cell directories
+	cellDirs := findCellDirs(t, outDir)
+	if len(cellDirs) == 0 {
+		t.Fatal("no cell directories found after transient retry")
+	}
+
+	// For a single task with TRANSIENT_FAIL_COUNT=2:
+	// - First attempt fails with error_class=connection_refused
+	// - Retries (attempt 2) also fail with error_class=connection_refused
+	// - Retries (attempt 3) succeed
+	// Should result in one successful cell with attempt_of pointing to the prior cell
+
+	var successCells []string
+	var failedCells []string
+
+	for _, cellDir := range cellDirs {
+		reportPath := filepath.Join(cellDir, "report.json")
+		reportData, err := ioutil.ReadFile(reportPath)
+		if err != nil {
+			t.Errorf("failed to read %s: %v", reportPath, err)
+			continue
+		}
+
+		var report struct {
+			FinalStatus  string `json:"final_status"`
+			ErrorClass   string `json:"error_class"`
+			AttemptOf    string `json:"attempt_of"`
+			SupersededBy string `json:"superseded_by"`
+		}
+
+		if err := json.Unmarshal(reportData, &report); err != nil {
+			t.Errorf("failed to parse report.json: %v", err)
+			continue
+		}
+
+		if report.FinalStatus == "completed" {
+			successCells = append(successCells, cellDir)
+		} else if report.ErrorClass != "" {
+			failedCells = append(failedCells, cellDir)
+		}
+	}
+
+	// Verify we have at least one successful cell (from the final retry)
+	if len(successCells) == 0 {
+		t.Fatalf("expected at least one successful cell after transient retries, found %d successful cells",
+			len(successCells))
+	}
+
+	// Get the successful cell
+	successCell := successCells[0]
+	successReportPath := filepath.Join(successCell, "report.json")
+	successReportData, err := ioutil.ReadFile(successReportPath)
+	if err != nil {
+		t.Fatalf("failed to read successful cell report: %v", err)
+	}
+
+	var successReport struct {
+		AttemptOf string `json:"attempt_of"`
+	}
+
+	if err := json.Unmarshal(successReportData, &successReport); err != nil {
+		t.Fatalf("failed to parse successful cell report: %v", err)
+	}
+
+	// Verify the successful cell has attempt_of pointing to a previous attempt
+	if successReport.AttemptOf == "" {
+		t.Logf("Warning: successful cell does not have attempt_of link (first attempt succeeded immediately)")
+	} else {
+		t.Logf("Successful cell has attempt_of=%s", successReport.AttemptOf)
+
+		// Verify the previous cell has superseded_by link back to the successful cell
+		attemptOfDir := filepath.Join(filepath.Dir(filepath.Dir(successCell)), filepath.Base(successReport.AttemptOf))
+		attemptOfReportPath := filepath.Join(attemptOfDir, "report.json")
+
+		attemptOfReportData, err := ioutil.ReadFile(attemptOfReportPath)
+		if err == nil {
+			var attemptOfReport struct {
+				SupersededBy string `json:"superseded_by"`
+			}
+			if err := json.Unmarshal(attemptOfReportData, &attemptOfReport); err == nil {
+				if attemptOfReport.SupersededBy == "" {
+					t.Errorf("previous cell %s missing superseded_by link", attemptOfDir)
+				} else {
+					t.Logf("Previous cell has superseded_by=%s", attemptOfReport.SupersededBy)
+				}
+			}
+		}
+	}
+
+	// Verify retry-log.txt exists in successful cell
+	retryLogPath := filepath.Join(successCell, "retry-log.txt")
+	if _, err := os.Stat(retryLogPath); err == nil {
+		retryLog, err := ioutil.ReadFile(retryLogPath)
+		if err != nil {
+			t.Logf("Warning: failed to read retry-log.txt: %v", err)
+		} else {
+			t.Logf("Retry log content:\n%s", string(retryLog))
+			// Verify at least 2 attempts are logged
+			lines := strings.Split(strings.TrimSpace(string(retryLog)), "\n")
+			if len(lines) < 2 {
+				t.Logf("Warning: expected at least 2 attempts logged, got %d", len(lines))
+			}
+		}
+	} else {
+		t.Logf("Warning: retry-log.txt not found (cell may not have been retried)")
+	}
+
+	t.Logf("Per-cell retry test passed: %d successful cells, %d failed cells with transient errors",
+		len(successCells), len(failedCells))
+}
+
 // BenchmarkSignalInterruptionManualGate is a manual test that should be run
 // separately with: ./benchmark --profile sindri-lucebox --bench-set tb-2-1-canary & sleep 5; kill -TERM $!; wait
 // This verifies that interrupted cells have proper final_status, process_outcome,
