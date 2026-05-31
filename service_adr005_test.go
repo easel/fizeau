@@ -410,6 +410,11 @@ func TestRouteRequestMinContextWindowDerivedFromEstimatedTokens(t *testing.T) {
 // rejected routing candidates keep typed filter reasons and enough identity
 // to be matched back to list-models rows by provider/model/endpoint/server.
 func TestRoutingDecisionRejectedCandidatesMatchSnapshotEvidence(t *testing.T) {
+	// Isolate discovery: an empty PATH makes subscription harnesses (claude/
+	// codex/gemini) unavailable so ListModels never spawns a live PTY scrape,
+	// and a temp cache dir keeps the snapshot cache hermetic.
+	t.Setenv("FIZEAU_CACHE_DIR", t.TempDir())
+	t.Setenv("PATH", "")
 	modelsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
 			http.NotFound(w, r)
@@ -444,11 +449,20 @@ func TestRoutingDecisionRejectedCandidatesMatchSnapshotEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("ListModels rows = %d, want 2 (rows=%#v)", len(rows), rows)
-	}
-	want := make(map[string]ModelInfo, len(rows))
+	// Filter to only fiz-harness models (HTTP providers). The unfiltered ListModels
+	// now includes subscription-harness tiers (claude/codex/gemini), so we filter
+	// to only the HTTP provider models for this test.
+	var fizRows []ModelInfo
 	for _, row := range rows {
+		if row.Harness == "fiz" || row.Harness == "" {
+			fizRows = append(fizRows, row)
+		}
+	}
+	if len(fizRows) != 2 {
+		t.Fatalf("ListModels fiz rows = %d, want 2 (all rows=%#v)", len(fizRows), rows)
+	}
+	want := make(map[string]ModelInfo, len(fizRows))
+	for _, row := range fizRows {
 		key := row.Provider + "\x00" + row.ID + "\x00" + row.EndpointName + "\x00" + row.ServerInstance
 		want[key] = row
 	}

@@ -77,11 +77,20 @@ func TestRouteStatusSnapshotRowsMatchMultiEndpointFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
-	if len(models) != 2 {
-		t.Fatalf("ListModels rows = %d, want 2 (rows=%#v)", len(models), models)
-	}
-	wantRows := make(map[string]ModelInfo, len(models))
+	// Filter to only fiz-harness models (HTTP providers). The unfiltered ListModels
+	// now includes subscription-harness tiers (claude/codex/gemini), so we filter
+	// to only the HTTP provider models for this test.
+	var fizModels []ModelInfo
 	for _, model := range models {
+		if model.Harness == "fiz" || model.Harness == "" {
+			fizModels = append(fizModels, model)
+		}
+	}
+	if len(fizModels) != 2 {
+		t.Fatalf("ListModels fiz rows = %d, want 2 (all rows=%#v)", len(fizModels), models)
+	}
+	wantRows := make(map[string]ModelInfo, len(fizModels))
+	for _, model := range fizModels {
 		key := model.Provider + "\x00" + model.ID + "\x00" + model.EndpointName + "\x00" + model.ServerInstance
 		wantRows[key] = model
 	}

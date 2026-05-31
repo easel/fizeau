@@ -119,12 +119,13 @@ func SubprocessHarnessModelIDs(name string, cfg harnesses.HarnessConfig) []strin
 	if !ok {
 		return nil
 	}
-	snapshot, err := mdh.DefaultModelSnapshot()
-	if err != nil {
+	payload, ok := cachedSubprocessDiscovery(name, mdh)
+	if !ok {
 		// Model discovery failed; return no models rather than a fallback.
 		// This enforces the no-static-fallback principle.
 		return nil
 	}
+	snapshot := payload.snapshot()
 	var models []string
 	models = AppendUniqueModelIDs(models, snapshot.Models...)
 	for _, family := range mdh.SupportedAliases() {
@@ -156,12 +157,12 @@ func ResolveSubprocessModelAlias(harness, model string) string {
 		if !ok {
 			return model
 		}
-		snapshot, err := mdh.DefaultModelSnapshot()
-		if err != nil {
+		payload, ok := cachedSubprocessDiscovery(harness, mdh)
+		if !ok {
 			// Model discovery failed; return the unresolved model.
 			return model
 		}
-		resolved, err := mdh.ResolveModelAlias(model, snapshot)
+		resolved, err := mdh.ResolveModelAlias(model, payload.snapshot())
 		if err != nil {
 			return model
 		}
