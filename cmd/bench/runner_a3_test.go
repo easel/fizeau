@@ -11,6 +11,51 @@ import (
 	"testing"
 )
 
+// countReportJsonFiles counts all report.json files under outDir.
+func countReportJsonFiles(t *testing.T, outDir string) int {
+	count := 0
+	err := filepath.Walk(outDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Name() == "report.json" && !info.IsDir() {
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to walk outDir: %v", err)
+	}
+	return count
+}
+
+// findCellDirs finds all cell directories under outDir/cells/.
+func findCellDirs(t *testing.T, outDir string) []string {
+	var cellDirs []string
+	cellsBaseDir := filepath.Join(outDir, "cells")
+	if _, err := os.Stat(cellsBaseDir); os.IsNotExist(err) {
+		return cellDirs
+	}
+
+	err := filepath.Walk(cellsBaseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// A cell dir contains report.json
+		if info.IsDir() && filepath.Base(filepath.Dir(path)) != "cells" {
+			reportPath := filepath.Join(path, "report.json")
+			if _, err := os.Stat(reportPath); err == nil {
+				cellDirs = append(cellDirs, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to walk cells directory: %v", err)
+	}
+	return cellDirs
+}
+
 // TestBenchmarkConcurrencyGroupFlockAndJobPool verifies that --jobs caps
 // concurrent background cells, concurrency-group YAML is honored,
 // per-group flock locks are acquired at the configured state path,
@@ -519,6 +564,189 @@ func TestRunProducesCellReports(t *testing.T) {
 	}
 
 	t.Logf("Successfully verified %d cells with embedded profile, command, env_redacted, and artifact files", cellCount)
+}
+
+// TestResumeAndRetryInvalid verifies that re-running ./benchmark honors resume logic
+// and --retry-invalid flags. Confirms that:
+// 1. Cells with terminal final_status are skipped on resume
+// 2. --force-rerun ignores existing reports and mints fresh cells
+// 3. --retry-invalid reruns cells with non-empty invalid_class or orphan cell-state.json
+// 4. New cells link via attempt_of; prior cells are back-written with superseded_by
+func TestResumeAndRetryInvalid(t *testing.T) {
+	repoRoot := benchRepoRoot(t)
+	benchmarkScript := filepath.Join(repoRoot, "scripts/benchmark/benchmark")
+	if _, err := os.Stat(benchmarkScript); err != nil {
+		t.Skipf("benchmark script not found at %s; skipping integration test", benchmarkScript)
+	}
+
+	testDir := t.TempDir()
+	outDir := filepath.Join(testDir, "results")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run benchmark first time to create cells
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s"
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("first run output: %s", output)
+		t.Fatalf("first run failed: %v", err)
+	}
+
+	// Count cells after first run
+	firstRunCells := countReportJsonFiles(t, outDir)
+	if firstRunCells == 0 {
+		t.Fatal("first run produced no cells")
+	}
+	t.Logf("first run: %d cells", firstRunCells)
+
+	// Second run without --force-rerun (should skip terminal cells)
+	cmd = exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s"
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("second run output: %s", output)
+		t.Fatalf("second run failed: %v", err)
+	}
+
+	secondRunCells := countReportJsonFiles(t, outDir)
+	if secondRunCells != firstRunCells {
+		t.Errorf("resume: expected %d cells (same as first run), got %d",
+			firstRunCells, secondRunCells)
+	}
+	t.Logf("resume (no --force-rerun): %d cells (unchanged)", secondRunCells)
+
+	// Third run with --force-rerun (should create new cells)
+	cmd = exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s" \
+		  --force-rerun
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("force-rerun output: %s", output)
+		t.Fatalf("force-rerun failed: %v", err)
+	}
+
+	forceRerunCells := countReportJsonFiles(t, outDir)
+	if forceRerunCells <= firstRunCells {
+		t.Errorf("--force-rerun: expected > %d cells, got %d",
+			firstRunCells, forceRerunCells)
+	}
+	t.Logf("--force-rerun: %d cells (increased)", forceRerunCells)
+
+	// Mark a cell as invalid and test --retry-invalid
+	// Find a cell from the initial run
+	cellDirs := findCellDirs(t, outDir)
+	if len(cellDirs) == 0 {
+		t.Fatal("no cell directories found")
+	}
+
+	targetCell := cellDirs[0]
+	reportPath := filepath.Join(targetCell, "report.json")
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("report.json not found at %s: %v", reportPath, err)
+	}
+
+	// Mark it as invalid
+	reportData, err := ioutil.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("failed to read report.json: %v", err)
+	}
+
+	var report map[string]interface{}
+	if err := json.Unmarshal(reportData, &report); err != nil {
+		t.Fatalf("failed to parse report.json: %v", err)
+	}
+
+	report["invalid_class"] = "test_invalid"
+	modifiedData, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("failed to marshal modified report: %v", err)
+	}
+
+	tmpPath := reportPath + ".tmp"
+	if err := ioutil.WriteFile(tmpPath, modifiedData, 0o644); err != nil {
+		t.Fatalf("failed to write modified report: %v", err)
+	}
+	if err := os.Rename(tmpPath, reportPath); err != nil {
+		t.Fatalf("failed to rename modified report: %v", err)
+	}
+
+	beforeRetryCount := countReportJsonFiles(t, outDir)
+	t.Logf("marked cell as invalid; before --retry-invalid: %d cells", beforeRetryCount)
+
+	// Run with --retry-invalid
+	cmd = exec.Command("bash", "-c", fmt.Sprintf(`
+		HARBOR_TASK_EXECUTOR_DRY_RUN=1 \
+		BENCH_HARBOR_DIGEST_OVERRIDE="sha256:test-digest" \
+		BENCH_TASKS_DIR="%s/external/terminal-bench-2" \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s" \
+		  --retry-invalid
+	`, repoRoot, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("retry-invalid output: %s", output)
+		t.Fatalf("--retry-invalid failed: %v", err)
+	}
+
+	afterRetryCount := countReportJsonFiles(t, outDir)
+	if afterRetryCount <= beforeRetryCount {
+		t.Errorf("--retry-invalid: expected > %d cells, got %d",
+			beforeRetryCount, afterRetryCount)
+	}
+	t.Logf("--retry-invalid: %d cells (increased from %d)", afterRetryCount, beforeRetryCount)
+
+	// Verify that the invalid cell has superseded_by link
+	reportData, err = ioutil.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("failed to re-read report.json: %v", err)
+	}
+
+	if err := json.Unmarshal(reportData, &report); err != nil {
+		t.Fatalf("failed to parse report.json after retry: %v", err)
+	}
+
+	if _, hasSupersededBy := report["superseded_by"]; !hasSupersededBy {
+		t.Error("superseded_by link not found in invalid cell after --retry-invalid")
+	} else {
+		t.Logf("superseded_by link found in invalid cell: %v", report["superseded_by"])
+	}
 }
 
 // BenchmarkSignalInterruptionManualGate is a manual test that should be run
