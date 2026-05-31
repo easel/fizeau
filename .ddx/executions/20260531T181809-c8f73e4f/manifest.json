@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260531T181809-c8f73e4f",
+  "bead_id": "fizeau-0aa53d01",
+  "base_rev": "4d576eb16823d0318f97939e463322fd590a15ae",
+  "created_at": "2026-05-31T18:18:15.569505965Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-0aa53d01",
+    "title": "routing: haiku (low tier) still auto-routed at policy=default despite exact_pin_only — alias gate miss",
+    "description": "PROBLEM: after v0.14.39 set claude-haiku-5.5 exact_pin_only:true, workers STILL auto-route to model \"haiku\" at policy=default (\"do route claude/haiku score=138.3\"). codex tiers (gpt-5.4-mini, gpt-5.5) and claude opus/sonnet route correctly, so the catalog flag works for canonical IDs. ROOT CAUSE (hypothesis): the subscription-harness tier enrollment emits the ALIAS \"haiku\" (claude surface alias), and the engine eligibility/exact_pin_only gate (internal/routing/gating.go CheckPowerEligibility -\u003e ModelEligibility lookup) resolves by that alias and does NOT map it to the catalog entry \"claude-haiku-5.5\" that carries exact_pin_only — so AutoRoutable/ExactPinOnly is missed and haiku passes the gate. Verify the actual tier IDs in catalogTierModelsForHarnessSurface / subprocessHarnessModelIDs vs the catalog key + alias resolution in serviceRoutingModelEligibility. PROPOSED FIX: resolve subscription-harness tier candidate IDs (and the eligibility lookup) to the canonical catalog entry so exact_pin_only/AutoRoutable is honored for aliases (haiku/sonnet/opus). NON-SCOPE: changing which tiers are pin-only (haiku stays pin-only per FEAT-004).",
+    "acceptance": "1. New test: an unpinned policy=default ResolveRoute on the claude harness does NOT select the haiku/low tier (selects sonnet/middle); haiku is only reachable via explicit --model pin. 2. Test asserts the eligibility lookup for the claude low-tier alias resolves ExactPinOnly=true. 3. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./internal/routing/... ./internal/modelcatalog/... . -count=1 green. 4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "area:catalog",
+      "kind:bug",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "phase:1"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T181809-c8f73e4f",
+    "prompt": ".ddx/executions/20260531T181809-c8f73e4f/prompt.md",
+    "manifest": ".ddx/executions/20260531T181809-c8f73e4f/manifest.json",
+    "result": ".ddx/executions/20260531T181809-c8f73e4f/result.json",
+    "checks": ".ddx/executions/20260531T181809-c8f73e4f/checks.json",
+    "usage": ".ddx/executions/20260531T181809-c8f73e4f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-0aa53d01-20260531T181809-c8f73e4f"
+  },
+  "prompt_sha": "981c969afe59517989d86c60bcddef49de5900bf91ad3c9d5850b6559840a700"
+}
