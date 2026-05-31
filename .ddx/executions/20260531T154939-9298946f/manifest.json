@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260531T154939-9298946f",
+  "bead_id": "fizeau-ffb7cdb9",
+  "base_rev": "83a3157e4a84db4c393d7644e8aac37f74d1e989",
+  "created_at": "2026-05-31T15:49:45.186491368Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-ffb7cdb9",
+    "title": "routing P0: freeze routing replay fixtures (baseline before policy changes)",
+    "description": "Frozen inputs-\u003eRouteDecision fixtures + replay harness in internal/routing as the regression baseline for Phase 1-5. See docs/helix/01-frame/features/FEAT-004-model-routing.md 'Addendum: tiered, quota-aware routing' for the normative model + failure-classification table.",
+    "acceptance": "1. fixture corpus (pinned/unpinned/policy/power/exclusion). 2. replay test matches frozen decisions. 3. cd fizeau \u0026\u0026 go test ./internal/routing/... green. 4. lefthook passes.",
+    "parent": "fizeau-2908cdfa",
+    "labels": [
+      "area:routing",
+      "kind:test-infra",
+      "spec:FEAT-004",
+      "phase:0"
+    ],
+    "metadata": {
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T154939-9298946f",
+    "prompt": ".ddx/executions/20260531T154939-9298946f/prompt.md",
+    "manifest": ".ddx/executions/20260531T154939-9298946f/manifest.json",
+    "result": ".ddx/executions/20260531T154939-9298946f/result.json",
+    "checks": ".ddx/executions/20260531T154939-9298946f/checks.json",
+    "usage": ".ddx/executions/20260531T154939-9298946f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-ffb7cdb9-20260531T154939-9298946f"
+  },
+  "prompt_sha": "e49a9ed5202e769dd8854154f27cf25276f0238f7c947c0650f228f25c303047"
+}
