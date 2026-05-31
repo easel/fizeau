@@ -1,0 +1,53 @@
+{
+  "attempt_id": "20260531T161801-17bcc757",
+  "bead_id": "fizeau-c81eb099",
+  "base_rev": "127cafdae5457c0b274f82dcccd3c51d265e9ca5",
+  "created_at": "2026-05-31T16:18:07.192502132Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-c81eb099",
+    "title": "routing P1: shared failure-classification table + classifier",
+    "description": "Single shared classifier mapping each attempt outcome to the action in the FEAT-004 addendum table (genuine-failure=escalate; no_changes/dirty/transport/quota/auth do NOT escalate). See docs/helix/01-frame/features/FEAT-004-model-routing.md 'Addendum: tiered, quota-aware routing' for the normative model + failure-classification table.",
+    "acceptance": "1. classifier maps every table row to an action enum. 2. table-driven test covers every row. 3. genuine-failure vs no_changes distinction tested. 4. go test green. 5. lefthook passes.",
+    "parent": "fizeau-2908cdfa",
+    "labels": [
+      "area:routing",
+      "area:execute-bead",
+      "kind:feature",
+      "spec:FEAT-004",
+      "phase:1"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: FEAT-004 addendum supplies a complete, normative 10-row failure-classification table in docs/helix/01-frame/features/FEAT-004-model-routing.md. Every outcome maps to exactly one action, and the acceptance criteria enumerate all required coverage: action enum, table-driven test per row, genuine-failure/no_changes distinction, go test green, lefthook passes. No existing classifier satisfies this contract: classifyRouteAttemptFailure (service_route_attempts.go:98) maps error text to availability/transport/protocol strings for route-health tracking; ClassifyFailureMode in .claude/skills/cli/internal/agent/execute_bead_status.go maps to failure-mode strings for metrics. Both are orthogonal to the addendum action enum. Package placement and type names are unspecified but straightforwardly derivable from repo conventions (internal/routing/, internal/routehealth/) and the table rows.\",\"fingerprint\":\"551cf8dafa789f3f93e29c52d94854dcb1a702d6993706ab9f8b765f99743728\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"551cf8dafa789f3f93e29c52d94854dcb1a702d6993706ab9f8b765f99743728\"}",
+          "created_at": "2026-05-31T16:17:54.690257785Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T161801-17bcc757",
+    "prompt": ".ddx/executions/20260531T161801-17bcc757/prompt.md",
+    "manifest": ".ddx/executions/20260531T161801-17bcc757/manifest.json",
+    "result": ".ddx/executions/20260531T161801-17bcc757/result.json",
+    "checks": ".ddx/executions/20260531T161801-17bcc757/checks.json",
+    "usage": ".ddx/executions/20260531T161801-17bcc757/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-c81eb099-20260531T161801-17bcc757"
+  },
+  "prompt_sha": "25e7fff489cf6ad093056bf657b32a60e991795b737d7e244b544b9e1ab94f7d"
+}
