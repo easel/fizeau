@@ -90,3 +90,39 @@ BENCHMARK="${SCRIPT_DIR}/benchmark"
   "${BENCHMARK}" validate >/dev/null 2>&1
   # Exit code is already verified by @test framework (exits non-zero = failure)
 }
+
+# Test 6: ./benchmark task-executors lists task executors
+@test "TestListSubcommands_task_executors" {
+  local output
+  output="$("${BENCHMARK}" task-executors 2>&1)"
+
+  # Verify harbor executor is listed (it should exist)
+  printf '%s\n' "${output}" | grep -q 'harbor'
+
+  # Verify output is not empty
+  [[ -n "${output}" ]]
+
+  # Verify output is sorted by name (check first field before tab)
+  local names
+  names="$(printf '%s\n' "${output}" | cut -f1)"
+  local sorted
+  sorted="$(printf '%s\n' "${names}" | LC_ALL=C sort -u)"
+  [[ "${names}" == "${sorted}" ]]
+}
+
+# Test 7: ./benchmark harness-adapters lists harness adapters
+@test "TestListSubcommands_harness_adapters" {
+  local output
+  output="$("${BENCHMARK}" harness-adapters 2>&1)"
+
+  # Verify fiz adapter is listed (it should exist)
+  printf '%s\n' "${output}" | grep -q 'fiz'
+
+  # Verify output is not empty
+  [[ -n "${output}" ]]
+
+  # Verify output is sorted
+  local sorted
+  sorted="$(printf '%s\n' "${output}" | LC_ALL=C sort -u)"
+  [[ "${output}" == "${sorted}" ]]
+}
