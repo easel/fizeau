@@ -1,0 +1,63 @@
+{
+  "attempt_id": "20260531T114832-77aa7859",
+  "bead_id": "fizeau-95d38581",
+  "base_rev": "03b8913e74a79dbf0665f614dd222d08fb0a4b92",
+  "created_at": "2026-05-31T11:48:39.555988806Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 7
+  },
+  "bead": {
+    "id": "fizeau-95d38581",
+    "title": "bench-pr-A3d: per-cell transient retry with backoff + supersede links",
+    "description": "PROBLEM: Transient adapter/executor failures (connection refused, 5xx, EOF parse) should not poison a cell. The runner must retry with bounded backoff and leave an auditable chain so a forensic reader can follow attempt_of -\u003e superseded_by between the retry cell and the cell it replaced.\n\nROOT CAUSE:\n- Retry-on-transient and the closed-cell link mutation are ported from cmd/bench/matrix.go's run loop (the same loop carrying the budget checks at cmd/bench/matrix.go:806/933).\n- Bash anchors: run_cell_with_per_cell_retry is declared at scripts/benchmark/benchmark:138 and its body sketch lives at scripts/benchmark/benchmark:1006-1034 (exponential backoff, retry-log.txt for forensics). The attempt_of/superseded_by link-writing helper is shared with A3b's invalid/orphan path; A3d owns the transient-retry caller.\n\nPROPOSED FIX (scripts/benchmark/benchmark):\n- Detect transient errors (connection refused, HTTP 5xx, EOF/parse) from adapter/executor exit and output; retry with bounded exponential backoff, capturing each attempt to cell_dir/retry-log.txt.\n- On retry, mint a new cell carrying attempt_of: \u003cprior cell id\u003e and back-write superseded_by: \u003cnew cell id\u003e into the prior closed cell (the one permitted mutation of a closed cell).\n- Exhausting retries yields a terminal final_status (e.g. transient_exhausted) per the front end's status vocabulary (scripts/benchmark/benchmark:895).\n\nNON-SCOPE: arg parsing / matrix / --plan (A2); adapters + image (A1); core per-cell loop + report.json composition (A3a, prerequisite); resume/skip + --retry-invalid (A3b); budget accounting + halt placeholders (A3c); flock/setsid/job-pool concurrency and SIGINT/SIGTERM handling (A4); Go agent-leak fix, Go deactivation, parity (A5). Parent out-of-scope preserved: PR B schema; PR C bench-set schema; PR D collector; PR E importers; PR F deleting cmd/bench; PR G docs. Governing artifact: docs/helix/02-design/plan-2026-05-15-benchmark-runner-simplification.md.\n\nDEPENDS ON: A3a (and transitively A2, A1). BLOCKS: A4.\n\nACCEPTANCE (satisfies parent A3 AC4):\n1. A transient adapter failure (simulated via scripts/benchmark/test/fixtures/transient-harness) yields a retry cell carrying attempt_of: and a superseded_by: back-written into the prior cell, with each attempt logged to retry-log.txt. TestPerCellRetryLinks (cmd/bench/runner_a3_test.go) plus a bats case in scripts/benchmark/tests/runner.bats exercising the transient fixture.\nGATES: bats scripts/benchmark/test (and scripts/benchmark/tests/runner.bats) pass; `go test ./...` passes; `lefthook run pre-commit` passes.",
+    "acceptance": "Parent A3 AC4 holds; acceptance 1 passes; bats, go test ./..., and lefthook run pre-commit all green.",
+    "parent": "fizeau-4f5acc2c",
+    "labels": [
+      "area:bench",
+      "kind:feature",
+      "governing:plan-2026-05-15-benchmark-runner-simplification",
+      "pr:A",
+      "pr:A3d",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: runner error: agent: provider error: openai: Post \\\"http://grendel:8000/v1/chat/completions\\\": dial tcp 100.97.179.68:8000: i/o timeout\",\"fingerprint\":\"fc17c6d2a8e4e40ede44eb3c72069e25883d10d223c84fb446fce720c395c8aa\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fc17c6d2a8e4e40ede44eb3c72069e25883d10d223c84fb446fce720c395c8aa\"}",
+          "created_at": "2026-05-31T11:47:43.778680829Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"actual_power\":5}",
+          "created_at": "2026-05-31T11:48:07.754271926Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"grendel-rapid-mlx\",\"resolved_model\":\"mlx-community/Qwen3.6-27B-8bit\",\"fallback_chain\":[],\"requested_min_power\":6,\"actual_power\":5}",
+          "created_at": "2026-05-31T11:48:30.528226239Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=grendel-rapid-mlx model=mlx-community/Qwen3.6-27B-8bit"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260531T114832-77aa7859",
+    "prompt": ".ddx/executions/20260531T114832-77aa7859/prompt.md",
+    "manifest": ".ddx/executions/20260531T114832-77aa7859/manifest.json",
+    "result": ".ddx/executions/20260531T114832-77aa7859/result.json",
+    "checks": ".ddx/executions/20260531T114832-77aa7859/checks.json",
+    "usage": ".ddx/executions/20260531T114832-77aa7859/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-95d38581-20260531T114832-77aa7859"
+  },
+  "prompt_sha": "6467e39a6eac6ce09af681579f2467a25bdb86b1f42b492f052c48e6c9de3389"
+}
