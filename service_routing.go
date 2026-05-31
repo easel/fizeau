@@ -1373,6 +1373,47 @@ func serviceRoutingModelEligibility(entries []routing.HarnessEntry, cat *modelca
 		return nil
 	}
 	eligibility := make(map[string]routing.ModelEligibility)
+
+	// mergeInto merges src into the eligibility map entry for key, or inserts
+	// if absent. Called from both add and addShortAlias so alias entries receive
+	// the same conservative merge semantics as primary entries.
+	mergeInto := func(key string, src routing.ModelEligibility) {
+		if existing, ok := eligibility[key]; ok {
+			if src.Power > existing.Power {
+				existing.Power = src.Power
+			}
+			existing.ExactPinOnly = existing.ExactPinOnly || src.ExactPinOnly
+			existing.AutoRoutable = existing.AutoRoutable || src.AutoRoutable
+			eligibility[key] = existing
+			return
+		}
+		eligibility[key] = src
+	}
+
+	// addShortAlias also registers the bare tier-suffix alias (e.g. "haiku" for
+	// "haiku-5.5" or "claude-haiku-5.5") in the eligibility map. This ensures
+	// CheckPowerEligibility gates the bare alias correctly even when the
+	// subscription-harness tier enrollment emits it before the catalog-surface
+	// override can replace it with a versioned surface ID. Without this, a
+	// lookup("haiku") returning ok=false would let the alias slip through the
+	// exact_pin_only gate when the request carries no explicit power bounds.
+	addShortAlias := func(modelID string, known routing.ModelEligibility) {
+		parsed := modelcatalog.Parse(modelID)
+		if parsed.Tier == modelcatalog.TierUnknown || parsed.Family == "" {
+			return
+		}
+		tiers, ok := modelcatalog.FamilyTiers[parsed.Family]
+		if !ok {
+			return
+		}
+		for suffix, tier := range tiers {
+			if tier == parsed.Tier && suffix != "" {
+				mergeInto(suffix, known)
+				break
+			}
+		}
+	}
+
 	add := func(modelID string, includeByDefault bool, status string) {
 		modelID = strings.TrimSpace(modelID)
 		if modelID == "" {
@@ -1384,16 +1425,8 @@ func serviceRoutingModelEligibility(entries []routing.HarnessEntry, cat *modelca
 			ExactPinOnly: view.ExactPinOnly,
 			AutoRoutable: view.AutoRoutable,
 		}
-		if existing, ok := eligibility[modelID]; ok {
-			if known.Power > existing.Power {
-				existing.Power = known.Power
-			}
-			existing.ExactPinOnly = existing.ExactPinOnly || known.ExactPinOnly
-			existing.AutoRoutable = existing.AutoRoutable || known.AutoRoutable
-			eligibility[modelID] = existing
-			return
-		}
-		eligibility[modelID] = known
+		mergeInto(modelID, known)
+		addShortAlias(modelID, eligibility[modelID])
 	}
 	for _, h := range entries {
 		status := "available"
