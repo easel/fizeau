@@ -222,6 +222,10 @@ models:
     provider_system: anthropic
     deployment_class: metered_cloud
     power: 7
+    # FEAT-004 tier policy: low tier (haiku/nano) is pin-only, never auto-routed.
+    # Auto-routing starts at the MIDDLE tier (sonnet/gpt-5.4-mini); a weak
+    # subscription tier wastes flat throughput on give-ups. Cheap work -> local.
+    exact_pin_only: true
     power_provenance:
       method: catalog_bootstrap_cost_recency
       benchmarks:
