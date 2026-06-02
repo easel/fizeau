@@ -717,7 +717,13 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 		if qs, ok := subscriptionQuotaForHarness(name, time.Now()); ok {
 			entry.QuotaOK = qs.OK
 			entry.QuotaStale = qs.Present && !qs.Fresh
-			entry.SubscriptionOK = qs.OK
+			// Fail-open contract: a subscription harness is hard-gated ONLY on
+			// PROVEN exhaustion (qs.Exhausted). Unknown/stale/unavailable quota
+			// keeps it eligible — QuotaOK=false still demotes it in score.go, so
+			// a healthy harness is preferred, but an unconfirmed-quota harness is
+			// never fabricated into "no viable provider". (Was: =qs.OK, which
+			// collapsed Unknown into the same hard gate as Blocked.)
+			entry.SubscriptionOK = !qs.Exhausted
 			entry.QuotaPercentUsed = qs.PercentUsed
 			entry.QuotaTrend = qs.Trend
 			entry.QuotaReason = qs.Reason
