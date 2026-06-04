@@ -46,8 +46,30 @@ type transcriptMessage struct {
 	ID         string            `json:"id,omitempty"`
 	Role       string            `json:"role,omitempty"`
 	StopReason string            `json:"stop_reason,omitempty"`
-	Usage      json.RawMessage   `json:"usage,omitempty"`
-	Content    []transcriptBlock `json:"content,omitempty"`
+	Usage      json.RawMessage `json:"usage,omitempty"`
+	Content    messageContent  `json:"content,omitempty"`
+}
+
+// messageContent is a message's content, which Claude Code emits as EITHER an
+// array of content blocks (assistant turns, tool_use/tool_result) OR a plain
+// string (simple text messages). Decoding only as []transcriptBlock dropped the
+// string form (observed live: "cannot unmarshal string into []transcriptBlock"
+// → the line was skipped, losing its text). Accept both: a string becomes a
+// single text block.
+type messageContent []transcriptBlock
+
+func (c *messageContent) UnmarshalJSON(data []byte) error {
+	var blocks []transcriptBlock
+	if err := json.Unmarshal(data, &blocks); err == nil {
+		*c = blocks
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*c = messageContent{{Type: "text", Text: s}}
+	return nil
 }
 
 // transcriptBlock is one content block inside a message.
