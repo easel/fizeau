@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -389,6 +390,49 @@ func TestNoStaticFallback(t *testing.T) {
 
 	if emptyModelSnapshot.Source != "" {
 		t.Errorf("emptyModelSnapshot should have empty Source, got %q", emptyModelSnapshot.Source)
+	}
+}
+
+// TestParseClaudeTuiModelsRejectsNonModelClaudeTokens verifies F2: the parser
+// never admits a bare `claude-<word>` token as a "model". Feeding it the
+// harness name, the temp hooks dir, and the git branch slug
+// `reliability/claude-tui-models` (all of which the old greedy
+// `claude-[a-z0-9...]` regex captured verbatim) must yield NO entry containing
+// "claude-tui".
+func TestParseClaudeTuiModelsRejectsNonModelClaudeTokens(t *testing.T) {
+	const captured = "Switch model for claude-tui session\n" +
+		"branch reliability/claude-tui-models\n" +
+		"hooks dir /tmp/claude-tui-hooks-12345\n" +
+		"1. Default (recommended)  Opus 4.8 with 1M context\n" +
+		"2. Sonnet  Sonnet 4.6 - Best for everyday tasks\n" +
+		"4. Haiku  Haiku 4.5 - Fastest for quick answers\n"
+	models := ParseClaudeTuiModels(captured)
+	for _, m := range models {
+		if strings.Contains(m, "claude-tui") {
+			t.Fatalf("parser admitted non-model token %q (full: %v)", m, models)
+		}
+		if strings.HasPrefix(m, "claude-") {
+			t.Fatalf("parser admitted bare claude-<word> token %q (full: %v)", m, models)
+		}
+	}
+	for _, want := range []string{"opus-4.8", "sonnet-4.6", "haiku-4.5"} {
+		if !contains(models, want) {
+			t.Errorf("expected %q in parsed models, got %v", want, models)
+		}
+	}
+}
+
+// TestParseClaudeTuiModelsCollapsedSpaceLabels verifies F3: the live Claude Code
+// PTY cell stream collapses the space in the picker labels (`Opus4.8`,
+// `Sonnet4.6`, `Haiku4.5`); the parser must still extract the version-bearing
+// tier IDs normalized to the catalog claude-code surface form.
+func TestParseClaudeTuiModelsCollapsedSpaceLabels(t *testing.T) {
+	const collapsed = "Opus4.8 with 1M context\nSonnet4.6 with 1M context\nHaiku4.5 fastest\nclaude-opus-4-8\n"
+	models := ParseClaudeTuiModels(collapsed)
+	for _, want := range []string{"opus-4.8", "sonnet-4.6", "haiku-4.5"} {
+		if !contains(models, want) {
+			t.Errorf("expected %q from collapsed-space label, got %v", want, models)
+		}
 	}
 }
 

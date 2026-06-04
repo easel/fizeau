@@ -193,10 +193,18 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		}
 	}
 
-	args := buildLaunchArgs(settingsJSON)
+	// Honor req.Model: launch the interactive TUI on the resolved tier model so
+	// a default-policy (sonnet-tier) route actually EXECUTES that model rather
+	// than whatever the account default happens to be. The resolved catalog
+	// surface ID (e.g. "sonnet-4.6"/"opus-4.8") is mapped to the CLI-acceptable
+	// model token claude's --model flag accepts (an alias or full ID). The pool
+	// is keyed on this token so a session launched for one model is never reused
+	// to serve a request for a different model.
+	cliModel := claudeTuiLaunchModel(req.Model)
+	args := buildLaunchArgs(settingsJSON, cliModel)
 
 	ps, err := claimPooledSession(
-		ctx, "claude-tui", claudePath, args, req.WorkDir, env,
+		ctx, poolKeyName("claude-tui", cliModel), claudePath, args, req.WorkDir, env,
 		session.Size{Rows: 50, Cols: 220},
 	)
 	if err != nil {
@@ -206,7 +214,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	}
 	ptySession := ps.session
 	// Symmetric release: every claimed session is released exactly once.
-	defer releasePooledSession("claude-tui", req.WorkDir, ptySession)
+	defer releasePooledSession(poolKeyName("claude-tui", cliModel), req.WorkDir, ptySession)
 
 	te := turnEnv{
 		conn:            ptySession,
@@ -235,7 +243,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	ps.transcriptOffset = te.nextTranscriptOffset
 	ps.transcriptPath = te.lastTranscriptPath
 	if status == turnEvicted {
-		evictPooledSession("claude-tui", req.WorkDir, ptySession)
+		evictPooledSession(poolKeyName("claude-tui", cliModel), req.WorkDir, ptySession)
 	}
 }
 
@@ -245,8 +253,47 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 // Claude Max subscription, and injects the hook settings via --settings. The
 // argument order is asserted by a deterministic test so that dropping either
 // the flag or its value regresses the suite.
-func buildLaunchArgs(settingsJSON string) []string {
-	return []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON}
+func buildLaunchArgs(settingsJSON string, cliModel string) []string {
+	args := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON}
+	if cliModel != "" {
+		args = append(args, "--model", cliModel)
+	}
+	return args
+}
+
+// claudeTuiLaunchModel maps a resolved catalog/tier model reference to the model
+// token the claude CLI's --model flag accepts. Catalog claude-code surface IDs
+// (sonnet-4.6, opus-4.8, opus-4.7, haiku-4.5, ...) and full claude-<family>-...
+// IDs collapse to the stable family alias (sonnet/opus/haiku) so the launched
+// session lands on the requested tier regardless of catalog point-version drift.
+// An empty request model returns "" (launch on the account default). An
+// unrecognized non-empty value is passed through verbatim so an explicit full
+// model ID still reaches the CLI.
+func claudeTuiLaunchModel(model string) string {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	if normalized == "" {
+		return ""
+	}
+	switch {
+	case normalized == "sonnet" || strings.HasPrefix(normalized, "sonnet-") || strings.HasPrefix(normalized, "claude-sonnet-"):
+		return "sonnet"
+	case normalized == "opus" || strings.HasPrefix(normalized, "opus-") || strings.HasPrefix(normalized, "claude-opus-"):
+		return "opus"
+	case normalized == "haiku" || strings.HasPrefix(normalized, "haiku-") || strings.HasPrefix(normalized, "claude-haiku-"):
+		return "haiku"
+	default:
+		return normalized
+	}
+}
+
+// poolKeyName derives the pooled-session harness key. A session launched on a
+// specific --model must never be reused to serve a request for a different
+// model, so the resolved CLI model token is folded into the key.
+func poolKeyName(harness, cliModel string) string {
+	if cliModel == "" {
+		return harness
+	}
+	return harness + ":" + cliModel
 }
 
 type turnOutcome int
@@ -500,9 +547,6 @@ func (h *Harness) emitTranscriptAndFinal(
 // ADR-013's capability baseline).
 func documentedRequestGaps(req harnesses.ExecuteRequest) []string {
 	var gaps []string
-	if req.Model != "" {
-		gaps = append(gaps, fmt.Sprintf("requested model %q is a documented gap: claude-tui has no batch model flag on the bypassPermissions path", req.Model))
-	}
 	if req.Reasoning != "" {
 		gaps = append(gaps, fmt.Sprintf("requested reasoning %q is a documented gap: no TUI affordance sets per-turn reasoning", req.Reasoning))
 	}
@@ -812,18 +856,33 @@ func claudeTuiModelDiscoveryComplete(text string) bool {
 }
 
 var (
-	claudeFullModelPattern         = regexp.MustCompile(`\bclaude-[a-z0-9][a-z0-9._-]*\b`)
+	// claudeFullFamilyVersionPattern matches the full `--model` ID form Claude
+	// Code documents, e.g. `claude-opus-4-8` or `claude-sonnet-4.6`. It is
+	// allowlisted to the real family stems so arbitrary `claude-<word>` tokens
+	// (the harness name `claude-tui`, the temp hooks dir `claude-tui-hooks-NNN`,
+	// or a git branch slug like `reliability/claude-tui-models`) can never be
+	// admitted as a "model". This replaces the old bare `claude-[a-z0-9...]`
+	// pattern that captured those tokens verbatim.
 	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
-	claudeFamilyVersionPattern     = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku)\s+([0-9]+(?:[.-][0-9]+){0,2})\b`)
-	claudeAliasPattern             = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku)(?:$|[\s'"])`)
-	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
+	// claudeFamilyVersionPattern matches the human-facing picker labels
+	// (`Opus 4.8`, `Sonnet 4.6`, `Haiku 4.5`). The family/version separator is
+	// OPTIONAL (`\s*`) because the live Claude Code PTY cell stream collapses
+	// the space, rendering `Opus4.8`/`Sonnet4.6`/`Haiku4.5`; requiring `\s+`
+	// dropped every version-bearing tier and left only bare aliases.
+	claudeFamilyVersionPattern = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku)\s*([0-9]+[.-][0-9]+)\b`)
+	claudeAliasPattern         = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku)(?:$|[\s'"])`)
+	claudeEffortPattern        = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
 
 // ParseClaudeTuiModels extracts available model names from claude /model output.
+// It only admits real, family-versioned IDs (sonnet/opus/haiku + version) and
+// the bare family aliases; arbitrary `claude-<word>` tokens are never emitted.
+// Version-bearing IDs are normalized to the catalog claude-code surface form
+// `<family>-<major>.<minor>` (e.g. opus-4.8, sonnet-4.6, haiku-4.5).
 func ParseClaudeTuiModels(text string) []string {
 	text = anthropic.StripANSI(strings.ReplaceAll(text, "\r\n", "\n"))
 	lower := strings.ToLower(text)
-	models := uniqueMatches(claudeFullModelPattern.FindAllString(lower, -1))
+	var models []string
 	for _, match := range claudeFullFamilyVersionPattern.FindAllStringSubmatch(lower, -1) {
 		if len(match) > 3 {
 			models = appendUniqueString(models, match[1]+"-"+match[2]+"."+match[3])
@@ -868,14 +927,6 @@ func discoveryRecordFromSnapshot(snapshot harnesses.ModelDiscoverySnapshot) cass
 		StalenessBehavior: "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
 		Metadata:          map[string]any{"detail": snapshot.Detail},
 	}
-}
-
-func uniqueMatches(values []string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = appendUniqueString(out, value)
-	}
-	return out
 }
 
 func appendUniqueString(values []string, value string) []string {

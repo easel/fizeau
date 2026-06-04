@@ -12,7 +12,7 @@ import (
 // or `bypassPermissions` from buildLaunchArgs regresses the suite.
 func TestBuildLaunchArgsBypassPermissions(t *testing.T) {
 	const settingsJSON = `{"hooks":{}}`
-	args := buildLaunchArgs(settingsJSON)
+	args := buildLaunchArgs(settingsJSON, "")
 
 	// Locate --permission-mode and assert its value is the very next element.
 	permIdx := -1
@@ -61,7 +61,7 @@ func TestBuildLaunchArgsBypassPermissions(t *testing.T) {
 // contract is fully specified and a regression in flag ordering is caught.
 func TestBuildLaunchArgsExactOrder(t *testing.T) {
 	const settingsJSON = `{"hooks":{"Stop":[]}}`
-	got := buildLaunchArgs(settingsJSON)
+	got := buildLaunchArgs(settingsJSON, "")
 	want := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON}
 	if len(got) != len(want) {
 		t.Fatalf("buildLaunchArgs() = %q (len %d), want %q (len %d)", got, len(got), want, len(want))
@@ -69,6 +69,45 @@ func TestBuildLaunchArgsExactOrder(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("buildLaunchArgs()[%d] = %q, want %q (full: %q)", i, got[i], want[i], got)
+		}
+	}
+}
+
+// TestBuildLaunchArgsHonorsModel proves a resolved tier model is wired through
+// as `--model <cli-model>` so the interactive TUI launches on the requested
+// model (F5: a default-policy sonnet-tier route EXECUTES sonnet via claude-tui).
+func TestBuildLaunchArgsHonorsModel(t *testing.T) {
+	const settingsJSON = `{"hooks":{}}`
+	got := buildLaunchArgs(settingsJSON, "sonnet")
+	want := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON, "--model", "sonnet"}
+	if len(got) != len(want) {
+		t.Fatalf("buildLaunchArgs(..., sonnet) = %q (len %d), want %q (len %d)", got, len(got), want, len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("buildLaunchArgs(..., sonnet)[%d] = %q, want %q (full: %q)", i, got[i], want[i], got)
+		}
+	}
+}
+
+// TestClaudeTuiLaunchModel proves resolved catalog tier IDs collapse to the
+// stable CLI alias so the launched session lands on the requested tier
+// regardless of catalog point-version drift (sonnet-4.6 -> sonnet, opus-4.8 ->
+// opus, claude-haiku-4-5 -> haiku), an empty model stays empty (account
+// default), and an unknown full ID passes through verbatim.
+func TestClaudeTuiLaunchModel(t *testing.T) {
+	cases := map[string]string{
+		"":                  "",
+		"sonnet-4.6":        "sonnet",
+		"opus-4.8":          "opus",
+		"opus-4.7":          "opus",
+		"claude-haiku-4-5":  "haiku",
+		"haiku":             "haiku",
+		"some-future-model": "some-future-model",
+	}
+	for in, want := range cases {
+		if got := claudeTuiLaunchModel(in); got != want {
+			t.Errorf("claudeTuiLaunchModel(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
