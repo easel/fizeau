@@ -65,12 +65,18 @@ func getOrCreatePooledSession(
 		globalPool.mu.Lock()
 		sessions := globalPool.sessions[key]
 
-		// Find first idle session
-		for i, ps := range sessions {
+		// Find first idle session. Claiming locks the slot's mutex but keeps
+		// the slot in the pool so releasePooledSession can find it and unlock
+		// it for reuse — claim and release stay symmetric.
+		for _, ps := range sessions {
 			// Try to acquire the session (non-blocking)
 			if ps.mu.TryLock() {
-				// Remove from pool and return
-				globalPool.sessions[key] = append(sessions[:i], sessions[i+1:]...)
+				if ps.session == nil {
+					// Slot exists but its session never started; unlock and
+					// skip so a healthy slot or fresh session is used instead.
+					ps.mu.Unlock()
+					continue
+				}
 				globalPool.mu.Unlock()
 				return ps.session, nil
 			}

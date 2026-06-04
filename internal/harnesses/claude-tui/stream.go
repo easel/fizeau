@@ -2,7 +2,6 @@ package claudetui
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,105 +15,108 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 )
 
-// TranscriptLine represents a single JSONL line from a Claude Code transcript.
-// The structure is minimal to allow forward compatibility with evolving Claude formats.
-type TranscriptLine struct {
-	Type  string          `json:"type"`
+// Real Claude Code 2.1.x transcript .jsonl schema.
+//
+// Top-level lines are objects with a "type" discriminator in
+// {assistant, user, attachment, ai-title, queue-operation, last-prompt}.
+// Only assistant and user lines carry model content we translate to events.
+//
+//	assistant line: {"type":"assistant","message":{"model","id","role",
+//	                 "content":[block,...],"stop_reason","usage"}}
+//	user line:      {"type":"user","message":{"role","content":[block,...]}}
+//
+// Each content block has its own "type" in {thinking, text, tool_use,
+// tool_result}. tool_result blocks appear inside user lines' content.
+//
+// We translate:
+//   - text block (assistant)   -> text_delta event
+//   - tool_use block           -> tool_call event
+//   - tool_result block (user) -> tool_result event
+//   - last assistant stop_reason + usage -> final event
+
+// transcriptLine is one decoded top-level JSONL line.
+type transcriptLine struct {
+	Type    string             `json:"type"`
+	Message *transcriptMessage `json:"message,omitempty"`
+}
+
+// transcriptMessage is the message envelope on assistant/user lines.
+type transcriptMessage struct {
+	Model      string            `json:"model,omitempty"`
+	ID         string            `json:"id,omitempty"`
+	Role       string            `json:"role,omitempty"`
+	StopReason string            `json:"stop_reason,omitempty"`
+	Usage      json.RawMessage   `json:"usage,omitempty"`
+	Content    []transcriptBlock `json:"content,omitempty"`
+}
+
+// transcriptBlock is one content block inside a message.
+type transcriptBlock struct {
+	Type string `json:"type"`
+	// text block
+	Text string `json:"text,omitempty"`
+	// tool_use block
 	ID    string          `json:"id,omitempty"`
 	Name  string          `json:"name,omitempty"`
 	Input json.RawMessage `json:"input,omitempty"`
-	Text  string          `json:"text,omitempty"`
-	// For tool_result entries
-	Output     string `json:"output,omitempty"`
-	Error      string `json:"error,omitempty"`
-	DurationMS int64  `json:"duration_ms,omitempty"`
-	// For final events
-	Status string          `json:"status,omitempty"`
-	Usage  json.RawMessage `json:"usage,omitempty"`
-	// Extra fields preserved as-is
-	Extra map[string]interface{} `json:"-"`
+	// tool_result block
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
+	IsError   bool            `json:"is_error,omitempty"`
 }
 
-// UnmarshalJSON allows TranscriptLine to capture unknown fields.
-func (tl *TranscriptLine) UnmarshalJSON(data []byte) error {
-	type rawLine struct {
-		Type       string          `json:"type"`
-		ID         string          `json:"id,omitempty"`
-		Name       string          `json:"name,omitempty"`
-		Input      json.RawMessage `json:"input,omitempty"`
-		Text       string          `json:"text,omitempty"`
-		Output     string          `json:"output,omitempty"`
-		Error      string          `json:"error,omitempty"`
-		DurationMS int64           `json:"duration_ms,omitempty"`
-		Status     string          `json:"status,omitempty"`
-		Usage      json.RawMessage `json:"usage,omitempty"`
-	}
-	var raw rawLine
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*tl = TranscriptLine{
-		Type:       raw.Type,
-		ID:         raw.ID,
-		Name:       raw.Name,
-		Input:      raw.Input,
-		Text:       raw.Text,
-		Output:     raw.Output,
-		Error:      raw.Error,
-		DurationMS: raw.DurationMS,
-		Status:     raw.Status,
-		Usage:      raw.Usage,
-	}
-	// Capture extra fields
-	var extras map[string]interface{}
-	_ = json.Unmarshal(data, &extras)
-	tl.Extra = extras
-	return nil
+// claudeUsage is the assistant-line usage object.
+type claudeUsage struct {
+	InputTokens              *int `json:"input_tokens,omitempty"`
+	OutputTokens             *int `json:"output_tokens,omitempty"`
+	CacheReadInputTokens     *int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens *int `json:"cache_creation_input_tokens,omitempty"`
 }
 
-// ParseTranscriptLine parses a single JSONL line into a TranscriptLine.
-// Returns an error if the line fails to parse; the error is logged and skipped during streaming.
-func ParseTranscriptLine(line string) (TranscriptLine, error) {
+// ParseTranscriptLine parses a single JSONL line into a transcriptLine.
+// Returns an error if the line is empty or fails to parse; callers skip
+// malformed lines during streaming.
+func ParseTranscriptLine(line string) (transcriptLine, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
-		return TranscriptLine{}, fmt.Errorf("empty line")
+		return transcriptLine{}, fmt.Errorf("empty line")
 	}
-	var tl TranscriptLine
+	var tl transcriptLine
 	if err := json.Unmarshal([]byte(line), &tl); err != nil {
-		return TranscriptLine{}, fmt.Errorf("invalid JSONL: %w", err)
+		return transcriptLine{}, fmt.Errorf("invalid JSONL: %w", err)
 	}
 	return tl, nil
 }
 
-// TranscriptTailer reads from a Claude Code transcript file,
-// emitting canonical Events as new lines arrive.
+// TranscriptTailer reads from a Claude Code transcript file, emitting
+// canonical Events derived from assistant/user message content blocks.
 type TranscriptTailer struct {
-	path           string
-	logger         *slog.Logger
-	lastSeenOffset int64  // For multi-turn replay safety
-	session        string // Session identifier for tracking
-	seqCounter     int64
-	startTime      time.Time
-	partialBuf     bytes.Buffer
-	readCloser     io.ReadCloser
-	scanner        *bufio.Scanner
-	retryBackoff   time.Duration
-	maxRetries     int
+	path       string
+	logger     *slog.Logger
+	session    string
+	seqCounter int64
+	startTime  time.Time
+	readCloser io.ReadCloser
+	scanner    *bufio.Scanner
+
+	// lastAssistant captures the most recent assistant message so the
+	// final event reflects its stop_reason + usage + accumulated text.
+	lastAssistantStop  string
+	lastAssistantUsage json.RawMessage
+	finalText          strings.Builder
+	sawAssistant       bool
 }
 
 // NewTranscriptTailer creates a new tailer for the given transcript path.
-// The session parameter is used for tracking multi-turn state.
 func NewTranscriptTailer(path, session string, logger *slog.Logger) *TranscriptTailer {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &TranscriptTailer{
-		path:         path,
-		logger:       logger,
-		session:      session,
-		retryBackoff: 50 * time.Millisecond,
-		maxRetries:   20,
-		startTime:    time.Now(),
+		path:      path,
+		logger:    logger,
+		session:   session,
+		startTime: time.Now(),
 	}
 }
 
@@ -126,9 +128,8 @@ func (t *TranscriptTailer) Open(ctx context.Context) error {
 	}
 	t.readCloser = f
 	t.scanner = bufio.NewScanner(f)
-	// Increase buffer size for large JSONL lines
 	buf := make([]byte, 0, 64*1024)
-	t.scanner.Buffer(buf, 1024*1024)
+	t.scanner.Buffer(buf, 4*1024*1024)
 	return nil
 }
 
@@ -140,10 +141,11 @@ func (t *TranscriptTailer) Close() error {
 	return nil
 }
 
-// ReadEvents reads all available events from the transcript, emitting them on the channel.
-// Returns when the file reaches EOF or context is cancelled.
+// ReadEvents reads all available events from the transcript, emitting them
+// on the channel. It walks assistant/user message content blocks into
+// text_delta/tool_call/tool_result events and synthesizes a single final
+// event from the last assistant stop_reason + usage when the stream ends.
 func (t *TranscriptTailer) ReadEvents(ctx context.Context, eventChan chan<- harnesses.Event) error {
-	// Ensure file is open
 	if t.scanner == nil {
 		if err := t.Open(ctx); err != nil {
 			return fmt.Errorf("open transcript: %w", err)
@@ -158,30 +160,25 @@ func (t *TranscriptTailer) ReadEvents(ctx context.Context, eventChan chan<- harn
 		default:
 		}
 
-		// Scan next line with retry logic for partial writes
-		var line string
 		if !t.scanner.Scan() {
-			if t.scanner.Err() != nil {
-				return fmt.Errorf("scanner error: %w", t.scanner.Err())
+			if err := t.scanner.Err(); err != nil {
+				return fmt.Errorf("scanner error: %w", err)
 			}
-			// EOF reached
-			return nil
+			break // EOF
 		}
 
-		line = t.scanner.Text()
-		if line == "" {
+		line := t.scanner.Text()
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		// Parse the JSONL line
 		tl, err := ParseTranscriptLine(line)
 		if err != nil {
-			t.logger.Warn("malformed JSONL line, skipping", "error", err, "line", line[:min(len(line), 100)])
+			t.logger.Warn("malformed JSONL line, skipping", "error", err)
 			continue
 		}
 
-		// Emit events based on the transcript line type
-		events := t.transcriptLineToEvents(tl)
+		events := t.lineToEvents(tl)
 		for _, ev := range events {
 			select {
 			case eventChan <- ev:
@@ -190,106 +187,200 @@ func (t *TranscriptTailer) ReadEvents(ctx context.Context, eventChan chan<- harn
 			}
 		}
 	}
+
+	// Synthesize the final event from the last assistant turn.
+	if fin, ok := t.finalEvent(); ok {
+		select {
+		case eventChan <- fin:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
-// transcriptLineToEvents converts a transcript line to one or more canonical events.
-func (t *TranscriptTailer) transcriptLineToEvents(tl TranscriptLine) []harnesses.Event {
-	t.seqCounter++
+// lineToEvents walks a single top-level line's content blocks into events.
+// It does NOT emit the final event; finalEvent does that after EOF so that
+// exactly one final is produced per transcript read.
+func (t *TranscriptTailer) lineToEvents(tl transcriptLine) []harnesses.Event {
+	if tl.Message == nil {
+		return nil
+	}
+
+	var out []harnesses.Event
 	now := time.Now()
 
 	switch tl.Type {
-	case "text_delta":
-		if tl.Text == "" {
-			return nil
+	case "assistant":
+		t.sawAssistant = true
+		t.lastAssistantStop = tl.Message.StopReason
+		if len(tl.Message.Usage) > 0 {
+			t.lastAssistantUsage = tl.Message.Usage
 		}
-		data, _ := json.Marshal(harnesses.TextDeltaData{Text: tl.Text})
-		return []harnesses.Event{{
-			Type:     harnesses.EventTypeTextDelta,
-			Sequence: t.seqCounter,
-			Time:     now,
-			Data:     data,
-		}}
-
-	case "tool_call":
-		if tl.ID == "" || tl.Name == "" {
-			t.logger.Warn("tool_call missing required fields", "id", tl.ID, "name", tl.Name)
-			return nil
+		for _, b := range tl.Message.Content {
+			switch b.Type {
+			case "text":
+				if b.Text == "" {
+					continue
+				}
+				t.finalText.WriteString(b.Text)
+				t.seqCounter++
+				data, _ := json.Marshal(harnesses.TextDeltaData{Text: b.Text})
+				out = append(out, harnesses.Event{
+					Type:     harnesses.EventTypeTextDelta,
+					Sequence: t.seqCounter,
+					Time:     now,
+					Data:     data,
+				})
+			case "tool_use":
+				if b.ID == "" || b.Name == "" {
+					t.logger.Warn("tool_use block missing id/name", "id", b.ID, "name", b.Name)
+					continue
+				}
+				t.seqCounter++
+				data, _ := json.Marshal(harnesses.ToolCallData{
+					ID:    b.ID,
+					Name:  b.Name,
+					Input: b.Input,
+				})
+				out = append(out, harnesses.Event{
+					Type:     harnesses.EventTypeToolCall,
+					Sequence: t.seqCounter,
+					Time:     now,
+					Data:     data,
+				})
+			}
 		}
-		data, _ := json.Marshal(harnesses.ToolCallData{
-			ID:    tl.ID,
-			Name:  tl.Name,
-			Input: tl.Input,
-		})
-		return []harnesses.Event{{
-			Type:     harnesses.EventTypeToolCall,
-			Sequence: t.seqCounter,
-			Time:     now,
-			Data:     data,
-		}}
-
-	case "tool_result":
-		if tl.ID == "" {
-			t.logger.Warn("tool_result missing ID field")
-			return nil
+	case "user":
+		for _, b := range tl.Message.Content {
+			if b.Type != "tool_result" {
+				continue
+			}
+			if b.ToolUseID == "" {
+				t.logger.Warn("tool_result block missing tool_use_id")
+				continue
+			}
+			t.seqCounter++
+			out = append(out, harnesses.Event{
+				Type:     harnesses.EventTypeToolResult,
+				Sequence: t.seqCounter,
+				Time:     now,
+				Data: mustMarshal(harnesses.ToolResultData{
+					ID:     b.ToolUseID,
+					Output: toolResultText(b.Content),
+					Error:  toolResultError(b.IsError, b.Content),
+				}),
+			})
 		}
-		data, _ := json.Marshal(harnesses.ToolResultData{
-			ID:         tl.ID,
-			Output:     tl.Output,
-			Error:      tl.Error,
-			DurationMS: tl.DurationMS,
-		})
-		return []harnesses.Event{{
-			Type:     harnesses.EventTypeToolResult,
-			Sequence: t.seqCounter,
-			Time:     now,
-			Data:     data,
-		}}
+	}
 
-	case "final":
-		fd := t.transcriptFinalToFinalData(tl)
-		data, _ := json.Marshal(fd)
-		return []harnesses.Event{{
-			Type:     harnesses.EventTypeFinal,
-			Sequence: t.seqCounter,
-			Time:     now,
-			Data:     data,
-		}}
+	return out
+}
 
+// finalEvent synthesizes the single final event from the last assistant
+// turn's stop_reason + usage + accumulated text. Returns false if no
+// assistant line was ever seen (an incomplete/empty transcript).
+func (t *TranscriptTailer) finalEvent() (harnesses.Event, bool) {
+	if !t.sawAssistant {
+		return harnesses.Event{}, false
+	}
+	t.seqCounter++
+	fd := harnesses.FinalData{
+		Status:     mapStopReason(t.lastAssistantStop),
+		FinalText:  t.finalText.String(),
+		DurationMS: time.Since(t.startTime).Milliseconds(),
+	}
+	if u := parseClaudeUsage(t.lastAssistantUsage); u != nil {
+		fd.Usage = u
+	}
+	return harnesses.Event{
+		Type:     harnesses.EventTypeFinal,
+		Sequence: t.seqCounter,
+		Time:     time.Now(),
+		Data:     mustMarshal(fd),
+	}, true
+}
+
+// mapStopReason maps a Claude stop_reason to a CONTRACT-003 final status.
+func mapStopReason(stop string) string {
+	switch stop {
+	case "end_turn", "stop_sequence", "tool_use", "":
+		return "success"
+	case "max_tokens":
+		return "iteration_limit"
 	default:
-		// Unknown types are silently skipped
-		return nil
+		return "success"
 	}
 }
 
-// transcriptFinalToFinalData converts a transcript final line to FinalData.
-func (t *TranscriptTailer) transcriptFinalToFinalData(tl TranscriptLine) harnesses.FinalData {
-	fd := harnesses.FinalData{
-		Status:     tl.Status,
-		FinalText:  tl.Text,
-		DurationMS: time.Since(t.startTime).Milliseconds(),
+// parseClaudeUsage converts a raw assistant-line usage object to FinalUsage.
+func parseClaudeUsage(raw json.RawMessage) *harnesses.FinalUsage {
+	if len(raw) == 0 {
+		return nil
 	}
+	var u claudeUsage
+	if err := json.Unmarshal(raw, &u); err != nil {
+		return nil
+	}
+	if u.InputTokens == nil && u.OutputTokens == nil &&
+		u.CacheReadInputTokens == nil && u.CacheCreationInputTokens == nil {
+		return nil
+	}
+	out := &harnesses.FinalUsage{
+		InputTokens:      u.InputTokens,
+		OutputTokens:     u.OutputTokens,
+		CacheReadTokens:  u.CacheReadInputTokens,
+		CacheWriteTokens: u.CacheCreationInputTokens,
+		Source:           "transcript",
+	}
+	return out
+}
 
-	// Parse usage if present
-	if tl.Usage != nil {
-		var usage harnesses.FinalUsage
-		if err := json.Unmarshal(tl.Usage, &usage); err != nil {
-			t.logger.Warn("failed to parse usage from final event", "error", err)
-		} else {
-			fd.Usage = &usage
+// toolResultText extracts a textual representation from a tool_result block's
+// content, which may be a JSON string or an array of {type,text} blocks.
+func toolResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err == nil {
+		var b strings.Builder
+		for _, blk := range blocks {
+			b.WriteString(blk.Text)
 		}
+		return b.String()
 	}
+	return string(raw)
+}
 
-	return fd
+// toolResultError returns the error text when a tool_result is flagged as an
+// error, otherwise the empty string.
+func toolResultError(isErr bool, raw json.RawMessage) string {
+	if !isErr {
+		return ""
+	}
+	return toolResultText(raw)
+}
+
+func mustMarshal(v interface{}) json.RawMessage {
+	b, _ := json.Marshal(v)
+	return b
 }
 
 // ReadHookPayload extracts the transcript path from a Stop-hook payload.
-// The payload is expected to be JSON with a transcript_path field.
+// The payload is JSON with a transcript_path field.
 func ReadHookPayload(data []byte) (string, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return "", fmt.Errorf("invalid hook payload JSON: %w", err)
 	}
-
 	transcriptPath, ok := payload["transcript_path"].(string)
 	if !ok {
 		return "", fmt.Errorf("transcript_path not found in hook payload")
@@ -297,7 +388,6 @@ func ReadHookPayload(data []byte) (string, error) {
 	if transcriptPath == "" {
 		return "", fmt.Errorf("transcript_path is empty")
 	}
-
 	return transcriptPath, nil
 }
 
@@ -320,30 +410,130 @@ func ExpandTranscriptPath(path string) (string, error) {
 	return path, nil
 }
 
-// SessionMarker tracks the last-processed position for multi-turn replay safety.
-// When /clear is issued, a new transcript file is created; this marker helps
-// distinguish new turns from previously-processed turns.
-type SessionMarker struct {
-	lastTranscriptPath string
-	lastOffset         int64
+// ---------------------------------------------------------------------------
+// Hook-event tailer: mid-turn tool_call / tool_result ProgressEvents.
+//
+// PreToolUse / PostToolUse hooks each write a per-event JSON payload file into
+// a hook directory during the turn. The tailer scans that directory for new
+// payload files and emits tool_call (PreToolUse) and tool_result (PostToolUse)
+// events as they appear, so ddx's idle watchdog observes progress during a
+// long turn instead of killing it.
+// ---------------------------------------------------------------------------
+
+// HookEvent is one decoded PreToolUse/PostToolUse payload file.
+type HookEvent struct {
+	Event      string          `json:"hook_event_name"`
+	ToolName   string          `json:"tool_name"`
+	ToolUseID  string          `json:"tool_use_id"`
+	ToolInput  json.RawMessage `json:"tool_input,omitempty"`
+	ToolOutput json.RawMessage `json:"tool_response,omitempty"`
 }
 
-// MarkProcessed records that we've processed up to the given line count
-// from the transcript at transcriptPath. This enables multi-turn safety.
-func (m *SessionMarker) MarkProcessed(transcriptPath string, lineCount int64) {
-	m.lastTranscriptPath = transcriptPath
-	m.lastOffset = lineCount
-}
-
-// IsNewTranscript returns true if the transcript path differs from the last-processed one.
-func (m *SessionMarker) IsNewTranscript(transcriptPath string) bool {
-	return m.lastTranscriptPath != transcriptPath
-}
-
-// helper
-func min(a, b int) int {
-	if a < b {
-		return a
+// ParseHookEvent decodes a single PreToolUse/PostToolUse payload file.
+func ParseHookEvent(data []byte) (HookEvent, error) {
+	var he HookEvent
+	if err := json.Unmarshal(data, &he); err != nil {
+		return HookEvent{}, fmt.Errorf("invalid hook-event JSON: %w", err)
 	}
-	return b
+	return he, nil
+}
+
+// HookEventToEvent converts a decoded hook event to a canonical Event, or
+// returns ok=false for events that do not map (e.g. unknown hook names).
+func HookEventToEvent(he HookEvent, seq int64) (harnesses.Event, bool) {
+	now := time.Now()
+	switch he.Event {
+	case "PreToolUse":
+		if he.ToolName == "" {
+			return harnesses.Event{}, false
+		}
+		return harnesses.Event{
+			Type:     harnesses.EventTypeToolCall,
+			Sequence: seq,
+			Time:     now,
+			Data: mustMarshal(harnesses.ToolCallData{
+				ID:    he.ToolUseID,
+				Name:  he.ToolName,
+				Input: he.ToolInput,
+			}),
+		}, true
+	case "PostToolUse":
+		return harnesses.Event{
+			Type:     harnesses.EventTypeToolResult,
+			Sequence: seq,
+			Time:     now,
+			Data: mustMarshal(harnesses.ToolResultData{
+				ID:     he.ToolUseID,
+				Output: toolResultText(he.ToolOutput),
+			}),
+		}, true
+	default:
+		return harnesses.Event{}, false
+	}
+}
+
+// HookEventTailer watches a hook directory for new PreToolUse/PostToolUse
+// payload files and emits tool_call/tool_result events during the turn.
+type HookEventTailer struct {
+	dir    string
+	logger *slog.Logger
+	seen   map[string]bool
+}
+
+// NewHookEventTailer creates a tailer over the given hook directory.
+func NewHookEventTailer(dir string, logger *slog.Logger) *HookEventTailer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &HookEventTailer{dir: dir, logger: logger, seen: make(map[string]bool)}
+}
+
+// Drain scans the hook directory once for new tool-event payload files
+// (prefixed "tool-") and emits the corresponding events on seq. Returns the
+// updated sequence counter. Files already processed are not re-emitted.
+func (h *HookEventTailer) Drain(seq int64, emit func(harnesses.Event)) int64 {
+	entries, err := os.ReadDir(h.dir)
+	if err != nil {
+		return seq
+	}
+	// Sort by name so PreToolUse/PostToolUse files emit in writual order
+	// (filenames embed a monotonically increasing counter).
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, "tool-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		names = append(names, name)
+	}
+	sortStrings(names)
+	for _, name := range names {
+		if h.seen[name] {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(h.dir, name))
+		if err != nil {
+			continue
+		}
+		h.seen[name] = true
+		he, err := ParseHookEvent(data)
+		if err != nil {
+			h.logger.Warn("malformed hook-event payload, skipping", "file", name, "error", err)
+			continue
+		}
+		if ev, ok := HookEventToEvent(he, seq+1); ok {
+			seq++
+			emit(ev)
+		}
+	}
+	return seq
+}
+
+// sortStrings is a small insertion sort to avoid importing sort for one call.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
 }
