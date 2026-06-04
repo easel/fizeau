@@ -53,7 +53,13 @@ func waitForRefresherCalls(t *testing.T, calls *int64, want int64) {
 	t.Fatalf("refresher calls = %d, want >= %d", atomic.LoadInt64(calls), want)
 }
 
-func TestCachedSubprocessDiscoveryColdCacheRunsOneSyncRefresh(t *testing.T) {
+// TestCachedSubprocessDiscoveryColdCacheFailsOpenAsync pins the FEAT-004 F2
+// fail-open behavior: a cold cache returns empty IMMEDIATELY (it must never
+// block the routing hot path on the up-to-60s PTY scrape) and warms the cache
+// ASYNCHRONOUSLY, so a subsequent call serves the discovered payload. The
+// caller fills SupportedModels from the static catalog tier set when discovery
+// is empty, so routing stays viable in the meantime.
+func TestCachedSubprocessDiscoveryColdCacheFailsOpenAsync(t *testing.T) {
 	payload := subprocessDiscoveryPayload{
 		CapturedAt: time.Now().UTC(),
 		Models:     []string{"claude-opus-4", "claude-sonnet-4"},
@@ -61,15 +67,30 @@ func TestCachedSubprocessDiscoveryColdCacheRunsOneSyncRefresh(t *testing.T) {
 	}
 	calls, _ := withTestDiscoveryCache(t, payload)
 
+	// First (cold) call must NOT block and must return empty fail-open.
 	got, ok := cachedSubprocessDiscovery("claude", nil)
-	if !ok {
-		t.Fatalf("cold cache: expected payload, got ok=false")
+	if ok || len(got.Models) != 0 {
+		t.Fatalf("cold cache: want empty fail-open (ok=false, 0 models), got ok=%v models=%#v", ok, got.Models)
 	}
-	if len(got.Models) != 2 {
-		t.Fatalf("cold cache models = %#v, want 2", got.Models)
-	}
-	if n := atomic.LoadInt64(calls); n != 1 {
-		t.Fatalf("cold cache refresher calls = %d, want exactly 1 (bounded sync)", n)
+
+	// The refresh is fired asynchronously to warm the cache.
+	waitForRefresherCalls(t, calls, 1)
+
+	// Once the async refresh commits, a subsequent call serves the discovered
+	// payload. Poll because the commit lands shortly after the refresher runs.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got2, ok2 := cachedSubprocessDiscovery("claude", nil)
+		if ok2 {
+			if len(got2.Models) != 2 {
+				t.Fatalf("warm cache models = %#v, want 2", got2.Models)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("warm cache did not serve payload within deadline (async commit did not land)")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

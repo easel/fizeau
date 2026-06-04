@@ -129,13 +129,24 @@ func cachedSubprocessDiscovery(name string, mdh harnesses.ModelDiscoveryHarness)
 		return decodeSubprocessDiscoveryPayload(read.Data)
 	}
 
-	// Cold cache: one bounded synchronous refresh, then read.
-	_ = cache.MaybeRefreshSync(src, refresher)
-	read, err = cache.Read(src)
-	if err != nil || len(read.Data) == 0 {
-		return subprocessDiscoveryPayload{}, false
-	}
-	return decodeSubprocessDiscoveryPayload(read.Data)
+	// Cold cache (FEAT-004 F2 fail-open): fire an ASYNC refresh to warm the
+	// cache for next time and return empty immediately. The routing hot path
+	// must NEVER block on the (up to 60s, flaky PTY) discovery scrape — a CLI
+	// /model TUI hiccup or a slow terminal cannot be allowed to stall routing.
+	// Returning empty here is safe: the caller fills SupportedModels from the
+	// static catalog tier set (service_routing.go catalogTierModelsForHarnessSurface),
+	// so a subscription harness stays routable with zero discovered models, and
+	// subsequent calls return the live set once the async refresh lands.
+	// (Was: a synchronous MaybeRefreshSync that stalled the first cold call up
+	// to subprocessDiscoveryRefreshDeadline.)
+	//
+	// Use a background Refresh (not MaybeRefresh): on a truly cold/absent cache
+	// Read errors, and MaybeRefresh bails on that error without scheduling work,
+	// so the cache would never warm. Refresh unconditionally refresh+commits and
+	// is singleflighted (in-process group + cross-process file marker), so
+	// concurrent cold callers coalesce into one bounded PTY scrape.
+	go func() { _ = cache.Refresh(src, refresher) }()
+	return subprocessDiscoveryPayload{}, false
 }
 
 func decodeSubprocessDiscoveryPayload(data []byte) (subprocessDiscoveryPayload, bool) {
