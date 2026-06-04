@@ -47,12 +47,15 @@ func TestRegistryNamesPreferenceOrder(t *testing.T) {
 	r := NewRegistry()
 	names := r.Names()
 	require.Len(t, names, 14)
+	// claude-tui is now in PreferenceOrder (the default for the shared "claude"
+	// surface) and ranks just after codex, ahead of claude(--print).
 	assert.Equal(t, "codex", names[0])
-	assert.Equal(t, "claude", names[1])
-	assert.Equal(t, "opencode", names[2])
-	assert.Equal(t, "lucebox", names[8])
-	assert.Equal(t, "vllm", names[9])
-	assert.Equal(t, "gemini", names[10])
+	assert.Equal(t, "claude-tui", names[1])
+	assert.Equal(t, "claude", names[2])
+	assert.Equal(t, "opencode", names[3])
+	assert.Equal(t, "lucebox", names[9])
+	assert.Equal(t, "vllm", names[10])
+	assert.Equal(t, "gemini", names[11])
 	assert.Contains(t, names, "virtual")
 	assert.Contains(t, names, "claude-tui")
 }
@@ -226,7 +229,10 @@ func TestRegistryDiscover_FirstAvailableHonorsPreferenceOrder(t *testing.T) {
 		wantFirst string
 	}{
 		{installed: []string{"claude", "codex", "opencode", "pi"}, wantFirst: "codex"},
-		{installed: []string{"claude", "opencode", "pi"}, wantFirst: "claude"},
+		// claude-tui shares the "claude" binary and now ranks ahead of
+		// claude(--print), so with the claude binary installed it is the first
+		// available claude-surface harness.
+		{installed: []string{"claude", "opencode", "pi"}, wantFirst: "claude-tui"},
 		{installed: []string{"opencode", "pi"}, wantFirst: "opencode"},
 		{installed: []string{"pi"}, wantFirst: "fiz"}, // fiz beats pi in preference
 	}

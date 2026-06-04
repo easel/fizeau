@@ -3,6 +3,7 @@ package builtin
 import (
 	"github.com/easel/fizeau/internal/harnesses"
 	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
+	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
@@ -14,6 +15,8 @@ func New(name string) harnesses.Harness {
 	switch name {
 	case "claude":
 		return &claudeharness.Runner{}
+	case "claude-tui":
+		return &claudetui.Harness{}
 	case "codex":
 		return &codexharness.Runner{}
 	case "gemini":
@@ -31,10 +34,11 @@ func New(name string) harnesses.Harness {
 // by canonical harness name.
 func Instances() map[string]harnesses.Harness {
 	return map[string]harnesses.Harness{
-		"claude":   New("claude"),
-		"codex":    New("codex"),
-		"gemini":   New("gemini"),
-		"opencode": New("opencode"),
-		"pi":       New("pi"),
+		"claude":     New("claude"),
+		"claude-tui": New("claude-tui"),
+		"codex":      New("codex"),
+		"gemini":     New("gemini"),
+		"opencode":   New("opencode"),
+		"pi":         New("pi"),
 	}
 }

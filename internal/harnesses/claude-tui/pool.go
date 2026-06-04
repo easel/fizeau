@@ -2,10 +2,8 @@ package claudetui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +20,20 @@ type poolKey struct {
 type pooledSession struct {
 	session *session.Session
 	mu      sync.Mutex
+
+	// used is true once this slot has driven at least one turn. A reused slot
+	// must be /clear'd before the next prompt so the new turn is a FRESH turn
+	// rather than an append to the prior multi-turn conversation context.
+	used bool
+	// transcriptOffset is the byte position the NEXT turn's transcript read
+	// should resume from. The Claude Code transcript .jsonl is append-only for
+	// the whole session, so without this a reused slot would replay every
+	// prior-turn block and fold prior-turn usage/text into the new turn's final.
+	transcriptOffset int64
+	// transcriptPath is the transcript file the prior turn read. When the next
+	// turn reuses the same path we resume from transcriptOffset; a different
+	// path (a new session file) resets the offset to 0.
+	transcriptPath string
 }
 
 // pool manages pooled sessions with concurrency control and eviction.
@@ -50,6 +62,28 @@ func getOrCreatePooledSession(
 	env []string,
 	size session.Size,
 ) (*session.Session, error) {
+	ps, err := claimPooledSession(ctx, harnessName, binary, args, workdir, env, size)
+	if err != nil {
+		return nil, err
+	}
+	return ps.session, nil
+}
+
+// claimPooledSession is getOrCreatePooledSession but returns the pooledSession
+// HANDLE (not just the underlying *session.Session) so the caller can observe
+// reuse state (used / transcriptOffset / transcriptPath) and reset conversation
+// state between turns. A CACHE HIT returns a slot with used==true; the caller
+// must /clear it before the next prompt. The slot's mutex is held (claimed) and
+// must be released via releasePooledSession (which finds it by session pointer).
+func claimPooledSession(
+	ctx context.Context,
+	harnessName string,
+	binary string,
+	args []string,
+	workdir string,
+	env []string,
+	size session.Size,
+) (*pooledSession, error) {
 	key := poolKey{harness: harnessName, workdir: workdir}
 
 	globalPool.mu.Lock()
@@ -78,7 +112,7 @@ func getOrCreatePooledSession(
 					continue
 				}
 				globalPool.mu.Unlock()
-				return ps.session, nil
+				return ps, nil
 			}
 		}
 
@@ -108,7 +142,7 @@ func getOrCreatePooledSession(
 			}
 
 			ps.session = s
-			return s, nil
+			return ps, nil
 		}
 
 		// No sessions available and at capacity; wait and retry
@@ -191,33 +225,6 @@ func SetPoolDepth(harnessName string, workdir string, depth int) {
 	globalPool.mu.Lock()
 	defer globalPool.mu.Unlock()
 	globalPool.depth[key] = depth
-}
-
-// clearSession issues /clear to the session and waits for the ready marker.
-func clearSession(s *session.Session, readyMarker string, timeout time.Duration) error {
-	if err := s.SendBytes([]byte("/clear\r")); err != nil {
-		return fmt.Errorf("send /clear: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	for {
-		select {
-		case chunk, ok := <-s.Output():
-			if !ok {
-				return errors.New("output channel closed before clear marker seen")
-			}
-			if chunk.ReadError != nil {
-				return fmt.Errorf("read error: %w", chunk.ReadError)
-			}
-			if strings.Contains(string(chunk.Bytes), readyMarker) {
-				return nil
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for clear prompt: %w", ctx.Err())
-		}
-	}
 }
 
 // GetPooledSession returns any idle session for a (harness, workdir) key for testing.
