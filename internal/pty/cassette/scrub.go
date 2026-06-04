@@ -46,11 +46,15 @@ func (s *Scrubber) ScrubString(input string) (string, ScrubReport) {
 	}
 	out := input
 	report := ScrubReport{Status: "clean", HitCounts: map[string]int{}, EnvAllowlist: append([]string(nil), s.EnvAllowlist...), IntentionallyPreserved: append([]string(nil), s.IntentionallyPreserved...)}
-	if s.Home != "" {
-		out = strings.ReplaceAll(out, filepath.Clean(s.Home), "$HOME")
-	}
+	// Replace the worktree path before the home path: the worktree is typically
+	// nested under $HOME, so substituting $HOME first would rewrite the leading
+	// segment of the worktree literal and prevent the (more specific) $WORKTREE
+	// match. Most-specific-first preserves the $WORKTREE placeholder.
 	if s.Worktree != "" {
 		out = strings.ReplaceAll(out, filepath.Clean(s.Worktree), "$WORKTREE")
+	}
+	if s.Home != "" {
+		out = strings.ReplaceAll(out, filepath.Clean(s.Home), "$HOME")
 	}
 	for _, account := range s.AccountIdentifiers {
 		if account == "" {

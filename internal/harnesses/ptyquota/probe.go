@@ -434,9 +434,24 @@ func (r *runState) exitedBeforeMarkersError(allMarkers, anyMarkers []string, don
 	return &ProbeError{Status: StatusError, Reason: "quota probe exited before expected output"}
 }
 
+// screenContains reports whether marker appears in the rendered screen. The
+// vt10x emulator soft-wraps a logical line at the terminal width by inserting a
+// row break (a "\n" in the joined screen text) with no separating space, so a
+// marker that straddles the wrap column (e.g. "% left" rendered as "...% l\neft")
+// would be missed by a naive substring check. We therefore also test against a
+// version of the screen with row breaks removed, reconstructing the wrapped
+// token. Markers are short contiguous tokens, so collapsing wraps cannot
+// produce a false positive across genuinely distinct lines.
+func screenContains(screen, marker string) bool {
+	if strings.Contains(screen, marker) {
+		return true
+	}
+	return strings.Contains(strings.ReplaceAll(screen, "\n", ""), marker)
+}
+
 func containsAllAndAny(screen string, allMarkers, anyMarkers []string) bool {
 	for _, marker := range allMarkers {
-		if !strings.Contains(screen, marker) {
+		if !screenContains(screen, marker) {
 			return false
 		}
 	}
@@ -444,7 +459,7 @@ func containsAllAndAny(screen string, allMarkers, anyMarkers []string) bool {
 		return true
 	}
 	for _, marker := range anyMarkers {
-		if strings.Contains(screen, marker) {
+		if screenContains(screen, marker) {
 			return true
 		}
 	}
