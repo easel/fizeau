@@ -265,6 +265,26 @@ func TestNativeRunner_MeteredBilling(t *testing.T) {
 	assert.Equal(t, 1_000_000, *final.Usage.OutputTokens)
 }
 
+// TestNativeRunner_HealthCheckIgnoresBinary proves a native-mode Runner reports
+// healthy WITHOUT a claude CLI on disk: native mode reaches the metered HTTP API
+// and never os/exec's the binary, so HealthCheck must not gate on its presence.
+// (Regression guard: HealthCheck previously LookPath'd "claude" unconditionally,
+// so a native Runner on a box without the CLI wrongly reported unavailable.)
+func TestNativeRunner_HealthCheckIgnoresBinary(t *testing.T) {
+	// Point Binary at a path that does not exist; subprocess mode would fail.
+	r := &Runner{NativeMode: true, Binary: "/nonexistent/claude-binary-xyz"}
+	if err := r.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("native-mode HealthCheck must succeed without a claude binary, got: %v", err)
+	}
+
+	// Sanity: the SAME nonexistent binary in subprocess mode DOES fail health,
+	// confirming the test isn't vacuously passing.
+	sub := &Runner{NativeMode: false, Binary: "/nonexistent/claude-binary-xyz"}
+	if err := sub.HealthCheck(context.Background()); err == nil {
+		t.Fatal("subprocess-mode HealthCheck with a missing binary must fail (control)")
+	}
+}
+
 // TestNativeRunner_UnknownToolErrors verifies a tool_use for a tool the runner
 // does not have wired produces an error tool_result rather than aborting.
 func TestNativeRunner_UnknownToolErrors(t *testing.T) {

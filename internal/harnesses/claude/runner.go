@@ -140,6 +140,14 @@ func (r *Runner) HealthCheck(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if r.NativeMode {
+		// Native mode reaches the metered Anthropic Messages API over HTTP and
+		// never os/exec's the claude CLI, so binary presence is irrelevant to
+		// health. (Execute likewise branches on NativeMode before resolving the
+		// binary.) Credential/provider reachability is validated lazily on the
+		// first native turn, not here.
+		return nil
+	}
 	path := r.Binary
 	if path == "" {
 		resolved, err := osexec.LookPath("claude")
