@@ -1,10 +1,13 @@
 package claudetui_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/quick"
 	"time"
@@ -533,5 +536,64 @@ func TestExpandTranscriptPath(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("expand %q = %q, want %q", tt.path, got, tt.want)
 		}
+	}
+}
+
+// TestHookEventTailerSkipsMalformedPayload reproduces the production WARN
+// "malformed hook-event payload, skipping ... unexpected end of JSON input"
+// that occurs when the tailer's ReadFile races Claude Code still writing a hook
+// payload mid-turn (partial/truncated JSON). The tailer must (1) log the WARN,
+// (2) not crash or corrupt its seen map, and (3) still process the next VALID
+// payload. Existing TestHookEventTailerEmitsToolEvents only uses complete,
+// pre-written payloads and therefore never exercises the partial-write path.
+func TestHookEventTailerSkipsMalformedPayload(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	// tool-0001 is a TRUNCATED PreToolUse payload (mid-write: the JSON object is
+	// cut off, yielding "unexpected end of JSON input"). tool-0002 is a complete,
+	// well-formed PostToolUse payload that must still be emitted.
+	write("tool-0001-pre.json", `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"l`)
+	write("tool-0002-post.json", `{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":"file.txt"}`)
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	tailer := claudetui.NewHookEventTailer(dir, logger)
+
+	var got []harnesses.Event
+	seq := tailer.Drain(0, func(ev harnesses.Event) { got = append(got, ev) })
+
+	// The malformed payload is skipped; the valid one is still emitted (exactly
+	// one tool_result), proving the seen map is not corrupted by the skip.
+	if len(got) != 1 {
+		t.Fatalf("emitted %d events, want 1 (malformed skipped, valid emitted): %+v", len(got), got)
+	}
+	if got[0].Type != harnesses.EventTypeToolResult {
+		t.Errorf("event[0] type = %v, want tool_result", got[0].Type)
+	}
+
+	// The WARN must be logged for the truncated payload.
+	if logged := buf.String(); !strings.Contains(logged, "malformed hook-event payload") {
+		t.Errorf("expected malformed-payload WARN, got log: %q", logged)
+	}
+
+	// A subsequent NEW valid payload arriving after the skip must still be
+	// processed: the skip did not corrupt the seen map nor wedge the tailer.
+	write("tool-0003-pre.json", `{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file":"a"}}`)
+
+	var second []harnesses.Event
+	seq2 := tailer.Drain(seq, func(ev harnesses.Event) { second = append(second, ev) })
+	if len(second) != 1 {
+		t.Fatalf("re-drain emitted %d events, want 1 (new valid payload): %+v", len(second), second)
+	}
+	if second[0].Type != harnesses.EventTypeToolCall {
+		t.Errorf("re-drain event[0] type = %v, want tool_call", second[0].Type)
+	}
+	if seq2 != seq+1 {
+		t.Errorf("seq must advance by 1 on the new valid payload: %d -> %d", seq, seq2)
 	}
 }

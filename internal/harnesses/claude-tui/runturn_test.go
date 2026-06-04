@@ -468,6 +468,52 @@ func TestRunTurnDocumentsRequestGaps(t *testing.T) {
 	}
 }
 
+// TestRunTurnNoGapWarningsForUnsetFields proves the complement of
+// TestRunTurnDocumentsRequestGaps: when req.Reasoning and req.Permissions are
+// UNSET (empty string, the default), the turn emits ZERO unsupported_request_field
+// gap warnings. CONTRACT-004 requires warnings only for fields with no TUI
+// affordance that the caller actually requested; an unset field is not a gap.
+func TestRunTurnNoGapWarningsForUnsetFields(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := "nonce-nogap"
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	// Reasoning and Permissions left at their zero value; Model set (honored, not a gap).
+	req := harnesses.ExecuteRequest{
+		Prompt:  "hi",
+		WorkDir: dir,
+		Model:   "claude-opus-4-6",
+	}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		100*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	for _, ev := range events {
+		if ev.Type != harnesses.EventTypeProgress {
+			continue
+		}
+		var w harnesses.FinalWarning
+		if err := json.Unmarshal(ev.Data, &w); err == nil && w.Code == "unsupported_request_field" {
+			t.Fatalf("unset request fields must NOT emit gap warnings, got: %q", w.Message)
+		}
+	}
+}
+
 // sentContains reports how many recorded SendBytes payloads contain sub.
 func (f *fakePTY) sentContains(sub []byte) int {
 	f.mu.Lock()
