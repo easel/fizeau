@@ -374,17 +374,17 @@ func TestDispatcherCallsClaudeTui(t *testing.T) {
 // Note: This test verifies parsing behavior; live PTY testing requires
 // cassette replay which is deferred to higher-level integration tests.
 func TestClaudeTuiDefaultModelSnapshotLiveContent(t *testing.T) {
-	// Sample output similar to what claude /model produces
+	// Sample output mirroring the live Claude Code /model picker (2.1.162):
+	// human-facing tier labels plus the documented full --model ID form.
 	sampleOutput := `
-Available Models:
-  claude-opus-4 (Latest Opus)
-  claude-sonnet-4.1 (Latest Sonnet)
-  claude-haiku-3 (Latest Haiku)
-  claude-3-opus (Opus)
-  claude-3-sonnet (Sonnet)
+Select Model:
+  1. Default (recommended)  Opus 4.8 with 1M context - Most capable
+  2. Sonnet                 Sonnet 4.6 - Best for everyday tasks
+  4. Haiku                  Haiku 4.5 - Fastest for quick answers
+  Full id example: claude-opus-4-8
 
 Aliases:
-  sonnet, opus, haiku
+  'sonnet' 'opus' 'haiku'
 `
 
 	// Test parsing of valid model output

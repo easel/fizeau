@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -412,9 +413,10 @@ func TestRunTurnTimeoutEmitsTimedOutFinal(t *testing.T) {
 	assertExactlyOneFinal(t, events, "timed_out")
 }
 
-// TestRunTurnDocumentsRequestGaps proves req.Model/Reasoning/Permissions with
-// no TUI affordance are surfaced as documented-gap progress warnings rather
-// than silently dropped.
+// TestRunTurnDocumentsRequestGaps proves req.Reasoning/Permissions with no TUI
+// affordance are surfaced as documented-gap progress warnings rather than
+// silently dropped. req.Model is NOT a gap: it is honored via the --model launch
+// flag (see TestBuildLaunchArgsHonorsModel), so it must NOT emit a gap warning.
 func TestRunTurnDocumentsRequestGaps(t *testing.T) {
 	dir := t.TempDir()
 	hookDir := filepath.Join(dir, "hooks")
@@ -456,8 +458,13 @@ func TestRunTurnDocumentsRequestGaps(t *testing.T) {
 			gapMsgs = append(gapMsgs, w.Message)
 		}
 	}
-	if len(gapMsgs) != 3 {
-		t.Fatalf("documented gaps = %d, want 3 (model, reasoning, permissions): %v", len(gapMsgs), gapMsgs)
+	if len(gapMsgs) != 2 {
+		t.Fatalf("documented gaps = %d, want 2 (reasoning, permissions): %v", len(gapMsgs), gapMsgs)
+	}
+	for _, m := range gapMsgs {
+		if strings.Contains(m, "model") {
+			t.Fatalf("req.Model must be honored via --model, not reported as a gap: %q", m)
+		}
 	}
 }
 

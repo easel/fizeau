@@ -519,6 +519,57 @@ func TestClaudeTuiIsDefaultForClaudeSurface(t *testing.T) {
 	}
 }
 
+// TestClaudeTuiResolvesDefaultTierModel proves F5/F6 end-to-end at the routing
+// layer: an UNPINNED default-policy claude-surface request resolves to claude-tui
+// with a supported tier model (one of the catalog claude-code tiers, NOT the
+// buggy discovery junk). claude-tui has ExactPinSupport=false, so the route must
+// flow through automatic tier resolution (AutoRoutingModels), and the resolved
+// model must be one claude-tui advertises in SupportedModels — proving a
+// default-policy route both PICKS claude-tui and lands on a model it can set.
+func TestClaudeTuiResolvesDefaultTierModel(t *testing.T) {
+	mk := func(name string) HarnessEntry {
+		return HarnessEntry{
+			Name:                name,
+			Surface:             "claude",
+			CostClass:           "medium",
+			IsSubscription:      true,
+			AutoRoutingEligible: true,
+			ExactPinSupport:     name == "claude", // claude-tui: no exact pin (matches registry)
+			Available:           true,
+			QuotaOK:             true,
+			SubscriptionOK:      true,
+			QuotaTrend:          QuotaTrendHealthy,
+			SupportsTools:       true,
+			DefaultModel:        "claude-sonnet-4-6",
+			// Both harnesses advertise the catalog claude-code tier surface. The
+			// service appends these to SupportedModels for every subscription
+			// harness (service_routing.go), so claude-tui can satisfy the resolved
+			// tier model.
+			SupportedModels:   []string{"opus-4.8", "sonnet-4.6", "haiku-4.5"},
+			AutoRoutingModels: []string{"sonnet-4.6", "opus-4.8"},
+		}
+	}
+	in := Inputs{
+		Harnesses: []HarnessEntry{mk("claude"), mk("claude-tui")},
+		Now:       time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	// Unpinned default-policy request (the mandatory effective-default path).
+	dec, err := Resolve(Request{Policy: "default"}, in)
+	if err != nil {
+		t.Fatalf("Resolve(default): %v", err)
+	}
+	if dec.Harness != "claude-tui" {
+		t.Fatalf("unpinned default-policy route = %q, want claude-tui (effective default)", dec.Harness)
+	}
+	// The resolved model must be a tier model claude-tui actually supports — not
+	// "" and not a non-tier alias.
+	supported := map[string]bool{"opus-4.8": true, "sonnet-4.6": true, "haiku-4.5": true}
+	if !supported[dec.Model] {
+		t.Fatalf("resolved model = %q, want a supported claude-tui tier model %v", dec.Model, supported)
+	}
+}
+
 // TestExplicitClaudePinBeatsTuiDefault proves the default is REVERTIBLE per
 // route: an explicit --harness claude pin resolves to claude(--print) even
 // though claude-tui is the surface default.

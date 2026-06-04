@@ -12,19 +12,19 @@
       "freshness_window": "24h",
       "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
       "models": [
-        "claude-opus-4-1",
-        "claude-opus-4-5",
-        "claude-sonnet-4-1",
-        "claude-sonnet-4-6",
-        "claude-haiku-3-5",
+        "opus-4.8",
+        "sonnet-4.6",
+        "haiku-4.5",
         "sonnet",
         "opus",
         "haiku"
       ],
       "reasoning_levels": [
-        "basic",
-        "standard",
-        "extended"
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
       ],
       "metadata": {
         "detail": "model discovery from claude TUI /model command"
