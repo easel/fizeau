@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 )
@@ -55,6 +56,37 @@ type Runner struct {
 
 	// DiscoveryCache overrides model/reasoning discovery evidence in tests.
 	DiscoveryCache *harnesses.ModelDiscoveryCache
+
+	// NativeMode routes Execute through the native Anthropic Messages API
+	// (streaming HTTP via internal/provider/anthropic) instead of os/exec'ing
+	// `claude --print`. In native mode the runner is metered
+	// (actual_cash_spend) and reports IsSubscription=false — distinct from the
+	// claude-tui flat-subscription surface.
+	NativeMode bool
+
+	// NativeProvider overrides the streaming provider used by the native path.
+	// When nil, the runner builds the real metered Anthropic provider via
+	// nativeFactory. Tests inject a fake here.
+	NativeProvider NativeStreamingProvider
+
+	// nativeFactory builds the native provider when NativeProvider is nil. When
+	// nil the default Anthropic provider factory is used. Test-only seam.
+	nativeFactory nativeProviderFactory
+
+	// NativeTools is the tool set the native agentic loop may execute. The
+	// subprocess path delegates tool execution to the claude CLI; the native
+	// Messages API only emits tool_use requests, so the runner executes them
+	// against this set and feeds back tool_result. Empty = no tools.
+	NativeTools []agentcore.Tool
+
+	// NativeAPIKey / NativeBaseURL configure the real metered Anthropic client
+	// when NativeProvider is not injected.
+	NativeAPIKey  string
+	NativeBaseURL string
+
+	// NativeMaxIterations bounds the native agentic loop. Zero selects
+	// defaultNativeMaxIterations.
+	NativeMaxIterations int
 }
 
 // Info returns identity + capability metadata for this harness.
@@ -75,6 +107,15 @@ func (r *Runner) Info() harnesses.HarnessInfo {
 		SupportedPermissions: []string{"safe", "supervised", "unrestricted"},
 		SupportedReasoning:   []string{"low", "medium", "high", "xhigh", "max"},
 		CostClass:            "medium",
+	}
+	if r.NativeMode {
+		// Native path uses the Anthropic Messages API directly (metered,
+		// actual_cash_spend) — there is no flat subscription and no claude
+		// binary involved.
+		info.Type = "native"
+		info.IsSubscription = false
+		info.Available = true
+		return info
 	}
 	path := r.Binary
 	if path == "" {
@@ -98,6 +139,14 @@ func (r *Runner) Info() harnesses.HarnessInfo {
 func (r *Runner) HealthCheck(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if r.NativeMode {
+		// Native mode reaches the metered Anthropic Messages API over HTTP and
+		// never os/exec's the claude CLI, so binary presence is irrelevant to
+		// health. (Execute likewise branches on NativeMode before resolving the
+		// binary.) Credential/provider reachability is validated lazily on the
+		// first native turn, not here.
+		return nil
 	}
 	path := r.Binary
 	if path == "" {
@@ -124,6 +173,20 @@ func (r *Runner) HealthCheck(ctx context.Context) error {
 // runner falls back to a buffered legacy invocation and emits a single
 // text_delta + final from the buffered output.
 func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	bufSize := r.EventBuffer
+	if bufSize <= 0 {
+		bufSize = defaultEventBuffer
+	}
+
+	// Channel returned to the caller; the goroutine below owns closing it.
+	out := make(chan harnesses.Event, bufSize)
+
+	if r.NativeMode {
+		// Native path does not os/exec the claude binary at all.
+		go r.run(ctx, "", req, out)
+		return out, nil
+	}
+
 	binary := r.Binary
 	if binary == "" {
 		resolved, err := osexec.LookPath("claude")
@@ -132,14 +195,6 @@ func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-c
 		}
 		binary = resolved
 	}
-
-	bufSize := r.EventBuffer
-	if bufSize <= 0 {
-		bufSize = defaultEventBuffer
-	}
-
-	// Channel returned to the caller; the goroutine below owns closing it.
-	out := make(chan harnesses.Event, bufSize)
 
 	go r.run(ctx, binary, req, out)
 	return out, nil
@@ -153,16 +208,28 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	start := time.Now()
 	var seq int64
 
-	// First attempt: stream-json invocation.
-	agg, exitCode, stderr, runErr, status := r.runStreaming(ctx, binary, req, out, &seq)
+	var (
+		agg      *streamAggregate
+		exitCode int
+		stderr   string
+		runErr   error
+		status   string
+	)
 
-	// Fallback path: claude rejected the stream-json flags. Retry with the
-	// legacy buffered --print/-p/--output-format=json invocation. We surface
-	// the legacy output as a single text_delta so consumers still receive
-	// the model's final text.
-	if status == "failed" && exitCode == 2 && claudeStreamArgsUnsupported(stderr) {
-		// Reset the aggregate so legacy output drives final event.
-		agg, exitCode, stderr, runErr, status = r.runLegacy(ctx, binary, req, out, &seq)
+	if r.NativeMode {
+		agg, exitCode, stderr, runErr, status = r.runNative(ctx, req, out, &seq)
+	} else {
+		// First attempt: stream-json invocation.
+		agg, exitCode, stderr, runErr, status = r.runStreaming(ctx, binary, req, out, &seq)
+
+		// Fallback path: claude rejected the stream-json flags. Retry with the
+		// legacy buffered --print/-p/--output-format=json invocation. We surface
+		// the legacy output as a single text_delta so consumers still receive
+		// the model's final text.
+		if status == "failed" && exitCode == 2 && claudeStreamArgsUnsupported(stderr) {
+			// Reset the aggregate so legacy output drives final event.
+			agg, exitCode, stderr, runErr, status = r.runLegacy(ctx, binary, req, out, &seq)
+		}
 	}
 
 	// Emit the final event regardless of outcome so downstream consumers

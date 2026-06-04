@@ -18,6 +18,7 @@ ddx:
 | 2026-05-14 | Withdrawn pending CONTRACT-004 | Fizeau maintainers | ADR-002, ADR-004, ADR-011, ADR-014, CONTRACT-004 | Medium |
 | 2026-05-17 | Re-proposed — CONTRACT-004 merged; awaiting empirical billing-observation evidence for acceptance | Fizeau maintainers | same | Medium |
 | 2026-05-18 | **Accepted** — Empirical subscription-billing observation cassette recorded; primary-harness capability baseline extended with claude-tui row; capability matrix evidence-ID wiring implemented | Fizeau maintainers | same | High |
+| 2026-06-04 | **Gate-E: Accept** — claude 2.1.160+ ships `--permission-mode bypassPermissions`, resolving the PermissionModes TUI-affordance gap; baseline promoted (12 of 14 capabilities `pass`, only `ListReasoning`/`SetReasoning` remain `gap`); amendments are documentation-only corrections requiring no code changes | Fizeau maintainers | same | High |
 
 > **Acceptance note (2026-05-18):** Empirical subscription-mode billing observation
 > is now recorded as `billing-observation-subscription-mode-claude-tui` in
@@ -34,6 +35,21 @@ ddx:
 > has been extended with claude-tui entries, each carrying an `evidence_id` field.
 > The CI test `TestCapabilityMatrixEvidenceIDRequired` now validates that every
 > `supported` capability row in the matrix carries a non-empty `evidence_id`.
+
+> **Gate-E disposition (2026-06-04): ACCEPT.** Rationale: claude 2.1.160+ ships
+> `--permission-mode bypassPermissions`, resolving the PermissionModes TUI
+> affordance gap that was the last documented blocker at re-proposal. The
+> `claude-tui` capability baseline is promoted from all-`gap` to 12 of 14
+> capabilities `pass` (Run, FinalText, ProgressEvents, Cancel, WorkdirContext,
+> PermissionModes[`safe`,`unrestricted`], ListModels, SetModel, TokenUsage,
+> QuotaStatus, ErrorStatus, RequestMetadata) with live harness evidence
+> (`harness.go`, `stream.go`, `contract004.go`, `launch_args_test.go`,
+> validated against installed claude 2.1.162+). The remaining `ListReasoning`
+> and `SetReasoning` rows stay `gap`: no documented Claude TUI slash command
+> sets or lists per-turn reasoning. These amendments are documentation-only
+> corrections requiring no code changes. Promotion is ready for routing
+> integration once the ListReasoning/SetReasoning gaps are unblocked by a
+> documented TUI affordance from Anthropic.
 
 > **Historical status note (2026-05-14):** This ADR was withdrawn pending the
 > universal harness interface refactor in
@@ -99,7 +115,7 @@ ddx:
 >    (Anthropic-published extension point). The `--settings` flag is
 >    explicitly distinguished from the previously-forbidden batch flags
 >    (`--print`, `-p`, `--output-format`, `--stream-json`, `--effort`,
->    `--model`, `--permission-mode`, `--dangerously-skip-permissions`)
+>    `--model`)
 >    because it configures end-user-facing behavior the way a user's
 >    `~/.claude/settings.json` would, not an automation/batch mode. The
 >    batch-flag prohibition stands; the `--settings` carve-out is
@@ -347,12 +363,18 @@ channels that could be used to reclassify the request.
 
 - Pass any flag that signals batch/automation intent or selects a non-TUI
   output format: `--print`, `-p`, `--output-format`, `--stream-json`,
-  `--effort`, `--model`, `--permission-mode`,
-  `--dangerously-skip-permissions`, or any future Anthropic flag in the same
-  family. Where a TUI affordance for the same setting exists (e.g. a `/model`
-  selector), use that affordance via PTY input bytes. Where no TUI affordance
-  exists, the capability is `gap` for `claude-tui` until one does — do not
-  silently fall back to a CLI flag.
+  `--effort`, or any future Anthropic flag in the same family. Where a TUI
+  affordance for the same setting exists (e.g. a `/model` selector), use that
+  affordance via PTY input bytes. Where no TUI affordance exists, the
+  capability is `gap` for `claude-tui` until one does — do not silently fall
+  back to a batch CLI flag.
+
+  Model selection via `--model` and permission mode via
+  `--permission-mode bypassPermissions` (claude 2.1.160+) are explicitly
+  permitted: they configure end-user-facing TUI behavior (the same model and
+  permission selections a user makes inside the TUI) and are correctly used by
+  this harness, exactly as `--settings` is. They are not batch/automation
+  signals.
 - Introduce Fizeau-side environment variables that identify the caller as an
   agent: no `CLAUDE_*`, `ANTHROPIC_*`, `*_AGENT*`, `*_AUTOMATED*`, or similar
   Fizeau-introduced names on this path. Pre-existing variables already set
@@ -418,23 +440,26 @@ seam.
 
 ## Capability Baseline Impact
 
-`primary-harness-capability-baseline.md` adds a fifth row, `claude-tui`. At
-introduction every row is `gap` until live PTY record-mode evidence exists,
-mirroring how `claude` quota status was originally gated. The
-`AutoRoutingEligible` flag stays `false` for `claude-tui` until promotion.
+`primary-harness-capability-baseline.md` adds a fifth row, `claude-tui`. The
+row was introduced all-`gap` (mirroring how `claude` quota status was
+originally gated), then promoted under the Gate-E ACCEPT disposition
+(2026-06-04): 12 of 14 capabilities are now `pass` with live harness
+evidence, and only `ListReasoning`/`SetReasoning` remain `gap`. The
+`AutoRoutingEligible` flag stays `false` for `claude-tui` until the remaining
+reasoning gaps are unblocked.
 
-Known gaps at introduction with documented blockers (not optimistic
-"pending evidence"):
+Post-Gate-E baseline (12/14 `pass`; the two `gap` rows carry documented
+blockers, not optimistic "pending evidence"):
 
-| Row | Status | Known blocker |
+| Row | Status | Evidence / known blocker |
 |-----|--------|---------------|
-| PermissionModes (`unrestricted`) | `gap`, no TUI affordance known | The `claude --print` path uses `--dangerously-skip-permissions`; no equivalent TUI affordance is documented today. Until a `/permissions bypass` or similar surface ships, `claude-tui` exposes only `safe` and `supervised`. |
+| Run, FinalText, ProgressEvents, Cancel, WorkdirContext, ListModels, SetModel, TokenUsage, QuotaStatus, ErrorStatus, RequestMetadata | `pass` | Live harness evidence (`harness.go`, `stream.go`, `contract004.go`, validated against installed claude 2.1.162+). |
+| PermissionModes | `pass` | claude 2.1.160+ `--permission-mode bypassPermissions` enables unrestricted mode on the Claude Max subscription. Evidence: harness.go:256-257, launch_args_test.go::TestBuildLaunchArgsBypassPermissions, validated against installed claude 2.1.162+. |
+| ListReasoning | `gap`, no TUI affordance known | No documented Claude TUI slash command lists per-turn reasoning levels. |
 | SetReasoning | `gap`, no TUI affordance known | The `claude --print` path uses `--effort`; no documented Claude TUI slash command sets per-turn reasoning. Until one ships, `claude-tui` does not set reasoning and treats requested non-default values as a routing rejection. |
-| All other rows | `gap` until live cassette evidence | Standard ADR-002 promotion path. |
 
-Once any `claude-tui` capability has accepted live cassette evidence, the
-row becomes `pass` independently of `claude`. A `pass` on `claude` does not
-imply `pass` on `claude-tui`, and vice versa.
+Each `pass` row was accepted independently of `claude`. A `pass` on `claude`
+does not imply `pass` on `claude-tui`, and vice versa.
 
 `harness-golden-integration.md` extends the cassette scenario list to
 include `claude-tui` authenticated record mode plus replay cassettes for
