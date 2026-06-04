@@ -148,7 +148,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		}
 	}
 
-	args := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON}
+	args := buildLaunchArgs(settingsJSON)
 
 	ptySession, err := getOrCreatePooledSession(
 		ctx, "claude-tui", claudePath, args, req.WorkDir, env,
@@ -177,6 +177,16 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	if status == turnEvicted {
 		evictPooledSession("claude-tui", req.WorkDir, ptySession)
 	}
+}
+
+// buildLaunchArgs builds the claude CLI argument slice for an unattended TUI
+// turn. The harness launches interactively (NO --print) under
+// `--permission-mode bypassPermissions` so tools run without prompts on the
+// Claude Max subscription, and injects the hook settings via --settings. The
+// argument order is asserted by a deterministic test so that dropping either
+// the flag or its value regresses the suite.
+func buildLaunchArgs(settingsJSON string) []string {
+	return []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON}
 }
 
 type turnOutcome int
