@@ -13,301 +13,323 @@ import (
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 )
 
-// TestParseTranscriptLine tests basic JSONL parsing.
-func TestParseTranscriptLine(t *testing.T) {
+// realTranscript is a fixture in the REAL Claude Code 2.1.x transcript schema:
+// top-level {type:"assistant"|"user"|...} lines whose message.content holds
+// {thinking,text,tool_use,tool_result} blocks. tool_result blocks appear
+// inside user lines. Usage + stop_reason ride the last assistant line.
+const realTranscript = `{"type":"ai-title","title":"List directory"}
+{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_1","role":"assistant","content":[{"type":"thinking","text":"I should list the dir."},{"type":"text","text":"Let me list the directory."},{"type":"tool_use","id":"toolu_01","name":"Bash","input":{"command":"ls"}}],"stop_reason":"tool_use","usage":{"input_tokens":120,"output_tokens":30,"cache_read_input_tokens":5}}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"file.txt\ndir/"}]}}
+{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_2","role":"assistant","content":[{"type":"text","text":"The directory contains file.txt and dir/."}],"stop_reason":"end_turn","usage":{"input_tokens":200,"output_tokens":40}}}
+`
+
+func writeTranscript(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "transcript.jsonl")
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	return p
+}
+
+func drainTranscript(t *testing.T, path string) []harnesses.Event {
+	t.Helper()
+	tailer := claudetui.NewTranscriptTailer(path, "test", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ch := make(chan harnesses.Event, 64)
+	go func() {
+		_ = tailer.ReadEvents(ctx, ch)
+		close(ch)
+	}()
+	var events []harnesses.Event
+	for ev := range ch {
+		events = append(events, ev)
+	}
+	return events
+}
+
+// TestTranscriptParserRealSchemaWalksContentBlocks proves the rewritten parser
+// walks assistant/user message.content blocks into text_delta/tool_call/
+// tool_result events and synthesizes exactly one final from the last assistant
+// stop_reason + usage. The old flat-schema parser produced ZERO events here.
+func TestTranscriptParserRealSchemaWalksContentBlocks(t *testing.T) {
+	path := writeTranscript(t, realTranscript)
+	events := drainTranscript(t, path)
+
+	var (
+		textDeltas  []string
+		toolCalls   []harnesses.ToolCallData
+		toolResults []harnesses.ToolResultData
+		finals      []harnesses.FinalData
+	)
+	for _, ev := range events {
+		switch ev.Type {
+		case harnesses.EventTypeTextDelta:
+			var d harnesses.TextDeltaData
+			_ = json.Unmarshal(ev.Data, &d)
+			textDeltas = append(textDeltas, d.Text)
+		case harnesses.EventTypeToolCall:
+			var d harnesses.ToolCallData
+			_ = json.Unmarshal(ev.Data, &d)
+			toolCalls = append(toolCalls, d)
+		case harnesses.EventTypeToolResult:
+			var d harnesses.ToolResultData
+			_ = json.Unmarshal(ev.Data, &d)
+			toolResults = append(toolResults, d)
+		case harnesses.EventTypeFinal:
+			var d harnesses.FinalData
+			_ = json.Unmarshal(ev.Data, &d)
+			finals = append(finals, d)
+		}
+	}
+
+	if len(textDeltas) != 2 {
+		t.Fatalf("text_delta count = %d, want 2 (%v)", len(textDeltas), textDeltas)
+	}
+	if textDeltas[0] != "Let me list the directory." {
+		t.Errorf("text_delta[0] = %q", textDeltas[0])
+	}
+	if len(toolCalls) != 1 || toolCalls[0].ID != "toolu_01" || toolCalls[0].Name != "Bash" {
+		t.Fatalf("tool_call = %+v, want one Bash call toolu_01", toolCalls)
+	}
+	if len(toolResults) != 1 || toolResults[0].ID != "toolu_01" {
+		t.Fatalf("tool_result = %+v, want one for toolu_01", toolResults)
+	}
+	if toolResults[0].Output != "file.txt\ndir/" {
+		t.Errorf("tool_result output = %q", toolResults[0].Output)
+	}
+
+	// Exactly one final, from the LAST assistant line.
+	if len(finals) != 1 {
+		t.Fatalf("final count = %d, want exactly 1", len(finals))
+	}
+	fin := finals[0]
+	if fin.Status != "success" {
+		t.Errorf("final status = %q, want success", fin.Status)
+	}
+	if fin.FinalText != "Let me list the directory.The directory contains file.txt and dir/." {
+		t.Errorf("final text = %q", fin.FinalText)
+	}
+	if fin.Usage == nil {
+		t.Fatal("final usage is nil; want usage from last assistant line")
+	}
+	if fin.Usage.InputTokens == nil || *fin.Usage.InputTokens != 200 {
+		t.Errorf("final input_tokens = %v, want 200 (last assistant line)", fin.Usage.InputTokens)
+	}
+	if fin.Usage.OutputTokens == nil || *fin.Usage.OutputTokens != 40 {
+		t.Errorf("final output_tokens = %v, want 40", fin.Usage.OutputTokens)
+	}
+}
+
+// TestTranscriptParserExactlyOneFinal proves the parser emits exactly one
+// final even when many assistant lines are present.
+func TestTranscriptParserExactlyOneFinal(t *testing.T) {
+	path := writeTranscript(t, realTranscript)
+	events := drainTranscript(t, path)
+	finals := 0
+	for _, ev := range events {
+		if ev.Type == harnesses.EventTypeFinal {
+			finals++
+		}
+	}
+	if finals != 1 {
+		t.Fatalf("final events = %d, want 1", finals)
+	}
+	if events[len(events)-1].Type != harnesses.EventTypeFinal {
+		t.Fatalf("last event type = %v, want final", events[len(events)-1].Type)
+	}
+}
+
+// TestTranscriptParserMaxTokensMapsIterationLimit proves stop_reason mapping.
+func TestTranscriptParserMaxTokensMapsIterationLimit(t *testing.T) {
+	body := `{"type":"assistant","message":{"id":"m","role":"assistant","content":[{"type":"text","text":"partial"}],"stop_reason":"max_tokens","usage":{"input_tokens":1,"output_tokens":2}}}
+`
+	path := writeTranscript(t, body)
+	events := drainTranscript(t, path)
+	var fin *harnesses.FinalData
+	for _, ev := range events {
+		if ev.Type == harnesses.EventTypeFinal {
+			var d harnesses.FinalData
+			_ = json.Unmarshal(ev.Data, &d)
+			fin = &d
+		}
+	}
+	if fin == nil {
+		t.Fatal("no final event")
+	}
+	if fin.Status != "iteration_limit" {
+		t.Errorf("status = %q, want iteration_limit", fin.Status)
+	}
+}
+
+// TestTranscriptParserSkipsMalformedLines proves malformed lines are skipped
+// without aborting the stream.
+func TestTranscriptParserSkipsMalformedLines(t *testing.T) {
+	body := `{"type":"assistant","message":{"id":"m","role":"assistant","content":[{"type":"text","text":"a"}],"stop_reason":"end_turn"}}
+{this is not json
+{"type":"assistant","message":{"id":"m2","role":"assistant","content":[{"type":"text","text":"b"}],"stop_reason":"end_turn"}}
+`
+	path := writeTranscript(t, body)
+	events := drainTranscript(t, path)
+	var texts []string
+	for _, ev := range events {
+		if ev.Type == harnesses.EventTypeTextDelta {
+			var d harnesses.TextDeltaData
+			_ = json.Unmarshal(ev.Data, &d)
+			texts = append(texts, d.Text)
+		}
+	}
+	if len(texts) != 2 || texts[0] != "a" || texts[1] != "b" {
+		t.Errorf("texts = %v, want [a b]", texts)
+	}
+}
+
+// TestTranscriptParserEmptyOrIncompleteNoFinal proves an empty transcript (no
+// assistant line) yields no events at all, so the harness can fall back.
+func TestTranscriptParserEmptyOrIncompleteNoFinal(t *testing.T) {
+	path := writeTranscript(t, "")
+	if events := drainTranscript(t, path); len(events) != 0 {
+		t.Errorf("empty transcript yielded %d events, want 0", len(events))
+	}
+
+	// A transcript with only a non-assistant line yields no final.
+	body := `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}
+`
+	path2 := writeTranscript(t, body)
+	for _, ev := range drainTranscript(t, path2) {
+		if ev.Type == harnesses.EventTypeFinal {
+			t.Errorf("user-only transcript should not produce a final event")
+		}
+	}
+}
+
+// TestParseTranscriptLineReal exercises the line decoder against real-shape lines.
+func TestParseTranscriptLineReal(t *testing.T) {
 	tests := []struct {
 		name    string
 		line    string
-		want    string
 		wantErr bool
 	}{
-		{
-			name: "text_delta",
-			line: `{"type":"text_delta","text":"hello"}`,
-			want: "text_delta",
-		},
-		{
-			name: "tool_call",
-			line: `{"type":"tool_call","id":"call-123","name":"bash","input":{"command":"ls"}}`,
-			want: "tool_call",
-		},
-		{
-			name: "tool_result",
-			line: `{"type":"tool_result","id":"call-123","output":"file.txt"}`,
-			want: "tool_result",
-		},
-		{
-			name: "final with status",
-			line: `{"type":"final","status":"success","text":"Done","usage":{"input_tokens":100,"output_tokens":50}}`,
-			want: "final",
-		},
-		{
-			name:    "malformed JSON",
-			line:    `{"type":"text_delta"`,
-			wantErr: true,
-		},
-		{
-			name:    "empty line",
-			line:    ``,
-			wantErr: true,
-		},
-		{
-			name:    "whitespace only",
-			line:    `   `,
-			wantErr: true,
-		},
+		{"assistant", `{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}`, false},
+		{"user", `{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}`, false},
+		{"malformed", `{"type":"assistant"`, true},
+		{"empty", ``, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := claudetui.ParseTranscriptLine(tt.line)
+			_, err := claudetui.ParseTranscriptLine(tt.line)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseTranscriptLine(%q) error = %v, wantErr %v", tt.line, err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && got.Type != tt.want {
-				t.Errorf("ParseTranscriptLine(%q).Type = %s, want %s", tt.line, got.Type, tt.want)
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestTranscriptLineRoundTrip tests that we can parse and re-marshal JSONL lines.
-// This is a property test using quick.Check.
-func TestTranscriptLineRoundTrip(t *testing.T) {
-	prop := func(typeStr string, id string, name string, text string) bool {
-		// Only test known types
-		if typeStr != "text_delta" && typeStr != "tool_call" && typeStr != "tool_result" {
-			return true
-		}
-
-		data := map[string]interface{}{
-			"type": typeStr,
-		}
-		if id != "" {
-			data["id"] = id
-		}
-		if name != "" {
-			data["name"] = name
-		}
-		if text != "" {
-			data["text"] = text
-		}
-
-		// Marshal to JSON
-		jsonBytes, err := json.Marshal(data)
-		if err != nil {
-			return false
-		}
-
-		// Parse back
-		line, err := claudetui.ParseTranscriptLine(string(jsonBytes))
-		if err != nil {
-			return false
-		}
-
-		// Check type survived the round trip
-		if line.Type != typeStr {
-			return false
-		}
-
-		return true
-	}
-
-	// Run the property test
-	if err := quick.Check(prop, nil); err != nil {
-		t.Errorf("property test failed: %v", err)
-	}
-}
-
-// FuzzParseTranscriptLine fuzzes the JSONL parser.
+// FuzzParseTranscriptLine ensures the decoder never panics.
 func FuzzParseTranscriptLine(f *testing.F) {
-	// Seed corpus with known cases
-	f.Add(`{"type":"text_delta","text":"hello"}`)
-	f.Add(`{"type":"tool_call","id":"123","name":"bash"}`)
-	f.Add(`{"type":"tool_result","id":"123","output":"result"}`)
-	f.Add(`{"type":"final","status":"success"}`)
-	f.Add(`{invalid json}`)
+	f.Add(`{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}`)
+	f.Add(`{"type":"user"}`)
+	f.Add(`{invalid}`)
 	f.Add(``)
-	f.Add(`{"type":"","foo":"bar"}`)
-
 	f.Fuzz(func(t *testing.T, line string) {
-		// ParseTranscriptLine should not panic on any input
-		tl, err := claudetui.ParseTranscriptLine(line)
-		_ = tl
-		_ = err
-		// We don't assert specific behavior; just that it doesn't panic
+		_, _ = claudetui.ParseTranscriptLine(line)
 	})
 }
 
-// TestTranscriptTailerBasic tests basic transcript reading.
-func TestTranscriptTailerBasic(t *testing.T) {
-	// Create a temporary file with sample JSONL
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
+// TestTranscriptLineRoundTrip is a property test for the type discriminator.
+func TestTranscriptLineRoundTrip(t *testing.T) {
+	prop := func(text string) bool {
+		obj := map[string]interface{}{
+			"type":    "assistant",
+			"message": map[string]interface{}{"content": []map[string]interface{}{{"type": "text", "text": text}}},
+		}
+		b, err := json.Marshal(obj)
+		if err != nil {
+			return false
+		}
+		line, err := claudetui.ParseTranscriptLine(string(b))
+		if err != nil {
+			return false
+		}
+		return line.Type == "assistant"
 	}
-	defer os.Remove(tmpFile.Name())
-
-	// Write sample transcript
-	transcript := `{"type":"text_delta","text":"Hello"}
-{"type":"text_delta","text":" world"}
-{"type":"final","status":"success","text":"Hello world"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write transcript: %v", err)
-	}
-	tmpFile.Close()
-
-	// Create tailer and read events
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	if len(events) != 3 {
-		t.Errorf("got %d events, want 3", len(events))
-		return
-	}
-
-	// Check types
-	if events[0].Type != harnesses.EventTypeTextDelta {
-		t.Errorf("event 0: got type %s, want text_delta", events[0].Type)
-	}
-	if events[1].Type != harnesses.EventTypeTextDelta {
-		t.Errorf("event 1: got type %s, want text_delta", events[1].Type)
-	}
-	if events[2].Type != harnesses.EventTypeFinal {
-		t.Errorf("event 2: got type %s, want final", events[2].Type)
-	}
-
-	// Check sequence numbers
-	if events[0].Sequence != 1 || events[1].Sequence != 2 || events[2].Sequence != 3 {
-		t.Errorf("sequence numbers: got %d,%d,%d want 1,2,3", events[0].Sequence, events[1].Sequence, events[2].Sequence)
+	if err := quick.Check(prop, nil); err != nil {
+		t.Errorf("property failed: %v", err)
 	}
 }
 
-// TestMalformedJSONLHandling tests that malformed lines are skipped.
-func TestMalformedJSONLHandling(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
+// --- Hook-event tailer ------------------------------------------------------
 
-	// Write transcript with a malformed line in the middle
-	transcript := `{"type":"text_delta","text":"start"}
-{"invalid":"json"
-{"type":"text_delta","text":"end"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write transcript: %v", err)
-	}
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	// Should have 2 events (malformed line skipped)
-	if len(events) != 2 {
-		t.Errorf("got %d events, want 2 (malformed line should be skipped)", len(events))
-		return
-	}
-
-	var texts []string
-	for _, ev := range events {
-		if ev.Type == harnesses.EventTypeTextDelta {
-			var data harnesses.TextDeltaData
-			_ = json.Unmarshal(ev.Data, &data)
-			texts = append(texts, data.Text)
+// TestHookEventTailerEmitsToolEvents proves the hook-event tailer emits
+// tool_call (PreToolUse) and tool_result (PostToolUse) ProgressEvents from
+// per-tool payload files DURING the turn, in file order, exactly once each.
+func TestHookEventTailerEmitsToolEvents(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
 		}
 	}
+	// Filenames are lexically ordered: pre before post.
+	write("tool-0001-pre.json", `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_01","tool_input":{"command":"ls"}}`)
+	write("tool-0002-post.json", `{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"toolu_01","tool_response":"file.txt"}`)
+	write("ignore.txt", "not a tool payload")
 
-	if len(texts) != 2 || texts[0] != "start" || texts[1] != "end" {
-		t.Errorf("got texts %v, want [start, end]", texts)
+	tailer := claudetui.NewHookEventTailer(dir, nil)
+	var got []harnesses.Event
+	seq := tailer.Drain(0, func(ev harnesses.Event) { got = append(got, ev) })
+
+	if len(got) != 2 {
+		t.Fatalf("emitted %d events, want 2", len(got))
+	}
+	if got[0].Type != harnesses.EventTypeToolCall {
+		t.Errorf("event[0] type = %v, want tool_call", got[0].Type)
+	}
+	if got[1].Type != harnesses.EventTypeToolResult {
+		t.Errorf("event[1] type = %v, want tool_result", got[1].Type)
+	}
+	var call harnesses.ToolCallData
+	_ = json.Unmarshal(got[0].Data, &call)
+	if call.Name != "Bash" || call.ID != "toolu_01" {
+		t.Errorf("tool_call = %+v", call)
+	}
+	var res harnesses.ToolResultData
+	_ = json.Unmarshal(got[1].Data, &res)
+	if res.ID != "toolu_01" || res.Output != "file.txt" {
+		t.Errorf("tool_result = %+v", res)
+	}
+
+	// Re-draining must not re-emit already-seen payloads (idempotent tail).
+	var second []harnesses.Event
+	seq2 := tailer.Drain(seq, func(ev harnesses.Event) { second = append(second, ev) })
+	if len(second) != 0 {
+		t.Errorf("re-drain emitted %d events, want 0", len(second))
+	}
+	if seq2 != seq {
+		t.Errorf("seq advanced on empty re-drain: %d -> %d", seq, seq2)
 	}
 }
 
-// TestPartialWriteHandling tests handling of incomplete lines (AC #8).
-// Note: This test is designed to verify that the tailer handles partial writes
-// by retrying rather than parsing-and-failing. In practice, this is tested
-// through integration with the PTY layer which naturally produces partial reads.
-// Unit testing partial writes requires sophisticated mocking, so this is
-// covered by integration tests rather than unit tests here.
-func TestPartialWriteHandling(t *testing.T) {
-	// Placeholder: AC #8 is verified through integration tests with live PTY.
-	// The tailer's use of bufio.Scanner naturally handles partial lines by
-	// blocking until a complete line (ending in \n) is available.
-	t.Skip("partial-write race is tested via integration with PTY layer")
-}
-
-// TestSequenceNumberOrdering tests that sequence numbers are monotonic.
-func TestSequenceNumberOrdering(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
+// TestParseHookEvent proves payload decoding and event mapping.
+func TestParseHookEvent(t *testing.T) {
+	he, err := claudetui.ParseHookEvent([]byte(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"x"}`))
 	if err != nil {
-		t.Fatalf("create temp file: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-
-	// Write multiple events
-	transcript := `{"type":"text_delta","text":"a"}
-{"type":"text_delta","text":"b"}
-{"type":"tool_call","id":"1","name":"cmd"}
-{"type":"tool_result","id":"1","output":"result"}
-{"type":"final","status":"success"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
+	ev, ok := claudetui.HookEventToEvent(he, 7)
+	if !ok || ev.Type != harnesses.EventTypeToolCall || ev.Sequence != 7 {
+		t.Errorf("mapping = %+v ok=%v", ev, ok)
 	}
 
-	// Check all sequence numbers are present and monotonic
-	for i, ev := range events {
-		expectedSeq := int64(i + 1)
-		if ev.Sequence != expectedSeq {
-			t.Errorf("event %d: sequence = %d, want %d", i, ev.Sequence, expectedSeq)
-		}
+	_, ok = claudetui.HookEventToEvent(claudetui.HookEvent{Event: "SessionStart"}, 1)
+	if ok {
+		t.Errorf("unknown hook event should not map to a canonical event")
 	}
 }
 
-// TestHookPayloadParsing tests reading the transcript path from hook payload.
+// TestHookPayloadParsing covers the Stop-payload transcript-path extractor.
 func TestHookPayloadParsing(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -315,328 +337,44 @@ func TestHookPayloadParsing(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{
-			name:    "valid payload",
-			payload: `{"transcript_path":"~/.claude/projects/mydir/abc123.jsonl"}`,
-			want:    "~/.claude/projects/mydir/abc123.jsonl",
-		},
-		{
-			name:    "missing transcript_path",
-			payload: `{"other_field":"value"}`,
-			wantErr: true,
-		},
-		{
-			name:    "invalid JSON",
-			payload: `{invalid}`,
-			wantErr: true,
-		},
-		{
-			name:    "empty transcript_path",
-			payload: `{"transcript_path":""}`,
-			wantErr: true,
-		},
+		{"valid", `{"transcript_path":"~/.claude/projects/x/abc.jsonl"}`, "~/.claude/projects/x/abc.jsonl", false},
+		{"missing", `{"other":"v"}`, "", true},
+		{"invalid", `{invalid}`, "", true},
+		{"empty", `{"transcript_path":""}`, "", true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := claudetui.ReadHookPayload([]byte(tt.payload))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ReadHookPayload error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && got != tt.want {
-				t.Errorf("ReadHookPayload = %q, want %q", got, tt.want)
+				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestExpandTranscriptPath tests ~ expansion.
+// TestExpandTranscriptPath covers ~ expansion.
 func TestExpandTranscriptPath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		t.Skip("cannot determine home directory")
+		t.Skip("no home dir")
 	}
-
-	tests := []struct {
-		name string
-		path string
-		want string
-	}{
-		{
-			name: "tilde at start",
-			path: "~/.claude/projects/test",
-			want: filepath.Join(home, ".claude/projects/test"),
-		},
-		{
-			name: "absolute path",
-			path: "/tmp/transcript.jsonl",
-			want: "/tmp/transcript.jsonl",
-		},
-		{
-			name: "relative path",
-			path: "transcript.jsonl",
-			want: "transcript.jsonl",
-		},
+	tests := []struct{ path, want string }{
+		{"~/.claude/x", filepath.Join(home, ".claude/x")},
+		{"/abs/x.jsonl", "/abs/x.jsonl"},
+		{"rel.jsonl", "rel.jsonl"},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := claudetui.ExpandTranscriptPath(tt.path)
-			if err != nil {
-				t.Errorf("ExpandTranscriptPath error: %v", err)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("ExpandTranscriptPath(%q) = %q, want %q", tt.path, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestToolCallAndResultEvents tests tool invocation event emission.
-func TestToolCallAndResultEvents(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	// Write tool call and result
-	transcript := `{"type":"tool_call","id":"call-1","name":"bash","input":{"command":"ls"}}
-{"type":"tool_result","id":"call-1","output":"file.txt\ndir/"}
-{"type":"final","status":"success"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	if len(events) != 3 {
-		t.Fatalf("got %d events, want 3", len(events))
-	}
-
-	// Check tool_call event
-	if events[0].Type != harnesses.EventTypeToolCall {
-		t.Errorf("event 0: type = %s, want tool_call", events[0].Type)
-	}
-	var toolCall harnesses.ToolCallData
-	_ = json.Unmarshal(events[0].Data, &toolCall)
-	if toolCall.ID != "call-1" || toolCall.Name != "bash" {
-		t.Errorf("tool_call: id=%s, name=%s; want id=call-1, name=bash", toolCall.ID, toolCall.Name)
-	}
-
-	// Check tool_result event
-	if events[1].Type != harnesses.EventTypeToolResult {
-		t.Errorf("event 1: type = %s, want tool_result", events[1].Type)
-	}
-	var toolResult harnesses.ToolResultData
-	_ = json.Unmarshal(events[1].Data, &toolResult)
-	if toolResult.ID != "call-1" || toolResult.Output != "file.txt\ndir/" {
-		t.Errorf("tool_result: id=%s; want id=call-1", toolResult.ID)
-	}
-}
-
-// TestMultiTurnReplaySafety tests that we only process new turns after /clear.
-func TestMultiTurnReplaySafety(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	// Write two completed turns + one new turn
-	transcript := `{"type":"text_delta","text":"turn1"}
-{"type":"final","status":"success"}
-{"type":"text_delta","text":"turn2"}
-{"type":"final","status":"success"}
-{"type":"text_delta","text":"turn3"}
-{"type":"final","status":"success"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	tmpFile.Close()
-
-	// Simulate marker tracking for multi-turn
-	marker := &claudetui.SessionMarker{}
-
-	// First read: process turns 1 and 2
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var allEvents []harnesses.Event
-	for ev := range eventChan {
-		allEvents = append(allEvents, ev)
-	}
-	cancel()
-
-	// Should have 6 events total (2 events per turn * 3 turns)
-	if len(allEvents) != 6 {
-		t.Errorf("got %d total events, want 6", len(allEvents))
-	}
-
-	// Mark first two turns as processed (simulating /clear)
-	marker.MarkProcessed(tmpFile.Name(), 4)
-	if marker.IsNewTranscript(tmpFile.Name()) {
-		t.Error("marker should recognize same transcript path after mark")
-	}
-
-	// In a real scenario, /clear would create a new transcript file
-	// The marker would detect it's a different path and process all new events
-}
-
-// TestFinalEventWithUsage tests that usage is properly parsed from final events.
-func TestFinalEventWithUsage(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	usage := map[string]interface{}{
-		"input_tokens":      100,
-		"output_tokens":     50,
-		"cache_read_tokens": 10,
-	}
-	usageJSON, _ := json.Marshal(usage)
-
-	finalEvent := map[string]interface{}{
-		"type":   "final",
-		"status": "success",
-		"text":   "Done",
-		"usage":  json.RawMessage(usageJSON),
-	}
-	finalJSON, _ := json.Marshal(finalEvent)
-
-	if _, err := tmpFile.Write(finalJSON); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	tmpFile.Write([]byte("\n"))
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	if len(events) != 1 {
-		t.Fatalf("got %d events, want 1", len(events))
-	}
-
-	var finalData harnesses.FinalData
-	_ = json.Unmarshal(events[0].Data, &finalData)
-
-	if finalData.Status != "success" || finalData.FinalText != "Done" {
-		t.Errorf("final event: status=%s, text=%s", finalData.Status, finalData.FinalText)
-	}
-
-	if finalData.Usage == nil {
-		t.Error("final event: usage is nil")
-	} else {
-		if finalData.Usage.InputTokens == nil || *finalData.Usage.InputTokens != 100 {
-			t.Errorf("input_tokens: got %v, want 100", finalData.Usage.InputTokens)
+		got, err := claudetui.ExpandTranscriptPath(tt.path)
+		if err != nil {
+			t.Errorf("expand %q: %v", tt.path, err)
+			continue
 		}
-		if finalData.Usage.OutputTokens == nil || *finalData.Usage.OutputTokens != 50 {
-			t.Errorf("output_tokens: got %v, want 50", finalData.Usage.OutputTokens)
+		if got != tt.want {
+			t.Errorf("expand %q = %q, want %q", tt.path, got, tt.want)
 		}
-	}
-}
-
-// TestEmptyTranscriptFile tests reading from an empty transcript file.
-func TestEmptyTranscriptFile(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	if len(events) != 0 {
-		t.Errorf("got %d events from empty file, want 0", len(events))
-	}
-}
-
-// TestUnknownEventTypeSkipped tests that unknown event types are skipped.
-func TestUnknownEventTypeSkipped(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "transcript-*.jsonl")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	transcript := `{"type":"text_delta","text":"before"}
-{"type":"unknown_type","data":"something"}
-{"type":"text_delta","text":"after"}
-`
-	if _, err := tmpFile.WriteString(transcript); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	tmpFile.Close()
-
-	tailer := claudetui.NewTranscriptTailer(tmpFile.Name(), "test-session", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	eventChan := make(chan harnesses.Event, 10)
-	go func() {
-		_ = tailer.ReadEvents(ctx, eventChan)
-		close(eventChan)
-	}()
-
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-
-	if len(events) != 2 {
-		t.Errorf("got %d events, want 2 (unknown type should be skipped)", len(events))
 	}
 }
