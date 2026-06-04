@@ -1,6 +1,7 @@
 package claudetui_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -452,6 +453,93 @@ func TestRunTurnDocumentsRequestGaps(t *testing.T) {
 	if len(gapMsgs) != 3 {
 		t.Fatalf("documented gaps = %d, want 3 (model, reasoning, permissions): %v", len(gapMsgs), gapMsgs)
 	}
+}
+
+// sentContains reports how many recorded SendBytes payloads contain sub.
+func (f *fakePTY) sentContains(sub []byte) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, b := range f.sent {
+		if bytes.Contains(b, sub) {
+			n++
+		}
+	}
+	return n
+}
+
+// TestRunTurnSingleOutputConsumerNoStolenChunks is the dedicated R7 regression
+// test for the "single Output() consumer / no stolen chunks" requirement.
+//
+// It pushes a sequence of chunks where EACH chunk carries a DISTINCT Ink
+// startup probe (DA1, DA2, DSR, XTVERSION, window-size 18t/19t). The turn loop's
+// single Output() consumer feeds every chunk to startupProbe.Feed inline, which
+// answers each probe with a distinct reply written back through SendBytes. The
+// test asserts every probe reply appears EXACTLY ONCE.
+//
+// If a second concurrent Output() reader existed (a "stolen chunk"), at least
+// one probe-bearing chunk would be routed to that competing goroutine instead
+// of the probe-answering consumer, so its reply would be MISSING (count 0). The
+// per-probe "answered at least once" assertions therefore directly prove that
+// every Output() chunk reached the single probe-answering consumer and no chunk
+// was stolen or dropped. (startupProbe.Feed accumulates its buffer, so a probe
+// may legitimately be re-answered on later Feed calls; the load-bearing
+// invariant a stolen chunk breaks is count == 0, not the exact repeat count.)
+func TestRunTurnSingleOutputConsumerNoStolenChunks(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := "nonce-single-consumer"
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Each distinct probe request maps to a distinct expected reply emitted by
+	// startupProbe.Feed. One probe per chunk so every reply is individually
+	// attributable to its source chunk having reached the single consumer.
+	type probe struct{ req, reply []byte }
+	probes := []probe{
+		{[]byte("\x1b[c"), []byte("\x1b[?1;0c")},         // DA1
+		{[]byte("\x1b[>c"), []byte("\x1b[?62;4;0c")},     // DA2
+		{[]byte("\x1b[6n"), []byte("\x1b[1;1R")},         // DSR cursor report
+		{[]byte("\x1b[>q"), []byte("\x1b[>0;370;0c")},    // XTVERSION
+		{[]byte("\x1b[18t"), []byte("\x1b[8;50;220t")},   // text-area size
+		{[]byte("\x1b[19t"), []byte("\x1b[9;700;1760t")}, // screen size (rows*14, cols*8)
+	}
+
+	go func() {
+		// Home + clear, then one probe-bearing chunk at a time.
+		f.push([]byte("\x1b[H\x1b[2J"))
+		for _, p := range probes {
+			f.push(append([]byte(nil), p.req...))
+			// Brief spacing so each chunk is a separate Output() receive; a
+			// stealing goroutine would have an opportunity to race here.
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Now present the prompt and complete via the Stop nonce.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	for _, p := range probes {
+		n := f.sentContains(p.reply)
+		if n < 1 {
+			t.Errorf("probe reply %q answered %d times, want >= 1 (count 0 means the probe-bearing chunk was stolen/dropped by a competing Output() consumer)", p.reply, n)
+		}
+	}
+	assertExactlyOneFinal(t, events, "success")
 }
 
 func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) {
