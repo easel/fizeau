@@ -172,6 +172,100 @@ func TestClaudeTuiRefreshQuotaSingleFlight(t *testing.T) {
 	}
 }
 
+// TestRefreshQuotaSingleFlightCohortSeesCachedState proves that concurrent
+// RefreshQuota calls on FRESH Harness instances coalesce on the package-scope
+// singleflight group (key "claudetui:refresh-quota") and that every queued
+// caller observes the SAME just-written cached state. The probe stamps each
+// invocation with a monotonically increasing CapturedAt; within a single
+// cohort the probe must run exactly once, so all callers must see one identical
+// CapturedAt. Running two sequential cohorts proves the timestamp advances
+// EXACTLY ONCE PER COHORT (not per caller): cohort 2's timestamp is strictly
+// later than cohort 1's, and the probe ran exactly twice total.
+func TestRefreshQuotaSingleFlightCohortSeesCachedState(t *testing.T) {
+	var probeCount int32
+	var probeSeq int64 // advances once per probe invocation
+
+	probe := func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
+		atomic.AddInt32(&probeCount, 1)
+		seq := atomic.AddInt64(&probeSeq, 1)
+		// Hold the cohort open long enough for all goroutines to enqueue on the
+		// singleflight group, forcing coalescing.
+		time.Sleep(100 * time.Millisecond)
+		// Encode the per-probe sequence into UsedPercent so the projected status
+		// is distinguishable per cohort even though CapturedAt is wall-clock.
+		return []harnesses.QuotaWindow{
+			{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: float64(seq), State: "available"},
+			{Name: "Current week (all models)", LimitID: "weekly-all", WindowMinutes: 10080, UsedPercent: 25.0, State: "available"},
+		}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+	}
+	restore := SetCaptureForTest(probe)
+	defer restore()
+
+	// runCohort launches n concurrent RefreshQuota calls, each on a FRESH
+	// Harness instance (the dispatcher constructs harnesses per call), and
+	// returns the CapturedAt every caller observed.
+	runCohort := func(n int) []time.Time {
+		var wg sync.WaitGroup
+		stamps := make([]time.Time, n)
+		errs := make([]error, n)
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				h := &Harness{} // fresh instance; shared package singleflight group
+				status, err := h.RefreshQuota(context.Background())
+				if err != nil {
+					errs[idx] = err
+					return
+				}
+				stamps[idx] = status.CapturedAt
+			}(i)
+		}
+		wg.Wait()
+		for _, err := range errs {
+			if err != nil {
+				t.Fatalf("RefreshQuota in cohort: %v", err)
+			}
+		}
+		return stamps
+	}
+
+	// Cohort 1.
+	c1 := runCohort(5)
+	if got := atomic.LoadInt32(&probeCount); got != 1 {
+		t.Fatalf("cohort 1: probe ran %d times, want 1 (callers did not coalesce)", got)
+	}
+	// Every cohort-1 caller must observe the SAME CapturedAt (one cached write).
+	for i := 1; i < len(c1); i++ {
+		if !c1[i].Equal(c1[0]) {
+			t.Fatalf("cohort 1: caller %d CapturedAt %v != caller 0 %v (callers saw different cached state)", i, c1[i], c1[0])
+		}
+	}
+	if c1[0].IsZero() {
+		t.Fatal("cohort 1: CapturedAt is zero; status did not reflect a written cache")
+	}
+
+	// Ensure the wall clock advances between cohorts so the timestamp can move.
+	time.Sleep(2 * time.Millisecond)
+
+	// Cohort 2: the prior cohort has fully returned, so the singleflight group
+	// is idle and a NEW cohort runs a fresh probe.
+	c2 := runCohort(5)
+	if got := atomic.LoadInt32(&probeCount); got != 2 {
+		t.Fatalf("two cohorts: probe ran %d times total, want 2 (timestamp must advance once per cohort)", got)
+	}
+	for i := 1; i < len(c2); i++ {
+		if !c2[i].Equal(c2[0]) {
+			t.Fatalf("cohort 2: caller %d CapturedAt %v != caller 0 %v", i, c2[i], c2[0])
+		}
+	}
+	// The cohort timestamp advanced exactly once per cohort: cohort 2 is strictly
+	// later than cohort 1.
+	if !c2[0].After(c1[0]) {
+		t.Fatalf("cohort 2 CapturedAt %v must be strictly after cohort 1 %v (timestamp did not advance per cohort)", c2[0], c1[0])
+	}
+}
+
 // TestClaudeTuiQuotaFreshness verifies AC#6:
 // QuotaFreshness returns a positive duration matching ADR-013's documented value.
 func TestClaudeTuiQuotaFreshness(t *testing.T) {

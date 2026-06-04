@@ -1354,6 +1354,141 @@ func TestClaudeTuiEnvironmentAllowlist(t *testing.T) {
 	}
 }
 
+// TestBuildEnvironmentAllowlistExactSet proves the PTY environment allowlist
+// (ADR-013 §Environment Allowlist) admits ONLY documented keys and drops every
+// undocumented variable. It seeds a clean environment with exactly the documented
+// keys plus one deliberately undocumented variable (RANDOM_UNINTENDED) and asserts:
+//  1. the undocumented variable is dropped;
+//  2. the resulting allowlist's key set is a STRICT SUBSET of the documented set
+//     (documented exact keys + XDG_* + CLAUDE_* prefixes), so no surprise key
+//     leaks into the child process;
+//  3. every seeded documented key survives passthrough;
+//  4. the TERM/LANG/LC_ALL defaults are present.
+func TestBuildEnvironmentAllowlistExactSet(t *testing.T) {
+	oldEnv := os.Environ()
+	defer func() {
+		os.Clearenv()
+		for _, kv := range oldEnv {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) == 2 {
+				os.Setenv(parts[0], parts[1])
+			}
+		}
+	}()
+
+	os.Clearenv()
+	// Seed exactly the documented exact keys + one XDG_* + one CLAUDE_* + one
+	// deliberately undocumented variable that must be dropped.
+	seeded := map[string]string{
+		"HOME":              "/home/test",
+		"PATH":              "/usr/bin:/bin",
+		"USER":              "testuser",
+		"LOGNAME":           "testuser",
+		"SHELL":             "/bin/bash",
+		"LANG":              "en_US.UTF-8",
+		"LC_ALL":            "en_US.UTF-8",
+		"TZ":                "UTC",
+		"TERM":              "screen-256color",
+		"XDG_CONFIG_HOME":   "/home/test/.config",
+		"CLAUDE_DEBUG":      "1",
+		"RANDOM_UNINTENDED": "should-be-dropped",
+	}
+	for k, v := range seeded {
+		os.Setenv(k, v)
+	}
+
+	env := claudetui.BuildEnvironmentAllowlist()
+	keys := make(map[string]bool, len(env))
+	for _, kv := range env {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) == 2 {
+			keys[parts[0]] = true
+		}
+	}
+
+	// (1) The undocumented variable must be dropped.
+	if keys["RANDOM_UNINTENDED"] {
+		t.Errorf("undocumented variable RANDOM_UNINTENDED leaked into allowlist")
+	}
+
+	// documentedExact is the exact-match documented key set per ADR-013.
+	documentedExact := map[string]bool{
+		"HOME": true, "PATH": true, "USER": true, "LOGNAME": true,
+		"SHELL": true, "LANG": true, "LC_ALL": true, "TZ": true, "TERM": true,
+	}
+	isDocumented := func(k string) bool {
+		if documentedExact[k] {
+			return true
+		}
+		return strings.HasPrefix(k, "XDG_") || strings.HasPrefix(k, "CLAUDE_")
+	}
+
+	// (2) The allowlist key set must be a STRICT SUBSET of the documented set.
+	for k := range keys {
+		if !isDocumented(k) {
+			t.Errorf("allowlist contains undocumented key %q (not in HOME/PATH/USER/LOGNAME/SHELL/LANG/LC_ALL/TZ/TERM, XDG_*, CLAUDE_*)", k)
+		}
+	}
+
+	// (3) Every seeded documented key must survive passthrough.
+	for _, k := range []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "TERM", "XDG_CONFIG_HOME", "CLAUDE_DEBUG"} {
+		if !keys[k] {
+			t.Errorf("documented key %q dropped from allowlist", k)
+		}
+	}
+
+	// (4) TERM/LANG/LC_ALL defaults present (here seeded values pass through).
+	for _, k := range []string{"TERM", "LANG", "LC_ALL"} {
+		if !keys[k] {
+			t.Errorf("default-bearing key %q missing from allowlist", k)
+		}
+	}
+}
+
+// TestBuildEnvironmentAllowlistDefaultsWhenUnset proves the TERM/LANG/LC_ALL
+// defaults are injected when the operator environment does not provide them, and
+// that the defaults are the documented values.
+func TestBuildEnvironmentAllowlistDefaultsWhenUnset(t *testing.T) {
+	oldEnv := os.Environ()
+	defer func() {
+		os.Clearenv()
+		for _, kv := range oldEnv {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) == 2 {
+				os.Setenv(parts[0], parts[1])
+			}
+		}
+	}()
+
+	os.Clearenv()
+	os.Setenv("HOME", "/home/test") // a single documented passthrough, no TERM/LANG/LC_ALL
+
+	env := claudetui.BuildEnvironmentAllowlist()
+	vals := make(map[string]string, len(env))
+	for _, kv := range env {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) == 2 {
+			vals[parts[0]] = parts[1]
+		}
+	}
+
+	wantDefaults := map[string]string{
+		"TERM":   "xterm-256color",
+		"LANG":   "C.UTF-8",
+		"LC_ALL": "C.UTF-8",
+	}
+	for k, want := range wantDefaults {
+		got, ok := vals[k]
+		if !ok {
+			t.Errorf("default %q not injected when unset", k)
+			continue
+		}
+		if got != want {
+			t.Errorf("default %q = %q, want %q", k, got, want)
+		}
+	}
+}
+
 // TestClaudeTuiHealthCheckCliNotFound verifies HealthCheck fails gracefully when claude is missing.
 func TestClaudeTuiHealthCheckCliNotFound(t *testing.T) {
 	h := &claudetui.Harness{}

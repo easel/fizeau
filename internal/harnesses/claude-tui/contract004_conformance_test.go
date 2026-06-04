@@ -1,11 +1,44 @@
 package claudetui
 
 import (
+	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses/harnesstest"
 )
+
+// TestClaudeTuiHealthCheckSuccess proves the positive HealthCheck path: when the
+// real `claude` binary IS on PATH, HealthCheck(ctx) returns nil. It also asserts
+// the Info() availability semantics hold (claude-tui advertises Available=false
+// — the harness is a subscription PTY harness whose availability is gated on the
+// quota cache, not on binary presence — and remains AutoRoutingEligible). On
+// machines without claude installed the test SKIPs rather than failing.
+func TestClaudeTuiHealthCheckSuccess(t *testing.T) {
+	if _, err := exec.LookPath("claude"); err != nil {
+		t.Skipf("claude binary not on PATH: %v", err)
+	}
+
+	h := &Harness{}
+	if err := h.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("HealthCheck with claude on PATH = %v, want nil", err)
+	}
+
+	info := h.Info()
+	if info.Name != "claude-tui" {
+		t.Errorf("Info().Name = %q, want claude-tui", info.Name)
+	}
+	if info.Available {
+		t.Errorf("Info().Available = true; claude-tui must advertise Available=false (availability is quota-gated, not binary-gated)")
+	}
+	if !info.IsSubscription {
+		t.Errorf("Info().IsSubscription = false; claude-tui is a subscription harness")
+	}
+	if !info.AutoRoutingEligible {
+		t.Errorf("Info().AutoRoutingEligible = false; claude-tui must remain auto-routing eligible")
+	}
+}
 
 // TestClaudeTuiHarnessConformance asserts the bare Harness contract.
 // Run in an isolated env: a non-existent cache path and an empty PATH
