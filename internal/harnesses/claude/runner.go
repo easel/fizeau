@@ -358,9 +358,15 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	}
 
 	// Wait for stdout to be fully read; context cancellation also wakes us up.
-	// Either way, the defer ensures process group is killed on function exit.
+	// On cancellation we must reap the process group *immediately* — not via the
+	// deferred killProcessGroup — otherwise the stderr/stdout io.Copy goroutines
+	// (and thus the <-stderrDone / <-parseDone waits below) block until the child
+	// closes its pipes on its own, which a long-running turn never does. Killing
+	// the group here closes the pipes and lets the drain goroutines complete so
+	// Execute terminates promptly with a cancelled/timed_out status.
 	select {
 	case <-ctx.Done():
+		killProcessGroup(cmd)
 	case <-stdoutDone:
 	}
 

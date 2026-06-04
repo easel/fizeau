@@ -3,7 +3,7 @@ package harnesses
 import "github.com/easel/fizeau/internal/productinfo"
 
 // PreferenceOrder defines the default harness preference when multiple are available.
-var PreferenceOrder = []string{"codex", "claude", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini"}
+var PreferenceOrder = []string{"codex", "claude-tui", "claude", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini"}
 
 // builtinHarnesses defines known harnesses and how to invoke them.
 var builtinHarnesses = map[string]HarnessConfig{
@@ -76,7 +76,7 @@ var builtinHarnesses = map[string]HarnessConfig{
 		CostClass:           "medium",
 		IsLocal:             false,
 		IsSubscription:      true,
-		AutoRoutingEligible: false,
+		AutoRoutingEligible: true,
 		ExactPinSupport:     false,
 	},
 	"gemini": {

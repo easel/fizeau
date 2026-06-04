@@ -453,6 +453,112 @@ func TestNonClaudeSubscriptionQuotaStale(t *testing.T) {
 	}
 }
 
+// claudeSurfacePairInputs builds an Inputs with BOTH claude (--print) and
+// claude-tui sharing the "claude" surface, identical on every routing signal
+// (cost class, quota, tools) so the ONLY differentiator is the surface
+// preference. This isolates the claude-tui-default behavior.
+func claudeSurfacePairInputs() Inputs {
+	mk := func(name string) HarnessEntry {
+		return HarnessEntry{
+			Name:                name,
+			Surface:             "claude",
+			CostClass:           "medium",
+			IsSubscription:      true,
+			AutoRoutingEligible: true,
+			ExactPinSupport:     name == "claude", // claude-tui has no exact pin
+			Available:           true,
+			QuotaOK:             true,
+			SubscriptionOK:      true,
+			QuotaTrend:          QuotaTrendHealthy,
+			SupportedReasoning:  []string{"low", "medium", "high"},
+			SupportedPerms:      []string{"safe", "supervised", "unrestricted"},
+			SupportsTools:       true,
+			DefaultModel:        "claude-sonnet-4-6",
+		}
+	}
+	return Inputs{
+		Harnesses: []HarnessEntry{mk("claude"), mk("claude-tui")},
+		Now:       time.Date(2026, 4, 18, 0, 0, 0, 0, time.UTC),
+	}
+}
+
+// TestClaudeTuiIsDefaultForClaudeSurface proves the reliability/claude-tui-
+// default behavior: an UNPINNED claude-surface route resolves to claude-tui
+// over claude(--print). Without the surface preference, the alphabetical
+// tie-break (claude < claude-tui) would pick the --print runner.
+func TestClaudeTuiIsDefaultForClaudeSurface(t *testing.T) {
+	in := claudeSurfacePairInputs() // nil SurfacePreference → DefaultSurfacePreference()
+
+	dec, err := Resolve(Request{Policy: "default"}, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if dec.Harness != "claude-tui" {
+		t.Fatalf("unpinned claude-surface route = %q, want claude-tui (default)", dec.Harness)
+	}
+
+	// The preferred candidate must outscore (or at least tie-and-win-by-
+	// preference) the --print runner.
+	var tuiScore, printScore float64
+	var sawBoth int
+	for _, c := range dec.Candidates {
+		switch c.Harness {
+		case "claude-tui":
+			tuiScore = c.Score
+			sawBoth++
+		case "claude":
+			printScore = c.Score
+			sawBoth++
+		}
+	}
+	if sawBoth != 2 {
+		t.Fatalf("expected both claude and claude-tui candidates, saw %d", sawBoth)
+	}
+	if tuiScore < printScore {
+		t.Errorf("claude-tui score %.2f < claude score %.2f; preferred harness must not lose on score", tuiScore, printScore)
+	}
+}
+
+// TestExplicitClaudePinBeatsTuiDefault proves the default is REVERTIBLE per
+// route: an explicit --harness claude pin resolves to claude(--print) even
+// though claude-tui is the surface default.
+func TestExplicitClaudePinBeatsTuiDefault(t *testing.T) {
+	in := claudeSurfacePairInputs()
+
+	dec, err := Resolve(Request{Policy: "default", Harness: "claude"}, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if dec.Harness != "claude" {
+		t.Fatalf("explicit --harness claude = %q, want claude (pin authoritative)", dec.Harness)
+	}
+}
+
+// TestSurfacePreferenceDisabledFallsBackToAlphabetical proves the preference is
+// config-gated: an explicit EMPTY (non-nil) SurfacePreference disables it, so
+// the engine falls back to the alphabetical tie-break and claude(--print) wins.
+func TestSurfacePreferenceDisabledFallsBackToAlphabetical(t *testing.T) {
+	in := claudeSurfacePairInputs()
+	in.SurfacePreference = map[string]string{} // explicit empty = disabled
+
+	dec, err := Resolve(Request{Policy: "default"}, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if dec.Harness != "claude" {
+		t.Fatalf("preference disabled: route = %q, want claude (alphabetical tie-break)", dec.Harness)
+	}
+}
+
+// TestDefaultSurfacePreferenceConstant pins the built-in default mapping so a
+// silent change to the claude→claude-tui default is caught.
+func TestDefaultSurfacePreferenceConstant(t *testing.T) {
+	pref := DefaultSurfacePreference()
+	if got := pref["claude"]; got != "claude-tui" {
+		t.Errorf("DefaultSurfacePreference()[claude] = %q, want claude-tui", got)
+	}
+}
+
 func TestCostTiebreakLowerCostWins(t *testing.T) {
 	in := Inputs{
 		Harnesses: []HarnessEntry{{

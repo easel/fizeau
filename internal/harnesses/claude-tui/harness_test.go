@@ -40,9 +40,9 @@ func TestClaudeTuiInterfaceConformance(t *testing.T) {
 	// no network, no PTY).
 	restoreProbe := claudetui.SetCaptureForTest(func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
 		return []harnesses.QuotaWindow{
-				{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
-				{Name: "Current week (all models)", LimitID: "weekly-all", WindowMinutes: 10080, UsedPercent: 5.0, State: "available"},
-			}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+			{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
+			{Name: "Current week (all models)", LimitID: "weekly-all", WindowMinutes: 10080, UsedPercent: 5.0, State: "available"},
+		}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
 	})
 	defer restoreProbe()
 
@@ -332,8 +332,10 @@ func TestClaudeTuiRegistryEntry(t *testing.T) {
 	if !config.IsSubscription {
 		t.Error("IsSubscription: got false, want true")
 	}
-	if config.AutoRoutingEligible {
-		t.Error("AutoRoutingEligible: got true, want false")
+	// claude-tui is now auto-routing eligible and the default for the shared
+	// "claude" surface (reliability/claude-tui-default).
+	if !config.AutoRoutingEligible {
+		t.Error("AutoRoutingEligible: got false, want true")
 	}
 }
 

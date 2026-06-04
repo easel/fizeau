@@ -46,8 +46,30 @@ type transcriptMessage struct {
 	ID         string            `json:"id,omitempty"`
 	Role       string            `json:"role,omitempty"`
 	StopReason string            `json:"stop_reason,omitempty"`
-	Usage      json.RawMessage   `json:"usage,omitempty"`
-	Content    []transcriptBlock `json:"content,omitempty"`
+	Usage      json.RawMessage `json:"usage,omitempty"`
+	Content    messageContent  `json:"content,omitempty"`
+}
+
+// messageContent is a message's content, which Claude Code emits as EITHER an
+// array of content blocks (assistant turns, tool_use/tool_result) OR a plain
+// string (simple text messages). Decoding only as []transcriptBlock dropped the
+// string form (observed live: "cannot unmarshal string into []transcriptBlock"
+// → the line was skipped, losing its text). Accept both: a string becomes a
+// single text block.
+type messageContent []transcriptBlock
+
+func (c *messageContent) UnmarshalJSON(data []byte) error {
+	var blocks []transcriptBlock
+	if err := json.Unmarshal(data, &blocks); err == nil {
+		*c = blocks
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*c = messageContent{{Type: "text", Text: s}}
+	return nil
 }
 
 // transcriptBlock is one content block inside a message.
@@ -99,6 +121,16 @@ type TranscriptTailer struct {
 	readCloser io.ReadCloser
 	scanner    *bufio.Scanner
 
+	// startOffset is the byte offset to resume reading from. The Claude Code
+	// transcript .jsonl is append-only for the WHOLE session, so a reused
+	// pooled session would otherwise replay every prior-turn block (and fold
+	// prior-turn usage/text into this turn's final). Seeking past the bytes
+	// consumed by earlier turns scopes the read to exactly this turn's lines.
+	startOffset int64
+	// endOffset is the byte offset just past the last line consumed by the most
+	// recent ReadEvents call. Callers persist it as the next turn's startOffset.
+	endOffset int64
+
 	// lastAssistant captures the most recent assistant message so the
 	// final event reflects its stop_reason + usage + accumulated text.
 	lastAssistantStop  string
@@ -120,11 +152,39 @@ func NewTranscriptTailer(path, session string, logger *slog.Logger) *TranscriptT
 	}
 }
 
-// Open opens the transcript file for reading.
+// SetStartOffset sets the byte offset ReadEvents resumes from. A reused pooled
+// session passes the prior turn's EndOffset() so it does not replay earlier
+// turns' content blocks. Offsets past EOF or <= 0 read from the start.
+func (t *TranscriptTailer) SetStartOffset(off int64) {
+	if off < 0 {
+		off = 0
+	}
+	t.startOffset = off
+	t.endOffset = off
+}
+
+// EndOffset returns the byte offset just past the last line consumed. After a
+// ReadEvents call it is the position the next turn should resume from.
+func (t *TranscriptTailer) EndOffset() int64 { return t.endOffset }
+
+// Open opens the transcript file for reading, seeking to startOffset so a
+// reused session resumes past prior turns instead of replaying the whole file.
 func (t *TranscriptTailer) Open(ctx context.Context) error {
 	f, err := os.Open(t.path)
 	if err != nil {
 		return fmt.Errorf("open transcript: %w", err)
+	}
+	if t.startOffset > 0 {
+		// Clamp to file size so a stale/over-large offset reads nothing rather
+		// than erroring; the next turn re-syncs from the true end.
+		if info, statErr := f.Stat(); statErr == nil && t.startOffset > info.Size() {
+			t.startOffset = info.Size()
+		}
+		if _, seekErr := f.Seek(t.startOffset, io.SeekStart); seekErr != nil {
+			_ = f.Close()
+			return fmt.Errorf("seek transcript to offset %d: %w", t.startOffset, seekErr)
+		}
+		t.endOffset = t.startOffset
 	}
 	t.readCloser = f
 	t.scanner = bufio.NewScanner(f)
@@ -168,6 +228,9 @@ func (t *TranscriptTailer) ReadEvents(ctx context.Context, eventChan chan<- harn
 		}
 
 		line := t.scanner.Text()
+		// Advance the resume offset past this line (+1 for the stripped newline).
+		// This is the per-turn bookmark a reused pooled session resumes from.
+		t.endOffset += int64(len(line)) + 1
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -440,8 +503,19 @@ func ParseHookEvent(data []byte) (HookEvent, error) {
 
 // HookEventToEvent converts a decoded hook event to a canonical Event, or
 // returns ok=false for events that do not map (e.g. unknown hook names).
-func HookEventToEvent(he HookEvent, seq int64) (harnesses.Event, bool) {
+//
+// corrID is the correlation ID to stamp on the event when the real Claude Code
+// PreToolUse/PostToolUse payload omits a top-level tool_use_id (which the
+// documented 2.1.x schema does — it carries session_id/tool_name/tool_input/
+// tool_response but no tool_use_id). The caller derives corrID from emission
+// order so a PreToolUse tool_call and its PostToolUse tool_result share an ID.
+// When the payload DOES carry a tool_use_id it takes precedence.
+func HookEventToEvent(he HookEvent, seq int64, corrID string) (harnesses.Event, bool) {
 	now := time.Now()
+	id := he.ToolUseID
+	if id == "" {
+		id = corrID
+	}
 	switch he.Event {
 	case "PreToolUse":
 		if he.ToolName == "" {
@@ -452,7 +526,7 @@ func HookEventToEvent(he HookEvent, seq int64) (harnesses.Event, bool) {
 			Sequence: seq,
 			Time:     now,
 			Data: mustMarshal(harnesses.ToolCallData{
-				ID:    he.ToolUseID,
+				ID:    id,
 				Name:  he.ToolName,
 				Input: he.ToolInput,
 			}),
@@ -463,13 +537,37 @@ func HookEventToEvent(he HookEvent, seq int64) (harnesses.Event, bool) {
 			Sequence: seq,
 			Time:     now,
 			Data: mustMarshal(harnesses.ToolResultData{
-				ID:     he.ToolUseID,
+				ID:     id,
 				Output: toolResultText(he.ToolOutput),
+				Error:  postToolUseError(he),
 			}),
 		}, true
 	default:
 		return harnesses.Event{}, false
 	}
+}
+
+// postToolUseError surfaces a tool failure from a PostToolUse payload. Claude
+// Code marks a failed tool with tool_response.is_error / an error string; we
+// best-effort decode that so a downstream consumer sees the failure.
+func postToolUseError(he HookEvent) string {
+	if len(he.ToolOutput) == 0 {
+		return ""
+	}
+	var resp struct {
+		IsError bool   `json:"is_error"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(he.ToolOutput, &resp); err != nil {
+		return ""
+	}
+	if resp.Error != "" {
+		return resp.Error
+	}
+	if resp.IsError {
+		return toolResultText(he.ToolOutput)
+	}
+	return ""
 }
 
 // HookEventTailer watches a hook directory for new PreToolUse/PostToolUse
@@ -478,6 +576,12 @@ type HookEventTailer struct {
 	dir    string
 	logger *slog.Logger
 	seen   map[string]bool
+	// preCount/postCount index PreToolUse/PostToolUse events by emission order
+	// so the Nth tool_call and the Nth tool_result share a synthetic
+	// correlation ID when the real payload omits tool_use_id (see
+	// HookEventToEvent). They are only consulted when a payload lacks a real id.
+	preCount  int
+	postCount int
 }
 
 // NewHookEventTailer creates a tailer over the given hook directory.
@@ -486,6 +590,23 @@ func NewHookEventTailer(dir string, logger *slog.Logger) *HookEventTailer {
 		logger = slog.Default()
 	}
 	return &HookEventTailer{dir: dir, logger: logger, seen: make(map[string]bool)}
+}
+
+// correlationID returns the synthetic correlation ID for a hook event based on
+// emission order: the Nth PreToolUse and the Nth PostToolUse both map to
+// "tool-N" so a consumer can pair a mid-turn call with its result even though
+// the real Claude Code 2.1.x payload carries no top-level tool_use_id.
+func (h *HookEventTailer) correlationID(event string) string {
+	switch event {
+	case "PreToolUse":
+		h.preCount++
+		return fmt.Sprintf("tool-%d", h.preCount)
+	case "PostToolUse":
+		h.postCount++
+		return fmt.Sprintf("tool-%d", h.postCount)
+	default:
+		return ""
+	}
 }
 
 // Drain scans the hook directory once for new tool-event payload files
@@ -521,7 +642,11 @@ func (h *HookEventTailer) Drain(seq int64, emit func(harnesses.Event)) int64 {
 			h.logger.Warn("malformed hook-event payload, skipping", "file", name, "error", err)
 			continue
 		}
-		if ev, ok := HookEventToEvent(he, seq+1); ok {
+		corr := ""
+		if he.ToolUseID == "" {
+			corr = h.correlationID(he.Event)
+		}
+		if ev, ok := HookEventToEvent(he, seq+1, corr); ok {
 			seq++
 			emit(ev)
 		}

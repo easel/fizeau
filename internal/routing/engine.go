@@ -62,6 +62,49 @@ const (
 	ContextSourceUnknown        = "unknown"
 )
 
+// SurfacePreferenceBias is the score bonus a candidate earns when its harness
+// is the configured preferred harness for its surface on an unpinned route.
+// It is intentionally small: it only needs to break what would otherwise be an
+// exact score tie between two harnesses sharing a surface (e.g. claude-tui vs
+// claude on the "claude" surface), without letting the preferred harness
+// outrank a genuinely better-scoring candidate on a different surface.
+const SurfacePreferenceBias = 0.5
+
+// DefaultSurfacePreference returns the built-in surface→harness preference:
+// the shared "claude" surface defaults to the claude-tui (interactive TUI,
+// bypassPermissions) harness over claude (--print). Callers gate this behind a
+// config flag by passing an explicit (possibly empty, non-nil) map in Inputs.
+func DefaultSurfacePreference() map[string]string {
+	return map[string]string{"claude": "claude-tui"}
+}
+
+// resolveSurfacePreference returns the effective surface→harness preference for
+// a routing call. A nil map (the zero value) means "use the default"; an
+// explicit empty map disables the preference.
+func resolveSurfacePreference(in Inputs) map[string]string {
+	if in.SurfacePreference == nil {
+		return DefaultSurfacePreference()
+	}
+	return in.SurfacePreference
+}
+
+// surfacePreferred reports whether harness h is the configured preferred
+// harness for its surface on THIS route. The preference only applies to
+// unpinned automatic routing: an explicit --harness pin selects exactly one
+// harness (so the preference is moot) and must remain authoritative, so a
+// claude pin keeps resolving to claude even though claude-tui is the default.
+func surfacePreferred(h HarnessEntry, req Request, in Inputs) bool {
+	if req.Harness != "" {
+		return false
+	}
+	if h.Surface == "" {
+		return false
+	}
+	pref := resolveSurfacePreference(in)
+	want, ok := pref[h.Surface]
+	return ok && want == h.Name
+}
+
 // MinContextWindow returns the minimum context window the request requires,
 // derived from EstimatedPromptTokens with a safety margin.
 func (r Request) MinContextWindow() int {
@@ -520,6 +563,17 @@ type Inputs struct {
 	// without rebuilding or redeploying the service.
 	SafeMode bool
 
+	// SurfacePreference maps a catalog surface identifier (e.g. "claude") to the
+	// canonical harness name that should win an UNPINNED route on that surface
+	// when multiple harnesses share the surface and tie on score. This is the
+	// config-gated mechanism that makes claude-tui the default for the shared
+	// "claude" surface (claude-tui vs claude --print) without hard-pinning: a
+	// preferred harness gets a small score bias plus the final tie-break, so an
+	// explicit --harness claude pin or claude-tui being ineligible still falls
+	// through to claude. Nil falls back to DefaultSurfacePreference(); an
+	// explicit empty (non-nil) map disables the preference entirely.
+	SurfacePreference map[string]string
+
 	Now              time.Time // injected for deterministic testing; default time.Now()
 	ModelEligibility func(model string) (ModelEligibility, bool)
 
@@ -647,6 +701,14 @@ type candidateInternal struct {
 	StickyMatch           bool
 	MinPower              int
 	MaxPower              int
+	// Surface is the catalog surface this candidate's harness belongs to
+	// (e.g. "claude"). Used by the surface-preference tie-break/bias.
+	Surface string
+	// SurfacePreferred is true when this candidate's harness is the configured
+	// preferred harness for its Surface on an unpinned route (see
+	// Inputs.SurfacePreference). It contributes a small score bias and wins the
+	// final same-surface tie-break.
+	SurfacePreferred bool
 }
 
 // ProviderModelKey is the metrics key used by routing callers for provider
@@ -766,6 +828,16 @@ func Resolve(req Request, in Inputs) (*Decision, error) {
 			}
 			if ranked[i].internal.EndpointLoad != ranked[j].internal.EndpointLoad {
 				return ranked[i].internal.EndpointLoad < ranked[j].internal.EndpointLoad
+			}
+		}
+		// Surface preference tie-break: among same-surface candidates that tied
+		// on every signal above, the configured preferred harness wins before
+		// falling back to alphabetical order (claude-tui < claude is alphabetical
+		// the wrong way, so without this the --print runner would win the tie).
+		if ranked[i].internal.Surface == ranked[j].internal.Surface {
+			pi, pj := ranked[i].internal.SurfacePreferred, ranked[j].internal.SurfacePreferred
+			if pi != pj {
+				return pi
 			}
 		}
 		if ranked[i].out.Harness != ranked[j].out.Harness {
@@ -1714,6 +1786,8 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 				StickyMatch:           stickyMatch,
 				MinPower:              req.MinPower,
 				MaxPower:              req.MaxPower,
+				Surface:               h.Surface,
+				SurfacePreferred:      surfacePreferred(h, req, in),
 			}
 			if eligible && ctxWin > 0 && minCtx > 0 {
 				ci.ContextHeadroom = ctxWin - minCtx

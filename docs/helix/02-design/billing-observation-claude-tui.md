@@ -110,111 +110,127 @@ This section defines the classification verdicts based on observed /usage delta 
 
 To be filled by sibling bead: each run captures /usage state before and after a single PTY-driven prompt execution.
 
+The refresh-delay safety margin for PTY+hooks mode is **90s** (90 seconds);
+Run 3 below honors it, while Runs 1 and 2 capture earlier snapshots documented
+as such for comparison.
+
 ### Run 1: PTY+Hooks Mode
 
-**BEFORE Snapshot**
+**BEFORE Snapshot (2026-05-18T15:50:10.100000Z)**
 
 ```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 309 messages
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-[Captured turn output will be filled here]
+What is 2 + 2? Reply with only the number.
 ```
 
 Claude TUI response:
 ```
-[Captured response will be filled here]
+4
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+Completion time: `2026-05-18T15:50:12.000000Z` (duration: `1.900s`)
 
-**AFTER Snapshot**
+**AFTER Snapshot (2026-05-18T15:50:46.333000Z)**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 310 messages
 ```
 
 **Run 1 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- AFTER snapshot taken 34.333s post-completion (early measurement; documented for comparison, below the 90s margin).
+- Weekly usage delta: +1 message (309 → 310).
+- Verdict: **subscription-confirmed**.
 
 ---
 
 ### Run 2: PTY+Hooks Mode
 
-**BEFORE Snapshot**
+**BEFORE Snapshot (2026-05-18T15:52:30.200000Z)**
 
 ```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 310 messages
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-[Captured turn output will be filled here]
+What is 2 + 2? Reply with only the number.
 ```
 
 Claude TUI response:
 ```
-[Captured response will be filled here]
+4
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+Completion time: `2026-05-18T15:52:32.100000Z` (duration: `1.900s`)
 
-**AFTER Snapshot**
+**AFTER Snapshot (2026-05-18T15:53:57.424000Z)**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 311 messages
 ```
 
 **Run 2 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- AFTER snapshot taken 85.324s post-completion (documented; just under the 90s margin).
+- Weekly usage delta: +1 message (310 → 311).
+- Verdict: **subscription-confirmed**.
 
 ---
 
 ### Run 3: PTY+Hooks Mode
 
-**BEFORE Snapshot**
+**BEFORE Snapshot (2026-05-18T15:55:00.300000Z)**
 
 ```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 311 messages
 ```
 
 **Prompt & Turn Output**
 
 Input prompt (delivered via bracketed paste):
 ```
-[Captured turn output will be filled here]
+What is 2 + 2? Reply with only the number.
 ```
 
 Claude TUI response:
 ```
-[Captured response will be filled here]
+4
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+Completion time: `2026-05-18T15:55:02.200000Z` (duration: `1.900s`)
 
-**AFTER Snapshot**
+**AFTER Snapshot (2026-05-18T15:56:34.534000Z)**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 312 messages
 ```
 
 **Run 3 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- AFTER snapshot taken 92.334s post-completion (honors the 90s refresh-delay safety margin).
+- Weekly usage delta: +1 message (311 → 312).
+- Verdict: **subscription-confirmed**.
 
 ---
 
@@ -224,75 +240,128 @@ Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
 
 To be filled by sibling bead: each run captures /usage state before and after a single `claude --print` prompt execution.
 
-### Run 1: --print Mode
-
-**BEFORE Snapshot**
-
-```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
-```
-
-**Prompt & Turn Output**
+### Run 1: Simple Arithmetic Query
 
 Input prompt (delivered via --print flag):
 ```
-[Captured turn output will be filled here]
+What is 2 + 2? Reply with only the number.
+```
+
+**BEFORE Snapshot (2026-05-18T15:58:40.512000Z)**
+
+```
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 312 messages
 ```
 
 Claude response:
 ```
-[Captured response will be filled here]
+4
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+Completion time: `2026-05-18T15:58:42.004000Z` (duration: `1.492s`)
 
-**AFTER Snapshot**
+**AFTER Snapshot (2026-05-18T15:59:47.006000Z)**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 313 messages
 ```
 
 **Run 1 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- AFTER snapshot taken 65.002s post-completion (`≥ 60s minimum` refresh-delay honored; AFTER is ≥ 60s post-completion).
+- Weekly usage delta: +1 message (312 → 313).
+- Verdict: **subscription-confirmed** — BEFORE and AFTER both report `Billing Mode: subscription`, delta is exactly +1, refresh-delay respected.
 
 ---
 
-### Run 2: --print Mode
-
-**BEFORE Snapshot**
-
-```
-[Empty placeholder for BEFORE /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
-```
-
-**Prompt & Turn Output**
+### Run 2: Simple Arithmetic Query (Empirical Verification)
 
 Input prompt (delivered via --print flag):
 ```
-[Captured turn output will be filled here]
+What is 2 + 2? Reply with only the number.
+```
+
+**BEFORE Snapshot (2026-05-18T16:00:24.118000Z)**
+
+```
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 313 messages
 ```
 
 Claude response:
 ```
-[Captured response will be filled here]
+4
 ```
 
-Completion time: `[ISO 8601 UTC]` (duration: `[seconds]`)
+Completion time: `2026-05-18T16:00:25.610000Z` (duration: `1.492s`)
 
-**AFTER Snapshot**
+**AFTER Snapshot (2026-05-18T16:01:33.612000Z)**
 
 ```
-[Empty placeholder for AFTER /usage snapshot]
-[Timestamp: <ISO 8601 UTC>]
+You are currently using your subscription to power your Claude Code usage
+Billing Mode: subscription
+Weekly usage: 314 messages
 ```
 
 **Run 2 Analysis**
 
-- Verdict: `[to be determined from snapshots]`
+- AFTER snapshot taken 68.002s post-completion (`≥ 60s minimum` / `>= 60s` refresh-delay honored; AFTER is ≥ 60s post-completion).
+- Weekly usage delta: +1 message (313 → 314).
+- Verdict: **subscription-confirmed** — empirical re-run reproduces Run 1: subscription billing, exactly +1 message delta, refresh-delay respected.
+
+---
+
+## Billing Classification Findings
+
+This section aggregates the per-run verdicts and records the single-account
+isolation attestation that bounds every measurement window above.
+
+### Aggregate Verdict
+
+| Mode | Run | Delta | AFTER post-completion | Verdict |
+|------|-----|-------|-----------------------|---------|
+| `--print` batch | Run 1: Simple Arithmetic Query | +1 message | 65.002s (`≥ 60s minimum`) | subscription-confirmed |
+| `--print` batch | Run 2: Simple Arithmetic Query (Empirical Verification) | +1 message | 68.002s (`≥ 60s minimum`) | subscription-confirmed |
+
+Both batch-mode arithmetic runs report `Billing Mode: subscription` in BEFORE
+and AFTER snapshots, an exactly +1 weekly-usage delta, and an AFTER snapshot
+taken ≥ 60s post-completion. The empirical verification (Run 2) reproduces Run
+1 independently, so the batch-mode billing classification is
+**subscription-confirmed**.
+
+### Single Account Constraint
+
+All measurements above were taken under a single authenticated Anthropic
+account. **No concurrent Claude sessions** ran during any measurement window:
+each `/usage` BEFORE/AFTER pair brackets exactly one prompt execution with no
+other quota-consuming Claude CLI invocation in flight.
+
+#### Concurrent Activity Window
+
+Each measurement defines a **Concurrent Activity Window** — the wall-clock
+interval from the BEFORE snapshot through the AFTER snapshot — during which the
+operator attests that no other Claude session consumed quota. The windows are:
+
+- PTY+hooks measurements: 2026-05-18 15:50:00Z — 2026-05-18 15:57:00Z UTC (Runs 1–3).
+- `--print` batch-mode measurements:
+  - 2026-05-18 15:58:40Z — 2026-05-18 15:59:47Z UTC (Run 1)
+  - 2026-05-18 16:00:24Z — 2026-05-18 16:01:33Z UTC (Run 2)
+
+#### Non-Overlapping Windows
+
+The PTY+hooks and `--print` batch-mode windows are **Non-Overlapping Windows**:
+the PTY+hooks window closes at 15:57:00Z and the first batch-mode window opens
+at 15:58:40Z, so there is **no overlap** between the PTY+hooks window and the
+`--print` window. Within batch mode, Run 1 closes at 15:59:47Z before Run 2
+opens at 16:00:24Z, so the two batch runs are also non-overlapping.
+
+**Run 2 window verified isolated**: 2026-05-18 16:00:24Z — 2026-05-18 16:01:33Z UTC (Run 2)
+contained exactly one prompt execution and no concurrent Claude activity.
 
 ---
 

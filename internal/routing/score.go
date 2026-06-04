@@ -47,6 +47,7 @@ func scoreComponents(policy string, cand candidateInternal) map[string]float64 {
 		"power":               0,
 		"context_headroom":    0,
 		"sticky_affinity":     0,
+		"surface_preference":  0,
 	}
 	base := 100.0
 	cr := costClassRank[cand.CostClass]
@@ -223,6 +224,16 @@ func scoreComponents(policy string, cand candidateInternal) map[string]float64 {
 		add("sticky_affinity", StickyAffinityBonus)
 	}
 
+	// Surface preference: the configured preferred harness for this surface on
+	// an unpinned route gets a small bias so it wins what would otherwise be an
+	// exact score tie with another harness sharing the surface (e.g. claude-tui
+	// over claude on the "claude" surface). It is small enough not to override a
+	// genuinely higher-scoring candidate.
+	if cand.SurfacePreferred {
+		base += SurfacePreferenceBias
+		add("surface_preference", SurfacePreferenceBias)
+	}
+
 	// Utilization pressure can outweigh stickiness when the chosen server is
 	// already busy or saturated.
 	// Unknown or stale utilization is treated explicitly. Missing data gets a
@@ -347,7 +358,7 @@ func scoreComponents(policy string, cand candidateInternal) map[string]float64 {
 
 	// base tracks the implicit profile baseline so the components sum to the
 	// same total as scorePolicy's legacy behavior.
-	components["base"] = base - (components["cost"] + components["deployment_locality"] + components["quota_health"] + components["sticky_affinity"] + components["utilization"] + components["power"] + components["context_headroom"] + components["performance"])
+	components["base"] = base - (components["cost"] + components["deployment_locality"] + components["quota_health"] + components["sticky_affinity"] + components["utilization"] + components["power"] + components["context_headroom"] + components["performance"] + components["surface_preference"])
 	return components
 }
 

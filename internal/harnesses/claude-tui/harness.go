@@ -27,6 +27,32 @@ import (
 // ErrNotYetImplemented is returned by stub methods pending real implementation.
 var ErrNotYetImplemented = errors.New("claude-tui harness: not yet implemented")
 
+// promptSubmitDelay is the settle window between writing the bracketed-paste
+// END marker and sending the standalone submit Enter. Proven against live
+// Claude Code 2.1.162: a too-eager submit (Enter glued to the paste end in one
+// write) is swallowed by Ink and never starts the turn. 400ms is the value the
+// live spike validated; it is a package var so tests can shrink it.
+var promptSubmitDelay = 400 * time.Millisecond
+
+// SetPromptSubmitDelayForTest overrides promptSubmitDelay and returns a restore
+// function. It exists so deterministic tests in the external _test package can
+// shrink the live-tuned 400ms settle window to keep the scripted turn loop fast
+// while still exercising the paste→settle→submit sequence.
+func SetPromptSubmitDelayForTest(d time.Duration) func() {
+	prev := promptSubmitDelay
+	promptSubmitDelay = d
+	return func() { promptSubmitDelay = prev }
+}
+
+// drainTimer non-blockingly drains a stopped timer's channel so a later Reset
+// does not immediately fire on a stale tick.
+func drainTimer(t *time.Timer) {
+	select {
+	case <-t.C:
+	default:
+	}
+}
+
 // emptyModelSnapshot is a zero-valued snapshot used to satisfy the
 // ModelDiscoveryHarness interface when discovery fails. Per the
 // no-static-fallback principle, this sentinel is only returned paired
@@ -47,7 +73,7 @@ func (h *Harness) Info() harnesses.HarnessInfo {
 		Type:                "subprocess",
 		Available:           false,
 		IsSubscription:      true,
-		AutoRoutingEligible: false,
+		AutoRoutingEligible: true,
 		DefaultModel:        "claude-sonnet-4-6",
 	}
 }
@@ -99,6 +125,25 @@ type turnEnv struct {
 	// turnTimeout bounds the whole turn.
 	turnTimeout time.Duration
 	logger      *slog.Logger
+
+	// needsClear is true when this turn runs on a REUSED pooled session whose
+	// prior-turn conversation context must be reset with /clear before the new
+	// prompt is sent (F1). A fresh session leaves it false.
+	needsClear bool
+
+	// transcriptStartOffset is the byte offset to resume the transcript read
+	// from (a reused pooled slot passes the prior turn's nextTranscriptOffset
+	// so it does not replay earlier turns). 0 reads from the start.
+	transcriptStartOffset int64
+	// priorTranscriptPath is the transcript file the prior turn read. When the
+	// Stop hook reports the SAME path, the offset applies; a DIFFERENT path is a
+	// new session file and the read starts at 0.
+	priorTranscriptPath string
+
+	// nextTranscriptOffset and lastTranscriptPath are OUTPUTS written by the
+	// turn loop: the byte position and path the next turn should resume from.
+	nextTranscriptOffset int64
+	lastTranscriptPath   string
 }
 
 // runTurn drives a single turn through a pooled PTY session.
@@ -150,7 +195,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 
 	args := buildLaunchArgs(settingsJSON)
 
-	ptySession, err := getOrCreatePooledSession(
+	ps, err := claimPooledSession(
 		ctx, "claude-tui", claudePath, args, req.WorkDir, env,
 		session.Size{Rows: 50, Cols: 220},
 	)
@@ -159,6 +204,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to get pooled session: %v", err), 1)
 		return
 	}
+	ptySession := ps.session
 	// Symmetric release: every claimed session is released exactly once.
 	defer releasePooledSession("claude-tui", req.WorkDir, ptySession)
 
@@ -171,9 +217,23 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		pollInterval:    50 * time.Millisecond,
 		turnTimeout:     5 * time.Minute,
 		logger:          logger,
+		// Pool reuse correctness (F1): a CACHE HIT returns a live TUI process
+		// whose context still holds the prior turn's conversation. Reset it with
+		// /clear so the new prompt is a FRESH turn, not an append to a stale
+		// multi-turn conversation. A fresh slot (used==false) skips this.
+		needsClear: ps.used,
+		// Resume the transcript read past prior turns on a reused slot so this
+		// turn's final reflects ONLY this turn (F2).
+		transcriptStartOffset: ps.transcriptOffset,
+		priorTranscriptPath:   ps.transcriptPath,
 	}
 
-	status := h.runTurnOver(ctx, te, req, eventChan, &seq, startTime)
+	status := h.runTurnOver(ctx, &te, req, eventChan, &seq, startTime)
+	// Mark the slot used and persist the per-turn transcript bookmark so the
+	// next reuse resumes correctly.
+	ps.used = true
+	ps.transcriptOffset = te.nextTranscriptOffset
+	ps.transcriptPath = te.lastTranscriptPath
 	if status == turnEvicted {
 		evictPooledSession("claude-tui", req.WorkDir, ptySession)
 	}
@@ -206,7 +266,7 @@ const (
 // It is exported to tests via RunTurnForTest.
 func (h *Harness) runTurnOver(
 	ctx context.Context,
-	te turnEnv,
+	te *turnEnv,
 	req harnesses.ExecuteRequest,
 	eventChan chan<- harnesses.Event,
 	seq *int64,
@@ -239,23 +299,57 @@ func (h *Harness) runTurnOver(
 	emu := terminal.New(terminal.Size{Rows: int(size.Rows), Cols: int(size.Cols)})
 
 	probe := newStartupProbe(te.conn)
-	trustAnswered := false
+	// answeredDialogs tracks which first-run interstitials have already been
+	// dismissed this turn so each is answered with Enter at most once.
+	answeredDialogs := map[string]bool{}
+
+	// F1: reset a reused session's conversation context with /clear before the
+	// prompt so the new turn is a FRESH turn, not an append to a stale
+	// multi-turn conversation. We render through the same emulator so the ready
+	// marker is matched after vt10x layout (raw bytes are space-less garbage).
+	if te.needsClear {
+		if !clearReusedSession(ctx, te.conn, emu, probe, te.readyTimeout) {
+			_ = te.conn.Kill()
+			*seq++
+			emitFinalEvent(eventChan, *seq, startTime, "failed", "reused session /clear did not return a ready prompt", 1)
+			return turnEvicted
+		}
+	}
 
 	hookTailer := NewHookEventTailer(te.hookDir, logger)
 
 	// Send the prompt via bracketed paste after a brief startup grace. We do
 	// not block on a ready marker (it fires mid-turn); the Stop hook is the
 	// only reliable turn-end signal.
+	//
+	// CRITICAL (proven against live Claude Code 2.1.162): the bracketed-paste
+	// END marker must NOT be immediately followed by the submit Enter in the
+	// SAME write. Ink lands the pasted text in the input box but does NOT submit
+	// it when "\x1b[201~\r" arrives as one chunk — the turn never starts, the
+	// Stop hook never fires, and the loop wedges to the turn timeout. The fix is
+	// to (1) write the paste WITHOUT a trailing carriage return, then (2) send a
+	// SEPARATE Enter keystroke after a brief settle delay so Ink processes the
+	// paste-end before it sees the submit. The submit is driven by a one-shot
+	// timer fired inside this same single-consumer select loop (no extra
+	// goroutine racing the Output() consumer).
 	promptSent := false
+	submitTimer := time.NewTimer(0)
+	submitTimer.Stop()
+	drainTimer(submitTimer)
+	defer submitTimer.Stop()
 	sendPrompt := func() {
 		if promptSent {
 			return
 		}
 		paste := append([]byte("\x1b[200~"), []byte(req.Prompt)...)
-		paste = append(paste, []byte("\x1b[201~\r")...)
+		paste = append(paste, []byte("\x1b[201~")...)
 		if err := te.conn.SendBytes(paste); err != nil {
-			logger.Warn("failed to send prompt", "error", err)
+			logger.Warn("failed to send prompt paste", "error", err)
 		}
+		// Submit on a separate keystroke after a short settle so the live TUI
+		// registers the paste before the Enter. promptSubmitDelay is small but
+		// non-zero; tests use a fast clock by passing pollInterval-scaled values.
+		submitTimer.Reset(promptSubmitDelay)
 		promptSent = true
 	}
 
@@ -294,13 +388,23 @@ func (h *Harness) runTurnOver(
 		case <-startupTimer.C:
 			sendPrompt()
 
+		case <-submitTimer.C:
+			// The paste has settled; submit it with a standalone carriage return.
+			// This is the keystroke that actually starts the turn (see
+			// sendPrompt). We write a bare "\r" via SendBytes (NOT SendKey) so it
+			// is observably distinct from interstitial-dismissal Enters, which use
+			// SendKey(KeyEnter).
+			if err := te.conn.SendBytes([]byte("\r")); err != nil {
+				logger.Warn("failed to submit prompt", "error", err)
+			}
+
 		case <-poll.C:
 			// Drain mid-turn tool events.
 			emitFromTailer()
 			// Check for Stop completion carrying our nonce.
 			if path, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
 				emitFromTailer()
-				h.emitTranscriptAndFinal(ctx, path, eventChan, seq, startTime, logger)
+				h.emitTranscriptAndFinal(ctx, te, path, eventChan, seq, startTime, logger)
 				return turnOK
 			}
 
@@ -310,7 +414,7 @@ func (h *Harness) runTurnOver(
 				// first, else synthesize a final.
 				emitFromTailer()
 				if path, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
-					h.emitTranscriptAndFinal(ctx, path, eventChan, seq, startTime, logger)
+					h.emitTranscriptAndFinal(ctx, te, path, eventChan, seq, startTime, logger)
 					return turnEvicted
 				}
 				*seq++
@@ -322,13 +426,27 @@ func (h *Harness) runTurnOver(
 			}
 			// 1) answer Ink startup probes.
 			probe.Feed(chunk.Bytes)
-			// 2) feed the emulator and 3) match the folder-trust dialog.
+			// 2) feed the emulator and render the screen.
 			frame, _ := emu.Feed(chunk.Bytes)
-			if !trustAnswered && screenHasFolderTrustDialog(frame) {
-				_ = te.conn.SendKey(session.KeyEnter)
-				trustAnswered = true
+			// 3) detect a mid-turn fatal screen (error/limit/disconnect) and
+			// surface it as a terminal final instead of waiting for the turn
+			// timeout. The session is evicted so a reused slot never inherits a
+			// broken process.
+			if fs, ok := detectFatalScreen(frame); ok {
+				_ = te.conn.Kill()
+				*seq++
+				emitFinalEvent(eventChan, *seq, startTime, fs.status, fs.errMsg, fs.exitCode)
+				return turnEvicted
 			}
-			// Once the prompt UI is ready, send the prompt.
+			// 4) dismiss any first-run interstitial (folder-trust, theme/
+			// onboarding, MCP/plugin trust, bypass-permissions warning) with its
+			// default-accept keystroke (Enter), at most once each.
+			if name := detectInterstitial(frame); name != "" && !answeredDialogs[name] {
+				_ = te.conn.SendKey(session.KeyEnter)
+				answeredDialogs[name] = true
+			}
+			// Once the prompt UI is ready (and no interstitial is showing), send
+			// the prompt.
 			if !promptSent && screenReadyForPrompt(frame) {
 				sendPrompt()
 			}
@@ -337,9 +455,14 @@ func (h *Harness) runTurnOver(
 }
 
 // emitTranscriptAndFinal reads the transcript (which produces its own single
-// final event) and, if the transcript is unreadable, synthesizes a final.
+// final event) and, if the transcript is unreadable, synthesizes a final. It
+// resumes the read at te.transcriptStartOffset when the Stop hook reported the
+// SAME transcript path the prior turn read (a reused pooled slot), so this
+// turn's events and final reflect ONLY this turn (F2). It records the resume
+// bookmark for the next turn on te.nextTranscriptOffset / te.lastTranscriptPath.
 func (h *Harness) emitTranscriptAndFinal(
 	ctx context.Context,
+	te *turnEnv,
 	transcriptPath string,
 	eventChan chan<- harnesses.Event,
 	seq *int64,
@@ -348,12 +471,19 @@ func (h *Harness) emitTranscriptAndFinal(
 ) {
 	expanded, err := ExpandTranscriptPath(transcriptPath)
 	if err == nil {
+		te.lastTranscriptPath = expanded
 		tailer := NewTranscriptTailer(expanded, "default", logger)
+		// Resume past prior turns only when this is the SAME session transcript
+		// file. A different path is a fresh session file → read from the start.
+		if te.transcriptStartOffset > 0 && te.priorTranscriptPath == expanded {
+			tailer.SetStartOffset(te.transcriptStartOffset)
+		}
 		// Continue the harness sequence counter through the transcript events.
 		tailer.seqCounter = *seq
 		tailer.startTime = startTime
 		if err := tailer.ReadEvents(ctx, eventChan); err == nil {
 			*seq = tailer.seqCounter
+			te.nextTranscriptOffset = tailer.EndOffset()
 			return
 		}
 		logger.Warn("failed to read transcript", "path", expanded, "error", err)
@@ -442,9 +572,13 @@ func buildHookConfigs(hookDir, stopPayloadPath, nonce string) map[string][]HookC
 		nonce, "%s", stopPayloadPath,
 	)
 
+	// Matcher "" is Claude Code's documented match-all form for PreToolUse/
+	// PostToolUse/Stop (a NON-empty matcher is treated as a tool-name regex).
+	// The prior "*" happened to match as a zero-width regex, but "" is the
+	// schema-faithful match-all and is what the live 2.1.x engine documents.
 	return map[string][]HookCommand{
-		"PreToolUse":  {cmdHook("*", preCmd)},
-		"PostToolUse": {cmdHook("*", postCmd)},
+		"PreToolUse":  {cmdHook("", preCmd)},
+		"PostToolUse": {cmdHook("", postCmd)},
 		"Stop":        {cmdHook("", stopCmd)},
 	}
 }
@@ -911,11 +1045,70 @@ var folderTrustMarkers = []string{
 	"trust the files in this folder",
 }
 
+// interstitialDialog is one first-run/blocking dialog the turn loop dismisses
+// with its default-accept keystroke. On a truly fresh profile any of these can
+// sit on screen blocking the ready prompt; left unhandled, the startup grace
+// would paste the prompt INTO the dialog and the turn would run to the turn
+// timeout. Each is dismissed by pressing Enter (the default highlighted choice
+// — "Yes, I trust", "1. Dark mode", "Yes, proceed", "I accept", etc.).
+//
+// Each dialog is answered AT MOST ONCE per turn (tracked by name) so we do not
+// re-press Enter on a screen that lingers a few frames after acceptance.
+type interstitialDialog struct {
+	name    string
+	markers []string
+}
+
+// interstitials enumerates the blocking first-run dialogs handled on the turn
+// path, mirroring the folder-trust handler. Markers are matched against the
+// vt10x-rendered frame text (NOT raw bytes).
+var interstitials = []interstitialDialog{
+	{name: "folder-trust", markers: folderTrustMarkers},
+	{name: "theme-onboarding", markers: []string{
+		"Choose the text style that looks best",
+		"Choose the option that looks best",
+		"Dark mode",
+		"Light mode",
+	}},
+	{name: "mcp-trust", markers: []string{
+		"wants to use the following MCP servers",
+		"trust this server",
+		"Use this MCP server",
+	}},
+	{name: "plugin-trust", markers: []string{
+		"wants to use the following plugins",
+		"trust this plugin",
+		"Use this plugin",
+	}},
+	{name: "bypass-warning", markers: []string{
+		"Bypass Permissions mode",
+		"Bypassing Permissions",
+		"WARNING: Claude Code running in Bypass Permissions",
+		"I accept",
+	}},
+}
+
 // screenHasFolderTrustDialog reports whether the rendered frame shows the
 // folder-trust dialog (answered with Enter = default "Yes, I trust...").
+// Retained for the targeted folder-trust regression test.
 func screenHasFolderTrustDialog(frame terminal.Frame) bool {
+	return frameHasAnyMarker(frame, folderTrustMarkers)
+}
+
+// detectInterstitial returns the name of the first blocking dialog visible on
+// the rendered frame, or "" when none is present.
+func detectInterstitial(frame terminal.Frame) string {
+	for _, d := range interstitials {
+		if frameHasAnyMarker(frame, d.markers) {
+			return d.name
+		}
+	}
+	return ""
+}
+
+func frameHasAnyMarker(frame terminal.Frame, markers []string) bool {
 	joined := strings.Join(frame.Text, "\n")
-	for _, m := range folderTrustMarkers {
+	for _, m := range markers {
 		if strings.Contains(joined, m) {
 			return true
 		}
@@ -924,13 +1117,97 @@ func screenHasFolderTrustDialog(frame terminal.Frame) bool {
 }
 
 // screenReadyForPrompt reports whether the rendered frame shows the Claude
-// input prompt (the "❯"/"> " affordance) so the prompt can be pasted.
+// input prompt (the "❯"/"> " affordance) so the prompt can be pasted. It
+// returns false while ANY first-run interstitial is on screen so the prompt is
+// never pasted into a blocking dialog.
 func screenReadyForPrompt(frame terminal.Frame) bool {
-	joined := strings.Join(frame.Text, "\n")
-	if strings.Contains(joined, "Is this a project") {
-		return false // still on trust dialog
+	if detectInterstitial(frame) != "" {
+		return false
 	}
+	joined := strings.Join(frame.Text, "\n")
 	return strings.Contains(joined, "❯") || strings.Contains(joined, "> ")
+}
+
+// fatalScreen is a mid-turn error/limit/disconnect screen the turn loop must
+// surface as a terminal final instead of absorbing into the turn timeout.
+type fatalScreen struct {
+	// status is the CONTRACT-003 final status emitted when this screen matches.
+	status string
+	// markers are matched against the vt10x-rendered frame text.
+	markers []string
+	// errMsg is the human-readable error attached to the final.
+	errMsg string
+	// exitCode is the synthetic exit code for the final.
+	exitCode int
+}
+
+// fatalScreens enumerates the mid-turn failure screens the loop detects. The
+// usage-limit screen maps to iteration_limit (a quota/limit signal, distinct
+// from a crash); login/disconnect/error screens map to failed. Each match
+// evicts the session so a reused pool slot never inherits a broken process.
+var fatalScreens = []fatalScreen{
+	{
+		status:   "iteration_limit",
+		markers:  []string{"usage limit reached", "Claude usage limit reached", "approaching usage limit", "out of free messages"},
+		errMsg:   "claude usage limit reached mid-turn",
+		exitCode: 1,
+	},
+	{
+		status:   "failed",
+		markers:  []string{"Please run /login", "Invalid API key", "authentication_error", "Credit balance is too low", "OAuth token has expired"},
+		errMsg:   "claude session not authenticated mid-turn",
+		exitCode: 1,
+	},
+	{
+		status:   "failed",
+		markers:  []string{"Connection error", "network error", "fetch failed", "ECONNREFUSED", "service is temporarily unavailable", "Overloaded"},
+		errMsg:   "claude lost connection to the API mid-turn",
+		exitCode: 1,
+	},
+}
+
+// detectFatalScreen returns the first fatal screen visible on the frame, or
+// (fatalScreen{}, false) when none is present.
+func detectFatalScreen(frame terminal.Frame) (fatalScreen, bool) {
+	for _, fs := range fatalScreens {
+		if frameHasAnyMarker(frame, fs.markers) {
+			return fs, true
+		}
+	}
+	return fatalScreen{}, false
+}
+
+// clearReusedSession issues /clear to a reused pooled session and waits, over
+// the SAME single Output() consumer discipline, for the input prompt to return
+// (rendered through the vt10x emulator). It answers Ink startup probes inline
+// so a reused process that re-probes does not stall. Returns true once the
+// ready prompt is observed, false on timeout / closed output / cancellation.
+func clearReusedSession(ctx context.Context, conn ptyConn, emu terminal.Emulator, probe *startupProbe, timeout time.Duration) bool {
+	if err := conn.SendBytes([]byte("/clear\r")); err != nil {
+		return false
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-deadline.C:
+			return false
+		case chunk, ok := <-conn.Output():
+			if !ok {
+				return false
+			}
+			if chunk.ReadError != nil {
+				continue
+			}
+			probe.Feed(chunk.Bytes)
+			frame, _ := emu.Feed(chunk.Bytes)
+			if screenReadyForPrompt(frame) {
+				return true
+			}
+		}
+	}
 }
 
 // RunTurnForTest drives a single turn over an injected ptyConn with explicit
@@ -960,7 +1237,7 @@ func RunTurnForTest(
 		logger:          slog.Default(),
 	}
 	go func() {
-		h.runTurnOver(ctx, te, req, eventChan, &seq, start)
+		h.runTurnOver(ctx, &te, req, eventChan, &seq, start)
 		close(eventChan)
 	}()
 	var events []harnesses.Event
@@ -968,6 +1245,50 @@ func RunTurnForTest(
 		events = append(events, ev)
 	}
 	return events
+}
+
+// RunTurnForTestWithOffset is RunTurnForTest with an explicit transcript resume
+// offset and prior transcript path, so a test can prove a reused pooled slot
+// reads ONLY the new turn's transcript lines (F2). It returns the events AND
+// the next resume offset the turn recorded.
+func RunTurnForTestWithOffset(
+	ctx context.Context,
+	conn TestPTYConn,
+	req harnesses.ExecuteRequest,
+	hookDir, stopPayloadPath, nonce string,
+	startOffset int64,
+	priorTranscriptPath string,
+	readyTimeout, pollInterval, turnTimeout time.Duration,
+) ([]harnesses.Event, int64, string) {
+	h := &Harness{}
+	eventChan := make(chan harnesses.Event, 256)
+	seq := int64(0)
+	start := time.Now()
+	te := turnEnv{
+		conn:                  conn,
+		hookDir:               hookDir,
+		stopPayloadPath:       stopPayloadPath,
+		nonce:                 nonce,
+		readyTimeout:          readyTimeout,
+		pollInterval:          pollInterval,
+		turnTimeout:           turnTimeout,
+		logger:                slog.Default(),
+		needsClear:            true,
+		transcriptStartOffset: startOffset,
+		priorTranscriptPath:   priorTranscriptPath,
+	}
+	done := make(chan struct{})
+	go func() {
+		h.runTurnOver(ctx, &te, req, eventChan, &seq, start)
+		close(eventChan)
+		close(done)
+	}()
+	var events []harnesses.Event
+	for ev := range eventChan {
+		events = append(events, ev)
+	}
+	<-done
+	return events, te.nextTranscriptOffset, te.lastTranscriptPath
 }
 
 // TestPTYConn is the injectable PTY surface used by RunTurnForTest. It mirrors

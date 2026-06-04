@@ -123,6 +123,87 @@ func TestTranscriptParserRealSchemaWalksContentBlocks(t *testing.T) {
 	}
 }
 
+// turn1Transcript and turn2Lines model an append-only session .jsonl where two
+// turns share ONE file (the real Claude Code behavior). Turn 1 is the whole of
+// turn1Transcript; turn 2 appends turn2Lines.
+const turn1Transcript = `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_t1","role":"assistant","content":[{"type":"text","text":"Turn one answer."}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}}
+`
+
+const turn2Lines = `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_t2","role":"assistant","content":[{"type":"text","text":"Turn two answer."}],"stop_reason":"end_turn","usage":{"input_tokens":99,"output_tokens":7}}}
+`
+
+// TestTranscriptTailerResumesFromOffset proves F2: a reused session resumes the
+// transcript read at a byte offset so it emits ONLY the new turn's events and
+// its final reflects ONLY the new turn (not a replay of prior turns folded
+// together). Without the offset, turn 2 would re-emit turn 1's text and fold
+// turn 1's usage into the final.
+func TestTranscriptTailerResumesFromOffset(t *testing.T) {
+	// Turn 1: read the whole file, capture the resume offset.
+	path := writeTranscript(t, turn1Transcript)
+
+	t1 := claudetui.NewTranscriptTailer(path, "test", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ch1 := make(chan harnesses.Event, 16)
+	if err := t1.ReadEvents(ctx, ch1); err != nil {
+		t.Fatalf("turn1 ReadEvents: %v", err)
+	}
+	close(ch1)
+	off := t1.EndOffset()
+	if off <= 0 {
+		t.Fatalf("turn1 EndOffset = %d, want > 0", off)
+	}
+
+	// Append turn 2 to the SAME file (append-only session transcript).
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open append: %v", err)
+	}
+	if _, err := f.WriteString(turn2Lines); err != nil {
+		t.Fatalf("append turn2: %v", err)
+	}
+	_ = f.Close()
+
+	// Turn 2: resume from the captured offset.
+	t2 := claudetui.NewTranscriptTailer(path, "test", nil)
+	t2.SetStartOffset(off)
+	ch2 := make(chan harnesses.Event, 16)
+	if err := t2.ReadEvents(ctx, ch2); err != nil {
+		t.Fatalf("turn2 ReadEvents: %v", err)
+	}
+	close(ch2)
+
+	var texts []string
+	var finals []harnesses.FinalData
+	for ev := range ch2 {
+		switch ev.Type {
+		case harnesses.EventTypeTextDelta:
+			var d harnesses.TextDeltaData
+			_ = json.Unmarshal(ev.Data, &d)
+			texts = append(texts, d.Text)
+		case harnesses.EventTypeFinal:
+			var d harnesses.FinalData
+			_ = json.Unmarshal(ev.Data, &d)
+			finals = append(finals, d)
+		}
+	}
+
+	// Turn 2 must NOT replay turn 1's text.
+	if len(texts) != 1 || texts[0] != "Turn two answer." {
+		t.Fatalf("turn2 texts = %v, want exactly [\"Turn two answer.\"] (no turn-1 replay)", texts)
+	}
+	if len(finals) != 1 {
+		t.Fatalf("turn2 finals = %d, want exactly 1", len(finals))
+	}
+	// The final's text and usage must reflect ONLY turn 2.
+	if finals[0].FinalText != "Turn two answer." {
+		t.Errorf("turn2 final text = %q, want only turn-2 text", finals[0].FinalText)
+	}
+	if finals[0].Usage == nil || finals[0].Usage.InputTokens == nil || *finals[0].Usage.InputTokens != 99 {
+		t.Errorf("turn2 final usage input_tokens = %v, want 99 (turn-2 only)", finals[0].Usage)
+	}
+}
+
 // TestTranscriptParserExactlyOneFinal proves the parser emits exactly one
 // final even when many assistant lines are present.
 func TestTranscriptParserExactlyOneFinal(t *testing.T) {
@@ -312,18 +393,94 @@ func TestHookEventTailerEmitsToolEvents(t *testing.T) {
 	}
 }
 
+// TestHookEventCorrelationByEmissionOrder proves F3: when real Claude Code
+// 2.1.x PreToolUse/PostToolUse payloads OMIT a top-level tool_use_id (the
+// documented payloads carry session_id/tool_name/tool_input/tool_response but
+// no tool_use_id), the tailer assigns a synthetic correlation ID by emission
+// order so the Nth tool_call and Nth tool_result share an ID — a downstream
+// consumer can still pair a PreToolUse with its PostToolUse.
+func TestHookEventCorrelationByEmissionOrder(t *testing.T) {
+	dir := t.TempDir()
+	// Two tool roundtrips, NONE carrying tool_use_id (real-schema shape).
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("tool-0001-pre.json", `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`)
+	write("tool-0002-post.json", `{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":"ok"}`)
+	write("tool-0003-pre.json", `{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file":"a"}}`)
+	write("tool-0004-post.json", `{"hook_event_name":"PostToolUse","tool_name":"Edit","tool_response":"done"}`)
+
+	tailer := claudetui.NewHookEventTailer(dir, nil)
+	var calls []harnesses.ToolCallData
+	var results []harnesses.ToolResultData
+	tailer.Drain(0, func(ev harnesses.Event) {
+		switch ev.Type {
+		case harnesses.EventTypeToolCall:
+			var d harnesses.ToolCallData
+			_ = json.Unmarshal(ev.Data, &d)
+			calls = append(calls, d)
+		case harnesses.EventTypeToolResult:
+			var d harnesses.ToolResultData
+			_ = json.Unmarshal(ev.Data, &d)
+			results = append(results, d)
+		}
+	})
+
+	if len(calls) != 2 || len(results) != 2 {
+		t.Fatalf("got %d calls, %d results; want 2 and 2", len(calls), len(results))
+	}
+	// Every event must carry a non-empty correlation ID (derived, since the
+	// payloads omit tool_use_id).
+	for _, c := range calls {
+		if c.ID == "" {
+			t.Errorf("tool_call %q has empty correlation ID", c.Name)
+		}
+	}
+	// The Nth call and Nth result must share an ID.
+	if calls[0].ID != results[0].ID {
+		t.Errorf("first roundtrip ID mismatch: call %q result %q", calls[0].ID, results[0].ID)
+	}
+	if calls[1].ID != results[1].ID {
+		t.Errorf("second roundtrip ID mismatch: call %q result %q", calls[1].ID, results[1].ID)
+	}
+	// Distinct roundtrips must NOT collide.
+	if calls[0].ID == calls[1].ID {
+		t.Errorf("distinct tool roundtrips share an ID %q", calls[0].ID)
+	}
+}
+
+// TestHookEventRealToolUseIDTakesPrecedence proves a payload that DOES carry a
+// real tool_use_id uses it verbatim instead of a synthetic correlation ID.
+func TestHookEventRealToolUseIDTakesPrecedence(t *testing.T) {
+	he, err := claudetui.ParseHookEvent([]byte(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_real","tool_input":{}}`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	ev, ok := claudetui.HookEventToEvent(he, 1, "tool-7")
+	if !ok {
+		t.Fatal("event did not map")
+	}
+	var d harnesses.ToolCallData
+	_ = json.Unmarshal(ev.Data, &d)
+	if d.ID != "toolu_real" {
+		t.Errorf("ID = %q, want toolu_real (real tool_use_id must win over corrID)", d.ID)
+	}
+}
+
 // TestParseHookEvent proves payload decoding and event mapping.
 func TestParseHookEvent(t *testing.T) {
 	he, err := claudetui.ParseHookEvent([]byte(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"x"}`))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	ev, ok := claudetui.HookEventToEvent(he, 7)
+	ev, ok := claudetui.HookEventToEvent(he, 7, "")
 	if !ok || ev.Type != harnesses.EventTypeToolCall || ev.Sequence != 7 {
 		t.Errorf("mapping = %+v ok=%v", ev, ok)
 	}
 
-	_, ok = claudetui.HookEventToEvent(claudetui.HookEvent{Event: "SessionStart"}, 1)
+	_, ok = claudetui.HookEventToEvent(claudetui.HookEvent{Event: "SessionStart"}, 1, "")
 	if ok {
 		t.Errorf("unknown hook event should not map to a canonical event")
 	}

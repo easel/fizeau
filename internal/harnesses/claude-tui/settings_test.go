@@ -69,6 +69,24 @@ func TestSettingsRealHookSchema(t *testing.T) {
 	}
 }
 
+// TestHookMatcherIsMatchAll proves F3: PreToolUse/PostToolUse/Stop all use the
+// documented match-all matcher "" (a NON-empty matcher is a tool-name regex in
+// Claude Code 2.1.x; the prior "*" only matched as a zero-width regex). Using
+// "" gives schema parity and unconditional firing on every tool.
+func TestHookMatcherIsMatchAll(t *testing.T) {
+	hooks := buildHookConfigs("/tmp/hookdir", "/tmp/hookdir/stop.json", "abc123")
+	for _, event := range []string{"PreToolUse", "PostToolUse", "Stop"} {
+		groups, ok := hooks[event]
+		if !ok || len(groups) == 0 {
+			t.Errorf("event %q missing hook group", event)
+			continue
+		}
+		if groups[0].Matcher != "" {
+			t.Errorf("event %q matcher = %q, want \"\" (documented match-all)", event, groups[0].Matcher)
+		}
+	}
+}
+
 // TestReadStopHookPayloadNonceMatch proves the Stop-payload reader only returns
 // a transcript path when the payload nonce matches, and reports not-complete
 // otherwise.

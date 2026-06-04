@@ -65,6 +65,12 @@ func (f *fakePTY) Kill() error {
 
 func (f *fakePTY) push(b []byte) { f.out <- session.OutputChunk{Bytes: b} }
 
+func (f *fakePTY) wasKilled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.killed
+}
+
 func (f *fakePTY) keyCount(k session.Key) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -468,6 +474,93 @@ func (f *fakePTY) sentContains(sub []byte) int {
 	return n
 }
 
+// sentSnapshot returns a copy of the ordered SendBytes payloads.
+func (f *fakePTY) sentSnapshot() [][]byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([][]byte, len(f.sent))
+	for i, b := range f.sent {
+		out[i] = append([]byte(nil), b...)
+	}
+	return out
+}
+
+// TestRunTurnSubmitsPromptWithSeparateEnterAfterPaste is the dedicated
+// regression test for the live-smoke wedge (round 2). The root cause, proven
+// against live Claude Code 2.1.162, was that the bracketed-paste END marker
+// glued to a trailing carriage return ("\x1b[201~\r") in ONE write lands the
+// text in the Ink input box but never SUBMITS it: the turn never starts, the
+// Stop hook never fires, and the loop wedges to the turn timeout. The fix sends
+// the paste WITHOUT a trailing "\r", then a SEPARATE bare "\r" after a settle
+// delay. This test asserts that exact wire sequence on the scripted fake PTY.
+func TestRunTurnSubmitsPromptWithSeparateEnterAfterPaste(t *testing.T) {
+	restore := claudetui.SetPromptSubmitDelayForTest(15 * time.Millisecond)
+	defer restore()
+
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := "nonce-submit"
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		// Only complete AFTER the standalone submit "\r" has been sent, proving
+		// the turn loop actually emits the submit keystroke (not just the paste).
+		for f.sentContains([]byte("\r")) == 0 || !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "do the thing", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		100*time.Millisecond, 10*time.Millisecond, 4*time.Second)
+
+	assertExactlyOneFinal(t, events, "success")
+
+	sent := f.sentSnapshot()
+	// 1) Find the bracketed-paste write and assert it carries the prompt and
+	//    does NOT end with a carriage return (the bug was a glued "\r").
+	pasteIdx := -1
+	for i, b := range sent {
+		if len(b) >= 6 && string(b[:6]) == "\x1b[200~" {
+			pasteIdx = i
+			if !bytes.Contains(b, []byte("do the thing")) {
+				t.Errorf("paste write does not carry the prompt: %q", b)
+			}
+			if bytes.HasSuffix(b, []byte("\r")) {
+				t.Errorf("paste write must NOT end with a carriage return (the wedge bug): %q", b)
+			}
+			if !bytes.HasSuffix(b, []byte("\x1b[201~")) {
+				t.Errorf("paste write must end with the bracketed-paste END marker: %q", b)
+			}
+			break
+		}
+	}
+	if pasteIdx < 0 {
+		t.Fatal("no bracketed-paste write observed")
+	}
+	// 2) A standalone "\r" submit write must appear AFTER the paste write.
+	sawSeparateSubmit := false
+	for i := pasteIdx + 1; i < len(sent); i++ {
+		if string(sent[i]) == "\r" {
+			sawSeparateSubmit = true
+			break
+		}
+	}
+	if !sawSeparateSubmit {
+		t.Errorf("no standalone carriage-return submit write after the paste; sequence=%q", sent)
+	}
+}
+
 // TestRunTurnSingleOutputConsumerNoStolenChunks is the dedicated R7 regression
 // test for the "single Output() consumer / no stolen chunks" requirement.
 //
@@ -540,6 +633,240 @@ func TestRunTurnSingleOutputConsumerNoStolenChunks(t *testing.T) {
 		}
 	}
 	assertExactlyOneFinal(t, events, "success")
+}
+
+// TestRunTurnDismissesInterstitials proves F4: every first-run blocking dialog
+// (theme/onboarding, MCP-server trust, plugin trust, bypass-permissions
+// warning), rendered with cursor-positioning escapes so it is only legible
+// after vt10x rendering, is dismissed with a single Enter on the turn path —
+// mirroring the folder-trust handler. Each dialog is answered exactly once and
+// the prompt is delivered only AFTER the dialog clears (never pasted into it).
+func TestRunTurnDismissesInterstitials(t *testing.T) {
+	cases := []struct {
+		name   string
+		render []byte // cursor-positioned dialog body
+	}{
+		{
+			name:   "theme-onboarding",
+			render: []byte("\x1b[3;5HChoose the text style that looks best\x1b[5;7H1. Dark mode\x1b[6;7H2. Light mode"),
+		},
+		{
+			name:   "mcp-trust",
+			render: []byte("\x1b[3;5HThis project wants to use the following MCP servers\x1b[5;7HDo you trust this server?"),
+		},
+		{
+			name:   "plugin-trust",
+			render: []byte("\x1b[3;5HThis project wants to use the following plugins\x1b[5;7HDo you trust this plugin?"),
+		},
+		{
+			name:   "bypass-warning",
+			render: []byte("\x1b[3;5HWARNING: Claude Code running in Bypass Permissions mode\x1b[5;7HI accept the risk. Press Enter to continue."),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			hookDir := filepath.Join(dir, "hooks")
+			if err := os.MkdirAll(hookDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			stopPath := filepath.Join(hookDir, "stop.json")
+			nonce := "nonce-" + tc.name
+			transcript := writeTranscript(t, realTranscript)
+
+			f := newFakePTY()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			go func() {
+				f.push([]byte("\x1b[H\x1b[2J"))
+				f.push(tc.render)
+				// Wait for the Enter dismissal, then clear the dialog and show
+				// the ready prompt.
+				for f.keyCount(session.KeyEnter) == 0 {
+					time.Sleep(5 * time.Millisecond)
+				}
+				f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+				for !f.sawBracketedPaste() {
+					time.Sleep(5 * time.Millisecond)
+				}
+				writeStopPayload(t, stopPath, nonce, transcript)
+			}()
+
+			req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir}
+			events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+				300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+			if f.keyCount(session.KeyEnter) == 0 {
+				t.Fatalf("%s dialog was not dismissed with Enter", tc.name)
+			}
+			if f.keyCount(session.KeyEnter) > 1 {
+				t.Errorf("%s: Enter pressed %d times, want exactly 1", tc.name, f.keyCount(session.KeyEnter))
+			}
+			if !f.sawBracketedPaste() {
+				t.Errorf("%s: prompt not delivered after dialog dismissed", tc.name)
+			}
+			assertExactlyOneFinal(t, events, "success")
+		})
+	}
+}
+
+// TestRunTurnSurfacesMidTurnUsageLimit proves F5: a mid-turn usage-limit screen
+// is surfaced as a terminal iteration_limit final and evicts the session,
+// instead of being absorbed into the (5-minute) turn timeout.
+func TestRunTurnSurfacesMidTurnUsageLimit(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		// Reach the ready prompt and let the prompt be pasted.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Now the model hits its limit mid-turn (rendered, no Stop hook).
+		f.push([]byte("\x1b[H\x1b[2J\x1b[3;5HClaude usage limit reached. Your limit will reset at 5pm."))
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "do work", WorkDir: dir}
+	// turnTimeout is LARGE: the test must finish well before it via the fatal
+	// screen detection, not the timeout.
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, "nonce-limit",
+		100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
+
+	assertExactlyOneFinal(t, events, "iteration_limit")
+	if !f.wasKilled() {
+		t.Error("session was not killed/evicted on mid-turn usage limit")
+	}
+}
+
+// TestRunTurnSurfacesMidTurnDisconnect proves F5: a mid-turn connection-error
+// screen is surfaced as a terminal failed final (not absorbed into the timeout).
+func TestRunTurnSurfacesMidTurnDisconnect(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		f.push([]byte("\x1b[H\x1b[2J\x1b[3;5HConnection error: fetch failed (network error)"))
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "do work", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, "nonce-disc",
+		100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
+
+	assertExactlyOneFinal(t, events, "failed")
+}
+
+// TestRunTurnReusedSessionClearsAndScopesTranscript proves F1+F2 together on the
+// harness turn path: a REUSED pooled slot (needsClear=true) issues /clear and
+// waits for the prompt to return BEFORE sending the new prompt, and resumes the
+// transcript read at the prior turn's offset so the new turn's final reflects
+// ONLY the new turn (no replay of the prior turn's text/usage).
+func TestRunTurnReusedSessionClearsAndScopesTranscript(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := "nonce-reuse"
+
+	// Append-only session transcript: turn 1 already written, turn 2 appended.
+	transcriptDir := t.TempDir()
+	transcript := filepath.Join(transcriptDir, "session.jsonl")
+	if err := os.WriteFile(transcript, []byte(turn1Transcript+turn2Lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Resume offset = length of turn 1 (so the read scopes to turn 2 only).
+	priorOffset := int64(len(turn1Transcript))
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clearObserved := make(chan struct{})
+	go func() {
+		// Reused slot: the loop must FIRST /clear and wait for the prompt before
+		// pasting. Wait for the /clear command, then render the ready prompt.
+		for f.sentContains([]byte("/clear")) == 0 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		close(clearObserved)
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		// The prompt must be pasted only AFTER /clear returned the prompt.
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "second turn", WorkDir: dir}
+	events, nextOff, lastPath := claudetui.RunTurnForTestWithOffset(
+		ctx, f, req, hookDir, stopPath, nonce,
+		priorOffset, transcript,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	select {
+	case <-clearObserved:
+	default:
+		t.Fatal("reused session did not issue /clear before the prompt")
+	}
+	if f.sentContains([]byte("/clear")) == 0 {
+		t.Fatal("no /clear was sent on a reused session")
+	}
+
+	// The final must reflect ONLY turn 2 (no replay of turn 1's text/usage).
+	var texts []string
+	var fin harnesses.FinalData
+	finals := 0
+	for _, ev := range events {
+		switch ev.Type {
+		case harnesses.EventTypeTextDelta:
+			var d harnesses.TextDeltaData
+			_ = json.Unmarshal(ev.Data, &d)
+			texts = append(texts, d.Text)
+		case harnesses.EventTypeFinal:
+			finals++
+			_ = json.Unmarshal(ev.Data, &fin)
+		}
+	}
+	if finals != 1 {
+		t.Fatalf("final events = %d, want 1", finals)
+	}
+	if len(texts) != 1 || texts[0] != "Turn two answer." {
+		t.Errorf("reused-turn texts = %v, want only [\"Turn two answer.\"] (no turn-1 replay)", texts)
+	}
+	if fin.FinalText != "Turn two answer." {
+		t.Errorf("reused-turn final text = %q, want only turn-2 text", fin.FinalText)
+	}
+	// The next resume bookmark must advance to end-of-file.
+	if nextOff <= priorOffset {
+		t.Errorf("next transcript offset = %d, want > prior %d", nextOff, priorOffset)
+	}
+	if lastPath != transcript {
+		t.Errorf("recorded transcript path = %q, want %q", lastPath, transcript)
+	}
 }
 
 func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) {
