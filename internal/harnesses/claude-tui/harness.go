@@ -27,6 +27,32 @@ import (
 // ErrNotYetImplemented is returned by stub methods pending real implementation.
 var ErrNotYetImplemented = errors.New("claude-tui harness: not yet implemented")
 
+// promptSubmitDelay is the settle window between writing the bracketed-paste
+// END marker and sending the standalone submit Enter. Proven against live
+// Claude Code 2.1.162: a too-eager submit (Enter glued to the paste end in one
+// write) is swallowed by Ink and never starts the turn. 400ms is the value the
+// live spike validated; it is a package var so tests can shrink it.
+var promptSubmitDelay = 400 * time.Millisecond
+
+// SetPromptSubmitDelayForTest overrides promptSubmitDelay and returns a restore
+// function. It exists so deterministic tests in the external _test package can
+// shrink the live-tuned 400ms settle window to keep the scripted turn loop fast
+// while still exercising the paste→settle→submit sequence.
+func SetPromptSubmitDelayForTest(d time.Duration) func() {
+	prev := promptSubmitDelay
+	promptSubmitDelay = d
+	return func() { promptSubmitDelay = prev }
+}
+
+// drainTimer non-blockingly drains a stopped timer's channel so a later Reset
+// does not immediately fire on a stale tick.
+func drainTimer(t *time.Timer) {
+	select {
+	case <-t.C:
+	default:
+	}
+}
+
 // emptyModelSnapshot is a zero-valued snapshot used to satisfy the
 // ModelDiscoveryHarness interface when discovery fails. Per the
 // no-static-fallback principle, this sentinel is only returned paired
@@ -295,16 +321,35 @@ func (h *Harness) runTurnOver(
 	// Send the prompt via bracketed paste after a brief startup grace. We do
 	// not block on a ready marker (it fires mid-turn); the Stop hook is the
 	// only reliable turn-end signal.
+	//
+	// CRITICAL (proven against live Claude Code 2.1.162): the bracketed-paste
+	// END marker must NOT be immediately followed by the submit Enter in the
+	// SAME write. Ink lands the pasted text in the input box but does NOT submit
+	// it when "\x1b[201~\r" arrives as one chunk — the turn never starts, the
+	// Stop hook never fires, and the loop wedges to the turn timeout. The fix is
+	// to (1) write the paste WITHOUT a trailing carriage return, then (2) send a
+	// SEPARATE Enter keystroke after a brief settle delay so Ink processes the
+	// paste-end before it sees the submit. The submit is driven by a one-shot
+	// timer fired inside this same single-consumer select loop (no extra
+	// goroutine racing the Output() consumer).
 	promptSent := false
+	submitTimer := time.NewTimer(0)
+	submitTimer.Stop()
+	drainTimer(submitTimer)
+	defer submitTimer.Stop()
 	sendPrompt := func() {
 		if promptSent {
 			return
 		}
 		paste := append([]byte("\x1b[200~"), []byte(req.Prompt)...)
-		paste = append(paste, []byte("\x1b[201~\r")...)
+		paste = append(paste, []byte("\x1b[201~")...)
 		if err := te.conn.SendBytes(paste); err != nil {
-			logger.Warn("failed to send prompt", "error", err)
+			logger.Warn("failed to send prompt paste", "error", err)
 		}
+		// Submit on a separate keystroke after a short settle so the live TUI
+		// registers the paste before the Enter. promptSubmitDelay is small but
+		// non-zero; tests use a fast clock by passing pollInterval-scaled values.
+		submitTimer.Reset(promptSubmitDelay)
 		promptSent = true
 	}
 
@@ -342,6 +387,16 @@ func (h *Harness) runTurnOver(
 
 		case <-startupTimer.C:
 			sendPrompt()
+
+		case <-submitTimer.C:
+			// The paste has settled; submit it with a standalone carriage return.
+			// This is the keystroke that actually starts the turn (see
+			// sendPrompt). We write a bare "\r" via SendBytes (NOT SendKey) so it
+			// is observably distinct from interstitial-dismissal Enters, which use
+			// SendKey(KeyEnter).
+			if err := te.conn.SendBytes([]byte("\r")); err != nil {
+				logger.Warn("failed to submit prompt", "error", err)
+			}
 
 		case <-poll.C:
 			// Drain mid-turn tool events.
