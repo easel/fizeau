@@ -42,10 +42,10 @@ type transcriptLine struct {
 
 // transcriptMessage is the message envelope on assistant/user lines.
 type transcriptMessage struct {
-	Model      string            `json:"model,omitempty"`
-	ID         string            `json:"id,omitempty"`
-	Role       string            `json:"role,omitempty"`
-	StopReason string            `json:"stop_reason,omitempty"`
+	Model      string          `json:"model,omitempty"`
+	ID         string          `json:"id,omitempty"`
+	Role       string          `json:"role,omitempty"`
+	StopReason string          `json:"stop_reason,omitempty"`
 	Usage      json.RawMessage `json:"usage,omitempty"`
 	Content    messageContent  `json:"content,omitempty"`
 }

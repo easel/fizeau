@@ -381,8 +381,22 @@ func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, p
 	switch name {
 	case "codex":
 		return strings.HasPrefix(model, "gpt-")
-	case "claude":
-		return strings.HasPrefix(model, "claude-")
+	case "claude", "claude-tui":
+		// Gate on the claude model FAMILY, not live /model enumeration. The
+		// catalog "claude" surface routes tier IDs like "sonnet-4.6" (note: no
+		// "claude-" prefix) alongside "claude-opus-4.7"/"claude-haiku-5.5".
+		// claude-tui's interactive /model picker only lists the CURRENT model,
+		// so a resolved tier will not appear in discovery — but the running
+		// session can /model to any family member. Accept any claude-family ID
+		// so a default-policy route (e.g. sonnet-4.6) executes via claude-tui
+		// instead of being rejected when discovery is cold/incomplete. (claude
+		// shares this case; before, it survived only via a warm-cache exact
+		// match and would have rejected the bare-tier "sonnet-4.6" too.)
+		m := strings.ToLower(model)
+		return strings.HasPrefix(m, "claude-") ||
+			strings.HasPrefix(m, "sonnet") ||
+			strings.HasPrefix(m, "opus") ||
+			strings.HasPrefix(m, "haiku")
 	case "pi":
 		// Pi can route to non-Gemini backends (lmstudio, omlx, etc.) when a
 		// provider is pinned. The pi CLI owns per-provider model validation
