@@ -3,6 +3,8 @@ package serviceimpl
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
@@ -13,6 +15,28 @@ import (
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
 	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
+
+// claudeTransportEnv is the kill-switch env var selecting the transport backing
+// the metered "claude" harness. Default-off: unset / "subprocess" spawns
+// `claude --print` (byte-for-byte unchanged production behavior); "native"
+// routes through the in-process Anthropic Messages API (metered,
+// actual_cash_spend). Rollback = unset the var or set it to "subprocess".
+const claudeTransportEnv = "FIZEAU_CLAUDE_TRANSPORT"
+
+// claudeNativeTransportSelected reports whether the claude harness should use
+// the native Anthropic Messages API transport. Only an explicit "native" value
+// flips it on; every other value (including empty and "subprocess") keeps the
+// default subprocess path.
+func claudeNativeTransportSelected() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv(claudeTransportEnv)), "native")
+}
+
+// newClaudeRunner constructs the metered claude harness Runner with the
+// transport selected by claudeTransportEnv. The default (subprocess) build is
+// the zero-value Runner — identical to the prior &claudeharness.Runner{}.
+func newClaudeRunner() *claudeharness.Runner {
+	return &claudeharness.Runner{NativeMode: claudeNativeTransportSelected()}
+}
 
 // ExecuteDispatchRequest carries API-neutral data needed to choose the
 // concrete execute runner.
@@ -40,7 +64,7 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 			cb.RunNative(ctx)
 		}
 	case "claude":
-		runSubprocess(ctx, cb, &claudeharness.Runner{})
+		runSubprocess(ctx, cb, newClaudeRunner())
 	case "claude-tui":
 		runSubprocess(ctx, cb, &claudetuiharness.Harness{})
 	case "codex":

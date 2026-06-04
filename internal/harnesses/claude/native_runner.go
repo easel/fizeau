@@ -9,6 +9,7 @@ import (
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
+	"github.com/easel/fizeau/internal/tool"
 )
 
 // defaultNativeMaxIterations bounds the native agentic loop so a model that
@@ -71,10 +72,23 @@ func (r *Runner) runNative(ctx context.Context, req harnesses.ExecuteRequest, ou
 		}
 	}
 
-	// Build the tool defs + lookup map from the runner's wired tools.
-	toolDefs := make([]agentcore.ToolDef, 0, len(r.NativeTools))
-	toolMap := make(map[string]agentcore.Tool, len(r.NativeTools))
-	for _, t := range r.NativeTools {
+	// Resolve the native tool set. An explicitly-wired NativeTools list is
+	// honored verbatim (the construction point already chose it). When no list
+	// is wired, build the same builtin agent tool set the service native loop
+	// uses (tool.BuiltinToolsForPreset) and apply the permission filter so the
+	// native claude path is agentic rather than text-only. Permission filtering
+	// mirrors serviceimpl.filterNativeToolsForPermission (which claude cannot
+	// import without an import cycle: serviceimpl -> harnesses/claude).
+	tools := r.NativeTools
+	if tools == nil {
+		tools = tool.BuiltinToolsForPreset(req.WorkDir, "", tool.BashOutputFilterConfig{})
+		tools = filterNativeToolsForPermission(tools, req.Permissions)
+	}
+
+	// Build the tool defs + lookup map from the resolved tools.
+	toolDefs := make([]agentcore.ToolDef, 0, len(tools))
+	toolMap := make(map[string]agentcore.Tool, len(tools))
+	for _, t := range tools {
 		toolDefs = append(toolDefs, agentcore.ToolDef{
 			Name:        t.Name(),
 			Description: t.Description(),
@@ -94,6 +108,12 @@ func (r *Runner) runNative(ctx context.Context, req harnesses.ExecuteRequest, ou
 	if req.Temperature != 0 {
 		t := float64(req.Temperature)
 		opts.Temperature = &t
+	}
+	// Map the public reasoning effort scalar onto the native Options so the
+	// metered Messages API path actually requests model-side reasoning. Empty
+	// / "off" leaves Reasoning unset (no thinking budget requested).
+	if req.Reasoning != "" {
+		opts.Reasoning = agentcore.Reasoning(req.Reasoning)
 	}
 
 	agg := &streamAggregate{Model: model}
@@ -167,6 +187,45 @@ func (r *Runner) runNative(ctx context.Context, req harnesses.ExecuteRequest, ou
 
 	// Hit the iteration cap with tool calls still pending.
 	return agg, 0, "", nil, "iteration_limit"
+}
+
+// nativeReadOnlyTools is the read-only tool allowlist applied under the "safe"
+// permission mode. It mirrors serviceimpl.nativeReadOnlyTools — kept as a local
+// copy because internal/harnesses/claude cannot import internal/serviceimpl
+// (serviceimpl already imports this package, so the reverse edge would cycle).
+var nativeReadOnlyTools = map[string]bool{
+	"read":       true,
+	"read_file":  true,
+	"grep":       true,
+	"ls":         true,
+	"find":       true,
+	"cat":        true,
+	"head":       true,
+	"tail":       true,
+	"stat":       true,
+	"web_fetch":  true,
+	"web_search": true,
+}
+
+// filterNativeToolsForPermission narrows the native tool set per permission
+// mode, mirroring serviceimpl.filterNativeToolsForPermission. "unrestricted"
+// keeps every tool; any other mode (including "" / "safe") keeps only the
+// read-only allowlist so the native claude path cannot mutate state under safe
+// permissions.
+func filterNativeToolsForPermission(tools []agentcore.Tool, permission string) []agentcore.Tool {
+	if permission == "unrestricted" {
+		return tools
+	}
+	filtered := make([]agentcore.Tool, 0, len(tools))
+	for _, t := range tools {
+		if t == nil {
+			continue
+		}
+		if nativeReadOnlyTools[t.Name()] {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
 }
 
 // executeNativeTool runs one tool call against the wired tool set. An unknown

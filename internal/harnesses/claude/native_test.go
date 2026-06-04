@@ -297,3 +297,60 @@ func TestNativeRunner_UnknownToolErrors(t *testing.T) {
 	require.NoError(t, json.Unmarshal(by[harnesses.EventTypeToolResult][0].Data, &tr))
 	assert.Contains(t, tr.Error, "unknown tool")
 }
+
+// TestNativeRunner_AutoToolsPermissionFilter proves that when no NativeTools
+// list is wired the runner auto-builds the builtin agent tool set
+// (tool.BuiltinToolsForPreset) and applies the permission filter: a mutating
+// tool (write) is available under "unrestricted" but stripped under the default
+// "safe" mode (surfacing as an "unknown tool" error result). This exercises the
+// reused builtin tool set + permission-filter path used in production native
+// dispatch.
+func TestNativeRunner_AutoToolsPermissionFilter(t *testing.T) {
+	makeProvider := func() *fakeStreamProvider {
+		return &fakeStreamProvider{
+			turns: [][]agentcore.StreamDelta{
+				{
+					{ToolCallID: "tu_w", ToolCallName: "write"},
+					{ToolCallID: "tu_w", ToolCallArgs: `{"path":"out.txt","content":"hi"}`},
+					{FinishReason: "tool_use"},
+					{Done: true},
+				},
+				{
+					{Content: "done"},
+					{FinishReason: "end_turn"},
+					{Done: true},
+				},
+			},
+		}
+	}
+
+	run := func(t *testing.T, permission string) harnesses.ToolResultData {
+		t.Helper()
+		// NativeTools intentionally left nil so the runner auto-builds + filters.
+		r := &Runner{NativeMode: true, NativeProvider: makeProvider()}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := r.Execute(ctx, harnesses.ExecuteRequest{
+			Prompt:      "write a file",
+			WorkDir:     t.TempDir(),
+			Permissions: permission,
+		})
+		require.NoError(t, err)
+		evs := drainEvents(t, ctx, out)
+		by := eventsByType(evs)
+		require.Len(t, by[harnesses.EventTypeToolResult], 1)
+		var tr harnesses.ToolResultData
+		require.NoError(t, json.Unmarshal(by[harnesses.EventTypeToolResult][0].Data, &tr))
+		return tr
+	}
+
+	// Safe (default): write is filtered out -> unknown tool error.
+	safe := run(t, "safe")
+	assert.Contains(t, safe.Error, "unknown tool",
+		"write must be filtered out under safe permissions")
+
+	// Unrestricted: write survives the filter and executes against the WorkDir.
+	unrestricted := run(t, "unrestricted")
+	assert.Empty(t, unrestricted.Error,
+		"write must be available under unrestricted permissions; got error=%q", unrestricted.Error)
+}

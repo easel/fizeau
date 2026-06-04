@@ -440,23 +440,26 @@ seam.
 
 ## Capability Baseline Impact
 
-`primary-harness-capability-baseline.md` adds a fifth row, `claude-tui`. At
-introduction every row is `gap` until live PTY record-mode evidence exists,
-mirroring how `claude` quota status was originally gated. The
-`AutoRoutingEligible` flag stays `false` for `claude-tui` until promotion.
+`primary-harness-capability-baseline.md` adds a fifth row, `claude-tui`. The
+row was introduced all-`gap` (mirroring how `claude` quota status was
+originally gated), then promoted under the Gate-E ACCEPT disposition
+(2026-06-04): 12 of 14 capabilities are now `pass` with live harness
+evidence, and only `ListReasoning`/`SetReasoning` remain `gap`. The
+`AutoRoutingEligible` flag stays `false` for `claude-tui` until the remaining
+reasoning gaps are unblocked.
 
-Known gaps at introduction with documented blockers (not optimistic
-"pending evidence"):
+Post-Gate-E baseline (12/14 `pass`; the two `gap` rows carry documented
+blockers, not optimistic "pending evidence"):
 
-| Row | Status | Known blocker |
+| Row | Status | Evidence / known blocker |
 |-----|--------|---------------|
+| Run, FinalText, ProgressEvents, Cancel, WorkdirContext, ListModels, SetModel, TokenUsage, QuotaStatus, ErrorStatus, RequestMetadata | `pass` | Live harness evidence (`harness.go`, `stream.go`, `contract004.go`, validated against installed claude 2.1.162+). |
 | PermissionModes | `pass` | claude 2.1.160+ `--permission-mode bypassPermissions` enables unrestricted mode on the Claude Max subscription. Evidence: harness.go:256-257, launch_args_test.go::TestBuildLaunchArgsBypassPermissions, validated against installed claude 2.1.162+. |
+| ListReasoning | `gap`, no TUI affordance known | No documented Claude TUI slash command lists per-turn reasoning levels. |
 | SetReasoning | `gap`, no TUI affordance known | The `claude --print` path uses `--effort`; no documented Claude TUI slash command sets per-turn reasoning. Until one ships, `claude-tui` does not set reasoning and treats requested non-default values as a routing rejection. |
-| All other rows | `gap` until live cassette evidence | Standard ADR-002 promotion path. |
 
-Once any `claude-tui` capability has accepted live cassette evidence, the
-row becomes `pass` independently of `claude`. A `pass` on `claude` does not
-imply `pass` on `claude-tui`, and vice versa.
+Each `pass` row was accepted independently of `claude`. A `pass` on `claude`
+does not imply `pass` on `claude-tui`, and vice versa.
 
 `harness-golden-integration.md` extends the cassette scenario list to
 include `claude-tui` authenticated record mode plus replay cassettes for
