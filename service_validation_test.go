@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/easel/fizeau/internal/harnesses"
 )
 
 func TestExecuteRejectsUnsupportedSubprocessModelBeforeRun(t *testing.T) {
@@ -37,6 +39,41 @@ func TestExecuteRejectsUnsupportedSubprocessModelBeforeRun(t *testing.T) {
 	}
 	if typed.Harness != "codex" || typed.Model != "not-a-real-model" {
 		t.Fatalf("typed error=%#v, want codex/not-a-real-model", typed)
+	}
+}
+
+// TestModelSupportedForHarnessClaudeTuiAcceptsFamilyWithoutDiscovery pins the
+// fix for the execute gate that blocked claude-tui from running catalog-tier
+// models. claude-tui's interactive /model picker only lists the CURRENT model,
+// so live discovery (subprocessHarnessModelIDs) returns the resolved tier ID
+// only by luck — on a cold/incomplete cache it is empty, and the gate must NOT
+// reject a claude-family model on that basis (the running session can /model to
+// any family member). The catalog "claude" surface routes bare-tier IDs like
+// "sonnet-4.6" (no "claude-" prefix), so the gate must be family-aware, not a
+// simple "claude-" prefix check.
+func TestModelSupportedForHarnessClaudeTuiAcceptsFamilyWithoutDiscovery(t *testing.T) {
+	cfg := harnesses.HarnessConfig{}
+	// Family models that a default-policy route resolves to. The bare-tier
+	// forms (no "claude-" prefix) are the ones the old "claude-" prefix check
+	// rejected; all must pass for both claude and claude-tui.
+	for _, tc := range []struct {
+		name  string
+		model string
+	}{
+		{"claude-tui", "sonnet-4.6"},
+		{"claude-tui", "claude-opus-4.7"},
+		{"claude-tui", "claude-haiku-5.5"},
+		{"claude-tui", "opus-4.7"},
+		{"claude-tui", "haiku-5.5"},
+		{"claude", "sonnet-4.6"},
+	} {
+		if !modelSupportedForHarness(tc.name, cfg, tc.model, "") {
+			t.Errorf("modelSupportedForHarness(%q, %q) = false, want true (family-aware, no discovery)", tc.name, tc.model)
+		}
+	}
+	// A non-claude model must still be rejected for claude-tui.
+	if modelSupportedForHarness("claude-tui", cfg, "gpt-5.4", "") {
+		t.Error("modelSupportedForHarness(claude-tui, gpt-5.4) = true, want false (not a claude-family model)")
 	}
 }
 
