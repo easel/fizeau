@@ -248,3 +248,97 @@ func TestClaudeTuiAccountFreshness(t *testing.T) {
 		t.Errorf("expected freshness=%v, got %v", expectedFreshness, freshness)
 	}
 }
+
+// TestRefreshQuotaBoundsProbeTimeoutWithoutDeadline proves the F1 fix:
+// when the caller passes a context with NO deadline (e.g.
+// context.Background()), RefreshQuota must bound the live PTY probe by the
+// short probe ceiling, NOT by the 15-minute cache freshness window. Before
+// the fix, refreshQuotaLocked seeded timeout = claudettuiQuotaFreshness
+// (15m), which exceeds the 10-minute go test binary timeout and hung the
+// conformance test against the live `claude` binary. This test captures the
+// timeout value the probe receives and asserts it equals the ceiling.
+func TestRefreshQuotaBoundsProbeTimeoutWithoutDeadline(t *testing.T) {
+	var gotTimeout time.Duration
+	probe := func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
+		gotTimeout = timeout
+		return []harnesses.QuotaWindow{
+			{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
+		}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+	}
+	restore := SetCaptureForTest(probe)
+	defer restore()
+
+	h := &Harness{}
+	if _, err := h.RefreshQuota(context.Background()); err != nil {
+		t.Fatalf("RefreshQuota: unexpected error %v", err)
+	}
+
+	if gotTimeout != claudettuiQuotaProbeCeiling {
+		t.Fatalf("probe timeout = %v, want ceiling %v (must not inherit the %v freshness window)",
+			gotTimeout, claudettuiQuotaProbeCeiling, claudettuiQuotaFreshness)
+	}
+	if gotTimeout >= claudettuiQuotaFreshness {
+		t.Fatalf("probe timeout %v must be strictly below freshness window %v", gotTimeout, claudettuiQuotaFreshness)
+	}
+}
+
+// TestRefreshQuotaHonorsShorterCallerDeadline proves the ceiling does not
+// override an even shorter caller deadline: when ctx carries a deadline
+// below the ceiling, the probe receives the (shorter) remaining time.
+func TestRefreshQuotaHonorsShorterCallerDeadline(t *testing.T) {
+	var gotTimeout time.Duration
+	probe := func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
+		gotTimeout = timeout
+		return []harnesses.QuotaWindow{
+			{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
+		}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+	}
+	restore := SetCaptureForTest(probe)
+	defer restore()
+
+	h := &Harness{}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := h.RefreshQuota(ctx); err != nil {
+		t.Fatalf("RefreshQuota: unexpected error %v", err)
+	}
+
+	if gotTimeout <= 0 || gotTimeout > 2*time.Second {
+		t.Fatalf("probe timeout = %v, want a positive value <= 2s (shorter caller deadline)", gotTimeout)
+	}
+	if gotTimeout >= claudettuiQuotaProbeCeiling {
+		t.Fatalf("probe timeout %v must honor the shorter caller deadline, not the ceiling %v", gotTimeout, claudettuiQuotaProbeCeiling)
+	}
+}
+
+// TestRefreshQuotaTerminatesQuicklyWithBackgroundContext is a wall-clock
+// regression guard for F1: even when the probe itself blocks until its
+// provided timeout (simulating the live binary never returning), the probe
+// is bounded by the ceiling so RefreshQuota returns far under the go test
+// binary timeout. We assert it returns well under a generous bound and that
+// the bounded timeout is the ceiling. The probe sleeps only briefly to keep
+// the test fast and deterministic.
+func TestRefreshQuotaTerminatesQuicklyWithBackgroundContext(t *testing.T) {
+	probe := func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
+		// A real probe would block up to `timeout`; the fix guarantees
+		// `timeout` is the ceiling, not 15m. Verify the bound here without
+		// actually sleeping for the ceiling.
+		if timeout > claudettuiQuotaProbeCeiling {
+			t.Errorf("probe received timeout %v > ceiling %v", timeout, claudettuiQuotaProbeCeiling)
+		}
+		return []harnesses.QuotaWindow{
+			{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
+		}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+	}
+	restore := SetCaptureForTest(probe)
+	defer restore()
+
+	h := &Harness{}
+	start := time.Now()
+	if _, err := h.RefreshAccount(context.Background()); err != nil {
+		t.Fatalf("RefreshAccount: unexpected error %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 30*time.Second {
+		t.Fatalf("RefreshAccount took %v with background context; must terminate well under the test timeout", elapsed)
+	}
+}

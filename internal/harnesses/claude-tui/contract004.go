@@ -28,6 +28,16 @@ const claudettuiQuotaFreshness = 15 * time.Minute
 // account refresh cadence matches quota.
 const claudettuiAccountFreshness = claudettuiQuotaFreshness
 
+// claudettuiQuotaProbeCeiling is the hard upper bound on how long a single
+// live /usage PTY probe may run. It is distinct from claudettuiQuotaFreshness
+// (a CACHE freshness window, not a probe timeout): a live `claude --usage`
+// probe completes in ~15s, so 60s is a generous ceiling. Bounding the probe
+// here keeps RefreshQuota/RefreshAccount terminating well under any test or
+// caller deadline even when ctx carries no deadline of its own — without this
+// ceiling a context.Background() caller would inherit the 15-minute freshness
+// window and could outlive the go test binary timeout (root cause of F1).
+const claudettuiQuotaProbeCeiling = 60 * time.Second
+
 // modelDiscoveryTTL is the freshness window for model discovery cache per ADR-012.
 const modelDiscoveryTTL = 24 * time.Hour
 
@@ -157,7 +167,11 @@ func (h *Harness) RefreshQuota(ctx context.Context) (harnesses.QuotaStatus, erro
 // Probe failure is folded into State=QuotaUnavailable.
 func (h *Harness) refreshQuotaLocked(ctx context.Context) harnesses.QuotaStatus {
 	now := time.Now()
-	timeout := claudettuiQuotaFreshness
+	// Start from the hard probe ceiling, NOT the cache freshness window.
+	// A live /usage probe finishes in ~15s; the ceiling guarantees the
+	// probe (and therefore RefreshQuota/RefreshAccount) returns well under
+	// any test or caller timeout even when ctx has no deadline.
+	timeout := claudettuiQuotaProbeCeiling
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining > 0 && remaining < timeout {

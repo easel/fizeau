@@ -29,6 +29,23 @@ import (
 func TestClaudeTuiInterfaceConformance(t *testing.T) {
 	// The var _ assignments in harness.go compile-time-check interface
 	// satisfaction. This test verifies they are present and correct.
+	//
+	// Install a deterministic in-process quota probe so RefreshQuota /
+	// RefreshAccount never drive the live `claude` binary via PTY. Without
+	// this seam, RefreshAccount(context.Background()) (below) would run the
+	// real /usage PTY probe and could park for minutes, blowing the go test
+	// binary timeout (root cause of F1). This test only asserts interface
+	// satisfaction and well-formed return values, so a fast fake probe is
+	// sufficient and keeps the test fully deterministic (no live claude,
+	// no network, no PTY).
+	restoreProbe := claudetui.SetCaptureForTest(func(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
+		return []harnesses.QuotaWindow{
+				{Name: "Current session", LimitID: "session", WindowMinutes: 300, UsedPercent: 10.0, State: "available"},
+				{Name: "Current week (all models)", LimitID: "weekly-all", WindowMinutes: 10080, UsedPercent: 5.0, State: "available"},
+			}, &harnesses.AccountInfo{PlanType: "Pro"}, nil
+	})
+	defer restoreProbe()
+
 	h := &claudetui.Harness{}
 
 	// Verify runtime methods work.
