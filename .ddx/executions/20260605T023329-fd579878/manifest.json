@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260605T023329-fd579878",
+  "bead_id": "fizeau-be7d5a20",
+  "base_rev": "7f4e771e1768728cb195c7d7ef0ab6a1ed912e26",
+  "created_at": "2026-06-05T02:33:36.806679055Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-be7d5a20",
+    "title": "builtin registry New(claude) must honor FIZEAU_CLAUDE_TRANSPORT like execute dispatch",
+    "description": "PROBLEM: internal/harnesses/builtin/registry.go:17 constructs \u0026claudeharness.Runner{} for the \\\"claude\\\" case with NativeMode always false, ignoring the FIZEAU_CLAUDE_TRANSPORT knob that internal/serviceimpl/execute_dispatch.go honors (claudeNativeTransportSelected at :30, newClaudeRunner at :37). Any code path that builds the claude harness via builtin.New (rather than execute dispatch's newClaudeRunner) silently gets the subprocess runner even when native is selected — a latent wrong-transport inconsistency.\n\nROOT CAUSE: registry.go:16-17 hard-codes \u0026claudeharness.Runner{} with no transport selection; the selection logic lives ONLY in serviceimpl (execute_dispatch.go).\n\nPROPOSED FIX: Make the claude case in builtin/registry.go New() honor the same transport selection. To avoid an import cycle (builtin must NOT import serviceimpl), move the env-read selection helper out of execute_dispatch.go into a location both can import — e.g. export claudeharness.NativeTransportSelected() in the claude harness package (internal/harnesses/claude) — and call it from BOTH execute_dispatch.go (newClaudeRunner) and builtin/registry.go. Single source of truth for the env read.\n\nNON-SCOPE: do NOT change the env var name (FIZEAU_CLAUDE_TRANSPORT) or its default (subprocess). Do NOT flip the default.",
+    "acceptance": "1. New Test TestBuiltinNewClaudeHonorsTransport (internal/harnesses/builtin/registry_test.go): with FIZEAU_CLAUDE_TRANSPORT=native, New(\\\"claude\\\") returns a Runner with NativeMode=true; unset/default returns NativeMode=false.\n2. execute_dispatch.go and builtin/registry.go share ONE transport-selection function (no duplicated env-read); existing TestClaudeTransportSelection still passes.\n3. No import cycle: GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go build ./... is clean.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/... ./internal/serviceimpl/... -count=1 -timeout 150s green. Do NOT run `go test ./...` (HANGS).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-claude",
+      "kind:bug",
+      "phase:6",
+      "native-transport"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"decode readiness classification result: json: cannot unmarshal array into Go struct field preClaimIntakePromptRewrite.rewrite.acceptance of type string\",\"fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"4d3ef910fa5fa4ed32056aae58b6a22d70d8b7522ba884a15b06d485686c716e\"}",
+          "created_at": "2026-06-05T02:33:18.192788539Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T023329-fd579878",
+    "prompt": ".ddx/executions/20260605T023329-fd579878/prompt.md",
+    "manifest": ".ddx/executions/20260605T023329-fd579878/manifest.json",
+    "result": ".ddx/executions/20260605T023329-fd579878/result.json",
+    "checks": ".ddx/executions/20260605T023329-fd579878/checks.json",
+    "usage": ".ddx/executions/20260605T023329-fd579878/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-be7d5a20-20260605T023329-fd579878"
+  },
+  "prompt_sha": "d15a2794dfeb30d668aff11a08ef220154f82ecaaa173c4330da57a49e88fbc6"
+}
