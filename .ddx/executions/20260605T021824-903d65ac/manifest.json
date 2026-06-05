@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T021824-903d65ac",
+  "bead_id": "fizeau-38cb69d4",
+  "base_rev": "c8340561837d92f24f8cba1589c70e68c59aa6bb",
+  "created_at": "2026-06-05T02:18:35.151221036Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-38cb69d4",
+    "title": "native claude cost: include cache-read/write tokens in metered CostUSD",
+    "description": "PROBLEM: The metered native claude transport under-counts actual_cash_spend when prompt caching is active. nativeCostUSD (internal/harnesses/claude/native_runner.go:270) computes cost via agentcore.DefaultPricing.EstimateCost(model, u.Input, u.Output) — input+output tokens ONLY. agentcore.TokenUsage (internal/core/agent.go:46) carries CacheRead and CacheWrite token counts, and ModelPricing (internal/core/pricing.go:9-10) carries CacheReadPerM/CacheWritePerM rates, but EstimateCost (internal/core/pricing.go:37) ignores both. So a cached turn is billed too low.\n\nROOT CAUSE: internal/core/pricing.go:37 EstimateCost(model, inputTokens, outputTokens) has no cache params; nativeCostUSD passes only u.Input/u.Output, dropping u.CacheRead/u.CacheWrite.\n\nPROPOSED FIX: Add a cache-aware method PricingTable.EstimateCostWithCache(model string, input, output, cacheRead, cacheWrite int) float64 returning the input+output cost PLUS float64(cacheRead)/1e6*CacheReadPerM + float64(cacheWrite)/1e6*CacheWritePerM, keeping the same unknown-model contract (return -1 for unknown model). Prefer a NEW method (do NOT change EstimateCost's signature — other callers depend on it). Update nativeCostUSD (native_runner.go:270) to call the new method with u.CacheRead/u.CacheWrite, preserving the existing negative=\u003e0 guard.\n\nNON-SCOPE: do NOT change the subprocess-path cost (it gets total_cost_usd from the CLI). Do NOT change existing EstimateCost callers. Do NOT flip the default transport.",
+    "acceptance": "1. New Test TestEstimateCostWithCache (internal/core/pricing_test.go): for a model whose ModelPricing has CacheReadPerM/CacheWritePerM set, EstimateCostWithCache adds cache cost on top of input+output; an unknown model returns -1.\n2. New Test TestNativeRunner_CacheCost (internal/harnesses/claude/native_test.go): a native turn whose TokenUsage includes CacheRead+CacheWrite yields a final CostUSD equal to the cache-inclusive cost (strictly greater than the input+output-only figure).\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/core/... ./internal/harnesses/claude/... -count=1 -timeout 120s is green. Do NOT run `go test ./...` (HANGS ~600s on pre-existing live-network ListModels tests — targeted paths only).\n4. lefthook run pre-commit passes (fizeau hook = gofmt-check + go vet).",
+    "labels": [
+      "area:harness-claude",
+      "kind:bug",
+      "phase:6",
+      "native-transport"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T021824-903d65ac",
+    "prompt": ".ddx/executions/20260605T021824-903d65ac/prompt.md",
+    "manifest": ".ddx/executions/20260605T021824-903d65ac/manifest.json",
+    "result": ".ddx/executions/20260605T021824-903d65ac/result.json",
+    "checks": ".ddx/executions/20260605T021824-903d65ac/checks.json",
+    "usage": ".ddx/executions/20260605T021824-903d65ac/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-38cb69d4-20260605T021824-903d65ac"
+  },
+  "prompt_sha": "1feff91547fdae9da3bd32e7af94efaf818e1c84b9bd0ee01a76903af7b12d60"
+}
