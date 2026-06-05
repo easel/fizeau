@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260605T034033-1c4e1d41",
+  "bead_id": "fizeau-2355230d",
+  "base_rev": "78506a4a2216f7d0643bbc6f147833a0855221c1",
+  "created_at": "2026-06-05T03:40:39.963662647Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2355230d",
+    "title": "opencode: add to capability_matrix.json and primary-harness baseline",
+    "description": "PROBLEM: opencode has no row in internal/harnesses/capability_matrix.json (which carries codex, claude, claude-tui, gemini) and is excluded from docs/helix/02-design/primary-harness-capability-baseline.md (still labeled \"secondary follow-up\", baseline lines 18-20). Without a matrix row + conformance-evidence bindings, opencode's CONTRACT-004 status is untracked and its parity work is invisible to the matrix tests.\n\nROOT CAUSE: documentation/registration gap; opencode was deferred as secondary.\n\nPROPOSED FIX: Add an opencode harness object to capability_matrix.json with Harness and ModelDiscoveryHarness supported rows bound to existing conformance tests (TestOpenCodeRunnerHarnessConformance, TestOpenCodeRunnerModelDiscoveryConformance, conformance_test.go:10,14) and QuotaHarness/AccountHarness marked n/a (matching doc.go). Add an opencode row to the baseline table reflecting post-parity status (Run/FinalText/ProgressEvents/ToolEvents/TokenUsage pass; QuotaStatus n/a). Verify against capability_matrix_test.go (it special-cases claude-tui; ensure adding opencode does not trip the evidence-ID requirement — opencode rows bind to test evidence, not billing cassettes).\n\nNON-SCOPE: code changes to the runner.",
+    "acceptance": "1. capability_matrix.json contains an opencode entry whose supported capabilities each carry non-empty test evidence IDs.\n2. Matrix-validation tests stay green: cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/... -run CapabilityMatrix -count=1 -timeout 120s.\n3. primary-harness-capability-baseline.md has an opencode row.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:docs",
+      "phase:6",
+      "opencode-parity"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: All referenced artifacts exist and match the bead's claims. capability_matrix.json has 4 harnesses (claude, codex, claude-tui, gemini) with no opencode entry. primary-harness-capability-baseline.md lines 18-20 explicitly label opencode as secondary follow-up, and the Required Baseline table (lines 45-51) contains no opencode row. conformance_test.go:10,14 confirm TestOpenCodeRunnerHarnessConformance and TestOpenCodeRunnerModelDiscoveryConformance exist. doc.go confirms QuotaHarness/AccountHarness are explicitly n/a. The evidence_id requirement in TestCapabilityMatrixEvidenceIDRequired is gated on harness.Name == 'claude-tui' (capability_matrix_test.go:63), so opencode entries using plain 'test' evidence with no evidence_id field will not trip that check. TestHarnessCapabilityMatrixEvidenceResolution iterates all harnesses and calls validateTestEvidenceExists, which parses the opencode/ package directory — the conformance test functions are present there and will resolve. TestHarnessCapabilityMatrixValidation and the SupportedLimitIDs/SupportedAliases tests enumerate explicit cases (claude, codex, gemini only) and are unaffected by a new opencode matrix entry. validateMethodExists has no opencode case, but the bead correctly specifies test-type evidence only, avoiding that path entirely. This is a pure JSON-object + markdown-table-row addition with no runner code changes.\",\"fingerprint\":\"562c9cb68ee08b259c740f21f9ffc6bcfbbf1d54bedd36c0808479b48fdd5a83\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"562c9cb68ee08b259c740f21f9ffc6bcfbbf1d54bedd36c0808479b48fdd5a83\"}",
+          "created_at": "2026-06-05T03:40:21.488839721Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T034033-1c4e1d41",
+    "prompt": ".ddx/executions/20260605T034033-1c4e1d41/prompt.md",
+    "manifest": ".ddx/executions/20260605T034033-1c4e1d41/manifest.json",
+    "result": ".ddx/executions/20260605T034033-1c4e1d41/result.json",
+    "checks": ".ddx/executions/20260605T034033-1c4e1d41/checks.json",
+    "usage": ".ddx/executions/20260605T034033-1c4e1d41/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-2355230d-20260605T034033-1c4e1d41"
+  },
+  "prompt_sha": "d3a927cce5157333de53137c6a97137e14d5121f0bae4c593dcaca03618e48b0"
+}
