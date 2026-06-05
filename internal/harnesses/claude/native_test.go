@@ -265,6 +265,62 @@ func TestNativeRunner_MeteredBilling(t *testing.T) {
 	assert.Equal(t, 1_000_000, *final.Usage.OutputTokens)
 }
 
+// TestNativeRunner_CacheCost proves that when a native turn's TokenUsage
+// includes CacheRead and CacheWrite tokens the final CostUSD is cache-inclusive
+// (strictly greater than the input+output-only figure). AC#2 of fizeau-38cb69d4.
+func TestNativeRunner_CacheCost(t *testing.T) {
+	// claude-sonnet-4-20250514: $3/MTok input, $15/MTok output,
+	//                           $0.30/MTok cache-read, $3.75/MTok cache-write
+	const (
+		inputTokens      = 1_000_000
+		outputTokens     = 1_000_000
+		cacheReadTokens  = 500_000
+		cacheWriteTokens = 200_000
+	)
+	// input+output only: $3 + $15 = $18
+	// cache-read: 0.5 * $0.30 = $0.15
+	// cache-write: 0.2 * $3.75 = $0.75
+	// total: $18.90
+	wantCacheInclusive := 18.90
+
+	provider := &fakeStreamProvider{
+		turns: [][]agentcore.StreamDelta{
+			{
+				{Content: "answer"},
+				{
+					Usage: &agentcore.TokenUsage{
+						Input:      inputTokens,
+						Output:     outputTokens,
+						CacheRead:  cacheReadTokens,
+						CacheWrite: cacheWriteTokens,
+					},
+					FinishReason: "end_turn",
+				},
+				{Done: true},
+			},
+		},
+	}
+	r := &Runner{NativeMode: true, NativeProvider: provider}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "x", Model: "claude-sonnet-4-20250514"})
+	require.NoError(t, err)
+	evs := drainEvents(t, ctx, out)
+	by := eventsByType(evs)
+
+	require.Len(t, by[harnesses.EventTypeFinal], 1)
+	var final harnesses.FinalData
+	require.NoError(t, json.Unmarshal(by[harnesses.EventTypeFinal][0].Data, &final))
+	assert.Equal(t, "success", final.Status)
+
+	// Must exceed input+output-only cost ($18.00).
+	assert.Greater(t, final.CostUSD, 18.0,
+		"cache-inclusive cost must exceed input+output-only cost")
+	assert.InDelta(t, wantCacheInclusive, final.CostUSD, 0.001,
+		"expected cache-inclusive cost $%.4f, got $%.4f", wantCacheInclusive, final.CostUSD)
+}
+
 // TestNativeRunner_HealthCheckIgnoresBinary proves a native-mode Runner reports
 // healthy WITHOUT a claude CLI on disk: native mode reaches the metered HTTP API
 // and never os/exec's the binary, so HealthCheck must not gate on its presence.

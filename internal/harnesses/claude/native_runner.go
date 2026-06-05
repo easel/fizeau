@@ -268,7 +268,7 @@ func optIntPtr(v int) *int {
 // using fizeau's pricing table. Unknown models yield 0 (no cost asserted)
 // rather than a negative sentinel.
 func nativeCostUSD(model string, u agentcore.TokenUsage) float64 {
-	cost := agentcore.DefaultPricing.EstimateCost(model, u.Input, u.Output)
+	cost := agentcore.DefaultPricing.EstimateCostWithCache(model, u.Input, u.Output, u.CacheRead, u.CacheWrite)
 	if cost < 0 {
 		return 0
 	}
