@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T031739-758c583b",
+  "bead_id": "fizeau-5c5758be",
+  "base_rev": "20f651242e224f238dfa848479c31b21b8ebb5b8",
+  "created_at": "2026-06-05T03:17:45.761633498Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-5c5758be",
+    "title": "opencode: replace fictional-format runner tests with real-JSONL fixtures",
+    "description": "PROBLEM: internal/harnesses/opencode/runner_test.go:235-291 (TestRunner_Execute_FinalUsageTotals) and runner_test.go:371-402 (TestParseOpencodeStream_WithUsage) assert against {\"usage\":{\"input_tokens\":15,...},\"total_cost_usd\":0.003} — a format opencode NEVER emits. These green-on-fiction tests actively block the parser/usage fixes and give false confidence. TestRunner_Execute_HappyPath (runner_test.go:160) feeds plain text, also not the real JSONL.\n\nROOT CAUSE: tests authored against an assumed envelope, never validated against the real opencode CLI.\n\nPROPOSED FIX: Delete/rewrite TestRunner_Execute_FinalUsageTotals, TestParseOpencodeStream_WithUsage, and TestRunner_Execute_HappyPath to drive the real JSONL fixtures (testdata/jsonl/text_only.jsonl, tool_use.jsonl) through a fake `opencode` shell binary that cats the fixture (the existing fake-binary test harness in runner_test.go). Keep TestRunner_Execute_AppliesRequestControls (arg wiring) and TestRunner_Execute_RequestTimeout / ExitErrorIncludesStderr (process control, format-independent).\n\nNON-SCOPE: do not weaken process-control tests; do not add new non-test code.",
+    "acceptance": "1. No test in internal/harnesses/opencode/ references total_cost_usd or a top-level {\"usage\":...} envelope.\n2. TestRunner_Execute_HappyPath asserts FinalText equals the assistant text (\"PONG\"), not raw JSON.\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:test",
+      "phase:6",
+      "opencode-parity"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T031739-758c583b",
+    "prompt": ".ddx/executions/20260605T031739-758c583b/prompt.md",
+    "manifest": ".ddx/executions/20260605T031739-758c583b/manifest.json",
+    "result": ".ddx/executions/20260605T031739-758c583b/result.json",
+    "checks": ".ddx/executions/20260605T031739-758c583b/checks.json",
+    "usage": ".ddx/executions/20260605T031739-758c583b/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-5c5758be-20260605T031739-758c583b"
+  },
+  "prompt_sha": "bd18e075c7c00f6303eb5b4655f52b425e57deccf20e2f9e73e63d2a6172cbaa"
+}
