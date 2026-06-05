@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T030935-e39c1227",
+  "bead_id": "fizeau-286f4725",
+  "base_rev": "170333d5eb1920fb4f083901363da9a4dea50acf",
+  "created_at": "2026-06-05T03:09:41.430770078Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-286f4725",
+    "title": "opencode: wire real token usage into final event via ResolveFinalUsage",
+    "description": "PROBLEM: Even after the parser captures step_finish.tokens, runner.go:136-150 still builds FinalUsage from the old agg.InputTokens/OutputTokens ints with UsageSourceNativeStream, ignoring reasoning/cache dimensions and not using the shared resolver. codex routes usage through harnesses.ResolveFinalUsage(agg.UsageSources) (codex/runner.go:146), which normalizes provenance, freshness, and warnings.\n\nROOT CAUSE: internal/harnesses/opencode/runner.go:136-150 hand-rolls FinalUsage; the opencode streamAggregate does not expose UsageSources []harnesses.UsageCandidate like codex (codex/stream.go:61-65,220-245).\n\nPROPOSED FIX: Change opencode streamAggregate to hold UsageSources []harnesses.UsageCandidate and a recordUsage that builds UsageTokenCounts (input/output/reasoning, cache read/write/total) from step_finish.part.tokens, tagged harnesses.UsageSourceNativeStream. In runner.go:136-150 replace the manual block with final.Usage, final.Warnings = harnesses.ResolveFinalUsage(agg.UsageSources) (mirror codex/runner.go:146). Keep CostUSD from part.cost.\n\nNON-SCOPE: tool events; parser line-scan (assumes the parser-rewrite bead landed).",
+    "acceptance": "1. New Test TestRunner_Execute_RealUsageFromStepFinish: running the text_only.jsonl fixture through a fake-binary Execute yields final.Usage.InputTokens==13505, OutputTokens==3, ReasoningTokens==18, Source==harnesses.UsageSourceNativeStream.\n2. final.Usage is nil when the stream carries no step_finish (no silent zero — preserve the provenance rule usage_provenance_test.go checks).\n3. Rewrite usage_provenance_test.go to use real step_finish JSONL instead of the fictional {\"usage\":...} envelope.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:bug",
+      "phase:6",
+      "opencode-parity"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T030935-e39c1227",
+    "prompt": ".ddx/executions/20260605T030935-e39c1227/prompt.md",
+    "manifest": ".ddx/executions/20260605T030935-e39c1227/manifest.json",
+    "result": ".ddx/executions/20260605T030935-e39c1227/result.json",
+    "checks": ".ddx/executions/20260605T030935-e39c1227/checks.json",
+    "usage": ".ddx/executions/20260605T030935-e39c1227/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-286f4725-20260605T030935-e39c1227"
+  },
+  "prompt_sha": "a84679b097b6a0335f8acf19bda72bdebc500e01b301fb06778eb710899ed742"
+}
