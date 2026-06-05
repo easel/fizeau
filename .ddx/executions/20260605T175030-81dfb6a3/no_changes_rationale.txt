@@ -1,0 +1,11 @@
+verification_command: cd /Users/erik/Projects/fizeau && GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s -run 'TestRunner_EmitsModelResolutionEvent|TestRunner_ReasoningResolutionForwarded'
+
+All acceptance criteria are already satisfied in HEAD (ada99a9d):
+
+AC1 - TestRunner_EmitsModelResolutionEvent: exists at runner_test.go:438, verifies EventTypeRoutingDecision with RunnerModelResolution data. PASS.
+AC2 - TestRunner_ReasoningResolutionForwarded: exists at runner_test.go:507, verifies resolved reasoning reaches --variant arg with snapped=medium warning. PASS.
+AC3 - DiscoveryCache field: opencode Runner exposes DiscoveryCache *harnesses.ModelDiscoveryCache at runner.go:46. Tests inject fixture snapshots via this field.
+AC4 - go test ./internal/harnesses/opencode/... green. All 21 tests pass.
+AC5 - lefthook run pre-commit passes (fmt/vet skip cleanly with no staged files).
+
+The implementation was already present in the baseline commit. No code changes required.
