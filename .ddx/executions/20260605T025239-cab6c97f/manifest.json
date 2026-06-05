@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T025239-cab6c97f",
+  "bead_id": "fizeau-2ae33094",
+  "base_rev": "fe5bfac403649300ddf64b6694c68474f900bf05",
+  "created_at": "2026-06-05T02:52:47.581278036Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-2ae33094",
+    "title": "opencode: rewrite stream parser to consume real --format json JSONL events",
+    "description": "PROBLEM: internal/harnesses/opencode/stream.go:52 (parseOpencodeStream) buffers ALL of `opencode run --format json` stdout and emits it as a single text_delta, then parses usage from opencodeUsage/opencodeEnvelope structs (stream.go:21-32) whose fields (usage.input_tokens, total_cost_usd) DO NOT EXIST in real output. Verified against opencode 1.3.17: `--format json` emits newline-delimited JSON events, e.g. {\"type\":\"text\",\"part\":{\"type\":\"text\",\"text\":\"PONG\"}} and {\"type\":\"step_finish\",\"part\":{\"type\":\"step-finish\",\"tokens\":{\"total\":13526,\"input\":13505,\"output\":3,\"reasoning\":18,\"cache\":{\"write\":0,\"read\":0}},\"cost\":0}}. Result: FinalText is raw JSONL (not the model's answer), no per-message text deltas, usage always absent.\n\nROOT CAUSE: stream.go:52-148 (buffer-and-blob design) + stream.go:21-32 (fictional envelope structs).\n\nPROPOSED FIX: Rewrite parseOpencodeStream to scan line-by-line, MIRRORING internal/harnesses/codex/stream.go parseCodexStream (codex/stream.go:77-192). Per line, unmarshal into a new opencodeStreamEvent{Type string; Part struct{Type,Text,Tool,CallID string; State json.RawMessage; Tokens *opencodeTokens; Cost float64}}. Map type==\"text\"/part.type==\"text\" -\u003e EventTypeTextDelta (accumulate into agg.FinalText); type==\"step_finish\" -\u003e record part.tokens (input/output/reasoning, cache.read/write) + part.cost into the aggregate; type==\"error\" -\u003e return error from part/error.data.message (keep existing opencodeErrorMessage shape, stream.go:151). Extend streamAggregate to carry input/output/reasoning/cache token counts. Leave tool_use handling to the dependent tool-events bead.\n\nNON-SCOPE: tool_call/tool_result emission (separate bead); usage ResolveFinalUsage wiring (separate bead). Do not change runner arg construction.",
+    "acceptance": "1. Add fixture internal/harnesses/opencode/testdata/jsonl/text_only.jsonl with the verified 3-line text run (step_start; text=\"PONG\"; step_finish tokens input=13505/output=3/reasoning=18, cost=0).\n2. New Test TestParseOpencodeStream_RealJSONL: exactly one text_delta with Text==\"PONG\", agg.FinalText==\"PONG\", aggregate input=13505 output=3.\n3. New Test TestParseOpencodeStream_StepFinishUsage: the step_finish tokens map (input/output/reasoning, cache read/write) is captured into the aggregate.\n4. New Test TestParseOpencodeStream_ErrorEventInStream: a 2-line stream (one text, then {\"type\":\"error\",...,\"error\":{\"data\":{\"message\":\"Model not found\"}}}) makes the parser return an error containing \"Model not found\".\n5. Remove the obsolete opencodeUsage/opencodeEnvelope structs (stream.go:21-32).\n6. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS ~600s on live-network ListModels tests).\n7. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:bug",
+      "phase:6",
+      "opencode-parity"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T025239-cab6c97f",
+    "prompt": ".ddx/executions/20260605T025239-cab6c97f/prompt.md",
+    "manifest": ".ddx/executions/20260605T025239-cab6c97f/manifest.json",
+    "result": ".ddx/executions/20260605T025239-cab6c97f/result.json",
+    "checks": ".ddx/executions/20260605T025239-cab6c97f/checks.json",
+    "usage": ".ddx/executions/20260605T025239-cab6c97f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-2ae33094-20260605T025239-cab6c97f"
+  },
+  "prompt_sha": "307a6294853c0055caa0a4d224c2d8abd4ffc4f8630875785755376a71a24627"
+}
