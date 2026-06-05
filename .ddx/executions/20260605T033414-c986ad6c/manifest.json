@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260605T033414-c986ad6c",
+  "bead_id": "fizeau-a89283c9",
+  "base_rev": "9d58ad5f37c29b817a4005392ba1c4101a5a25d8",
+  "created_at": "2026-06-05T03:34:21.621447878Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-a89283c9",
+    "title": "test: prove default (knob-unset) claude Execute routes to subprocess end-to-end",
+    "description": "PROBLEM: The completeness review of the native-transport work found NO test proving that with FIZEAU_CLAUDE_TRANSPORT UNSET, a full claude Execute routes through the SUBPROCESS runner (not native). TestClaudeTransportSelection (internal/serviceimpl/execute_claude_transport_test.go) only checks the selection helper in isolation, not the end-to-end Execute dispatch path; so the \\\"default behavior unchanged\\\" guarantee is unproven at the service level.\n\nROOT CAUSE: missing service-level assertion; only unit-level selection is covered.\n\nPROPOSED FIX: Add a service-level test that, with the knob unset, drives the claude harness through the production dispatch path (internal/serviceimpl/execute_dispatch.go runSubprocess/newClaudeRunner) and asserts the subprocess transport is used — e.g. the constructed Runner has NativeMode=false and the path resolves the claude binary rather than the native provider. Reuse the existing fake-provider/seam patterns already in execute_claude_transport_test.go and service_execute_test.go. This is expected to be TEST-ONLY; if it reveals the default is not subprocess, that is a real bug to fix.\n\nNON-SCOPE: do NOT change the default; do NOT flip transport.",
+    "acceptance": "1. New Test TestClaudeDefaultTransportSubprocessEndToEnd (internal/serviceimpl/execute_claude_transport_test.go): with FIZEAU_CLAUDE_TRANSPORT unset, the claude dispatch builds a subprocess Runner (NativeMode=false) and does not take the native path.\n2. The test fails (guards) if the default is later flipped to native.\n3. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/serviceimpl/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-claude",
+      "kind:test",
+      "phase:6",
+      "native-transport"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"system_unready: Well-scoped test-only bead: single named test function, named target file, named struct field (NativeMode), named seam patterns to reuse, explicit non-scope, and a precise go test command. No functional changes required. The description references existing seams in execute_claude_transport_test.go and service_execute_test.go as the reuse substrate, so no new infrastructure is needed. The only unverified pre-condition is that NativeMode is an accessible field on the constructed Runner, but the bead's own description names it as an existing field, and the acceptance criteria are tight enough that a wrong field name would fail compilation rather than silently pass.\",\"fingerprint\":\"387952f003301951e8aedf56ce82804f9d84754fb7800066bde4e49f81765c91\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"387952f003301951e8aedf56ce82804f9d84754fb7800066bde4e49f81765c91\"}",
+          "created_at": "2026-06-05T03:34:03.59183882Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T033414-c986ad6c",
+    "prompt": ".ddx/executions/20260605T033414-c986ad6c/prompt.md",
+    "manifest": ".ddx/executions/20260605T033414-c986ad6c/manifest.json",
+    "result": ".ddx/executions/20260605T033414-c986ad6c/result.json",
+    "checks": ".ddx/executions/20260605T033414-c986ad6c/checks.json",
+    "usage": ".ddx/executions/20260605T033414-c986ad6c/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-a89283c9-20260605T033414-c986ad6c"
+  },
+  "prompt_sha": "2efd73579ca57c55b12e662a8bc820c8c4e5e7e19c2b06c0343289b4f629998a"
+}
