@@ -91,10 +91,59 @@ func TestClaudeTransportSelection(t *testing.T) {
 		} else {
 			t.Setenv(claudeTransportEnv, "")
 		}
-		runner := newClaudeRunner()
+		if tc.wantNative {
+			// Provide a fake key so native cases don't error on missing credential.
+			t.Setenv(anthropicAPIKeyEnv, "sk-ant-test-selection")
+		} else {
+			t.Setenv(anthropicAPIKeyEnv, "")
+		}
+		runner, err := newClaudeRunner()
+		require.NoError(t, err, "FIZEAU_CLAUDE_TRANSPORT=%q (set=%v)", tc.value, tc.set)
 		assert.Equal(t, tc.wantNative, runner.NativeMode,
 			"FIZEAU_CLAUDE_TRANSPORT=%q (set=%v)", tc.value, tc.set)
 	}
+}
+
+// TestClaudeNativeCredentialWiring covers AC1 and AC2:
+//   - AC1: native transport + API key set → Runner has NativeMode=true and NativeAPIKey populated.
+//   - AC2: native transport + no API key → clear early error naming ANTHROPIC_API_KEY.
+func TestClaudeNativeCredentialWiring(t *testing.T) {
+	t.Run("key set wires NativeAPIKey", func(t *testing.T) {
+		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv(anthropicAPIKeyEnv, "sk-ant-wiring-test")
+		t.Setenv(anthropicBaseURLEnv, "")
+
+		runner, err := newClaudeRunner()
+		require.NoError(t, err)
+		require.NotNil(t, runner)
+		assert.True(t, runner.NativeMode, "native transport must set NativeMode=true")
+		assert.Equal(t, "sk-ant-wiring-test", runner.NativeAPIKey, "NativeAPIKey must be populated from ANTHROPIC_API_KEY")
+		assert.Equal(t, "", runner.NativeBaseURL, "NativeBaseURL must be empty when ANTHROPIC_BASE_URL is unset")
+	})
+
+	t.Run("base URL wired when set", func(t *testing.T) {
+		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv(anthropicAPIKeyEnv, "sk-ant-wiring-test")
+		t.Setenv(anthropicBaseURLEnv, "https://custom.example.com")
+
+		runner, err := newClaudeRunner()
+		require.NoError(t, err)
+		require.NotNil(t, runner)
+		assert.Equal(t, "https://custom.example.com", runner.NativeBaseURL, "NativeBaseURL must be populated from ANTHROPIC_BASE_URL")
+	})
+
+	t.Run("no key produces early error naming ANTHROPIC_API_KEY", func(t *testing.T) {
+		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv(anthropicAPIKeyEnv, "")
+
+		runner, err := newClaudeRunner()
+		require.Error(t, err, "native without API key must fail fast")
+		assert.Nil(t, runner)
+		assert.Contains(t, err.Error(), "ANTHROPIC_API_KEY",
+			"error must name the missing key so operators know what to set")
+		assert.Contains(t, err.Error(), "FIZEAU_CLAUDE_TRANSPORT=native",
+			"error must mention the transport knob to give context")
+	})
 }
 
 // TestRunSubprocess_ClaudeNativeTransport_EndToEnd is the key proof: with the
@@ -105,6 +154,7 @@ func TestClaudeTransportSelection(t *testing.T) {
 // subprocess.
 func TestRunSubprocess_ClaudeNativeTransport_EndToEnd(t *testing.T) {
 	t.Setenv(claudeTransportEnv, "native")
+	t.Setenv(anthropicAPIKeyEnv, "sk-ant-e2e-test")
 	require.True(t, claudeNativeTransportSelected(), "knob must select native")
 
 	tool := &fakeUnrestrictedTool{}
@@ -133,7 +183,8 @@ func TestRunSubprocess_ClaudeNativeTransport_EndToEnd(t *testing.T) {
 	// set) and inject the fake streaming provider + an explicit tool set. The
 	// Binary points at a nonexistent path: a subprocess invocation would fail,
 	// so a "success" final proves no claude --print was ever spawned.
-	runner := newClaudeRunner()
+	runner, err := newClaudeRunner()
+	require.NoError(t, err, "newClaudeRunner must not error when ANTHROPIC_API_KEY is set")
 	require.True(t, runner.NativeMode, "knob=native must build a native Runner")
 	runner.NativeProvider = provider
 	runner.NativeTools = []agentcore.Tool{tool}

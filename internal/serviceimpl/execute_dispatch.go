@@ -23,6 +23,13 @@ import (
 // actual_cash_spend). Rollback = unset the var or set it to "subprocess".
 const claudeTransportEnv = "FIZEAU_CLAUDE_TRANSPORT"
 
+// anthropicAPIKeyEnv / anthropicBaseURLEnv are the canonical env vars for the
+// Anthropic provider, mirroring the source used by the provider registry.
+const (
+	anthropicAPIKeyEnv  = "ANTHROPIC_API_KEY"
+	anthropicBaseURLEnv = "ANTHROPIC_BASE_URL"
+)
+
 // claudeNativeTransportSelected reports whether the claude harness should use
 // the native Anthropic Messages API transport. Only an explicit "native" value
 // flips it on; every other value (including empty and "subprocess") keeps the
@@ -34,8 +41,23 @@ func claudeNativeTransportSelected() bool {
 // newClaudeRunner constructs the metered claude harness Runner with the
 // transport selected by claudeTransportEnv. The default (subprocess) build is
 // the zero-value Runner — identical to the prior &claudeharness.Runner{}.
-func newClaudeRunner() *claudeharness.Runner {
-	return &claudeharness.Runner{NativeMode: claudeNativeTransportSelected()}
+//
+// When native transport is selected, the Anthropic API key must be present in
+// the environment; a missing key is surfaced as a clear early error rather than
+// a late nil-deref or opaque failure mid-turn.
+func newClaudeRunner() (*claudeharness.Runner, error) {
+	if claudeNativeTransportSelected() {
+		key := strings.TrimSpace(os.Getenv(anthropicAPIKeyEnv))
+		if key == "" {
+			return nil, fmt.Errorf("FIZEAU_CLAUDE_TRANSPORT=native but no Anthropic API key found; set ANTHROPIC_API_KEY")
+		}
+		return &claudeharness.Runner{
+			NativeMode:    true,
+			NativeAPIKey:  key,
+			NativeBaseURL: os.Getenv(anthropicBaseURLEnv),
+		}, nil
+	}
+	return &claudeharness.Runner{NativeMode: false}, nil
 }
 
 // ExecuteDispatchRequest carries API-neutral data needed to choose the
@@ -64,7 +86,22 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 			cb.RunNative(ctx)
 		}
 	case "claude":
-		runSubprocess(ctx, cb, newClaudeRunner())
+		runner, err := newClaudeRunner()
+		if err != nil {
+			finalizeDispatch(cb, harnesses.FinalData{
+				Status:     "failed",
+				Error:      err.Error(),
+				DurationMS: time.Since(req.Started).Milliseconds(),
+				RoutingActual: &harnesses.RoutingActual{
+					Harness:        req.Decision.Harness,
+					Provider:       req.Decision.Provider,
+					ServerInstance: req.Decision.ServerInstance,
+					Model:          req.Decision.Model,
+				},
+			})
+			return
+		}
+		runSubprocess(ctx, cb, runner)
 	case "claude-tui":
 		runSubprocess(ctx, cb, &claudetuiharness.Harness{})
 	case "codex":
