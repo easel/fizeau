@@ -52,6 +52,75 @@ func TestParseOpencodeStream_RealJSONL(t *testing.T) {
 	}
 }
 
+func TestParseOpencodeStream_ToolUseEmitsCallAndResult(t *testing.T) {
+	data, err := os.ReadFile("testdata/jsonl/tool_use.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan harnesses.Event, 16)
+	var seq int64
+	agg, err := parseOpencodeStream(context.Background(), bytes.NewReader(data), out, nil, &seq)
+	close(out)
+	if err != nil {
+		t.Fatalf("parseOpencodeStream: %v", err)
+	}
+
+	var events []harnesses.Event
+	for ev := range out {
+		events = append(events, ev)
+	}
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+	if events[0].Type != harnesses.EventTypeToolCall {
+		t.Fatalf("events[0].Type = %q, want %q", events[0].Type, harnesses.EventTypeToolCall)
+	}
+	if events[1].Type != harnesses.EventTypeToolResult {
+		t.Fatalf("events[1].Type = %q, want %q", events[1].Type, harnesses.EventTypeToolResult)
+	}
+	if events[2].Type != harnesses.EventTypeTextDelta {
+		t.Fatalf("events[2].Type = %q, want %q", events[2].Type, harnesses.EventTypeTextDelta)
+	}
+
+	var call harnesses.ToolCallData
+	if err := json.Unmarshal(events[0].Data, &call); err != nil {
+		t.Fatalf("unmarshal tool_call: %v", err)
+	}
+	if call.ID != "call_abc123" {
+		t.Fatalf("tool_call.ID = %q, want %q", call.ID, "call_abc123")
+	}
+	if call.Name != "write" {
+		t.Fatalf("tool_call.Name = %q, want %q", call.Name, "write")
+	}
+	var input struct {
+		FilePath string `json:"filePath"`
+		Content  string `json:"content"`
+	}
+	if err := json.Unmarshal(call.Input, &input); err != nil {
+		t.Fatalf("unmarshal tool_call.Input: %v", err)
+	}
+	if input.FilePath != "hello.txt" {
+		t.Fatalf("tool_call.Input.filePath = %q, want %q", input.FilePath, "hello.txt")
+	}
+	if input.Content != "hello from opencode\n" {
+		t.Fatalf("tool_call.Input.content = %q, want %q", input.Content, "hello from opencode\n")
+	}
+
+	var result harnesses.ToolResultData
+	if err := json.Unmarshal(events[1].Data, &result); err != nil {
+		t.Fatalf("unmarshal tool_result: %v", err)
+	}
+	if result.ID != call.ID {
+		t.Fatalf("tool_result.ID = %q, want %q", result.ID, call.ID)
+	}
+	if !strings.Contains(result.Output, "Wrote file successfully") {
+		t.Fatalf("tool_result.Output = %q, want to contain %q", result.Output, "Wrote file successfully")
+	}
+	if agg.FinalText != "Done." {
+		t.Fatalf("agg.FinalText = %q, want %q", agg.FinalText, "Done.")
+	}
+}
+
 func TestParseOpencodeStream_StepFinishUsage(t *testing.T) {
 	input := `{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":13526,"input":13505,"output":3,"reasoning":18,"cache":{"write":100,"read":200}},"cost":0.005}}`
 	out := make(chan harnesses.Event, 8)

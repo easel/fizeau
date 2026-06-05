@@ -28,8 +28,17 @@ type opencodeTokens struct {
 type opencodeStreamEvent struct {
 	Type string `json:"type"`
 	Part struct {
-		Type   string          `json:"type"`
-		Text   string          `json:"text"`
+		Type   string `json:"type"`
+		Text   string `json:"text"`
+		Tool   string `json:"tool"`
+		CallID string `json:"callID"`
+		State  struct {
+			Status   string          `json:"status"`
+			Input    json.RawMessage `json:"input,omitempty"`
+			Output   string          `json:"output,omitempty"`
+			Error    string          `json:"error,omitempty"`
+			Metadata json.RawMessage `json:"metadata,omitempty"`
+		} `json:"state"`
 		Tokens *opencodeTokens `json:"tokens"`
 		Cost   float64         `json:"cost"`
 	} `json:"part"`
@@ -58,10 +67,11 @@ type streamAggregate struct {
 // parseOpencodeStream reads opencode --format json newline-delimited JSON
 // events from r and emits harness Events on out. Mapping:
 //
-//   - type==text, part.type==text  -> EventTypeTextDelta (accumulated into agg.FinalText)
-//   - type==step_finish             -> aggregate tokens and cost
-//   - type==error                   -> return error
-//   - all other types               -> skipped
+//   - type==text, part.type==text         -> EventTypeTextDelta (accumulated into agg.FinalText)
+//   - type==tool_use, part.type==tool     -> EventTypeToolCall then EventTypeToolResult
+//   - type==step_finish                   -> aggregate tokens and cost
+//   - type==error                         -> return error
+//   - all other types                     -> skipped
 func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event, metadata map[string]string, seq *int64) (*streamAggregate, error) {
 	agg := &streamAggregate{}
 
@@ -111,6 +121,30 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 			if ev.Part.Type == "text" && ev.Part.Text != "" {
 				agg.FinalText += ev.Part.Text
 				if err := emit(harnesses.EventTypeTextDelta, harnesses.TextDeltaData{Text: ev.Part.Text}); err != nil {
+					return agg, err
+				}
+			}
+		case "tool_use":
+			if ev.Part.Type != "tool" || ev.Part.CallID == "" || ev.Part.Tool == "" {
+				continue
+			}
+			if err := emit(harnesses.EventTypeToolCall, harnesses.ToolCallData{
+				ID:    ev.Part.CallID,
+				Name:  ev.Part.Tool,
+				Input: ev.Part.State.Input,
+			}); err != nil {
+				return agg, err
+			}
+			if ev.Part.State.Status == "completed" || ev.Part.State.Status == "error" {
+				result := harnesses.ToolResultData{
+					ID:     ev.Part.CallID,
+					Output: ev.Part.State.Output,
+					Error:  ev.Part.State.Error,
+				}
+				if result.Error == "" && ev.Part.State.Status == "error" {
+					result.Error = result.Output
+				}
+				if err := emit(harnesses.EventTypeToolResult, result); err != nil {
 					return agg, err
 				}
 			}

@@ -1,0 +1,4 @@
+{"type":"step_start","part":{"type":"step-start"}}
+{"type":"tool_use","part":{"type":"tool","callID":"call_abc123","tool":"write","state":{"status":"completed","input":{"filePath":"hello.txt","content":"hello from opencode\n"},"output":"Wrote file successfully.","metadata":{"exit":0}}}}
+{"type":"text","part":{"type":"text","text":"Done."}}
+{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":42,"input":10,"output":2,"reasoning":30,"cache":{"write":0,"read":0}},"cost":0}}
