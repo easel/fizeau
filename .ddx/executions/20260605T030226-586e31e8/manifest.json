@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T030226-586e31e8",
+  "bead_id": "fizeau-9174410e",
+  "base_rev": "7da87200c1fb223cc7e2b41fb50586d82181161d",
+  "created_at": "2026-06-05T03:02:32.786540874Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-9174410e",
+    "title": "opencode: emit tool_call/tool_result events from tool_use stream events",
+    "description": "PROBLEM: opencode emits {\"type\":\"tool_use\",\"part\":{\"type\":\"tool\",\"tool\":\"write\",\"callID\":\"call_...\",\"state\":{\"status\":\"completed\",\"input\":{...},\"output\":\"Wrote file successfully.\"}}} (verified, opencode 1.3.17). The wrapper emits ZERO EventTypeToolCall/EventTypeToolResult (grep of internal/harnesses/opencode/ returns none), so progress observers and the ddx execution UI see no tool activity — a CONTRACT-004 ProgressEvents gap that codex and claude-tui both satisfy.\n\nROOT CAUSE: no tool handling in internal/harnesses/opencode/stream.go (depends on the line-scanning rewrite in the parser-rewrite bead).\n\nPROPOSED FIX: In the rewritten parseOpencodeStream, add a type==\"tool_use\"/part.type==\"tool\" case. Decode part.state ({status,input,output,metadata}). Emit EventTypeToolCall{ID:part.callID, Name:part.tool, Input:state.input} and, since opencode emits one terminal tool_use per call with state.status==\"completed\" (verified), ALSO emit EventTypeToolResult{ID:part.callID, Output:state.output, Error:\u003cset when status==\"error\"\u003e} from the same event so observers see the call/result pair. MIRROR codex tool framing: codex/stream.go:161-177 (call) and codex/stream.go:133-153 (result), keyed by callID.\n\nNON-SCOPE: usage wiring; arg construction.",
+    "acceptance": "1. Add fixture internal/harnesses/opencode/testdata/jsonl/tool_use.jsonl (verified write-tool run: step_start; tool_use(write-\u003ehello.txt); text; step_finish).\n2. New Test TestParseOpencodeStream_ToolUseEmitsCallAndResult: an EventTypeToolCall with Name==\"write\" and ID==\"call_...\" is followed by an EventTypeToolResult with the same ID and Output containing \"Wrote file successfully\".\n3. The tool input JSON (filePath, content) is preserved on the tool_call event's Input.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:bug",
+      "phase:6",
+      "opencode-parity"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T030226-586e31e8",
+    "prompt": ".ddx/executions/20260605T030226-586e31e8/prompt.md",
+    "manifest": ".ddx/executions/20260605T030226-586e31e8/manifest.json",
+    "result": ".ddx/executions/20260605T030226-586e31e8/result.json",
+    "checks": ".ddx/executions/20260605T030226-586e31e8/checks.json",
+    "usage": ".ddx/executions/20260605T030226-586e31e8/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-9174410e-20260605T030226-586e31e8"
+  },
+  "prompt_sha": "0d29e1232f0c9c930a545002f553c0c56eace29734b43e9f16191b915a89ef75"
+}
