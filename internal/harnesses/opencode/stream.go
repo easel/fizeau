@@ -12,43 +12,56 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 )
 
-// opencodeEnvelope is a minimal view of the opencode --format json output.
-// opencode emits a JSON object (may be on a single line or multiple lines)
-// with the response text and optional usage fields.
-//
-// From DDx ExtractUsage: envelope.Usage.InputTokens, envelope.Usage.OutputTokens,
-// envelope.TotalCostUSD. Response text is the raw output.
-type opencodeUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+type opencodeTokenCache struct {
+	Read  int `json:"read"`
+	Write int `json:"write"`
 }
 
-type opencodeEnvelope struct {
-	// Pointer so a missing usage object stays nil; presence (even with all-
-	// zero counts) signals an upstream-reported usage envelope per
-	// CONTRACT-003.
-	Usage        *opencodeUsage `json:"usage,omitempty"`
-	TotalCostUSD float64        `json:"total_cost_usd"`
+type opencodeTokens struct {
+	Total     int                `json:"total"`
+	Input     int                `json:"input"`
+	Output    int                `json:"output"`
+	Reasoning int                `json:"reasoning"`
+	Cache     opencodeTokenCache `json:"cache"`
 }
 
-// streamAggregate captures usage from the opencode output. HasUsage is set
-// when the provider envelope carried a usage object — InputTokens /
-// OutputTokens then preserve the upstream values verbatim, including zero.
+type opencodeStreamEvent struct {
+	Type string `json:"type"`
+	Part struct {
+		Type   string          `json:"type"`
+		Text   string          `json:"text"`
+		Tokens *opencodeTokens `json:"tokens"`
+		Cost   float64         `json:"cost"`
+	} `json:"part"`
+	Error struct {
+		Name string `json:"name"`
+		Data struct {
+			Message string `json:"message"`
+		} `json:"data"`
+	} `json:"error"`
+}
+
+// streamAggregate captures running totals from the opencode JSONL stream.
+// HasUsage is set when a step_finish event carries a tokens object — token
+// counts then reflect verbatim upstream values, including explicit zeros.
 type streamAggregate struct {
-	FinalText    string
-	HasUsage     bool
-	InputTokens  int
-	OutputTokens int
-	CostUSD      float64
+	FinalText        string
+	HasUsage         bool
+	InputTokens      int
+	OutputTokens     int
+	ReasoningTokens  int
+	CacheReadTokens  int
+	CacheWriteTokens int
+	CostUSD          float64
 }
 
-// parseOpencodeStream reads opencode --format json output from r and emits
-// harness Events on out. opencode produces a JSON object after completion
-// (buffered, not streaming line-by-line). We buffer all output, emit a single
-// text_delta with the content, then parse usage from the JSON envelope.
+// parseOpencodeStream reads opencode --format json newline-delimited JSON
+// events from r and emits harness Events on out. Mapping:
 //
-// If the output is valid JSON with a usage envelope, usage is extracted.
-// Otherwise the raw output is emitted as-is as a text_delta.
+//   - type==text, part.type==text  -> EventTypeTextDelta (accumulated into agg.FinalText)
+//   - type==step_finish             -> aggregate tokens and cost
+//   - type==error                   -> return error
+//   - all other types               -> skipped
 func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event, metadata map[string]string, seq *int64) (*streamAggregate, error) {
 	agg := &streamAggregate{}
 
@@ -73,8 +86,6 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 		}
 	}
 
-	// Buffer all output — opencode produces a JSON block, not JSONL.
-	var buf strings.Builder
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
 
@@ -84,67 +95,47 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 			return agg, ctx.Err()
 		default:
 		}
-		buf.WriteString(scanner.Text())
-		buf.WriteString("\n")
+
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var ev opencodeStreamEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			continue
+		}
+
+		switch ev.Type {
+		case "text":
+			if ev.Part.Type == "text" && ev.Part.Text != "" {
+				agg.FinalText += ev.Part.Text
+				if err := emit(harnesses.EventTypeTextDelta, harnesses.TextDeltaData{Text: ev.Part.Text}); err != nil {
+					return agg, err
+				}
+			}
+		case "step_finish":
+			if ev.Part.Tokens != nil {
+				agg.HasUsage = true
+				agg.InputTokens = ev.Part.Tokens.Input
+				agg.OutputTokens = ev.Part.Tokens.Output
+				agg.ReasoningTokens = ev.Part.Tokens.Reasoning
+				agg.CacheReadTokens = ev.Part.Tokens.Cache.Read
+				agg.CacheWriteTokens = ev.Part.Tokens.Cache.Write
+			}
+			if ev.Part.Cost > 0 {
+				agg.CostUSD = ev.Part.Cost
+			}
+		case "error":
+			if msg, ok := opencodeErrorMessage(line); ok {
+				return agg, errors.New("opencode error: " + msg)
+			}
+			return agg, errors.New("opencode error: unknown")
+		}
 	}
 	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
 		return agg, err
 	}
-
-	output := strings.TrimSpace(buf.String())
-	if output == "" {
-		return agg, nil
-	}
-	if errMessage, ok := opencodeErrorMessage(output); ok {
-		return agg, errors.New("opencode error: " + errMessage)
-	}
-
-	// Try to parse as a JSON envelope to extract usage.
-	// opencode may emit usage in the envelope or as the last non-empty line.
-	// Detection is by *envelope presence* (Usage pointer non-nil OR cost
-	// reported), not by positive values, so explicit upstream zeros are
-	// preserved per CONTRACT-003.
-	applyEnv := func(env opencodeEnvelope) bool {
-		if env.Usage != nil {
-			agg.HasUsage = true
-			agg.InputTokens = env.Usage.InputTokens
-			agg.OutputTokens = env.Usage.OutputTokens
-		}
-		if env.TotalCostUSD > 0 {
-			agg.CostUSD = env.TotalCostUSD
-		}
-		return env.Usage != nil || env.TotalCostUSD > 0
-	}
-
-	parsed := false
-	var env opencodeEnvelope
-	if err := json.Unmarshal([]byte(output), &env); err == nil {
-		if applyEnv(env) {
-			parsed = true
-		}
-	}
-	if !parsed {
-		// Try last non-empty line.
-		lines := strings.Split(output, "\n")
-		for i := len(lines) - 1; i >= 0; i-- {
-			line := strings.TrimSpace(lines[i])
-			if line == "" {
-				continue
-			}
-			var env2 opencodeEnvelope
-			if err := json.Unmarshal([]byte(line), &env2); err == nil {
-				applyEnv(env2)
-			}
-			break
-		}
-	}
-
-	// Emit raw output as a text_delta — opencode returns clean text.
-	agg.FinalText = output
-	if err := emit(harnesses.EventTypeTextDelta, harnesses.TextDeltaData{Text: output}); err != nil {
-		return agg, err
-	}
-
 	return agg, nil
 }
 

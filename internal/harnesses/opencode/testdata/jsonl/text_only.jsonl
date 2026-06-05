@@ -1,0 +1,3 @@
+{"type":"step_start","part":{"type":"step-start"}}
+{"type":"text","part":{"type":"text","text":"PONG"}}
+{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":13526,"input":13505,"output":3,"reasoning":18,"cache":{"write":0,"read":0}},"cost":0}}

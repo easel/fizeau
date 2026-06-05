@@ -22,14 +22,14 @@ func TestHarnessFinalEventPreservesUsageProvenance(t *testing.T) {
 	}{
 		{
 			name:       "explicit_zero_usage_preserved",
-			input:      `{"usage":{"input_tokens":0,"output_tokens":0},"total_cost_usd":0}`,
+			input:      `{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":0,"input":0,"output":0,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}`,
 			wantUsage:  true,
 			wantInput:  intPtr(0),
 			wantOutput: intPtr(0),
 		},
 		{
 			name:       "positive_usage_preserved",
-			input:      `{"usage":{"input_tokens":42,"output_tokens":7},"total_cost_usd":0}`,
+			input:      `{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":49,"input":42,"output":7,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}`,
 			wantUsage:  true,
 			wantInput:  intPtr(42),
 			wantOutput: intPtr(7),

@@ -162,11 +162,9 @@ func TestRunner_Execute_HappyPath(t *testing.T) {
 		t.Skip("sh not available")
 	}
 
-	// Fake opencode emits a JSON object with response text and usage.
+	// Fake opencode emits opencode --format json JSONL events.
 	script := `#!/bin/sh
-cat <<'EOF'
-opencode response text
-EOF
+printf '{"type":"text","part":{"type":"text","text":"opencode response text"}}\n'
 `
 	f, err := os.CreateTemp("", "fake-opencode-*")
 	if err != nil {
@@ -237,9 +235,7 @@ func TestRunner_Execute_FinalUsageTotals(t *testing.T) {
 		t.Skip("sh not available")
 	}
 	script := `#!/bin/sh
-cat <<'EOF'
-{"usage":{"input_tokens":15,"output_tokens":8},"total_cost_usd":0.003}
-EOF
+printf '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":23,"input":15,"output":8,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0.003}}\n'
 `
 	f, err := os.CreateTemp("", "fake-opencode-*")
 	if err != nil {
@@ -369,8 +365,8 @@ sleep 5
 }
 
 func TestParseOpencodeStream_WithUsage(t *testing.T) {
-	// Simulate opencode JSON output with usage envelope.
-	input := `{"usage":{"input_tokens":15,"output_tokens":8},"total_cost_usd":0.003}`
+	// Simulate opencode --format json step_finish event with usage.
+	input := `{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":23,"input":15,"output":8,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0.003}}`
 	out := make(chan harnesses.Event, 16)
 	var seq int64
 	agg, err := parseOpencodeStream(context.Background(), strings.NewReader(input), out, nil, &seq)
@@ -389,15 +385,13 @@ func TestParseOpencodeStream_WithUsage(t *testing.T) {
 		t.Errorf("expected CostUSD=0.003, got %f", agg.CostUSD)
 	}
 
+	// step_finish emits no text_delta events.
 	var events []harnesses.Event
 	for ev := range out {
 		events = append(events, ev)
 	}
-	if len(events) != 1 {
-		t.Fatalf("expected 1 text_delta event, got %d", len(events))
-	}
-	if events[0].Type != harnesses.EventTypeTextDelta {
-		t.Errorf("expected text_delta, got %q", events[0].Type)
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events, got %d", len(events))
 	}
 }
 
