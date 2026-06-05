@@ -8,6 +8,7 @@ import (
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
+	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -257,6 +258,44 @@ func TestRunSubprocess_ClaudeNativeTransport_EndToEnd(t *testing.T) {
 			assert.NotContains(t, m.Content, "stream-json")
 		}
 	}
+}
+
+// TestClaudeDefaultTransportSubprocessEndToEnd is the service-level guard that the
+// default (FIZEAU_CLAUDE_TRANSPORT unset) routes the claude harness through the
+// subprocess path, not the native path. It drives DispatchExecuteRun — the
+// production dispatch entry point — and asserts that the runner received by
+// RunSubprocess is a *claudeharness.Runner with NativeMode=false.
+//
+// This test will FAIL (guard) if the default transport is later flipped to native,
+// ensuring "default behavior unchanged" is provably true at the dispatch level.
+func TestClaudeDefaultTransportSubprocessEndToEnd(t *testing.T) {
+	// Clear both knobs so we simulate "knob unset" — the pure default state.
+	t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "")
+	t.Setenv(anthropicAPIKeyEnv, "")
+
+	var capturedRunner harnesses.Harness
+	subprocessCalled := false
+
+	cb := ExecuteDispatchCallbacks{
+		RunSubprocess: func(_ context.Context, runner harnesses.Harness) {
+			subprocessCalled = true
+			capturedRunner = runner
+		},
+	}
+
+	DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
+		Decision: ExecuteRunnerDecision{Harness: "claude"},
+		Started:  time.Now(),
+	}, cb)
+
+	require.True(t, subprocessCalled,
+		"with FIZEAU_CLAUDE_TRANSPORT unset, DispatchExecuteRun must call RunSubprocess (not native)")
+	require.NotNil(t, capturedRunner, "RunSubprocess must receive a non-nil runner")
+
+	claudeRunner, ok := capturedRunner.(*claudeharness.Runner)
+	require.True(t, ok, "runner must be *claudeharness.Runner for harness=claude; got %T", capturedRunner)
+	assert.False(t, claudeRunner.NativeMode,
+		"default transport (knob unset) must build NativeMode=false — if this fails the default was flipped to native")
 }
 
 // Compile-time guard: the fake tool satisfies agentcore.Tool.
