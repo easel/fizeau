@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T032539-a6d4a6f1",
+  "bead_id": "fizeau-d31ff685",
+  "base_rev": "acfb088f8266d189da20384850cc19a8af0e5785",
+  "created_at": "2026-06-05T03:25:45.562880232Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-d31ff685",
+    "title": "opencode: add discovery-cache model/reasoning resolution + resolution progress events",
+    "description": "PROBLEM: internal/harnesses/opencode/runner.go:184-191 passes req.Model and AdapterReasoningValue(req) straight to -m/--variant with no discovery-cache resolution and emits no resolution events. codex resolves via ResolveRunnerModelWithCache/ResolveRunnerReasoningWithCache and emits RunnerDefaultResolutionEvent/RunnerReasoningResolutionEvent (codex/runner.go:199-200,261-279), so operators see what model/reasoning was actually chosen. opencode --variant values are MODEL-SPECIFIC (not the fixed minimal/low/medium/high/max list hardcoded at runner.go:55), so blind pass-through can send an unsupported variant.\n\nROOT CAUSE: runner.go:184-191 (no resolution) and missing DiscoveryCache field on the opencode Runner (codex has it, codex/runner.go:45).\n\nPROPOSED FIX: Add DiscoveryCache *harnesses.ModelDiscoveryCache to opencode Runner. In runStreaming, resolve model via harnesses.ResolveRunnerModelWithCache(r.DiscoveryCache, \"opencode\", modelcatalog.SurfaceEmbeddedOpenAI, req.Model, \"opencode/gpt-5.4\") and reasoning via ResolveRunnerReasoningWithCache(..., \"opencode\", req.Reasoning); emit the two resolution events guarded by ShouldEmitRunnerDefaultResolution/ShouldEmitRunnerReasoningResolution exactly as codex/runner.go:261-279. Use resolved values for -m/--variant. SCOPE DECISION (operator): best-effort pass-through of the resolved variant (emit a warning resolution event on unknown variant) — do NOT hard-reject unsupported variants in this bead; strict per-model variant rejection (wiring model_discovery.go:323 sortedOpenCodeVariantNames) is a deliberate follow-up if requested.\n\nNON-SCOPE: hard variant rejection; parser/usage changes.",
+    "acceptance": "1. New Test TestRunner_EmitsModelResolutionEvent (fake binary): a routing/resolution progress event is emitted when the default model is resolved (mirror the codex assertion style).\n2. New Test TestRunner_ReasoningResolutionForwarded: the resolved reasoning value reaches the --variant arg.\n3. opencode Runner exposes a settable DiscoveryCache so tests can inject a fixture snapshot.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/harnesses/opencode/... -count=1 -timeout 120s green. Do NOT run `go test ./...` (HANGS).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-opencode",
+      "kind:enhancement",
+      "phase:6",
+      "opencode-parity"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T032539-a6d4a6f1",
+    "prompt": ".ddx/executions/20260605T032539-a6d4a6f1/prompt.md",
+    "manifest": ".ddx/executions/20260605T032539-a6d4a6f1/manifest.json",
+    "result": ".ddx/executions/20260605T032539-a6d4a6f1/result.json",
+    "checks": ".ddx/executions/20260605T032539-a6d4a6f1/checks.json",
+    "usage": ".ddx/executions/20260605T032539-a6d4a6f1/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-d31ff685-20260605T032539-a6d4a6f1"
+  },
+  "prompt_sha": "daf30163d25f6db51e0d17f404c3d455027776e2c78693e79bfaa3caee1322a2"
+}
