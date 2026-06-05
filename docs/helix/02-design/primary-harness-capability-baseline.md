@@ -48,6 +48,7 @@ can exist in a broader matrix, but this primary baseline is deliberately strict.
 | codex | pass | pass | pass | pass | pass | `safe`, `supervised`, `unrestricted` | pass | pass | pass | pass | pass | pass | pass | pass |
 | claude | pass | pass | pass | pass | pass | `safe`, `supervised`, `unrestricted` | pass | pass | pass | pass | pass | pass | pass | pass |
 | claude-tui | pass | pass | pass | pass | pass | `safe`, `unrestricted` | pass | pass | gap | gap | pass | pass | pass | pass |
+| opencode | pass | pass | pass | pass | pass | `safe`, `supervised`, `unrestricted` | pass | pass | pass | pass | pass | n/a | pass | pass |
 | gemini | pass | pass | pass | pass | pass | `safe`, `supervised`, `unrestricted` | pass | pass | n/a | n/a | pass | pass, auth-gated | pass | pass |
 
 ## Native `fiz` Evidence

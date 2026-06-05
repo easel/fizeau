@@ -235,6 +235,42 @@
       ]
     },
     {
+      "name": "opencode",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/opencode::TestOpenCodeRunnerHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/opencode::TestOpenCodeRunnerModelDiscoveryConformance"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "n/a",
+          "evidence": []
+        },
+        {
+          "name": "AccountHarness",
+          "status": "n/a",
+          "evidence": []
+        }
+      ]
+    },
+    {
       "name": "gemini",
       "type": "subprocess",
       "capabilities": [
