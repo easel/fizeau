@@ -433,6 +433,140 @@ func TestParseOpencodeStream_ErrorEnvelope(t *testing.T) {
 	}
 }
 
+// TestRunner_EmitsModelResolutionEvent verifies that a routing/resolution event
+// is emitted when the default model is resolved (parity with codex).
+func TestRunner_EmitsModelResolutionEvent(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "capture.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  i=0
+  for arg in "$@"; do
+    printf 'ARG[%%s]=%%s\n' "$i" "$arg"
+    i=$((i + 1))
+  done
+} > %q
+printf 'controlled response\n'
+`, capture)
+	binary := filepath.Join(dir, "fake-opencode")
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{Binary: binary}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "hello prompt"})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	var resolution *harnesses.RunnerModelResolution
+	for ev := range ch {
+		if ev.Type != harnesses.EventTypeRoutingDecision {
+			continue
+		}
+		var data harnesses.RunnerModelResolution
+		if err := json.Unmarshal(ev.Data, &data); err != nil {
+			continue
+		}
+		if data.ResolvedModel != "" {
+			resolution = &data
+		}
+	}
+
+	raw, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	for _, want := range []string{
+		"ARG[0]=run",
+		"ARG[1]=--format",
+		"ARG[2]=json",
+		"ARG[3]=-m",
+		"ARG[4]=opencode/gpt-5.4",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("capture missing %q:\n%s", want, got)
+		}
+	}
+	if resolution == nil {
+		t.Fatal("expected runner default-resolution signal")
+	}
+	if resolution.ResolvedModel != "opencode/gpt-5.4" || resolution.PriorDefaultModel != "opencode/gpt-5.4" || resolution.Surface != "embedded.openai" {
+		t.Fatalf("resolution = %#v", resolution)
+	}
+}
+
+// TestRunner_ReasoningResolutionForwarded verifies that the resolved reasoning
+// value reaches the --variant arg when the discovery cache snaps the level.
+func TestRunner_ReasoningResolutionForwarded(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "capture.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  i=0
+  for arg in "$@"; do
+    printf 'ARG[%%s]=%%s\n' "$i" "$arg"
+    i=$((i + 1))
+  done
+} > %q
+printf 'controlled response\n'
+`, capture)
+	binary := filepath.Join(dir, "fake-opencode")
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cache := harnesses.NewModelDiscoveryCache(func(harnessName, source string) (harnesses.ModelDiscoverySnapshot, error) {
+		return harnesses.ModelDiscoverySnapshot{
+			CapturedAt:      time.Now().UTC(),
+			Models:          []string{"opencode/gpt-5.4"},
+			ReasoningLevels: []string{"low", "medium"},
+			Source:          source,
+		}, nil
+	})
+
+	r := &Runner{Binary: binary, DiscoveryCache: cache}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
+		Prompt:    "hello prompt",
+		Model:     "opencode/gpt-5.4",
+		Reasoning: "high",
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	var reasoning *harnesses.ReasoningActual
+	for ev := range ch {
+		if ev.Type != harnesses.EventTypeRoutingDecision {
+			continue
+		}
+		var data harnesses.ReasoningActual
+		if err := json.Unmarshal(ev.Data, &data); err == nil && data.ResolvedReasoning != "" {
+			reasoning = &data
+		}
+	}
+	raw, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(raw); !strings.Contains(got, "--variant") || !strings.Contains(got, "medium") {
+		t.Fatalf("capture missing snapped reasoning --variant medium:\n%s", got)
+	}
+	if reasoning == nil || reasoning.ResolvedReasoning != "medium" || reasoning.Source != "snapped" || reasoning.Warning == "" {
+		t.Fatalf("reasoning resolution = %#v", reasoning)
+	}
+}
+
 func readFinalEvent(t *testing.T, ch <-chan harnesses.Event) harnesses.FinalData {
 	t.Helper()
 	var finalEv *harnesses.FinalData

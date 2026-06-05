@@ -19,6 +19,7 @@ const (
 	SurfaceCodex          Surface = "codex"
 	SurfaceClaudeCode     Surface = "claude-code"
 	SurfaceGemini         Surface = "gemini"
+	SurfaceEmbeddedOpenAI Surface = "embedded.openai"
 )
 
 // ResolveOptions configures compatibility model-reference resolution.
