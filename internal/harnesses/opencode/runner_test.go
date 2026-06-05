@@ -156,16 +156,14 @@ printf 'stdin response\n'
 	}
 }
 
-// TestRunner_Execute_HappyPath runs a fake script that emits opencode-style JSON output.
+// TestRunner_Execute_HappyPath cats the real text_only.jsonl fixture through a
+// fake opencode binary and verifies the parsed FinalText and event stream.
 func TestRunner_Execute_HappyPath(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")
 	}
-
-	// Fake opencode emits opencode --format json JSONL events.
-	script := `#!/bin/sh
-printf '{"type":"text","part":{"type":"text","text":"opencode response text"}}\n'
-`
+	fixture := filepath.Join("testdata", "jsonl", "text_only.jsonl")
+	script := "#!/bin/sh\ncat " + fixture + "\n"
 	f, err := os.CreateTemp("", "fake-opencode-*")
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +213,7 @@ printf '{"type":"text","part":{"type":"text","text":"opencode response text"}}\n
 
 	if len(textDeltas) == 0 {
 		t.Error("expected at least one text_delta event")
-	} else if !strings.Contains(textDeltas[0], "opencode response text") {
+	} else if textDeltas[0] != "PONG" {
 		t.Errorf("unexpected text delta: %q", textDeltas[0])
 	}
 
@@ -225,8 +223,8 @@ printf '{"type":"text","part":{"type":"text","text":"opencode response text"}}\n
 	if finalEv.Status != "success" {
 		t.Errorf("expected status=success, got %q (error: %s)", finalEv.Status, finalEv.Error)
 	}
-	if finalEv.FinalText != "opencode response text" {
-		t.Errorf("expected FinalText=%q, got %q", "opencode response text", finalEv.FinalText)
+	if finalEv.FinalText != "PONG" {
+		t.Errorf("expected FinalText=%q, got %q", "PONG", finalEv.FinalText)
 	}
 }
 
