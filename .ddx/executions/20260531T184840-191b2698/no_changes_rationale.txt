@@ -1,0 +1,28 @@
+verification_command: go test ./internal/routing/... ./internal/modelcatalog/... . -count=1 -run "TestHaiku|TestServiceModelEligibilityResolvesHaikuAlias"
+
+All acceptance criteria are already satisfied by commit 5d82c7c8
+("fix(routing): resolve haiku alias to ExactPinOnly in eligibility lookup [fizeau-0aa53d01]"),
+which was produced by the first execution of this bead.
+
+AC1: TestHaikuLowTierNotAutoRoutedForDefaultPolicy passes — unpinned policy=default
+     selects claude/sonnet-4.6, not haiku; haiku appears in candidates with
+     FilterReasonExactPinOnly.
+
+AC2: TestHaikuAliasEligibilityLookupReturnsExactPinOnly passes — ModelEligibility
+     lookup for "haiku", "haiku-5.5", and "claude-haiku-5.5" all return
+     ExactPinOnly=true.
+
+AC3: go test ./internal/routing/... ./internal/modelcatalog/... -count=1 green
+     (no failures in those packages).
+
+AC4: No staged changes; working tree is clean — lefthook pre-commit not applicable.
+
+The service-layer fix (serviceRoutingModelEligibility + addShortAlias in
+service_routing.go) and the service-layer test
+(service_haiku_alias_eligibility_test.go) are also in place and pass.
+
+Note: the root package "." has pre-existing test failures unrelated to this bead
+(timing-sensitive local-health tests, a codex model ID mismatch, a ListModels
+network-dependent test). The verification command above scopes to the bead's
+specific tests with -run to avoid false failures from those pre-existing issues.
+No further code changes are needed for this bead.

@@ -1,0 +1,96 @@
+{
+  "attempt_id": "20260531T184840-191b2698",
+  "bead_id": "fizeau-0aa53d01",
+  "base_rev": "d86fb716cfda33f9117212f48a18f3bde9cf375a",
+  "created_at": "2026-05-31T18:48:46.541601929Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-0aa53d01",
+    "title": "routing: haiku (low tier) still auto-routed at policy=default despite exact_pin_only — alias gate miss",
+    "description": "PROBLEM: after v0.14.39 set claude-haiku-5.5 exact_pin_only:true, workers STILL auto-route to model \"haiku\" at policy=default (\"do route claude/haiku score=138.3\"). codex tiers (gpt-5.4-mini, gpt-5.5) and claude opus/sonnet route correctly, so the catalog flag works for canonical IDs. ROOT CAUSE (hypothesis): the subscription-harness tier enrollment emits the ALIAS \"haiku\" (claude surface alias), and the engine eligibility/exact_pin_only gate (internal/routing/gating.go CheckPowerEligibility -\u003e ModelEligibility lookup) resolves by that alias and does NOT map it to the catalog entry \"claude-haiku-5.5\" that carries exact_pin_only — so AutoRoutable/ExactPinOnly is missed and haiku passes the gate. Verify the actual tier IDs in catalogTierModelsForHarnessSurface / subprocessHarnessModelIDs vs the catalog key + alias resolution in serviceRoutingModelEligibility. PROPOSED FIX: resolve subscription-harness tier candidate IDs (and the eligibility lookup) to the canonical catalog entry so exact_pin_only/AutoRoutable is honored for aliases (haiku/sonnet/opus). NON-SCOPE: changing which tiers are pin-only (haiku stays pin-only per FEAT-004).",
+    "acceptance": "1. New test: an unpinned policy=default ResolveRoute on the claude harness does NOT select the haiku/low tier (selects sonnet/middle); haiku is only reachable via explicit --model pin. 2. Test asserts the eligibility lookup for the claude low-tier alias resolves ExactPinOnly=true. 3. cd /Users/erik/Projects/fizeau \u0026\u0026 go test ./internal/routing/... ./internal/modelcatalog/... . -count=1 green. 4. lefthook run pre-commit passes.",
+    "labels": [
+      "area:routing",
+      "area:catalog",
+      "kind:bug",
+      "priority:reliability",
+      "severity:high",
+      "spec:FEAT-004",
+      "phase:1",
+      "triage:no-changes-unjustified"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"resolved_model\":\"sonnet\",\"fallback_chain\":[]}",
+          "created_at": "2026-05-31T18:42:58.510820161Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=claude model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260531T181809-c8f73e4f\",\"harness\":\"claude\",\"model\":\"sonnet\",\"input_tokens\":749,\"output_tokens\":69683,\"total_tokens\":70432,\"cost_usd\":4.033071200000001,\"duration_ms\":1481913,\"exit_code\":0}",
+          "created_at": "2026-05-31T18:42:58.548200003Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=70432 cost_usd=4.0331 model=sonnet"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"actual_harness\":\"claude\",\"actual_model\":\"sonnet\",\"actual_power\":0,\"actual_provider\":\"\",\"attempt_id\":\"20260531T181809-c8f73e4f\",\"bead_id\":\"fizeau-0aa53d01\",\"estimated_difficulty\":\"medium\",\"rejected_route_pins\":null,\"requested_power_class\":\"standard\",\"requested_profile\":\"default\",\"routing_intent_degraded\":false,\"routing_intent_note\":\"\",\"routing_intent_source\":\"readiness\"}",
+          "created_at": "2026-05-31T18:43:02.528906963Z",
+          "kind": "execution-routing-intent",
+          "source": "ddx work",
+          "summary": "source=readiness difficulty=medium powerClass=standard model=sonnet harness=claude"
+        },
+        {
+          "actor": "erik",
+          "body": "(rationale absent)",
+          "created_at": "2026-05-31T18:43:02.619464216Z",
+          "kind": "no_changes_unjustified",
+          "source": "ddx work",
+          "summary": "no_changes_unjustified"
+        },
+        {
+          "actor": "erik",
+          "body": "",
+          "created_at": "2026-05-31T18:43:02.684567742Z",
+          "kind": "reviewer-skipped-empty-diff",
+          "source": "ddx work",
+          "summary": "reviewer skipped: empty diff (no commits produced)"
+        },
+        {
+          "actor": "erik",
+          "body": "agent exited without a commit or no_changes_rationale.txt\npowerClass=standard\nresult_rev=4d576eb16823d0318f97939e463322fd590a15ae\nbase_rev=4d576eb16823d0318f97939e463322fd590a15ae\noutcome_reason=no_evidence_produced",
+          "created_at": "2026-05-31T18:43:02.716776422Z",
+          "kind": "execute-bead",
+          "source": "ddx work",
+          "summary": "no_changes"
+        }
+      ],
+      "spec-id": "FEAT-004",
+      "work-no-changes-count": 1
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "docs/helix/01-frame/features/FEAT-004-model-routing.md",
+      "title": "Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260531T184840-191b2698",
+    "prompt": ".ddx/executions/20260531T184840-191b2698/prompt.md",
+    "manifest": ".ddx/executions/20260531T184840-191b2698/manifest.json",
+    "result": ".ddx/executions/20260531T184840-191b2698/result.json",
+    "checks": ".ddx/executions/20260531T184840-191b2698/checks.json",
+    "usage": ".ddx/executions/20260531T184840-191b2698/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-0aa53d01-20260531T184840-191b2698"
+  },
+  "prompt_sha": "3f0d5c79801edb967382f84f49e62354b58191075bb372eb43a850c9c8f3da85"
+}
