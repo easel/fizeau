@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260605T022428-8d631268",
+  "bead_id": "fizeau-3ab2b4b1",
+  "base_rev": "e941440155cf28aaec38d71782a176910847f7bb",
+  "created_at": "2026-06-05T02:24:36.167736255Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "fizeau-3ab2b4b1",
+    "title": "native claude transport: resolve + wire Anthropic credentials, fail fast if absent",
+    "description": "PROBLEM: When FIZEAU_CLAUDE_TRANSPORT=native, newClaudeRunner (internal/serviceimpl/execute_dispatch.go:37) builds \u0026claudeharness.Runner{NativeMode: claudeNativeTransportSelected()} but NEVER sets NativeAPIKey/NativeBaseURL (the claude Runner reads these at internal/harnesses/claude/native_runner.go:39-40 when building the provider). So the native path relies on an undocumented provider-registry env fallback to find an Anthropic API key; if none is reachable the failure is opaque and late (mid-turn), not at selection time.\n\nROOT CAUSE: execute_dispatch.go:37-38 constructs the native Runner without resolving credentials, and there is no fail-fast check when native is selected but no key is available.\n\nPROPOSED FIX: In newClaudeRunner (internal/serviceimpl/execute_dispatch.go), when claudeNativeTransportSelected() is true, resolve the Anthropic API key (and optional base URL) from the SAME source the existing native Anthropic provider uses — grep internal/provider/anthropic for the canonical env var (e.g. ANTHROPIC_API_KEY) and reuse it; set Runner.NativeAPIKey/NativeBaseURL accordingly. If native is selected but no API key can be resolved, surface a clear early error (message naming the missing key, e.g. \\\"FIZEAU_CLAUDE_TRANSPORT=native but no Anthropic API key found; set ANTHROPIC_API_KEY\\\") rather than proceeding. The default (subprocess) path must be byte-for-byte unchanged.\n\nNON-SCOPE: do NOT add new config schema beyond reading the existing Anthropic key env/source. Do NOT flip the default transport. Do NOT change subprocess behavior.",
+    "acceptance": "1. New Test TestClaudeNativeCredentialWiring (internal/serviceimpl/execute_claude_transport_test.go): with FIZEAU_CLAUDE_TRANSPORT=native and the Anthropic key env set, newClaudeRunner returns a Runner with NativeMode=true AND NativeAPIKey populated.\n2. New Test asserts native selection with NO Anthropic key produces a clear early error naming the missing key (not a nil-deref or late opaque failure).\n3. Default (knob unset) still builds a subprocess Runner with NativeMode=false and empty NativeAPIKey (no behavior change) — existing TestClaudeTransportSelection still passes.\n4. cd /Users/erik/Projects/fizeau \u0026\u0026 GOPRIVATE=github.com/easel/* GOSUMDB=off GOFLAGS=-mod=mod go test ./internal/serviceimpl/... ./internal/harnesses/claude/... -count=1 -timeout 150s green. Do NOT run `go test ./...` (HANGS on live-network tests).\n5. lefthook run pre-commit passes.",
+    "labels": [
+      "area:harness-claude",
+      "kind:bug",
+      "phase:6",
+      "native-transport"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260605T022428-8d631268",
+    "prompt": ".ddx/executions/20260605T022428-8d631268/prompt.md",
+    "manifest": ".ddx/executions/20260605T022428-8d631268/manifest.json",
+    "result": ".ddx/executions/20260605T022428-8d631268/result.json",
+    "checks": ".ddx/executions/20260605T022428-8d631268/checks.json",
+    "usage": ".ddx/executions/20260605T022428-8d631268/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-fizeau-3ab2b4b1-20260605T022428-8d631268"
+  },
+  "prompt_sha": "0baf18fbbfa7be0ababc50e6aeca8fac6a8b7f68381800a382c35e9ca75bc652"
+}
