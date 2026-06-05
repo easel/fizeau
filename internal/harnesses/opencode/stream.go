@@ -51,17 +51,10 @@ type opencodeStreamEvent struct {
 }
 
 // streamAggregate captures running totals from the opencode JSONL stream.
-// HasUsage is set when a step_finish event carries a tokens object — token
-// counts then reflect verbatim upstream values, including explicit zeros.
 type streamAggregate struct {
-	FinalText        string
-	HasUsage         bool
-	InputTokens      int
-	OutputTokens     int
-	ReasoningTokens  int
-	CacheReadTokens  int
-	CacheWriteTokens int
-	CostUSD          float64
+	FinalText    string
+	UsageSources []harnesses.UsageCandidate
+	CostUSD      float64
 }
 
 // parseOpencodeStream reads opencode --format json newline-delimited JSON
@@ -150,16 +143,9 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 			}
 		case "step_finish":
 			if ev.Part.Tokens != nil {
-				agg.HasUsage = true
-				agg.InputTokens = ev.Part.Tokens.Input
-				agg.OutputTokens = ev.Part.Tokens.Output
-				agg.ReasoningTokens = ev.Part.Tokens.Reasoning
-				agg.CacheReadTokens = ev.Part.Tokens.Cache.Read
-				agg.CacheWriteTokens = ev.Part.Tokens.Cache.Write
+				agg.recordUsage(ev.Part.Tokens)
 			}
-			if ev.Part.Cost > 0 {
-				agg.CostUSD = ev.Part.Cost
-			}
+			agg.CostUSD = ev.Part.Cost
 		case "error":
 			if msg, ok := opencodeErrorMessage(line); ok {
 				return agg, errors.New("opencode error: " + msg)
@@ -171,6 +157,26 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 		return agg, err
 	}
 	return agg, nil
+}
+
+func (a *streamAggregate) recordUsage(tokens *opencodeTokens) {
+	if a == nil || tokens == nil {
+		return
+	}
+	cacheTokens := tokens.Cache.Read + tokens.Cache.Write
+	a.UsageSources = append(a.UsageSources, harnesses.UsageCandidate{
+		Source: harnesses.UsageSourceNativeStream,
+		Fresh:  harnesses.BoolPtr(true),
+		Counts: harnesses.UsageTokenCounts{
+			InputTokens:      harnesses.IntPtr(tokens.Input),
+			OutputTokens:     harnesses.IntPtr(tokens.Output),
+			CacheReadTokens:  harnesses.IntPtr(tokens.Cache.Read),
+			CacheWriteTokens: harnesses.IntPtr(tokens.Cache.Write),
+			CacheTokens:      harnesses.IntPtr(cacheTokens),
+			ReasoningTokens:  harnesses.IntPtr(tokens.Reasoning),
+			TotalTokens:      harnesses.IntPtr(tokens.Total),
+		},
+	})
 }
 
 func opencodeErrorMessage(output string) (string, bool) {

@@ -135,18 +135,8 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	}
 	if agg != nil {
 		final.FinalText = agg.FinalText
-		if agg.HasUsage {
-			final.Usage = &harnesses.FinalUsage{
-				InputTokens:  harnesses.IntPtr(agg.InputTokens),
-				OutputTokens: harnesses.IntPtr(agg.OutputTokens),
-				TotalTokens:  harnesses.IntPtr(agg.InputTokens + agg.OutputTokens),
-				Source:       harnesses.UsageSourceNativeStream,
-				Fresh:        harnesses.BoolPtr(true),
-			}
-		}
-		if agg.CostUSD > 0 {
-			final.CostUSD = agg.CostUSD
-		}
+		final.Usage, final.Warnings = harnesses.ResolveFinalUsage(agg.UsageSources)
+		final.CostUSD = agg.CostUSD
 	}
 
 	finalRaw, err := json.Marshal(final)

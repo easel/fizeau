@@ -44,11 +44,27 @@ func TestParseOpencodeStream_RealJSONL(t *testing.T) {
 	if agg.FinalText != "PONG" {
 		t.Fatalf("agg.FinalText = %q, want \"PONG\"", agg.FinalText)
 	}
-	if agg.InputTokens != 13505 {
-		t.Fatalf("agg.InputTokens = %d, want 13505", agg.InputTokens)
+	usage, warnings := harnesses.ResolveFinalUsage(agg.UsageSources)
+	if len(warnings) != 0 {
+		t.Fatalf("ResolveFinalUsage warnings = %#v, want none", warnings)
 	}
-	if agg.OutputTokens != 3 {
-		t.Fatalf("agg.OutputTokens = %d, want 3", agg.OutputTokens)
+	if usage == nil {
+		t.Fatal("usage = nil, want native stream usage")
+	}
+	if usage.InputTokens == nil || *usage.InputTokens != 13505 {
+		t.Fatalf("usage.InputTokens = %#v, want 13505", usage.InputTokens)
+	}
+	if usage.OutputTokens == nil || *usage.OutputTokens != 3 {
+		t.Fatalf("usage.OutputTokens = %#v, want 3", usage.OutputTokens)
+	}
+	if usage.ReasoningTokens == nil || *usage.ReasoningTokens != 18 {
+		t.Fatalf("usage.ReasoningTokens = %#v, want 18", usage.ReasoningTokens)
+	}
+	if usage.TotalTokens == nil || *usage.TotalTokens != 13526 {
+		t.Fatalf("usage.TotalTokens = %#v, want 13526", usage.TotalTokens)
+	}
+	if usage.Source != harnesses.UsageSourceNativeStream {
+		t.Fatalf("usage.Source = %q, want %q", usage.Source, harnesses.UsageSourceNativeStream)
 	}
 }
 
@@ -130,23 +146,36 @@ func TestParseOpencodeStream_StepFinishUsage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseOpencodeStream: %v", err)
 	}
-	if !agg.HasUsage {
-		t.Fatal("HasUsage = false, want true")
+	if len(agg.UsageSources) != 1 {
+		t.Fatalf("UsageSources len = %d, want 1", len(agg.UsageSources))
 	}
-	if agg.InputTokens != 13505 {
-		t.Errorf("InputTokens = %d, want 13505", agg.InputTokens)
+	candidate := agg.UsageSources[0]
+	if candidate.Source != harnesses.UsageSourceNativeStream {
+		t.Fatalf("candidate.Source = %q, want %q", candidate.Source, harnesses.UsageSourceNativeStream)
 	}
-	if agg.OutputTokens != 3 {
-		t.Errorf("OutputTokens = %d, want 3", agg.OutputTokens)
+	if candidate.Fresh == nil || !*candidate.Fresh {
+		t.Fatalf("candidate.Fresh = %#v, want true", candidate.Fresh)
 	}
-	if agg.ReasoningTokens != 18 {
-		t.Errorf("ReasoningTokens = %d, want 18", agg.ReasoningTokens)
+	if candidate.Counts.InputTokens == nil || *candidate.Counts.InputTokens != 13505 {
+		t.Errorf("InputTokens = %#v, want 13505", candidate.Counts.InputTokens)
 	}
-	if agg.CacheWriteTokens != 100 {
-		t.Errorf("CacheWriteTokens = %d, want 100", agg.CacheWriteTokens)
+	if candidate.Counts.OutputTokens == nil || *candidate.Counts.OutputTokens != 3 {
+		t.Errorf("OutputTokens = %#v, want 3", candidate.Counts.OutputTokens)
 	}
-	if agg.CacheReadTokens != 200 {
-		t.Errorf("CacheReadTokens = %d, want 200", agg.CacheReadTokens)
+	if candidate.Counts.ReasoningTokens == nil || *candidate.Counts.ReasoningTokens != 18 {
+		t.Errorf("ReasoningTokens = %#v, want 18", candidate.Counts.ReasoningTokens)
+	}
+	if candidate.Counts.CacheWriteTokens == nil || *candidate.Counts.CacheWriteTokens != 100 {
+		t.Errorf("CacheWriteTokens = %#v, want 100", candidate.Counts.CacheWriteTokens)
+	}
+	if candidate.Counts.CacheReadTokens == nil || *candidate.Counts.CacheReadTokens != 200 {
+		t.Errorf("CacheReadTokens = %#v, want 200", candidate.Counts.CacheReadTokens)
+	}
+	if candidate.Counts.CacheTokens == nil || *candidate.Counts.CacheTokens != 300 {
+		t.Errorf("CacheTokens = %#v, want 300", candidate.Counts.CacheTokens)
+	}
+	if candidate.Counts.TotalTokens == nil || *candidate.Counts.TotalTokens != 13526 {
+		t.Errorf("TotalTokens = %#v, want 13526", candidate.Counts.TotalTokens)
 	}
 	if agg.CostUSD != 0.005 {
 		t.Errorf("CostUSD = %f, want 0.005", agg.CostUSD)

@@ -230,12 +230,13 @@ printf '{"type":"text","part":{"type":"text","text":"opencode response text"}}\n
 	}
 }
 
-func TestRunner_Execute_FinalUsageTotals(t *testing.T) {
+func TestRunner_Execute_RealUsageFromStepFinish(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")
 	}
+	fixture := filepath.Join("testdata", "jsonl", "text_only.jsonl")
 	script := `#!/bin/sh
-printf '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":23,"input":15,"output":8,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0.003}}\n'
+cat ` + fixture + `
 `
 	f, err := os.CreateTemp("", "fake-opencode-*")
 	if err != nil {
@@ -275,14 +276,26 @@ printf '{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":23,
 	if finalEv.Usage == nil {
 		t.Fatal("expected usage in final event")
 	}
-	if finalEv.Usage.InputTokens == nil || *finalEv.Usage.InputTokens != 15 {
-		t.Errorf("expected InputTokens=15, got %#v", finalEv.Usage.InputTokens)
+	if finalEv.Usage.Source != harnesses.UsageSourceNativeStream {
+		t.Fatalf("expected Source=%q, got %q", harnesses.UsageSourceNativeStream, finalEv.Usage.Source)
 	}
-	if finalEv.Usage.OutputTokens == nil || *finalEv.Usage.OutputTokens != 8 {
-		t.Errorf("expected OutputTokens=8, got %#v", finalEv.Usage.OutputTokens)
+	if finalEv.Usage.InputTokens == nil || *finalEv.Usage.InputTokens != 13505 {
+		t.Errorf("expected InputTokens=13505, got %#v", finalEv.Usage.InputTokens)
 	}
-	if finalEv.Usage.TotalTokens == nil || *finalEv.Usage.TotalTokens != 23 {
-		t.Errorf("expected TotalTokens=23, got %#v", finalEv.Usage.TotalTokens)
+	if finalEv.Usage.OutputTokens == nil || *finalEv.Usage.OutputTokens != 3 {
+		t.Errorf("expected OutputTokens=3, got %#v", finalEv.Usage.OutputTokens)
+	}
+	if finalEv.Usage.ReasoningTokens == nil || *finalEv.Usage.ReasoningTokens != 18 {
+		t.Errorf("expected ReasoningTokens=18, got %#v", finalEv.Usage.ReasoningTokens)
+	}
+	if finalEv.Usage.CacheReadTokens == nil || *finalEv.Usage.CacheReadTokens != 0 {
+		t.Errorf("expected CacheReadTokens=0, got %#v", finalEv.Usage.CacheReadTokens)
+	}
+	if finalEv.Usage.CacheWriteTokens == nil || *finalEv.Usage.CacheWriteTokens != 0 {
+		t.Errorf("expected CacheWriteTokens=0, got %#v", finalEv.Usage.CacheWriteTokens)
+	}
+	if finalEv.Usage.TotalTokens == nil || *finalEv.Usage.TotalTokens != 13526 {
+		t.Errorf("expected TotalTokens=13526, got %#v", finalEv.Usage.TotalTokens)
 	}
 }
 
@@ -375,11 +388,21 @@ func TestParseOpencodeStream_WithUsage(t *testing.T) {
 		t.Fatalf("parseOpencodeStream: %v", err)
 	}
 
-	if agg.InputTokens != 15 {
-		t.Errorf("expected InputTokens=15, got %d", agg.InputTokens)
+	if len(agg.UsageSources) != 1 {
+		t.Fatalf("expected 1 usage source, got %d", len(agg.UsageSources))
 	}
-	if agg.OutputTokens != 8 {
-		t.Errorf("expected OutputTokens=8, got %d", agg.OutputTokens)
+	candidate := agg.UsageSources[0]
+	if candidate.Source != harnesses.UsageSourceNativeStream {
+		t.Fatalf("expected Source=%q, got %q", harnesses.UsageSourceNativeStream, candidate.Source)
+	}
+	if candidate.Counts.InputTokens == nil || *candidate.Counts.InputTokens != 15 {
+		t.Errorf("expected InputTokens=15, got %#v", candidate.Counts.InputTokens)
+	}
+	if candidate.Counts.OutputTokens == nil || *candidate.Counts.OutputTokens != 8 {
+		t.Errorf("expected OutputTokens=8, got %#v", candidate.Counts.OutputTokens)
+	}
+	if candidate.Counts.TotalTokens == nil || *candidate.Counts.TotalTokens != 23 {
+		t.Errorf("expected TotalTokens=23, got %#v", candidate.Counts.TotalTokens)
 	}
 	if agg.CostUSD != 0.003 {
 		t.Errorf("expected CostUSD=0.003, got %f", agg.CostUSD)
