@@ -1,0 +1,42 @@
+{
+  "bead_id": "fizeau-be7d5a20",
+  "attempt_id": "20260605T024404-0e11ac26",
+  "base_rev": "a8336d9fddba8df941d82ff1c2680fd786b57eae",
+  "result_rev": "98969c69cb8c9bd092d23831f8ff4d2abc1a0115",
+  "implementation_rev": "98969c69cb8c9bd092d23831f8ff4d2abc1a0115",
+  "landed_rev": "98969c69cb8c9bd092d23831f8ff4d2abc1a0115",
+  "landed_branch": "master",
+  "outcome": "merged",
+  "status": "success",
+  "detail": "success",
+  "orchestrator_status": "success",
+  "candidate_ref": "refs/ddx/iterations/20260605T024404-0e11ac26/0",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260605T024404-0e11ac26",
+      "result_rev": "98969c69cb8c9bd092d23831f8ff4d2abc1a0115",
+      "implementer_route": {
+        "harness": "codex",
+        "model": "gpt-5.4-mini"
+      },
+      "review_result": {},
+      "final_decision": "success"
+    }
+  ],
+  "harness": "codex",
+  "model": "gpt-5.4-mini",
+  "session_id": "eb-7b33efe6",
+  "duration_ms": 379833,
+  "tokens": 1892256,
+  "exit_code": 0,
+  "project_root": "/Users/erik/Projects/fizeau",
+  "execution_dir": ".ddx/executions/20260605T024404-0e11ac26",
+  "prompt_file": ".ddx/executions/20260605T024404-0e11ac26/prompt.md",
+  "manifest_file": ".ddx/executions/20260605T024404-0e11ac26/manifest.json",
+  "result_file": ".ddx/executions/20260605T024404-0e11ac26/result.json",
+  "usage_file": ".ddx/executions/20260605T024404-0e11ac26/usage.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-06-05T02:44:12.94971954Z",
+  "finished_at": "2026-06-05T02:50:32.783045448Z"
+}
