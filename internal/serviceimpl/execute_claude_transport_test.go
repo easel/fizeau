@@ -87,9 +87,9 @@ func TestClaudeTransportSelection(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if tc.set {
-			t.Setenv(claudeTransportEnv, tc.value)
+			t.Setenv("FIZEAU_CLAUDE_TRANSPORT", tc.value)
 		} else {
-			t.Setenv(claudeTransportEnv, "")
+			t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "")
 		}
 		if tc.wantNative {
 			// Provide a fake key so native cases don't error on missing credential.
@@ -109,7 +109,7 @@ func TestClaudeTransportSelection(t *testing.T) {
 //   - AC2: native transport + no API key → clear early error naming ANTHROPIC_API_KEY.
 func TestClaudeNativeCredentialWiring(t *testing.T) {
 	t.Run("key set wires NativeAPIKey", func(t *testing.T) {
-		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "native")
 		t.Setenv(anthropicAPIKeyEnv, "sk-ant-wiring-test")
 		t.Setenv(anthropicBaseURLEnv, "")
 
@@ -122,7 +122,7 @@ func TestClaudeNativeCredentialWiring(t *testing.T) {
 	})
 
 	t.Run("base URL wired when set", func(t *testing.T) {
-		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "native")
 		t.Setenv(anthropicAPIKeyEnv, "sk-ant-wiring-test")
 		t.Setenv(anthropicBaseURLEnv, "https://custom.example.com")
 
@@ -133,7 +133,7 @@ func TestClaudeNativeCredentialWiring(t *testing.T) {
 	})
 
 	t.Run("no key produces early error naming ANTHROPIC_API_KEY", func(t *testing.T) {
-		t.Setenv(claudeTransportEnv, "native")
+		t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "native")
 		t.Setenv(anthropicAPIKeyEnv, "")
 
 		runner, err := newClaudeRunner()
@@ -153,9 +153,8 @@ func TestClaudeNativeCredentialWiring(t *testing.T) {
 // (IsSubscription=false / actual_cash_spend), and spawns NO claude --print
 // subprocess.
 func TestRunSubprocess_ClaudeNativeTransport_EndToEnd(t *testing.T) {
-	t.Setenv(claudeTransportEnv, "native")
+	t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "native")
 	t.Setenv(anthropicAPIKeyEnv, "sk-ant-e2e-test")
-	require.True(t, claudeNativeTransportSelected(), "knob must select native")
 
 	tool := &fakeUnrestrictedTool{}
 	provider := &fakeClaudeStreamProvider{

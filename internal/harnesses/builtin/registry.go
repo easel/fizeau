@@ -14,7 +14,7 @@ import (
 func New(name string) harnesses.Harness {
 	switch name {
 	case "claude":
-		return &claudeharness.Runner{}
+		return &claudeharness.Runner{NativeMode: claudeharness.NativeTransportSelected()}
 	case "claude-tui":
 		return &claudetui.Harness{}
 	case "codex":

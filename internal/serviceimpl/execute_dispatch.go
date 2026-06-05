@@ -16,13 +16,6 @@ import (
 	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
 
-// claudeTransportEnv is the kill-switch env var selecting the transport backing
-// the metered "claude" harness. Default-off: unset / "subprocess" spawns
-// `claude --print` (byte-for-byte unchanged production behavior); "native"
-// routes through the in-process Anthropic Messages API (metered,
-// actual_cash_spend). Rollback = unset the var or set it to "subprocess".
-const claudeTransportEnv = "FIZEAU_CLAUDE_TRANSPORT"
-
 // anthropicAPIKeyEnv / anthropicBaseURLEnv are the canonical env vars for the
 // Anthropic provider, mirroring the source used by the provider registry.
 const (
@@ -30,23 +23,16 @@ const (
 	anthropicBaseURLEnv = "ANTHROPIC_BASE_URL"
 )
 
-// claudeNativeTransportSelected reports whether the claude harness should use
-// the native Anthropic Messages API transport. Only an explicit "native" value
-// flips it on; every other value (including empty and "subprocess") keeps the
-// default subprocess path.
-func claudeNativeTransportSelected() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv(claudeTransportEnv)), "native")
-}
-
 // newClaudeRunner constructs the metered claude harness Runner with the
-// transport selected by claudeTransportEnv. The default (subprocess) build is
-// the zero-value Runner — identical to the prior &claudeharness.Runner{}.
+// transport selected by claudeharness.NativeTransportSelected. The default
+// (subprocess) build is the zero-value Runner — identical to the prior
+// &claudeharness.Runner{}.
 //
 // When native transport is selected, the Anthropic API key must be present in
 // the environment; a missing key is surfaced as a clear early error rather than
 // a late nil-deref or opaque failure mid-turn.
 func newClaudeRunner() (*claudeharness.Runner, error) {
-	if claudeNativeTransportSelected() {
+	if claudeharness.NativeTransportSelected() {
 		key := strings.TrimSpace(os.Getenv(anthropicAPIKeyEnv))
 		if key == "" {
 			return nil, fmt.Errorf("FIZEAU_CLAUDE_TRANSPORT=native but no Anthropic API key found; set ANTHROPIC_API_KEY")
