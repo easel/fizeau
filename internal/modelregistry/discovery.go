@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -266,6 +267,20 @@ func parsePropsDiscovery(body []byte) ([]string, []string) {
 		addString(runtime["model"])
 		addString(runtime["model_id"])
 	}
+	// llama.cpp / lucebox-dflash props schema: the /v1/models id is a generic
+	// alias (e.g. "dflash") that has no catalog power, but /props carries the
+	// real model identity. Surface every identity hint so the catalog fuzzy
+	// matcher can resolve it to a powered entry (e.g. "Qwen3.6 27B" -> qwen3.6-27b).
+	addString(raw["model_alias"])
+	if card, ok := raw["model_card"].(map[string]any); ok {
+		addString(card["name"])
+		if src, ok := card["source"].(string); ok {
+			addString(lastPathSegment(src))
+		}
+	}
+	if mp, ok := raw["model_path"].(string); ok {
+		addString(modelNameFromPath(mp))
+	}
 	if server, ok := raw["server"].(map[string]any); ok && len(ids) == 0 {
 		addString(server["name"])
 	}
@@ -281,6 +296,38 @@ func parsePropsDiscovery(body []byte) ([]string, []string) {
 		}
 	}
 	return uniqueSortedStrings(ids), parsePropsReasoningLevels(raw)
+}
+
+// modelNameFromPath recovers a model name from a server-reported weights path by
+// taking the base filename and stripping a known model-weight extension, e.g.
+// "/opt/.../Qwen3.6-27B-Q4_K_M.gguf" -> "Qwen3.6-27B-Q4_K_M". Returns "" when
+// the path has no usable base name.
+func modelNameFromPath(p string) string {
+	base := path.Base(strings.TrimSpace(p))
+	if base == "." || base == "/" || base == "" {
+		return ""
+	}
+	for _, ext := range []string{".gguf", ".safetensors", ".bin", ".mlx"} {
+		if strings.HasSuffix(strings.ToLower(base), ext) {
+			base = base[:len(base)-len(ext)]
+			break
+		}
+	}
+	return strings.TrimSpace(base)
+}
+
+// lastPathSegment returns the final segment of a URL or path, used to recover a
+// model name from a model_card source URL (e.g. a HuggingFace repo URL ending in
+// ".../Qwen3.6-27B").
+func lastPathSegment(s string) string {
+	s = strings.TrimRight(strings.TrimSpace(s), "/")
+	if s == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(s, '/'); i >= 0 {
+		return strings.TrimSpace(s[i+1:])
+	}
+	return s
 }
 
 func parsePropsReasoningLevels(raw map[string]any) []string {
@@ -575,7 +622,7 @@ func discoveryTTLForProvider(pc config.ProviderConfig) time.Duration {
 
 func hasPropsDiscovery(providerType string) bool {
 	switch normalizeProviderType(providerType) {
-	case "ds4", "vidar-ds4", "lucebox":
+	case "ds4", "vidar-ds4", "lucebox", "llama-server", "sindri-llamacpp":
 		return true
 	default:
 		return false
