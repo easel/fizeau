@@ -231,6 +231,38 @@ func TestCheckPowerEligibilityKnownModelSnapshotHardPinBypassesCatalogOnlyGate(t
 	}
 }
 
+// TestCheckPowerEligibilityBareHarnessPinBypassesPowerGate covers the rule that
+// pinning --harness X must NOT require an accompanying model/policy/power flag.
+// A bare harness pin is honored even when the candidate model is empty or has no
+// catalog power; a harness pin WITH an explicit power bound still filters.
+func TestCheckPowerEligibilityBareHarnessPinBypassesPowerGate(t *testing.T) {
+	lookup := func(model string) (ModelEligibility, bool) {
+		switch model {
+		case "catalog-only-model":
+			return ModelEligibility{Power: 5, ExactPinOnly: true, AutoRoutable: false}, true
+		default:
+			return ModelEligibility{}, false
+		}
+	}
+
+	// Bare harness pin, empty candidate model (e.g. subscription TUI), no power
+	// bound -> eligible. This is the regression: previously model=="" returned
+	// FilterReasonPowerMissing and the operator had to add --min-power.
+	if got, fr := CheckPowerEligibility(lookup, "", Request{Harness: "claude"}); got != "" || fr != FilterReasonEligible {
+		t.Fatalf("bare harness pin (empty model) = (%q, %q), want eligible", got, fr)
+	}
+	// Bare harness pin, a model the catalog marks exact-pin-only/not-auto-
+	// routable, no power bound -> still eligible (the harness pin is the choice).
+	if got, fr := CheckPowerEligibility(lookup, "catalog-only-model", Request{Harness: "claude"}); got != "" || fr != FilterReasonEligible {
+		t.Fatalf("harness pin (catalog-only model) = (%q, %q), want eligible", got, fr)
+	}
+	// Harness pin WITH an explicit power bound and an empty model -> the bound
+	// still applies (operator asked for a power), so power metadata is required.
+	if got, fr := CheckPowerEligibility(lookup, "", Request{Harness: "claude", MinPower: 9}); got == "" || fr != FilterReasonPowerMissing {
+		t.Fatalf("harness pin + MinPower (empty model) = (%q, %q), want power_missing", got, fr)
+	}
+}
+
 func TestHarnessPolicyPinnedHarnessChoosesSupportedEligibleModel(t *testing.T) {
 	in := Inputs{
 		Harnesses: []HarnessEntry{{
