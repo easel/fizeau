@@ -88,7 +88,12 @@ type KnownModel struct {
 	ProviderType string `json:"provider_type,omitempty"`
 	Harness      string `json:"harness,omitempty"`
 	ID           string `json:"model,omitempty"`
-	Configured   bool   `json:"configured,omitempty"`
+	// CatalogID, when set, is the catalog-resolution identity recovered from a
+	// provider's /props endpoint (e.g. "Qwen3.6-27B" behind the served alias
+	// "dflash"). Power/family/cost enrichment resolves against CatalogID while ID
+	// stays the wire model the server is actually invoked with. Empty => use ID.
+	CatalogID  string `json:"catalog_id,omitempty"`
+	Configured bool   `json:"configured,omitempty"`
 
 	EndpointName     string                    `json:"endpoint_name,omitempty"`
 	EndpointBaseURL  string                    `json:"endpoint_base_url,omitempty"`

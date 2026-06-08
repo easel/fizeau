@@ -35,6 +35,7 @@ type discoveredModel struct {
 	ProviderType    string
 	Harness         string
 	ID              string
+	CatalogID       string
 	Configured      bool
 	EndpointName    string
 	EndpointBaseURL string

@@ -9,6 +9,7 @@ import (
 	"github.com/easel/fizeau/internal/config"
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/modelcatalog"
+	"github.com/easel/fizeau/internal/modeleligibility"
 )
 
 // RefreshMode controls whether Assemble refreshes stale source cache data.
@@ -68,12 +69,14 @@ func AssembleWithOptions(ctx context.Context, cfg *config.Config, cat *modelcata
 		includeByDefault := effectiveProviderIncludeByDefault(providerName, pcfg, cat)
 		billing := effectiveProviderBilling(providerName, pcfg, cat)
 		status := providerStatus(cache, providerName)
-		for _, discoveredModel := range discovered.Models {
+		reconciled := reconcilePropsModels(discovered.Models, includeByDefault, string(status), cat)
+		for _, discoveredModel := range reconciled {
 			model := KnownModel{
 				Provider:         providerName,
 				ProviderType:     discoveredModel.ProviderType,
 				Harness:          discoveredModel.Harness,
 				ID:               discoveredModel.ID,
+				CatalogID:        discoveredModel.CatalogID,
 				Configured:       discoveredModel.Configured,
 				EndpointName:     discoveredModel.EndpointName,
 				EndpointBaseURL:  discoveredModel.EndpointBaseURL,
@@ -157,6 +160,60 @@ func ActiveSources(cfg *config.Config) []discoverycache.Source {
 		})
 	}
 	return sources
+}
+
+// reconcilePropsModels collapses /props-recovered identities into the served
+// models for a provider. /props discovery exists to recover the real catalog
+// identity behind a generic served alias (e.g. "dflash" -> "Qwen3.6-27B"); those
+// recovered names are not separately-served models, so they must not become their
+// own route candidates. For each served model whose own ID has no catalog power,
+// attach the best catalog-matchable /props-recovered name as its CatalogID so
+// enrichment resolves power/family from it while the wire ID stays the served
+// alias. The standalone /props entries are then dropped. If a provider has only
+// /props models (its /v1/models returned nothing), the best /props identity is
+// promoted to the served model so the provider stays routable.
+//
+// Scoped per provider (these speculative-decoding servers are single-endpoint);
+// multi-endpoint /props providers are not a current configuration.
+func reconcilePropsModels(models []discoveredModel, includeByDefault bool, status string, cat *modelcatalog.Catalog) []discoveredModel {
+	bestCatalogID := ""
+	bestPower := 0
+	hasProps := false
+	for _, m := range models {
+		if m.Via != SourcePropsAPI {
+			continue
+		}
+		hasProps = true
+		if pw := modeleligibility.Resolve(m.ID, includeByDefault, status, cat).Power; pw > bestPower {
+			bestPower = pw
+			bestCatalogID = m.ID
+		}
+	}
+	if !hasProps {
+		return models
+	}
+
+	out := make([]discoveredModel, 0, len(models))
+	servedCount := 0
+	for _, m := range models {
+		if m.Via == SourcePropsAPI {
+			continue // /props identities are catalog hints, not separately-served models
+		}
+		servedCount++
+		if bestCatalogID != "" && modeleligibility.Resolve(m.ID, includeByDefault, status, cat).Power <= 0 {
+			m.CatalogID = bestCatalogID
+		}
+		out = append(out, m)
+	}
+	if servedCount == 0 && bestCatalogID != "" {
+		for _, m := range models {
+			if m.Via == SourcePropsAPI && m.ID == bestCatalogID {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func enumerateProviders(cfg *config.Config) map[string]config.ProviderConfig {

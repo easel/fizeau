@@ -1075,6 +1075,7 @@ func (s *service) snapshotProviderEntries(ctx context.Context, cat *modelcatalog
 			Billing:                   pcfg.Billing,
 			CostClass:                 providerRoutingCostClass(pcfg.Type),
 			DiscoveredIDs:             discoveredIDs,
+			CatalogIDByModel:          snapshotCatalogIDByModel(rows),
 			DiscoveryAttempted:        true,
 			ContextWindows:            ctxWindows,
 			ContextWindowSources:      ctxSources,
@@ -1140,6 +1141,25 @@ func snapshotEndpointName(pcfg ServiceProviderEntry, key snapshotProviderGroupKe
 		return trimmedBaseURL
 	}
 	return ""
+}
+
+// snapshotCatalogIDByModel maps each row's wire model ID to its /props-recovered
+// catalog identity (when the two differ), so the routing engine can resolve power
+// against the real model while invoking the server with the served alias.
+func snapshotCatalogIDByModel(rows []modelsnapshot.KnownModel) map[string]string {
+	var out map[string]string
+	for _, row := range rows {
+		id := strings.TrimSpace(row.ID)
+		catalogID := strings.TrimSpace(row.CatalogID)
+		if id == "" || catalogID == "" || catalogID == id {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]string, len(rows))
+		}
+		out[id] = catalogID
+	}
+	return out
 }
 
 func snapshotModelIDs(rows []modelsnapshot.KnownModel) []string {
@@ -1468,6 +1488,12 @@ func serviceRoutingModelEligibility(entries []routing.HarnessEntry, cat *modelca
 			add(p.DefaultModel, includeByDefault, status)
 			for _, modelID := range p.DiscoveredIDs {
 				add(modelID, includeByDefault, status)
+			}
+			// Register /props-recovered catalog identities so the power gate can
+			// resolve a served alias's real model (e.g. "dflash" routes via the
+			// "Qwen3.6-27B" eligibility entry; see ProviderEntry.CatalogIDByModel).
+			for _, catalogID := range p.CatalogIDByModel {
+				add(catalogID, includeByDefault, status)
 			}
 		}
 	}

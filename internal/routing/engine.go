@@ -184,6 +184,13 @@ type ProviderEntry struct {
 	Billing              modelcatalog.BillingModel
 	CostClass            string
 	DiscoveredIDs        []string // models discovered via /v1/models or equivalent
+	// CatalogIDByModel maps a served/wire model ID to the catalog-resolution
+	// identity recovered from the provider's /props endpoint (e.g.
+	// "dflash" -> "Qwen3.6-27B"). Power/auto-routability gates resolve against the
+	// mapped identity so a generic served alias inherits its real model's power,
+	// while the wire model the server is invoked with stays the served ID. Absent
+	// entries fall back to the model ID itself.
+	CatalogIDByModel     map[string]string
 	DiscoveryAttempted   bool
 	ContextWindows       map[string]int
 	ContextWindowSources map[string]string
@@ -1451,7 +1458,16 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 			if latencyMS == 0 && p.EndpointName != "" {
 				latencyMS = in.ObservedLatencyMS[ProviderModelKey(p.Name, "", model)]
 			}
-			power := candidatePower(in.ModelEligibility, model)
+			// Resolve power/auto-routability against the /props-recovered catalog
+			// identity when present, so a generic served alias ("dflash") inherits
+			// its real model's catalog power while `model` stays the wire identity.
+			powerModel := model
+			if p.CatalogIDByModel != nil {
+				if catalogID := p.CatalogIDByModel[model]; catalogID != "" {
+					powerModel = catalogID
+				}
+			}
+			power := candidatePower(in.ModelEligibility, powerModel)
 			endpointLoad := EndpointLoad{}
 			if in.EndpointLoadResolver != nil {
 				loadProvider, loadEndpoint := candidateLoadIdentity(h, p)
@@ -1487,7 +1503,7 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 					eligible = false
 					candidateReason = "model not in harness allow-list"
 					filterReason = FilterReasonScoredBelowTop
-				} else if g, fr := CheckPowerEligibility(in.ModelEligibility, model, gateReq); g != "" {
+				} else if g, fr := CheckPowerEligibility(in.ModelEligibility, powerModel, gateReq); g != "" {
 					eligible = false
 					candidateReason = g
 					filterReason = fr

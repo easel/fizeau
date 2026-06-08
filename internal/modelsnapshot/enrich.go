@@ -18,19 +18,27 @@ const (
 
 // EnrichModel adds catalog-derived metadata to a discovered model row.
 func EnrichModel(model KnownModel, includeByDefault bool, cat *modelcatalog.Catalog) KnownModel {
-	parsed := modelcatalog.Parse(model.ID)
+	// Catalog enrichment resolves against the recovered catalog identity (from
+	// /props) when present, so a generic served alias ("dflash") inherits the
+	// power/family/cost of its real model ("Qwen3.6-27B"). model.ID stays the
+	// wire name the provider is actually called with.
+	catalogID := strings.TrimSpace(model.CatalogID)
+	if catalogID == "" {
+		catalogID = model.ID
+	}
+	parsed := modelcatalog.Parse(catalogID)
 	model.Family = parsed.Family
 	model.Version = append([]int(nil), parsed.Version...)
 	model.Tier = parsed.Tier
 	model.PreRelease = parsed.PreRelease
 
-	view := modeleligibility.Resolve(model.ID, includeByDefault, string(model.Status), cat)
+	view := modeleligibility.Resolve(catalogID, includeByDefault, string(model.Status), cat)
 	model.Power = view.Power
 	model.ExactPinOnly = view.ExactPinOnly
 	model.AutoRoutable = view.AutoRoutable
 	model.ExclusionReason = view.ExclusionReason
 	if cat != nil {
-		if entry, ok := cat.LookupModel(model.ID); ok {
+		if entry, ok := cat.LookupModel(catalogID); ok {
 			model.CostInputPerM = catalogCostInput(entry)
 			model.CostOutputPerM = catalogCostOutput(entry)
 			model.ContextWindow = entry.ContextWindow
