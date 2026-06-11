@@ -65,7 +65,10 @@ func TestModelSupportedForHarnessClaudeTuiAcceptsFamilyWithoutDiscovery(t *testi
 		{"claude-tui", "claude-haiku-5.5"},
 		{"claude-tui", "opus-4.7"},
 		{"claude-tui", "haiku-5.5"},
+		{"claude-tui", "fable"},
+		{"claude-tui", "fable-1.0"},
 		{"claude", "sonnet-4.6"},
+		{"claude", "fable"},
 	} {
 		if !modelSupportedForHarness(tc.name, cfg, tc.model, "") {
 			t.Errorf("modelSupportedForHarness(%q, %q) = false, want true (family-aware, no discovery)", tc.name, tc.model)

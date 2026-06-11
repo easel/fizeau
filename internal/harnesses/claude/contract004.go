@@ -32,7 +32,7 @@ var supportedLimitIDs = []string{
 
 // supportedAliases is the stable public set of family aliases
 // ResolveModelAlias recognizes. Mirrored in doc.go for human readers.
-var supportedAliases = []string{"sonnet", "opus", "haiku"}
+var supportedAliases = []string{"sonnet", "opus", "haiku", "fable"}
 
 // refreshGroup serializes concurrent RefreshQuota / RefreshAccount calls
 // across all *Runner instances. Per CONTRACT-004 invariant #6 Runners are

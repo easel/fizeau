@@ -57,7 +57,7 @@ var supportedLimitIDs = []string{
 
 // supportedAliases is the stable public set of family aliases
 // ResolveModelAlias recognizes. Mirrored in doc.go for human readers.
-var supportedAliases = []string{"sonnet", "opus", "haiku"}
+var supportedAliases = []string{"sonnet", "opus", "haiku", "fable"}
 
 // modelDiscoveryCache is the per-process instance for model discovery caching
 // per ADR-012. It is initialized once at package load time.

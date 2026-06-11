@@ -18,9 +18,9 @@ const ClaudeModelDiscoveryFreshnessWindow = 24 * time.Hour
 
 var (
 	claudeFullModelPattern         = regexp.MustCompile(`\bclaude-[a-z0-9][a-z0-9._-]*\b`)
-	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
-	claudeFamilyVersionPattern     = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku)\s+([0-9]+(?:[.-][0-9]+){0,2})\b`)
-	claudeAliasPattern             = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku)(?:$|[\s'"])`)
+	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku|fable)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
+	claudeFamilyVersionPattern     = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku|fable)\s+([0-9]+(?:[.-][0-9]+){0,2})\b`)
+	claudeAliasPattern             = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku|fable)(?:$|[\s'"])`)
 	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
 
@@ -182,7 +182,7 @@ func parseClaudeModels(text string) []string {
 
 func resolveClaudeFamilyAlias(model string, snapshot harnesses.ModelDiscoverySnapshot) string {
 	family := strings.ToLower(strings.TrimSpace(model))
-	if family != "sonnet" && family != "opus" && family != "haiku" {
+	if !isSupportedClaudeAlias(family) {
 		return model
 	}
 	if resolved := latestClaudeFamilyVersion(family, snapshot.Models); resolved != "" {

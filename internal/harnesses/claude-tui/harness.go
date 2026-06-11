@@ -263,8 +263,8 @@ func buildLaunchArgs(settingsJSON string, cliModel string) []string {
 
 // claudeTuiLaunchModel maps a resolved catalog/tier model reference to the model
 // token the claude CLI's --model flag accepts. Catalog claude-code surface IDs
-// (sonnet-4.6, opus-4.8, opus-4.7, haiku-4.5, ...) and full claude-<family>-...
-// IDs collapse to the stable family alias (sonnet/opus/haiku) so the launched
+// (sonnet-4.6, opus-4.8, opus-4.7, haiku-4.5, fable-1.0, ...) and full claude-<family>-...
+// IDs collapse to the stable family alias (sonnet/opus/haiku/fable) so the launched
 // session lands on the requested tier regardless of catalog point-version drift.
 // An empty request model returns "" (launch on the account default). An
 // unrecognized non-empty value is passed through verbatim so an explicit full
@@ -281,6 +281,8 @@ func claudeTuiLaunchModel(model string) string {
 		return "opus"
 	case normalized == "haiku" || strings.HasPrefix(normalized, "haiku-") || strings.HasPrefix(normalized, "claude-haiku-"):
 		return "haiku"
+	case normalized == "fable" || strings.HasPrefix(normalized, "fable-") || strings.HasPrefix(normalized, "claude-fable-"):
+		return "fable"
 	default:
 		return normalized
 	}
@@ -863,19 +865,19 @@ var (
 	// or a git branch slug like `reliability/claude-tui-models`) can never be
 	// admitted as a "model". This replaces the old bare `claude-[a-z0-9...]`
 	// pattern that captured those tokens verbatim.
-	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
+	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku|fable)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
 	// claudeFamilyVersionPattern matches the human-facing picker labels
 	// (`Opus 4.8`, `Sonnet 4.6`, `Haiku 4.5`). The family/version separator is
 	// OPTIONAL (`\s*`) because the live Claude Code PTY cell stream collapses
 	// the space, rendering `Opus4.8`/`Sonnet4.6`/`Haiku4.5`; requiring `\s+`
 	// dropped every version-bearing tier and left only bare aliases.
-	claudeFamilyVersionPattern = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku)\s*([0-9]+[.-][0-9]+)\b`)
-	claudeAliasPattern         = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku)(?:$|[\s'"])`)
+	claudeFamilyVersionPattern = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku|fable)\s*([0-9]+[.-][0-9]+)\b`)
+	claudeAliasPattern         = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku|fable)(?:$|[\s'"])`)
 	claudeEffortPattern        = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
 
 // ParseClaudeTuiModels extracts available model names from claude /model output.
-// It only admits real, family-versioned IDs (sonnet/opus/haiku + version) and
+// It only admits real, family-versioned IDs (sonnet/opus/haiku/fable + version) and
 // the bare family aliases; arbitrary `claude-<word>` tokens are never emitted.
 // Version-bearing IDs are normalized to the catalog claude-code surface form
 // `<family>-<major>.<minor>` (e.g. opus-4.8, sonnet-4.6, haiku-4.5).

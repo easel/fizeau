@@ -5,6 +5,15 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.14.50] — 2026-06-11
+
+### Fixed
+
+- Claude and Claude TUI harness model validation now accepts the `fable`
+  family alias and versioned `fable-*` IDs, so downstream callers can pass
+  `model=fable` through to the Claude CLI instead of being rejected by
+  Fizeau's family gate.
+
 ## [v0.14.30] — 2026-05-15
 
 ### Fixed

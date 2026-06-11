@@ -396,7 +396,8 @@ func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, p
 		return strings.HasPrefix(m, "claude-") ||
 			strings.HasPrefix(m, "sonnet") ||
 			strings.HasPrefix(m, "opus") ||
-			strings.HasPrefix(m, "haiku")
+			strings.HasPrefix(m, "haiku") ||
+			strings.HasPrefix(m, "fable")
 	case "pi":
 		// Pi can route to non-Gemini backends (lmstudio, omlx, etc.) when a
 		// provider is pinned. The pi CLI owns per-provider model validation

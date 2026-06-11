@@ -93,7 +93,7 @@ func TestBuildLaunchArgsHonorsModel(t *testing.T) {
 // TestClaudeTuiLaunchModel proves resolved catalog tier IDs collapse to the
 // stable CLI alias so the launched session lands on the requested tier
 // regardless of catalog point-version drift (sonnet-4.6 -> sonnet, opus-4.8 ->
-// opus, claude-haiku-4-5 -> haiku), an empty model stays empty (account
+// opus, claude-haiku-4-5 -> haiku, fable-1.0 -> fable), an empty model stays empty (account
 // default), and an unknown full ID passes through verbatim.
 func TestClaudeTuiLaunchModel(t *testing.T) {
 	cases := map[string]string{
@@ -103,6 +103,9 @@ func TestClaudeTuiLaunchModel(t *testing.T) {
 		"opus-4.7":          "opus",
 		"claude-haiku-4-5":  "haiku",
 		"haiku":             "haiku",
+		"fable-1.0":         "fable",
+		"claude-fable-1-0":  "fable",
+		"fable":             "fable",
 		"some-future-model": "some-future-model",
 	}
 	for in, want := range cases {

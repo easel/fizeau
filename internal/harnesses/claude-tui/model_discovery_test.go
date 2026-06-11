@@ -288,7 +288,7 @@ func TestDefaultModelSnapshotStaleCacheRefresh(t *testing.T) {
 func TestResolveModelAliasForAllSupportedFamilies(t *testing.T) {
 	h := &Harness{}
 	snap := harnesses.ModelDiscoverySnapshot{
-		Models: []string{"claude-sonnet-4-6", "claude-opus-4-5", "claude-haiku-3-5", "sonnet", "opus", "haiku"},
+		Models: []string{"claude-sonnet-4-6", "claude-opus-4-5", "claude-haiku-3-5", "claude-fable-1-0", "sonnet", "opus", "haiku", "fable"},
 	}
 
 	// Test all supported aliases
@@ -316,13 +316,13 @@ func TestResolveModelAliasForAllSupportedFamilies(t *testing.T) {
 }
 
 // TestSupportedAliasesReturnsCanonicalFamilyList verifies AC#6:
-// SupportedAliases returns the canonical family list (sonnet, opus, haiku)
+// SupportedAliases returns the canonical family list (sonnet, opus, haiku, fable)
 // per ADR-013's known surface.
 func TestSupportedAliasesReturnsCanonicalFamilyList(t *testing.T) {
 	h := &Harness{}
 	aliases := h.SupportedAliases()
 
-	expected := []string{"sonnet", "opus", "haiku"}
+	expected := []string{"sonnet", "opus", "haiku", "fable"}
 	if len(aliases) != len(expected) {
 		t.Errorf("expected %d aliases, got %d: %v", len(expected), len(aliases), aliases)
 	}

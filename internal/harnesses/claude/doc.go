@@ -14,6 +14,7 @@
 //   - "sonnet"
 //   - "opus"
 //   - "haiku"
+//   - "fable"
 //
 // These sets are the stable public contract for this harness. The
 // programmatic source of truth is (*Runner).SupportedLimitIDs() and
