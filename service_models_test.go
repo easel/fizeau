@@ -419,7 +419,7 @@ func TestListModels_catalogMetadataForKnownAndUnknownProviderModels(t *testing.T
 }
 
 func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 
 	sc := &fakeServiceConfig{
@@ -540,6 +540,12 @@ func TestListModels_contextSourcePrecedence(t *testing.T) {
 }
 
 func TestListModels_catalogMetadataForSubprocessHarnessModels(t *testing.T) {
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"claude": {"opus-4.7"},
+	})
 	svc := newTestService(t, ServiceOptions{})
 
 	infos, err := svc.ListModels(context.Background(), ModelFilter{Harness: "claude"})
@@ -575,6 +581,17 @@ func TestListModels_catalogMetadataForSubprocessHarnessModels(t *testing.T) {
 }
 
 func TestListModels_harnessFilter(t *testing.T) {
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"claude":   {"opus", "opus-4.7"},
+		"codex":    {"gpt", "gpt-5.4"},
+		"opencode": {"opencode-model"},
+		"pi":       {"pi-model"},
+		"gemini":   {"gemini-2.5-pro"},
+	})
+
 	ts := fakeModelsServer([]string{"model-a"})
 	defer ts.Close()
 
@@ -689,6 +706,10 @@ func stubSubprocessHarnessModelIDs(t *testing.T, byHarness map[string][]string) 
 }
 
 func TestListModelsUnfilteredIncludesAvailableSubscriptionTiers(t *testing.T) {
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+
 	// ServiceConfig with NO configured providers: the provider-backed snapshot
 	// is empty, exercising the regression where unfiltered ListModels returned
 	// zero models even though subscription CLIs are on PATH.
@@ -779,6 +800,10 @@ func TestListModelsFilteredByHarnessUnchanged(t *testing.T) {
 }
 
 func TestListModels_rankPosition(t *testing.T) {
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+
 	ts := fakeModelsServer([]string{"first-model", "second-model", "third-model"})
 	defer ts.Close()
 

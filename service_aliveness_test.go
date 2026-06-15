@@ -227,7 +227,7 @@ func TestNew_DoesNotBlockOnLocalAlivenessProbe(t *testing.T) {
 }
 
 func TestServiceStartup_FailedProbeHardGatesRouting(t *testing.T) {
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	baseURL := "http://127.0.0.1:1/v1"
@@ -408,7 +408,7 @@ func TestProbeLoop_SkipsProvidersWithFreshProbes(t *testing.T) {
 
 func TestResolveRoute_UnknownLocalHealthDoesNotBlockSubscriptionFallback(t *testing.T) {
 	configureFreshCodexQuotaForRouting(t)
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"
@@ -514,7 +514,7 @@ models:
 
 func TestExecute_RouteResolutionUsesCallerContextAndNonblockingLocalHealth(t *testing.T) {
 	configureFreshCodexQuotaForRouting(t)
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"
@@ -589,7 +589,7 @@ models:
 
 func TestDefaultProviderFailsOverWhenUnreachable(t *testing.T) {
 	configureFreshCodexQuotaForRouting(t)
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"
@@ -683,7 +683,7 @@ models:
 }
 
 func TestRouter_AllProvidersDead_FailsFast(t *testing.T) {
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"
@@ -771,7 +771,7 @@ models:
 }
 
 func TestResolveRoute_KnownFailedLocalProbeIsEvidence(t *testing.T) {
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"
@@ -944,7 +944,7 @@ models:
 }
 
 func TestResolveRoute_DoesNotProbeFreshHealthOnEveryRun(t *testing.T) {
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"

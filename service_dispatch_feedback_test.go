@@ -25,7 +25,7 @@ import (
 // that loop.
 func TestRoutePicksAlternateAfterDispatchFailureFeedback(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 
 	cache := &discoverycache.Cache{Root: cacheDir}
