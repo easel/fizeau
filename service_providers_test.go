@@ -1070,7 +1070,7 @@ func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
 }
 
 func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
-	dir := t.TempDir()
+	dir := tempDiscoveryCacheDir(t)
 	t.Setenv("HOME", dir)
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
