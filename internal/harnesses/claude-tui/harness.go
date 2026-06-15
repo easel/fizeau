@@ -225,7 +225,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		nonce:           nonce,
 		readyTimeout:    10 * time.Second,
 		pollInterval:    50 * time.Millisecond,
-		turnTimeout:     5 * time.Minute,
+		turnTimeout:     effectiveTurnTimeout(req.Timeout),
 		logger:          logger,
 		// Pool reuse correctness (F1): a CACHE HIT returns a live TUI process
 		// whose context still holds the prior turn's conversation. Reset it with
@@ -247,6 +247,13 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	if status == turnEvicted {
 		evictPooledSession(poolKeyName("claude-tui", cliModel), req.WorkDir, ptySession)
 	}
+}
+
+func effectiveTurnTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 {
+		return timeout
+	}
+	return 5 * time.Minute
 }
 
 // buildLaunchArgs builds the claude CLI argument slice for an unattended TUI
