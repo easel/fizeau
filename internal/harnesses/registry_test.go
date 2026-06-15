@@ -135,6 +135,11 @@ func TestBuiltinHarnessesPermissionArgs(t *testing.T) {
 	claude, ok := r.Get("claude")
 	require.True(t, ok)
 	assert.Contains(t, claude.PermissionArgs["unrestricted"], "--dangerously-skip-permissions")
+
+	claudeTUI, ok := r.Get("claude-tui")
+	require.True(t, ok)
+	assert.Empty(t, claudeTUI.PermissionArgs["unrestricted"])
+	assert.Len(t, claudeTUI.PermissionArgs, 1)
 }
 
 // TestRegistryDiscover_LookupTable drives Discover() through a table of

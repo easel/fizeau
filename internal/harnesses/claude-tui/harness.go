@@ -69,12 +69,14 @@ type Harness struct {
 // Info implements harnesses.Harness.
 func (h *Harness) Info() harnesses.HarnessInfo {
 	return harnesses.HarnessInfo{
-		Name:                "claude-tui",
-		Type:                "subprocess",
-		Available:           false,
-		IsSubscription:      true,
-		AutoRoutingEligible: true,
-		DefaultModel:        "claude-sonnet-4-6",
+		Name:                 "claude-tui",
+		Type:                 "subprocess",
+		Available:            false,
+		IsSubscription:       true,
+		AutoRoutingEligible:  true,
+		DefaultModel:         "claude-sonnet-4-6",
+		SupportedPermissions: []string{"unrestricted"},
+		CostClass:            "medium",
 	}
 }
 

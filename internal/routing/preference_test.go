@@ -459,6 +459,10 @@ func TestNonClaudeSubscriptionQuotaStale(t *testing.T) {
 // preference. This isolates the claude-tui-default behavior.
 func claudeSurfacePairInputs() Inputs {
 	mk := func(name string) HarnessEntry {
+		supportedPerms := []string{"safe", "supervised", "unrestricted"}
+		if name == "claude-tui" {
+			supportedPerms = []string{"unrestricted"}
+		}
 		return HarnessEntry{
 			Name:                name,
 			Surface:             "claude",
@@ -471,7 +475,7 @@ func claudeSurfacePairInputs() Inputs {
 			SubscriptionOK:      true,
 			QuotaTrend:          QuotaTrendHealthy,
 			SupportedReasoning:  []string{"low", "medium", "high"},
-			SupportedPerms:      []string{"safe", "supervised", "unrestricted"},
+			SupportedPerms:      supportedPerms,
 			SupportsTools:       true,
 			DefaultModel:        "claude-sonnet-4-6",
 		}
@@ -516,6 +520,27 @@ func TestClaudeTuiIsDefaultForClaudeSurface(t *testing.T) {
 	}
 	if tuiScore < printScore {
 		t.Errorf("claude-tui score %.2f < claude score %.2f; preferred harness must not lose on score", tuiScore, printScore)
+	}
+}
+
+// TestClaudeTuiDefaultSupportsUnrestrictedPermissions locks the execute-bead
+// path: DDx requests unrestricted permissions for isolated worktree execution,
+// and claude-tui must remain eligible because it launches under
+// bypassPermissions even though it does not support safe/supervised modes.
+func TestClaudeTuiDefaultSupportsUnrestrictedPermissions(t *testing.T) {
+	in := claudeSurfacePairInputs()
+
+	dec, err := Resolve(Request{Policy: "default", Permissions: "unrestricted"}, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if dec.Harness != "claude-tui" {
+		t.Fatalf("unrestricted default route = %q, want claude-tui", dec.Harness)
+	}
+	for _, c := range dec.Candidates {
+		if c.Harness == "claude-tui" && !c.Eligible {
+			t.Fatalf("claude-tui was ineligible: %s", c.Reason)
+		}
 	}
 }
 

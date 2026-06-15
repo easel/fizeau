@@ -52,6 +52,9 @@ func TestClaudeTuiInterfaceConformance(t *testing.T) {
 	if h.Info().Name != "claude-tui" {
 		t.Errorf("Info().Name: got %q, want \"claude-tui\"", h.Info().Name)
 	}
+	if got := h.Info().SupportedPermissions; len(got) != 1 || got[0] != "unrestricted" {
+		t.Errorf("Info().SupportedPermissions: got %v, want [unrestricted]", got)
+	}
 
 	// Verify all interface methods are callable.
 	_ = h.Info()
@@ -317,8 +320,11 @@ func TestClaudeTuiRegistryEntry(t *testing.T) {
 	if config.BaseArgs != nil && len(config.BaseArgs) > 0 {
 		t.Errorf("BaseArgs: got %v, want nil or empty", config.BaseArgs)
 	}
-	if config.PermissionArgs != nil && len(config.PermissionArgs) > 0 {
-		t.Errorf("PermissionArgs: got %v, want nil or empty", config.PermissionArgs)
+	if got := config.PermissionArgs["unrestricted"]; got == nil {
+		t.Errorf("PermissionArgs[unrestricted]: got nil, want empty arg list")
+	}
+	if len(config.PermissionArgs) != 1 {
+		t.Errorf("PermissionArgs: got %v, want only unrestricted", config.PermissionArgs)
 	}
 	if config.ModelFlag != "" {
 		t.Errorf("ModelFlag: got %q, want empty", config.ModelFlag)

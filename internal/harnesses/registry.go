@@ -65,7 +65,7 @@ var builtinHarnesses = map[string]HarnessConfig{
 		Name:                "claude-tui",
 		Binary:              "claude",
 		BaseArgs:            nil,
-		PermissionArgs:      nil,
+		PermissionArgs:      map[string][]string{"unrestricted": {}},
 		PromptMode:          "stdin", // TUI interaction via stdin
 		DefaultModel:        "claude-sonnet-4-6",
 		ReasoningLevels:     nil,
