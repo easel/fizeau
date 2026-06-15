@@ -87,7 +87,7 @@ func RegisterHarnessSession(sessionLogDir, sessionID, harnessName string, cmd *e
 	}
 
 	// Write the record as JSON.
-	if err := os.MkdirAll(registryDir, 0o755); err != nil {
+	if err := os.MkdirAll(registryDir, 0o750); err != nil {
 		return nil // Best-effort
 	}
 

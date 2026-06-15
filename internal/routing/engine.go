@@ -175,15 +175,15 @@ type HarnessEntry struct {
 
 // ProviderEntry describes one provider available under a harness.
 type ProviderEntry struct {
-	Name                 string
-	BaseURL              string
-	ServerInstance       string
-	EndpointName         string
-	EndpointBaseURL      string
-	DefaultModel         string
-	Billing              modelcatalog.BillingModel
-	CostClass            string
-	DiscoveredIDs        []string // models discovered via /v1/models or equivalent
+	Name            string
+	BaseURL         string
+	ServerInstance  string
+	EndpointName    string
+	EndpointBaseURL string
+	DefaultModel    string
+	Billing         modelcatalog.BillingModel
+	CostClass       string
+	DiscoveredIDs   []string // models discovered via /v1/models or equivalent
 	// CatalogIDByModel maps a served/wire model ID to the catalog-resolution
 	// identity recovered from the provider's /props endpoint (e.g.
 	// "dflash" -> "Qwen3.6-27B"). Power/auto-routability gates resolve against the

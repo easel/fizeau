@@ -19,6 +19,7 @@ import (
 // anthropicAPIKeyEnv / anthropicBaseURLEnv are the canonical env vars for the
 // Anthropic provider, mirroring the source used by the provider registry.
 const (
+	// #nosec G101 -- this is an environment variable name, not a credential value.
 	anthropicAPIKeyEnv  = "ANTHROPIC_API_KEY"
 	anthropicBaseURLEnv = "ANTHROPIC_BASE_URL"
 )

@@ -405,6 +405,9 @@ models:
       agent.openai: qwen3.5-27b
 `)
 	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"codex": {"gpt-5.4", "gpt-5.4-mini"},
+	})
 
 	svc := publicRouteTraceService(nil)
 	t.Setenv("PATH", "")

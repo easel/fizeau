@@ -424,12 +424,16 @@ func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 
 	sc := &fakeServiceConfig{
 		providers: map[string]ServiceProviderEntry{
-			"codex-subscription": {Type: "codex", Model: "gpt-5.5", Billing: BillingModelSubscription},
+			"codex-subscription": {Type: "codex", Model: "gpt-5.4", Billing: BillingModelSubscription},
 		},
 		names:       []string{"codex-subscription"},
 		defaultName: "codex-subscription",
 	}
+	stubSubprocessHarnessModelIDs(t, map[string][]string{
+		"codex": {"gpt-5.4"},
+	})
 	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
+	stubSubscriptionHarnessLookPath(svc, "codex")
 	remaining := 14
 	if err := runtimesignals.Write(&discoverycache.Cache{Root: cacheDir}, runtimesignals.Signal{
 		Provider:         "codex-subscription",
@@ -440,6 +444,7 @@ func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("write runtime signal: %v", err)
 	}
+	writeSnapshotDiscoveryFixture(t, &discoverycache.Cache{Root: cacheDir}, testDiscoverySourceName("codex-subscription", "codex-subscription", "", ""), time.Date(2026, 5, 12, 14, 20, 0, 0, time.UTC), []string{"gpt-5.4"})
 
 	infos, err := svc.ListModels(context.Background(), ModelFilter{})
 	if err != nil {
@@ -452,7 +457,7 @@ func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 	if len(byID) == 0 {
 		t.Fatal("expected at least one codex model")
 	}
-	subscription := byID["gpt-5.5"]
+	subscription := byID["gpt-5.4"]
 	if subscription.Billing != BillingModelSubscription {
 		t.Fatalf("Billing = %q, want subscription", subscription.Billing)
 	}

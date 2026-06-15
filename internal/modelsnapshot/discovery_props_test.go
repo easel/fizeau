@@ -29,10 +29,10 @@ func TestParsePropsDiscovery_RecoversRealModelIdentity(t *testing.T) {
 	// "Qwen3.6 27B" (model_card.name) canonicalizes to the same key as the
 	// catalog's "qwen3.6-27b" (power 5).
 	want := []string{
-		"dflash",                // model_alias
-		"Qwen3.6 27B",           // model_card.name
-		"Qwen3.6-27B",           // model_card.source last segment
-		"Qwen3.6-27B-Q4_K_M",    // model_path basename, .gguf stripped
+		"dflash",             // model_alias
+		"Qwen3.6 27B",        // model_card.name
+		"Qwen3.6-27B",        // model_card.source last segment
+		"Qwen3.6-27B-Q4_K_M", // model_path basename, .gguf stripped
 	}
 	for _, w := range want {
 		if !slices.Contains(ids, w) {
@@ -44,11 +44,11 @@ func TestParsePropsDiscovery_RecoversRealModelIdentity(t *testing.T) {
 func TestModelNameFromPath(t *testing.T) {
 	cases := map[string]string{
 		"/opt/lucebox-hub/server/models/Qwen3.6-27B-Q4_K_M.gguf": "Qwen3.6-27B-Q4_K_M",
-		"models/Qwen3.5-27B.safetensors":                        "Qwen3.5-27B",
-		"/x/y/model.BIN":                                        "model",
-		"plain-name":                                            "plain-name",
-		"":                                                      "",
-		"/":                                                     "",
+		"models/Qwen3.5-27B.safetensors":                         "Qwen3.5-27B",
+		"/x/y/model.BIN":                                         "model",
+		"plain-name":                                             "plain-name",
+		"":                                                       "",
+		"/":                                                      "",
 	}
 	for in, want := range cases {
 		if got := modelNameFromPath(in); got != want {
@@ -61,8 +61,8 @@ func TestLastPathSegment(t *testing.T) {
 	cases := map[string]string{
 		"https://huggingface.co/Qwen/Qwen3.6-27B":  "Qwen3.6-27B",
 		"https://huggingface.co/Qwen/Qwen3.6-27B/": "Qwen3.6-27B",
-		"Qwen3.6-27B":                              "Qwen3.6-27B",
-		"":                                         "",
+		"Qwen3.6-27B": "Qwen3.6-27B",
+		"":            "",
 	}
 	for in, want := range cases {
 		if got := lastPathSegment(in); got != want {

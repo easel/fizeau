@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
+	"github.com/easel/fizeau/internal/runtimesignals"
 	"github.com/easel/fizeau/internal/serverinstance"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
@@ -131,11 +133,39 @@ func (s *service) subscriptionHarnessTierModels(name string, cfg harnesses.Harne
 			info.ContextLength, info.ContextSource = resolveContextEvidence(context.Background(), ServiceProviderEntry{}, id, cat)
 			info.Cost, info.PerfSignal = catalogCostAndPerf(cat, id)
 			info.Power, info.AutoRoutable, info.ExactPinOnly = catalogPowerEligibility(cat, id)
+			if cost, ok := catalogCostUSDPer1kTokens(cat, id); ok {
+				info.EffectiveCost = cost
+				if info.Billing == BillingModelSubscription {
+					info.EffectiveCostSource = "subscription_shadow"
+				} else {
+					info.EffectiveCostSource = "catalog"
+				}
+			}
 		}
+		attachRuntimeSignalToModelInfo(&info, name)
 		info.Utilization = s.routeUtilizationEvidence(name, info.ServerInstance, info.EndpointName, id)
 		out = append(out, info)
 	}
 	return out
+}
+
+func attachRuntimeSignalToModelInfo(info *ModelInfo, providerName string) {
+	if info == nil {
+		return
+	}
+	cacheRoot, err := serviceSnapshotCacheRoot()
+	if err != nil {
+		return
+	}
+	sig, ok := runtimesignals.ReadCached(&discoverycache.Cache{Root: cacheRoot}, providerName)
+	if !ok || sig == nil || sig.RecordedAt.IsZero() {
+		return
+	}
+	recordedAt := sig.RecordedAt.UTC()
+	info.HealthFreshnessAt = recordedAt
+	info.HealthFreshnessSource = "runtime"
+	info.QuotaFreshnessAt = recordedAt
+	info.QuotaFreshnessSource = "runtime"
 }
 
 // subprocessHarnessModelIDs resolves the documented CLI model surface for a

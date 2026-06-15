@@ -3,6 +3,7 @@ package fizeau
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 func TestResolveRouteModelConstraintNormalization(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	cases := []struct {
 		name      string
@@ -69,10 +70,7 @@ models:
 				names:       []string{"live"},
 				defaultName: "live",
 			}
-			svc, err := New(ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
-			if err != nil {
-				t.Fatalf("New: %v", err)
-			}
+			svc := newTestService(t, ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
 
 			dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: tc.request})
 			if err != nil {
@@ -90,7 +88,7 @@ models:
 
 func TestResolveRouteModelConstraintAmbiguousAndNoMatch(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	catalogCleanup := replaceRoutingCatalogForTest(t, loadRoutingFixtureCatalog(t, `
 version: 5
@@ -123,10 +121,7 @@ models:
 			names:       []string{"live"},
 			defaultName: "live",
 		}
-		svc, err := New(ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
+		svc := newTestService(t, ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
 
 		dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: "qwen3.6"})
 		if err == nil {
@@ -158,10 +153,7 @@ models:
 			names:       []string{"live"},
 			defaultName: "live",
 		}
-		svc, err := New(ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
+		svc := newTestService(t, ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
 
 		dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: "qwen36"})
 		if err == nil {
@@ -188,7 +180,7 @@ models:
 
 func TestExecuteModelConstraintNormalization(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	catalogCleanup := replaceRoutingCatalogForTest(t, loadRoutingFixtureCatalog(t, `
 version: 5
@@ -252,4 +244,25 @@ models:
 			}
 		})
 	}
+}
+
+func tempDiscoveryCacheDir(t *testing.T) string {
+	t.Helper()
+	prefix := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	dir, err := os.MkdirTemp("", prefix+"-*")
+	if err != nil {
+		t.Fatalf("create cache dir: %v", err)
+	}
+	t.Cleanup(func() {
+		var err error
+		for i := 0; i < 20; i++ {
+			err = os.RemoveAll(dir)
+			if err == nil {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("remove cache dir %s: %v", dir, err)
+	})
+	return dir
 }

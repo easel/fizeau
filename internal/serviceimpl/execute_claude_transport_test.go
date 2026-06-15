@@ -8,7 +8,6 @@ import (
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
-	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -292,10 +291,12 @@ func TestClaudeDefaultTransportSubprocessEndToEnd(t *testing.T) {
 		"with FIZEAU_CLAUDE_TRANSPORT unset, DispatchExecuteRun must call RunSubprocess (not native)")
 	require.NotNil(t, capturedRunner, "RunSubprocess must receive a non-nil runner")
 
-	claudeRunner, ok := capturedRunner.(*claudeharness.Runner)
-	require.True(t, ok, "runner must be *claudeharness.Runner for harness=claude; got %T", capturedRunner)
-	assert.False(t, claudeRunner.NativeMode,
-		"default transport (knob unset) must build NativeMode=false — if this fails the default was flipped to native")
+	info := capturedRunner.Info()
+	assert.Equal(t, "claude", info.Name)
+	assert.Equal(t, "subprocess", info.Type,
+		"default transport (knob unset) must dispatch the subprocess claude harness — if this fails the default was flipped to native")
+	assert.True(t, info.IsSubscription,
+		"default transport (knob unset) must preserve subscription billing semantics")
 }
 
 // Compile-time guard: the fake tool satisfies agentcore.Tool.

@@ -65,7 +65,7 @@ func WriteClaudeQuota(path string, snapshot ClaudeQuotaSnapshot) error {
 		snapshot.CapturedAt = snapshot.CapturedAt.UTC()
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create claude quota cache dir: %w", err)
 	}
 
@@ -95,6 +95,7 @@ func WriteClaudeQuota(path string, snapshot ClaudeQuotaSnapshot) error {
 // existence is NOT an error: foreground callers are expected to fall back
 // to a safe default when no snapshot is present.
 func ReadClaudeQuotaFrom(path string) (*ClaudeQuotaSnapshot, bool) {
+	// #nosec G304 -- path is an explicit quota-cache path selected by config/env.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, false
