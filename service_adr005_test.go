@@ -413,7 +413,7 @@ func TestRoutingDecisionRejectedCandidatesMatchSnapshotEvidence(t *testing.T) {
 	// Isolate discovery: an empty PATH makes subscription harnesses (claude/
 	// codex/gemini) unavailable so ListModels never spawns a live PTY scrape,
 	// and a temp cache dir keeps the snapshot cache hermetic.
-	t.Setenv("FIZEAU_CACHE_DIR", t.TempDir())
+	t.Setenv("FIZEAU_CACHE_DIR", tempDiscoveryCacheDir(t))
 	t.Setenv("PATH", "")
 	modelsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {

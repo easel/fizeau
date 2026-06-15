@@ -52,7 +52,7 @@ func openrouterCreditGateService(t *testing.T, pcfgOverride func(*ServiceProvide
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	t.Setenv("PATH", "")
 	cache := &discoverycache.Cache{Root: cacheDir}

@@ -858,7 +858,7 @@ models:
 }
 
 func TestResolveRoute_FailedProbeGatesOnlyMatchingEndpoint(t *testing.T) {
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	modelID := "mlx-community/Qwen3.6-27B-8bit"

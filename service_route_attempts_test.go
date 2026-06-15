@@ -544,7 +544,7 @@ func TestResolveRoute_CodexUsesDurableQuotaCache(t *testing.T) {
 	}
 }
 
-func TestBuildRoutingInputs_CodexQuotaStaleOrBlockedIsIneligible(t *testing.T) {
+func TestBuildRoutingInputs_CodexQuotaStaleIsEligibleBlockedIsIneligible(t *testing.T) {
 	dir := t.TempDir()
 	codexQuotaPath := filepath.Join(dir, "codex-quota.json")
 	t.Setenv("FIZEAU_CODEX_QUOTA_CACHE", codexQuotaPath)
@@ -556,8 +556,8 @@ func TestBuildRoutingInputs_CodexQuotaStaleOrBlockedIsIneligible(t *testing.T) {
 		[]harnesses.QuotaWindow{{Name: "5h", UsedPercent: 25, State: "ok"}},
 	)
 	codex := routingHarnessEntry(t, svc.buildRoutingInputs(context.Background()).Harnesses, "codex")
-	if codex.SubscriptionOK || !codex.QuotaStale {
-		t.Fatalf("stale codex quota: SubscriptionOK=%v QuotaStale=%v", codex.SubscriptionOK, codex.QuotaStale)
+	if !codex.SubscriptionOK || !codex.QuotaStale {
+		t.Fatalf("stale codex quota should fail open: SubscriptionOK=%v QuotaStale=%v", codex.SubscriptionOK, codex.QuotaStale)
 	}
 
 	writeCodexQuotaCacheFile(t, codexQuotaPath, time.Now().UTC(), "pty",
@@ -580,14 +580,15 @@ func TestBuildRoutingInputs_GeminiQuotaGatesAutoRouting(t *testing.T) {
 	registry := harnesses.NewRegistry()
 	svc := &service{opts: ServiceOptions{}, registry: registry}
 
-	// Missing cache: no SubscriptionOK even with fresh auth.
+	// Missing cache is unknown, not proven exhausted: keep the harness
+	// subscription-eligible but score it down with QuotaOK=false.
 	t.Setenv("GOOGLE_API_KEY", "test")
 	gemini := routingHarnessEntry(t, svc.buildRoutingInputs(context.Background()).Harnesses, "gemini")
-	if gemini.SubscriptionOK || gemini.QuotaOK {
-		t.Fatalf("missing gemini quota cache must keep gemini out of auto-routing: %+v", gemini)
+	if !gemini.SubscriptionOK || gemini.QuotaOK {
+		t.Fatalf("missing gemini quota cache should fail open with QuotaOK=false: %+v", gemini)
 	}
 
-	// Stale snapshot: ineligible even though windows show headroom.
+	// Stale snapshot is also unknown, not proven exhausted.
 	writeGeminiTestQuota(t, quotaPath, geminiTestQuotaSnapshot{
 		CapturedAt: time.Now().UTC().Add(-1 * time.Hour),
 		Source:     "pty",
@@ -596,8 +597,8 @@ func TestBuildRoutingInputs_GeminiQuotaGatesAutoRouting(t *testing.T) {
 		},
 	})
 	gemini = routingHarnessEntry(t, svc.buildRoutingInputs(context.Background()).Harnesses, "gemini")
-	if gemini.SubscriptionOK || !gemini.QuotaStale {
-		t.Fatalf("stale gemini quota: SubscriptionOK=%v QuotaStale=%v", gemini.SubscriptionOK, gemini.QuotaStale)
+	if !gemini.SubscriptionOK || !gemini.QuotaStale {
+		t.Fatalf("stale gemini quota should fail open: SubscriptionOK=%v QuotaStale=%v", gemini.SubscriptionOK, gemini.QuotaStale)
 	}
 
 	// Fresh but all tiers exhausted: routing must still mark ineligible.
@@ -708,7 +709,7 @@ func TestResolveRoute_GeminiCatalogModelsResolveByConcreteModel(t *testing.T) {
 
 func routeAttemptTestService(t *testing.T, cooldown time.Duration) *service {
 	t.Helper()
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	t.Setenv("PATH", "")
 	cache := &discoverycache.Cache{Root: cacheDir}

@@ -207,7 +207,7 @@ func TestExecuteHTTPProviderHarnessNoMatchDiagnostic(t *testing.T) {
 
 func TestExecuteEndpointFirstRoutingSkipsDeadAndNormalizesModel(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	cache := &discoverycache.Cache{Root: cacheDir}
 
@@ -266,7 +266,7 @@ func TestExecuteEndpointFirstRoutingSkipsDeadAndNormalizesModel(t *testing.T) {
 
 func TestExecuteEndpointFirstRoutingIgnoresStaleCacheForDeadEndpoint(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	cache := &discoverycache.Cache{Root: cacheDir}
 
@@ -389,7 +389,7 @@ func TestExecuteEndpointFirstRoutingUsesMetricsBeforeConfigOrder(t *testing.T) {
 
 func TestExecuteEndpointFirstRoutingNoLiveModelMatchDiagnostic(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	cache := &discoverycache.Cache{Root: cacheDir}
 

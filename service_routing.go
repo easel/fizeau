@@ -133,7 +133,7 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 	if result != nil {
 		result.RequestedPolicy = req.Policy
 		result.PowerPolicy = powerPolicy
-		result.Model = resolveSubprocessModelAlias(result.Harness, result.Model)
+		result.Model = resolveSubprocessModelAliasWithCatalog(result.Harness, result.Model, cat)
 		result.Power = catalogPowerForModel(cat, result.Model)
 	}
 	s.cacheRouteDecision(req.Model, result)

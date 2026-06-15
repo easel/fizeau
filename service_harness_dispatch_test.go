@@ -31,7 +31,8 @@ EOF
 `)
 	writeFakeHarness(t, binDir, "opencode", `#!/bin/sh
 cat <<'EOF'
-opencode service response
+{"type":"text","part":{"type":"text","text":"opencode service response"}}
+{"type":"step_finish","part":{"type":"step-finish","tokens":{"total":5,"input":3,"output":2,"cache":{"write":0,"read":0}},"cost":0}}
 EOF
 `)
 	writeFakeHarness(t, binDir, "pi", `#!/bin/sh

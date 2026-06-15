@@ -216,7 +216,7 @@ func (s *service) resolveExecuteRouteContext(ctx context.Context, req ServiceExe
 		return s.resolveExecuteRouteWithEngine(ctx, req)
 	}
 
-	resolvedModel := resolveSubprocessModelAlias(canonical, req.Model)
+	resolvedModel := resolveSubprocessModelAliasWithCatalog(canonical, req.Model, serviceRoutingCatalog())
 	decision := &RouteDecision{
 		Harness:  canonical,
 		Provider: req.Provider,
@@ -364,7 +364,7 @@ func validateExplicitHarnessModel(name string, cfg harnesses.HarnessConfig, mode
 	if modelSupportedForHarness(name, cfg, model, provider) {
 		return nil
 	}
-	supportedModels := subprocessHarnessModelIDs(name, cfg)
+	supportedModels := supportedModelsForHarness(name, cfg, serviceRoutingCatalog())
 	return &ErrHarnessModelIncompatible{
 		Harness:         name,
 		Model:           model,
@@ -373,7 +373,7 @@ func validateExplicitHarnessModel(name string, cfg harnesses.HarnessConfig, mode
 }
 
 func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, provider string) bool {
-	for _, known := range subprocessHarnessModelIDs(name, cfg) {
+	for _, known := range supportedModelsForHarness(name, cfg, serviceRoutingCatalog()) {
 		if model == known {
 			return true
 		}
@@ -382,22 +382,7 @@ func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, p
 	case "codex":
 		return strings.HasPrefix(model, "gpt-")
 	case "claude", "claude-tui":
-		// Gate on the claude model FAMILY, not live /model enumeration. The
-		// catalog "claude" surface routes tier IDs like "sonnet-4.6" (note: no
-		// "claude-" prefix) alongside "claude-opus-4.7"/"claude-haiku-5.5".
-		// claude-tui's interactive /model picker only lists the CURRENT model,
-		// so a resolved tier will not appear in discovery — but the running
-		// session can /model to any family member. Accept any claude-family ID
-		// so a default-policy route (e.g. sonnet-4.6) executes via claude-tui
-		// instead of being rejected when discovery is cold/incomplete. (claude
-		// shares this case; before, it survived only via a warm-cache exact
-		// match and would have rejected the bare-tier "sonnet-4.6" too.)
-		m := strings.ToLower(model)
-		return strings.HasPrefix(m, "claude-") ||
-			strings.HasPrefix(m, "sonnet") ||
-			strings.HasPrefix(m, "opus") ||
-			strings.HasPrefix(m, "haiku") ||
-			strings.HasPrefix(m, "fable")
+		return false
 	case "pi":
 		// Pi can route to non-Gemini backends (lmstudio, omlx, etc.) when a
 		// provider is pinned. The pi CLI owns per-provider model validation
@@ -429,7 +414,7 @@ func (s *service) validateEngineResolvedExecuteDecision(req ServiceExecuteReques
 	if !ok {
 		return fmt.Errorf("unknown harness %q", req.Harness)
 	}
-	normalizedModel := resolveSubprocessModelAlias(canonical, decision.Model)
+	normalizedModel := resolveSubprocessModelAliasWithCatalog(canonical, decision.Model, serviceRoutingCatalog())
 	if err := validateExplicitHarnessModel(canonical, cfg, normalizedModel, decision.Provider); err != nil {
 		return err
 	}

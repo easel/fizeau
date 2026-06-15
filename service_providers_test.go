@@ -1081,7 +1081,7 @@ func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
 	claudeQuotaPath := filepath.Join(dir, "missing-claude-quota.json")
 	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", claudeQuotaPath)
 	resetPrimaryQuotaRefreshForTest(t)
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	cache := &discoverycache.Cache{Root: cacheRoot}
 	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("local", "local", "http://127.0.0.1:9999/v1", ""), time.Now().UTC(), []string{"model-a"})

@@ -237,7 +237,7 @@ func TestResolveRouteSuccessIncludesCandidates(t *testing.T) {
 
 func TestResolveRouteSnapshotProviderPowerCorrelation(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 
 	var probeHits atomic.Int32
@@ -423,7 +423,7 @@ models:
 
 func TestResolveRouteRefreshesStaleSnapshotInBackgroundWithoutBlocking(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -984,7 +984,7 @@ func findRoutingHarnessEntry(entries []routing.HarnessEntry, name string) (routi
 
 func TestResolveRouteSnapshotFreshCacheSkipsDiscoveryProbe(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 
 	var probeHits atomic.Int32
@@ -1959,7 +1959,7 @@ func openrouterCredentialGateService(t *testing.T, apiKey string) (*service, *at
 	}))
 	t.Cleanup(srv.Close)
 
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	t.Setenv("PATH", "")
 	cache := &discoverycache.Cache{Root: cacheDir}

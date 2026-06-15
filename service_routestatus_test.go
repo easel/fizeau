@@ -14,7 +14,7 @@ import (
 
 func isolateRouteStatusTestEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("FIZEAU_CACHE_DIR", t.TempDir())
+	t.Setenv("FIZEAU_CACHE_DIR", tempDiscoveryCacheDir(t))
 	t.Setenv("PATH", "")
 }
 

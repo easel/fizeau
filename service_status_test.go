@@ -280,8 +280,8 @@ func TestBuildRoutingInputs_IgnoresCodexUsageWindows(t *testing.T) {
 		registry: harnesses.NewRegistry(),
 	}
 	codex := routingHarnessEntry(t, svc.buildRoutingInputs(context.Background()).Harnesses, "codex")
-	if codex.SubscriptionOK {
-		t.Fatal("usage logs must not make Codex routing-eligible without quota evidence")
+	if !codex.SubscriptionOK || codex.QuotaOK {
+		t.Fatalf("usage logs must not fabricate quota health; got SubscriptionOK=%v QuotaOK=%v", codex.SubscriptionOK, codex.QuotaOK)
 	}
 }
 

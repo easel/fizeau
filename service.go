@@ -1396,7 +1396,7 @@ func (s *service) ListHarnesses(ctx context.Context) ([]HarnessInfo, error) {
 			AutoRoutingEligible:  cfg.AutoRoutingEligible,
 			TestOnly:             cfg.TestOnly,
 			ExactPinSupport:      cfg.ExactPinSupport,
-			DefaultModel:         cfg.DefaultModel,
+			DefaultModel:         harnessDefaultModel(name, cfg, serviceRoutingCatalog()),
 			SupportedPermissions: supportedPermissions(cfg),
 			SupportedReasoning:   supportedReasoning(cfg),
 			CostClass:            cfg.CostClass,

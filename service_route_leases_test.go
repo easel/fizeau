@@ -14,7 +14,7 @@ import (
 func seedSnapshotDiscoveryFixtures(t *testing.T, fixtures map[string][]string) {
 	t.Helper()
 	t.Setenv("PATH", "")
-	cacheDir := t.TempDir()
+	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
 	cache := &discoverycache.Cache{Root: cacheDir}
 	capturedAt := time.Date(2026, 5, 12, 15, 0, 0, 0, time.UTC)

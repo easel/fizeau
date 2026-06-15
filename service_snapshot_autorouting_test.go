@@ -41,7 +41,7 @@ type snapshotAutoroutingDiscoveryFixture struct {
 
 func TestSnapshotAutoroutingFromFixtures(t *testing.T) {
 	t.Setenv("PATH", "")
-	cacheRoot := t.TempDir()
+	cacheRoot := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 
 	fixture := loadSnapshotAutoroutingFixture(t)
