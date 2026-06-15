@@ -18,7 +18,7 @@ import (
 // returns a pointer to the refresher call counter and the temp root.
 func withTestDiscoveryCache(t *testing.T, payload subprocessDiscoveryPayload) (*int64, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := retryCleanupTempDir(t)
 
 	origRoot := subprocessDiscoveryCacheRoot
 	origRefresher := subprocessDiscoveryRefresher
@@ -37,6 +37,26 @@ func withTestDiscoveryCache(t *testing.T, payload subprocessDiscoveryPayload) (*
 		}
 	}
 	return &calls, root
+}
+
+func retryCleanupTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "subprocess-discovery-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		var err error
+		for i := 0; i < 20; i++ {
+			err = os.RemoveAll(dir)
+			if err == nil {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("remove temp dir %s: %v", dir, err)
+	})
+	return dir
 }
 
 // waitForRefresherCalls polls until the refresher call count reaches want or
