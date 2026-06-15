@@ -488,6 +488,10 @@ func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 }
 
 func TestListModels_contextSourcePrecedence(t *testing.T) {
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+
 	t.Run("provider config override wins", func(t *testing.T) {
 		ts := fakeModelsServer([]string{"qwen3.5-27b"})
 		defer ts.Close()
