@@ -636,12 +636,20 @@ func (h *HookEventTailer) Drain(seq int64, emit func(harnesses.Event)) int64 {
 		if err != nil {
 			continue
 		}
-		h.seen[name] = true
 		he, err := ParseHookEvent(data)
 		if err != nil {
+			if isLikelyPartialHookPayload(data, err) {
+				// The Claude hook command writes with `cat > file`, so the
+				// tailer can observe the file before the shell closes it.
+				// Leave it unseen so the next drain can parse the completed
+				// payload instead of permanently dropping the event.
+				continue
+			}
+			h.seen[name] = true
 			h.logger.Warn("malformed hook-event payload, skipping", "file", name, "error", err)
 			continue
 		}
+		h.seen[name] = true
 		corr := ""
 		if he.ToolUseID == "" {
 			corr = h.correlationID(he.Event)
@@ -652,6 +660,16 @@ func (h *HookEventTailer) Drain(seq int64, emit func(harnesses.Event)) int64 {
 		}
 	}
 	return seq
+}
+
+func isLikelyPartialHookPayload(data []byte, err error) bool {
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return true
+	}
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "unexpected end of JSON input")
 }
 
 // sortStrings is a small insertion sort to avoid importing sort for one call.
