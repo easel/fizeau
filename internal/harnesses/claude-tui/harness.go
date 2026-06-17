@@ -542,6 +542,12 @@ func (h *Harness) emitTranscriptAndFinal(
 		if err := tailer.ReadEvents(ctx, eventChan); err == nil {
 			*seq = tailer.seqCounter
 			te.nextTranscriptOffset = tailer.EndOffset()
+			if !tailer.sawAssistant {
+				// Parser-level empty/incomplete transcripts intentionally do
+				// not emit finals; the harness-level stream still must.
+				*seq++
+				emitFinalEvent(eventChan, *seq, startTime, "failed", "transcript contained no assistant final event", 1)
+			}
 			return
 		}
 		logger.Warn("failed to read transcript", "path", expanded, "error", err)
