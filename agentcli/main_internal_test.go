@@ -17,6 +17,15 @@ func isolateCatalogHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
+	t.Setenv("FIZEAU_CACHE_DIR", filepath.Join(home, ".cache", "fizeau"))
+	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+	// Unit tests must not discover or launch agent CLIs installed on the host.
+	// Modern Codex performs asynchronous marketplace setup on first launch,
+	// which otherwise races t.TempDir cleanup and makes the suite non-hermetic.
+	t.Setenv("PATH", "")
 }
 
 func TestResolvePreset(t *testing.T) {

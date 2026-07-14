@@ -63,6 +63,12 @@ func isStale(s Source, m *refreshMarker) bool {
 	if !processAlive(m.PID) {
 		return true
 	}
+	// Failed refreshes use Deadline as a short retry cooldown. They are not
+	// active refreshes and must not inherit the source's crash-recovery grace
+	// period, which can turn a 250 ms cooldown into minutes of suppression.
+	if m.LastError != "" {
+		return time.Now().After(m.Deadline)
+	}
 	// 2× multiplier per ADR-012 "Marker staleness threshold = 2 × refresh deadline"
 	threshold := s.RefreshDeadline * stalenessMultiplier
 	return time.Now().After(m.Deadline.Add(threshold))

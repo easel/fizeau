@@ -240,6 +240,12 @@ func (c *Cache) refreshAndCommit(s Source, fn Refresher) error {
 		return err
 	}
 	if !claim.claimed {
+		// A failed marker represents a retry cooldown, not work that is still in
+		// flight. Forced refresh callers must honor that cooldown without waiting
+		// for the source's (potentially much longer) refresh deadline.
+		if strings.TrimSpace(claim.marker.LastError) != "" {
+			return nil
+		}
 		if c.waitForRefreshHook != nil {
 			c.waitForRefreshHook(s)
 		}

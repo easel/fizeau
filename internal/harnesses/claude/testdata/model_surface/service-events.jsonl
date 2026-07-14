@@ -1,1 +1,1 @@
-{"seq":10,"t_ms":900,"payload":{"type":"final","status":"success"}}
+{"seq":4,"t_ms":550,"payload":{"frames":14,"harness":"claude","raw_bytes":5295,"status":"ok","type":"quota-probe"}}

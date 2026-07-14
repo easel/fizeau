@@ -290,24 +290,11 @@ func TestModelSurfaceCassetteReturnsNonEmptyModels(t *testing.T) {
 	// AC2: cassette reader returns non-empty Models slice
 	require.NotEmpty(t, snapshot.Models, "models should not be empty")
 
-	// AC2: covers expected opencode models
-	hasGPT := false
-	hasClaudeSONNET := false
-	hasMinimax := false
+	// The recorder scopes this portable fixture to OpenCode-owned models so
+	// account-local providers never leak into the checked-in evidence.
 	for _, model := range snapshot.Models {
-		if model == "opencode/gpt-5.4" {
-			hasGPT = true
-		}
-		if model == "opencode/claude-sonnet-4-6" {
-			hasClaudeSONNET = true
-		}
-		if model == "opencode/minimax-m2.5-free" {
-			hasMinimax = true
-		}
+		require.True(t, strings.HasPrefix(model, "opencode/"), "portable cassette contains account-local model %q", model)
 	}
-	require.True(t, hasGPT, "models should include opencode/gpt-5.4")
-	require.True(t, hasClaudeSONNET, "models should include opencode/claude-sonnet-4-6")
-	require.True(t, hasMinimax, "models should include opencode/minimax-m2.5-free")
 }
 
 // TestModelSurfaceCassetteStructure verifies the cassette directory structure

@@ -1,0 +1,18 @@
+Gemini CLI 0.46.0 bundled model surface excerpt.
+
+Source: @google/gemini-cli bundle, packages/core/src/config/models.ts.
+
+var DEFAULT_GEMINI_MODEL = "gemini-2.5-pro";
+var DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.5-flash";
+var DEFAULT_GEMINI_FLASH_LITE_MODEL = "gemini-3.1-flash-lite";
+var VALID_GEMINI_MODELS = new Set([
+  "gemini-3-pro-preview",
+  "gemini-3.1-pro-preview",
+  "gemini-3.1-pro-preview-customtools",
+  "gemini-3-flash-preview",
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_GEMINI_FLASH_MODEL,
+  "gemini-3.5-flash",
+  "gemini-3-flash",
+  DEFAULT_GEMINI_FLASH_LITE_MODEL,
+]);

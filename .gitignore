@@ -26,6 +26,9 @@ website/resources/
 # DDx and HELIX runtime artifacts
 .ddx/agent-logs/
 .ddx/config.yaml
+.ddx/plugins/
+.agents/skills/
+.claude/skills/
 
 # fizeau local provider config (machine-specific, not for commit)
 .fizeau/config.yaml

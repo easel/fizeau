@@ -21,7 +21,8 @@ var (
 	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku|fable)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
 	claudeFamilyVersionPattern     = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku|fable)\s+([0-9]+(?:[.-][0-9]+){0,2})\b`)
 	claudeAliasPattern             = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku|fable)(?:$|[\s'"])`)
-	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
+	claudeEffortPattern            = regexp.MustCompile(`--effort\s+<level>.*?\(([^)]*)\)`)
+	claudeValidEffortPattern       = regexp.MustCompile(`(?im)^.*unknown --effort value.*valid values:\s*([^\r\n.]+)`)
 )
 
 // claudeTrustInterstitial answers Claude Code's "Do you trust the files in
@@ -49,6 +50,9 @@ func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOptio
 			opt(&cfg)
 		}
 	}
+	reasoningCtx, cancelReasoning := context.WithTimeout(context.Background(), 5*time.Second)
+	reasoningLevels, _ := readClaudeReasoningFromHelp(reasoningCtx, cfg.binary)
+	cancelReasoning()
 	var snapshot harnesses.ModelDiscoverySnapshot
 	_, err := ptyquota.Run(context.Background(), ptyquota.Config{
 		HarnessName:   "claude",
@@ -65,6 +69,9 @@ func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOptio
 		CassetteDir:   cfg.cassetteDir,
 		Discovery: func(text string) (cassette.DiscoveryRecord, error) {
 			snapshot = claudeDiscoveryFromText(text, "pty")
+			if len(snapshot.ReasoningLevels) == 0 {
+				snapshot.ReasoningLevels = append([]string(nil), reasoningLevels...)
+			}
 			if len(snapshot.Models) == 0 {
 				return cassette.DiscoveryRecord{}, fmt.Errorf("no models found in claude /model output")
 			}
@@ -111,14 +118,28 @@ func readClaudeReasoningFromHelp(ctx context.Context, binary string, args ...str
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	out, err := cmd.CombinedOutput()
+	levels := parseClaudeReasoningLevels(string(out))
+	if len(levels) > 0 {
+		return levels, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("claude help: %w", err)
 	}
-	levels := parseClaudeReasoningLevels(string(out))
-	if len(levels) == 0 {
-		return nil, fmt.Errorf("claude help did not expose --effort levels")
+
+	// Newer Claude Code releases document --effort without enumerating the
+	// accepted values in --help. Ask the CLI to validate an impossible value;
+	// its local argument parser reports the authoritative choices without
+	// starting a model turn.
+	probe := exec.CommandContext(ctx, binary, "--effort", "__fizeau_probe__", "--print", "")
+	probeOut, probeErr := probe.CombinedOutput()
+	levels = parseClaudeReasoningLevels(string(probeOut))
+	if len(levels) > 0 {
+		return levels, nil
 	}
-	return levels, nil
+	if probeErr != nil {
+		return nil, fmt.Errorf("claude effort probe: %w", probeErr)
+	}
+	return nil, fmt.Errorf("claude CLI did not expose --effort levels")
 }
 
 // testClaudeModelDiscovery returns a minimal discovery snapshot for testing.
@@ -259,8 +280,11 @@ func compareVersionParts(a, b []int) int {
 }
 
 func parseClaudeReasoningLevels(text string) []string {
-	text = stripANSI(strings.ReplaceAll(text, "\n", " "))
-	m := claudeEffortPattern.FindStringSubmatch(text)
+	text = stripANSI(text)
+	m := claudeEffortPattern.FindStringSubmatch(strings.ReplaceAll(text, "\n", " "))
+	if len(m) < 2 {
+		m = claudeValidEffortPattern.FindStringSubmatch(text)
+	}
 	if len(m) < 2 {
 		return nil
 	}

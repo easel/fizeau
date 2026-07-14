@@ -72,6 +72,12 @@ func testEnvWithHome(home string, extra map[string]string) []string {
 	env = append(env,
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
+		"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
+		"FIZEAU_CACHE_DIR="+filepath.Join(home, ".cache", "fizeau"),
+		"CODEX_HOME="+filepath.Join(home, ".codex"),
+		"PATH=",
 	)
 	for k, v := range extra {
 		env = append(env, k+"="+v)

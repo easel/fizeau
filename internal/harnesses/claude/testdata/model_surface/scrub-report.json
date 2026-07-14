@@ -1,19 +1,29 @@
 {
-  "status": "ok",
+  "status": "redacted",
   "rules": [
-    "home-rewrite",
-    "path-normalization",
-    "env-allowlist"
+    "animation-counter",
+    "api-token",
+    "bearer-token",
+    "elapsed-duration",
+    "email",
+    "home-path",
+    "local-time",
+    "pid",
+    "rfc3339",
+    "socket-file",
+    "transient-file",
+    "uuid",
+    "worktree-path"
   ],
   "hit_counts": {
-    "bearer-token": 0,
-    "api-key": 0
+    "elapsed-duration": 22
   },
   "env_allowlist": [
-    "HOME",
-    "PATH",
     "TERM",
-    "LANG"
+    "LANG",
+    "LC_ALL"
   ],
-  "intentionally_preserved": []
+  "intentionally_preserved": [
+    "quota-status-text"
+  ]
 }

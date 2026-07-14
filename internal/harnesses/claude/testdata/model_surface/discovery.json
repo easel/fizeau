@@ -1,12 +1,21 @@
 {
   "source": "pty",
   "status": "ok",
-  "models": ["claude-sonnet-4-6", "sonnet-4.6", "sonnet", "claude-opus-4-7", "opus-4.7", "opus", "claude-haiku-5-5", "haiku-5.5", "haiku"],
-  "reasoning_levels": ["low", "medium", "high", "xhigh", "max"],
-  "captured_at": "2026-05-18T08:07:34Z",
-  "freshness_window": "24h",
+  "models": [
+    "fable-5",
+    "fable"
+  ],
+  "reasoning_levels": [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max"
+  ],
+  "captured_at": "2026-07-14T04:10:17Z",
+  "freshness_window": "24h0m0s",
   "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
   "metadata": {
-    "detail": "claude --help documents --model aliases/full IDs and --effort levels; authenticated PTY /model evidence refreshes family alias versions"
+    "detail": ""
   }
 }

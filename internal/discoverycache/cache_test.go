@@ -128,7 +128,9 @@ func TestRefreshPassesDeadlineContextToRefresher(t *testing.T) {
 
 func TestMaybeRefreshSyncFailedRefreshRetryAfterMarkerStaleness(t *testing.T) {
 	c := newTestCache(t)
-	s := testSource("failed-retry", time.Hour, 5*time.Millisecond)
+	// Use a production-shaped long refresh deadline to prove the failure
+	// cooldown is independent from the ordinary in-flight staleness window.
+	s := testSource("failed-retry", time.Hour, time.Minute)
 
 	attempts := 0
 	if err := c.MaybeRefreshSync(s, func(_ context.Context) ([]byte, error) {
@@ -191,6 +193,27 @@ func TestMaybeRefreshSyncFailedRefreshRetryAfterMarkerStaleness(t *testing.T) {
 	}
 	if !res.Fresh {
 		t.Fatalf("Read() after retry Fresh=false, Age=%v TTL=%v", res.Age, s.TTL)
+	}
+}
+
+func TestRefreshFailedRefreshDoesNotWaitForSourceDeadline(t *testing.T) {
+	c := newTestCache(t)
+	s := testSource("failed-force", time.Hour, time.Minute)
+
+	if err := c.Refresh(s, func(_ context.Context) ([]byte, error) {
+		return nil, fmt.Errorf("boom")
+	}); err == nil {
+		t.Fatal("expected initial failed refresh to return an error")
+	}
+
+	start := time.Now()
+	if err := c.Refresh(s, func(_ context.Context) ([]byte, error) {
+		return []byte(`{"v":"unexpected"}`), nil
+	}); err != nil {
+		t.Fatalf("forced refresh during failure cooldown returned error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("forced refresh during failure cooldown took %v, want < 100ms", elapsed)
 	}
 }
 

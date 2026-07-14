@@ -378,12 +378,22 @@ func TestModelDiscoveryFromText(t *testing.T) {
 }
 
 func TestModelDiscoveryFromRecordedCLISurface(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "model_surface", "gemini-cli-0.38.2-models.txt"))
+	data, err := os.ReadFile(filepath.Join("testdata", "model_surface", "gemini-cli-0.46.0-models.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot := ModelDiscoveryFromText(string(data), "gemini-cli-bundle:0.38.2")
-	want := []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"}
+	snapshot := ModelDiscoveryFromText(string(data), "gemini-cli-bundle:0.46.0")
+	want := []string{
+		"gemini-2.5-pro",
+		"gemini-2.5-flash",
+		"gemini-3.1-flash-lite",
+		"gemini-3-pro-preview",
+		"gemini-3.1-pro-preview",
+		"gemini-3.1-pro-preview-customtools",
+		"gemini-3-flash-preview",
+		"gemini-3.5-flash",
+		"gemini-3-flash",
+	}
 	if !reflect.DeepEqual(snapshot.Models, want) {
 		t.Fatalf("models: got %v, want %v", snapshot.Models, want)
 	}

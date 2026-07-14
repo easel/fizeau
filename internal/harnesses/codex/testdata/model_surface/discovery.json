@@ -2,7 +2,7 @@
   "source": "pty",
   "status": "ok",
   "models": [
-    "gpt-5.5"
+    "gpt-5.6-sol"
   ],
   "reasoning_levels": [
     "low",
@@ -11,10 +11,10 @@
     "xhigh",
     "max"
   ],
-  "captured_at": "2026-05-18T08:05:15Z",
+  "captured_at": "2026-07-14T04:08:37Z",
   "freshness_window": "24h0m0s",
   "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
   "metadata": {
-    "detail": "codex CLI exposes exact model pins with -m/--model; model IDs are refreshed by authenticated PTY record tests"
+    "detail": ""
   }
 }

@@ -15,8 +15,13 @@ import (
 )
 
 func TestParseClaudeModelsAndReasoning(t *testing.T) {
-	text := "Model: 'sonnet' or 'opus' or 'claude-sonnet-4-6'\n--effort <level> (low, medium, high, xhigh, max)"
+	text := "Model: 'sonnet' or 'opus' or 'claude-sonnet-4-6'\n--effort <level> Effort level\n  (low, medium, high, xhigh, max)\n--resume [value] Resume a session (or a PR number)"
 	require.Equal(t, []string{"claude-sonnet-4-6", "sonnet-4.6", "sonnet", "opus"}, parseClaudeModels(text))
+	require.Equal(t, []string{"low", "medium", "high", "xhigh", "max"}, parseClaudeReasoningLevels(text))
+}
+
+func TestParseClaudeReasoningLevelsFromValidationMessage(t *testing.T) {
+	text := "Warning: Unknown --effort value. Valid values: low, medium, high, xhigh, max."
 	require.Equal(t, []string{"low", "medium", "high", "xhigh", "max"}, parseClaudeReasoningLevels(text))
 }
 

@@ -1,6 +1,6 @@
 {
   "seq": 5,
-  "t_ms": 4450,
+  "t_ms": 1000,
   "exit": {
     "Code": -1,
     "Signal": "terminated",
@@ -8,11 +8,11 @@
     "Signaled": true,
     "Err": null
   },
-  "duration_ms": 4480,
+  "duration_ms": 1009,
   "metadata": {
-    "frames": 129,
+    "frames": 9,
     "harness": "codex",
-    "raw_bytes": 34859
+    "raw_bytes": 1943
   },
-  "final_text": "ururation\u003e/modeuration\u003e           uration\u003e                 uration\u003euration\u003euration\u003euration\u003e                              uration\u003euration\u003e\nation\u003e\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  gpt-5.5 xhigh\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n                                          uration\u003e$WORKTREE\n                       uration\u003e ·\n\n\n\n\n\n\n\n\n\n\n"
+  "final_text": "ururation\u003egpt-5.6-sol defaulturation\u003e · uration\u003e~/Projects/fizeau/internal/harnesses/codexuration\u003euration\u003e\n\n│ \u003e_\n│                                                       │\n│ model:     loading\n│ directory:\n╰───────────────────────────────────────────────────────╯\n\n• Queued follow-up inputs\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
 }

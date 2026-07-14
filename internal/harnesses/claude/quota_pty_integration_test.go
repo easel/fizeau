@@ -36,7 +36,7 @@ func Test_modelDiscoveryRecordClaudePTY(t *testing.T) {
 	if os.Getenv("FIZEAU_HARNESS_RECORD") != "1" {
 		t.Skip("set FIZEAU_HARNESS_RECORD=1 to refresh authenticated claude model cassette")
 	}
-	dir := filepath.Join(recordBaseDir(t), "claude", "models")
+	dir := modelSurfaceRecordDir(t, "claude")
 	snapshot, err := ReadClaudeModelDiscoveryViaPTY(45*time.Second, WithQuotaPTYCassetteDir(dir))
 	if err != nil {
 		assertNoAcceptedCassette(t, dir)
@@ -47,6 +47,17 @@ func Test_modelDiscoveryRecordClaudePTY(t *testing.T) {
 	reader, err := cassette.Open(dir)
 	require.NoError(t, err)
 	require.NotNil(t, reader.Discovery())
+}
+
+func modelSurfaceRecordDir(t *testing.T, harness string) string {
+	t.Helper()
+	if dir := os.Getenv("FIZEAU_HARNESS_CASSETTE_DIR"); dir != "" {
+		return filepath.Join(dir, harness, "models")
+	}
+	if dir := os.Getenv("FIZEAU_HARNESS_RECORD_DIR"); dir != "" {
+		return filepath.Join(dir, harness, "models")
+	}
+	return filepath.Join("testdata", "model_surface")
 }
 
 func recordBaseDir(t *testing.T) string {
