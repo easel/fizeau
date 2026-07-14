@@ -7,6 +7,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
+	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serverinstance"
 )
 
@@ -68,8 +69,9 @@ func AssembleModelInventory(ctx context.Context, input ModelInventoryInput) []Mo
 			rank := rankByEndpoint[rankKey]
 			rankByEndpoint[rankKey] = rank + 1
 
-			contextLength, contextSource := ResolveContextEvidence(ctx, entry, model.ID, input.Catalog)
+			contextLength, contextSource := ResolveSnapshotContextEvidence(ctx, entry, model, input.Catalog)
 			model.ContextWindow = contextLength
+			model.ContextWindowSource = contextSource
 			if model.Harness == "" {
 				model.Harness = "fiz"
 			}
@@ -89,6 +91,27 @@ func AssembleModelInventory(ctx context.Context, input ModelInventoryInput) []Mo
 		}
 	}
 	return out
+}
+
+// ResolveSnapshotContextEvidence applies context authority without discarding
+// provider-owned evidence already captured in the discovery cache. Explicit
+// config remains authoritative; cached provider API evidence avoids another
+// network lookup; live type-gated lookup can supersede legacy/catalog cache
+// evidence; catalog and default values remain fallbacks.
+func ResolveSnapshotContextEvidence(ctx context.Context, entry ProviderEntry, model modelsnapshot.KnownModel, cat *modelcatalog.Catalog) (int, string) {
+	if entry.ContextWindow > 0 {
+		return entry.ContextWindow, routing.ContextSourceProviderConfig
+	}
+	if model.ContextWindow > 0 && strings.TrimSpace(model.ContextWindowSource) == routing.ContextSourceProviderAPI {
+		return model.ContextWindow, routing.ContextSourceProviderAPI
+	}
+	if length, source := providerAPIContextEvidence(ctx, entry, model.ID); length > 0 {
+		return length, source
+	}
+	if model.ContextWindow > 0 {
+		return model.ContextWindow, routing.ContextSourceCatalog
+	}
+	return ResolveContextEvidence(ctx, ProviderEntry{}, model.ID, cat)
 }
 
 // SubscriptionHarnessInventoryInput carries the already-discovered model IDs

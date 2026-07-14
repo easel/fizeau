@@ -91,12 +91,13 @@ func TestBuildRoutingInputsPreservesSnapshotEvidence(t *testing.T) {
 				ContextWindow:   32768,
 			},
 			{
-				Provider:        "remote",
-				ProviderType:    "openrouter",
-				ID:              "priced-model",
-				EndpointName:    "remote",
-				EndpointBaseURL: "https://remote.invalid/v1",
-				ContextWindow:   262144,
+				Provider:            "remote",
+				ProviderType:        "openrouter",
+				ID:                  "priced-model",
+				EndpointName:        "remote",
+				EndpointBaseURL:     "https://remote.invalid/v1",
+				ContextWindow:       65536,
+				ContextWindowSource: routing.ContextSourceProviderAPI,
 			},
 			{Provider: "broken", ID: "priced-model"},
 			{Provider: "not-configured", ID: "priced-model"},
@@ -149,8 +150,8 @@ func TestBuildRoutingInputsPreservesSnapshotEvidence(t *testing.T) {
 	if !remote.ActualCashSpend || remote.CostSource != routing.CostSourceCatalog || !floatNearRoutingInput(remote.CostUSDPer1kTokens, 0.003) {
 		t.Fatalf("remote catalog cost evidence = %#v, want metered 0.003", remote)
 	}
-	if remote.ContextWindows["priced-model"] != 262144 || remote.ContextWindowSources["priced-model"] != routing.ContextSourceCatalog {
-		t.Fatalf("remote context evidence = %d/%q, want 262144/catalog", remote.ContextWindows["priced-model"], remote.ContextWindowSources["priced-model"])
+	if remote.ContextWindows["priced-model"] != 65536 || remote.ContextWindowSources["priced-model"] != routing.ContextSourceProviderAPI {
+		t.Fatalf("remote context evidence = %d/%q, want 65536/provider_api", remote.ContextWindows["priced-model"], remote.ContextWindowSources["priced-model"])
 	}
 
 	claude := got.Harnesses[1]

@@ -72,20 +72,24 @@ func AssembleWithOptions(ctx context.Context, cfg *config.Config, cat *modelcata
 		reconciled := reconcilePropsModels(discovered.Models, includeByDefault, string(status), cat)
 		for _, discoveredModel := range reconciled {
 			model := KnownModel{
-				Provider:         providerName,
-				ProviderType:     discoveredModel.ProviderType,
-				Harness:          discoveredModel.Harness,
-				ID:               discoveredModel.ID,
-				CatalogID:        discoveredModel.CatalogID,
-				Configured:       discoveredModel.Configured,
-				EndpointName:     discoveredModel.EndpointName,
-				EndpointBaseURL:  discoveredModel.EndpointBaseURL,
-				ServerInstance:   discoveredModel.ServerInstance,
-				Billing:          billing,
-				IncludeByDefault: includeByDefault,
-				DiscoveredVia:    discoveredModel.Via,
-				DiscoveredAt:     discoveredModel.DiscoveredAt,
-				Status:           status,
+				Provider:                  providerName,
+				ProviderType:              discoveredModel.ProviderType,
+				Harness:                   discoveredModel.Harness,
+				ID:                        discoveredModel.ID,
+				CatalogID:                 discoveredModel.CatalogID,
+				Configured:                discoveredModel.Configured,
+				EndpointName:              discoveredModel.EndpointName,
+				EndpointBaseURL:           discoveredModel.EndpointBaseURL,
+				ServerInstance:            discoveredModel.ServerInstance,
+				Billing:                   billing,
+				IncludeByDefault:          includeByDefault,
+				DiscoveredVia:             discoveredModel.Via,
+				DiscoveredAt:              discoveredModel.DiscoveredAt,
+				ContextWindow:             discoveredModel.ContextWindow,
+				ContextWindowSource:       discoveredModel.ContextWindowSource,
+				MaxCompletionTokens:       discoveredModel.MaxCompletionTokens,
+				MaxCompletionTokensSource: discoveredModel.MaxCompletionTokensSource,
+				Status:                    status,
 			}
 			model = enrichModel(model, includeByDefault, cat)
 			model = attachRuntimeSignals(model, cache)
@@ -179,11 +183,13 @@ func reconcilePropsModels(models []discoveredModel, includeByDefault bool, statu
 	bestCatalogID := ""
 	bestPower := 0
 	hasProps := false
+	var propsLimits discoveredModel
 	for _, m := range models {
 		if m.Via != SourcePropsAPI {
 			continue
 		}
 		hasProps = true
+		mergeMissingLimitEvidence(&propsLimits, m)
 		if pw := modeleligibility.Resolve(m.ID, includeByDefault, status, cat).Power; pw > bestPower {
 			bestPower = pw
 			bestCatalogID = m.ID
@@ -200,6 +206,7 @@ func reconcilePropsModels(models []discoveredModel, includeByDefault bool, statu
 			continue // /props identities are catalog hints, not separately-served models
 		}
 		servedCount++
+		mergeMissingLimitEvidence(&m, propsLimits)
 		if bestCatalogID != "" && modeleligibility.Resolve(m.ID, includeByDefault, status, cat).Power <= 0 {
 			m.CatalogID = bestCatalogID
 		}

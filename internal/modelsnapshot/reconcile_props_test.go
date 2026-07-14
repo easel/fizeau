@@ -49,3 +49,59 @@ func TestReconcilePropsModels_NoPropsIsNoOp(t *testing.T) {
 		t.Errorf("no-props provider mutated: %+v", out)
 	}
 }
+
+func TestReconcilePropsModels_ServedAliasInheritsLimitsWithoutCatalogIdentity(t *testing.T) {
+	models := []discoveredModel{
+		{Provider: "local", ID: "served-alias", Via: SourceNativeAPI, EndpointName: "default"},
+		{
+			Provider:                  "local",
+			ID:                        "uncataloged-model",
+			Via:                       SourcePropsAPI,
+			EndpointName:              "default",
+			ContextWindow:             65536,
+			ContextWindowSource:       limitSourceProviderAPI,
+			MaxCompletionTokens:       32768,
+			MaxCompletionTokensSource: limitSourceProviderAPI,
+		},
+	}
+
+	out := reconcilePropsModels(models, true, "available", nil)
+	if len(out) != 1 {
+		t.Fatalf("want one served alias, got %+v", out)
+	}
+	got := out[0]
+	if got.CatalogID != "" {
+		t.Errorf("CatalogID = %q, want empty for uncataloged props identity", got.CatalogID)
+	}
+	if got.ContextWindow != 65536 || got.ContextWindowSource != limitSourceProviderAPI {
+		t.Errorf("context evidence = %d/%q, want 65536/%q", got.ContextWindow, got.ContextWindowSource, limitSourceProviderAPI)
+	}
+	if got.MaxCompletionTokens != 32768 || got.MaxCompletionTokensSource != limitSourceProviderAPI {
+		t.Errorf("output evidence = %d/%q, want 32768/%q", got.MaxCompletionTokens, got.MaxCompletionTokensSource, limitSourceProviderAPI)
+	}
+}
+
+func TestProviderDiscoveryMerge_DuplicateAliasFillsMissingLimitEvidence(t *testing.T) {
+	base := providerDiscoveryResult{Models: []discoveredModel{{
+		Provider: "local", ID: "served-alias", Via: SourceNativeAPI, EndpointName: "default",
+	}}}
+	base.merge(providerDiscoveryResult{Models: []discoveredModel{{
+		Provider:                  "local",
+		ID:                        "served-alias",
+		Via:                       SourcePropsAPI,
+		EndpointName:              "default",
+		ContextWindow:             65536,
+		ContextWindowSource:       limitSourceProviderAPI,
+		MaxCompletionTokens:       32768,
+		MaxCompletionTokensSource: limitSourceProviderAPI,
+	}}})
+
+	if len(base.Models) != 1 {
+		t.Fatalf("merged models = %+v, want one", base.Models)
+	}
+	got := base.Models[0]
+	if got.ContextWindow != 65536 || got.ContextWindowSource != limitSourceProviderAPI ||
+		got.MaxCompletionTokens != 32768 || got.MaxCompletionTokensSource != limitSourceProviderAPI {
+		t.Errorf("merged limit evidence = context %d/%q, output %d/%q", got.ContextWindow, got.ContextWindowSource, got.MaxCompletionTokens, got.MaxCompletionTokensSource)
+	}
+}

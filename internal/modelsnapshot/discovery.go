@@ -30,17 +30,21 @@ const (
 )
 
 type discoveredModel struct {
-	Provider        string
-	ProviderType    string
-	Harness         string
-	ID              string
-	CatalogID       string
-	Configured      bool
-	EndpointName    string
-	EndpointBaseURL string
-	ServerInstance  string
-	Via             Source
-	DiscoveredAt    time.Time
+	Provider                  string
+	ProviderType              string
+	Harness                   string
+	ID                        string
+	CatalogID                 string
+	Configured                bool
+	EndpointName              string
+	EndpointBaseURL           string
+	ServerInstance            string
+	Via                       Source
+	DiscoveredAt              time.Time
+	ContextWindow             int
+	ContextWindowSource       string
+	MaxCompletionTokens       int
+	MaxCompletionTokensSource string
 }
 
 type modelDiscoveryEndpoint struct {
@@ -55,11 +59,20 @@ type providerDiscoveryResult struct {
 }
 
 type discoveryPayload struct {
-	CapturedAt      time.Time `json:"captured_at"`
-	Models          []string  `json:"models,omitempty"`
-	ReasoningLevels []string  `json:"reasoning_levels,omitempty"`
-	Source          string    `json:"source,omitempty"`
+	CapturedAt                time.Time `json:"captured_at"`
+	Models                    []string  `json:"models,omitempty"`
+	ReasoningLevels           []string  `json:"reasoning_levels,omitempty"`
+	Source                    string    `json:"source,omitempty"`
+	ContextWindow             int       `json:"context_window,omitempty"`
+	ContextWindowSource       string    `json:"context_window_source,omitempty"`
+	MaxCompletionTokens       int       `json:"max_completion_tokens,omitempty"`
+	MaxCompletionTokensSource string    `json:"max_completion_tokens_source,omitempty"`
 }
+
+const (
+	limitSourceProviderAPI = "provider_api"
+	limitSourceCatalog     = "catalog"
+)
 
 func discoverProvider(ctx context.Context, providerName string, pc ProviderConfig, cache *discoverycache.Cache, opts AssembleOptions) providerDiscoveryResult {
 	providerType := normalizeProviderType(pc.Type)
@@ -224,11 +237,16 @@ func fetchPropsDiscoveryPayload(ctx context.Context, baseURL string) ([]byte, er
 		return nil, fmt.Errorf("props discovery: read body: %w", err)
 	}
 	ids, reasoningLevels := parsePropsDiscovery(body)
+	limits := parsePropsLimitEvidence(body)
 	return json.Marshal(discoveryPayload{
-		CapturedAt:      time.Now().UTC(),
-		Models:          ids,
-		ReasoningLevels: reasoningLevels,
-		Source:          "props:/props",
+		CapturedAt:                time.Now().UTC(),
+		Models:                    ids,
+		ReasoningLevels:           reasoningLevels,
+		Source:                    "props:/props",
+		ContextWindow:             limits.ContextWindow,
+		ContextWindowSource:       limits.ContextWindowSource,
+		MaxCompletionTokens:       limits.MaxCompletionTokens,
+		MaxCompletionTokensSource: limits.MaxCompletionTokensSource,
 	})
 }
 
@@ -296,6 +314,68 @@ func parsePropsDiscovery(body []byte) ([]string, []string) {
 		}
 	}
 	return uniqueSortedStrings(ids), parsePropsReasoningLevels(raw)
+}
+
+type limitEvidence struct {
+	ContextWindow             int
+	ContextWindowSource       string
+	MaxCompletionTokens       int
+	MaxCompletionTokensSource string
+}
+
+func parsePropsLimitEvidence(body []byte) limitEvidence {
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return limitEvidence{}
+	}
+
+	var contextWindow int
+	if settings, ok := raw["default_generation_settings"].(map[string]any); ok {
+		contextWindow = positiveJSONInt(settings["n_ctx"])
+	}
+	if contextWindow == 0 {
+		contextWindow = positiveJSONInt(raw["context_window"])
+	}
+	if contextWindow == 0 {
+		if runtime, ok := raw["runtime"].(map[string]any); ok {
+			contextWindow = positiveJSONInt(runtime["max_ctx"])
+		}
+	}
+
+	var maxCompletionTokens int
+	if card, ok := raw["model_card"].(map[string]any); ok {
+		maxCompletionTokens = positiveJSONInt(card["max_tokens"])
+	}
+	if maxCompletionTokens == 0 {
+		maxCompletionTokens = positiveJSONInt(raw["max_completion_tokens"])
+	}
+	if maxCompletionTokens == 0 {
+		if settings, ok := raw["default_generation_settings"].(map[string]any); ok {
+			if params, ok := settings["params"].(map[string]any); ok {
+				maxCompletionTokens = positiveJSONInt(params["max_tokens"])
+			}
+		}
+	}
+
+	evidence := limitEvidence{
+		ContextWindow:       contextWindow,
+		MaxCompletionTokens: maxCompletionTokens,
+	}
+	if evidence.ContextWindow > 0 {
+		evidence.ContextWindowSource = limitSourceProviderAPI
+	}
+	if evidence.MaxCompletionTokens > 0 {
+		evidence.MaxCompletionTokensSource = limitSourceProviderAPI
+	}
+	return evidence
+}
+
+func positiveJSONInt(value any) int {
+	n, ok := value.(float64)
+	if !ok || n <= 0 || n != float64(int(n)) {
+		return 0
+	}
+	return int(n)
 }
 
 // modelNameFromPath recovers a model name from a server-reported weights path by
@@ -471,7 +551,7 @@ func readDiscoveryCache(cache *discoverycache.Cache, src discoverycache.Source, 
 	if read.Data == nil {
 		return result
 	}
-	ids, capturedAt, err := parseDiscoveryIDs(read.Data, providerName)
+	ids, capturedAt, limits, err := parseDiscoveryPayload(read.Data, providerName)
 	if err != nil {
 		meta.Error = err.Error()
 		result.Sources[src.Name] = meta
@@ -481,26 +561,47 @@ func readDiscoveryCache(cache *discoverycache.Cache, src discoverycache.Source, 
 		meta.LastRefreshedAt = capturedAt.UTC()
 		result.Sources[src.Name] = meta
 	}
+	if via == SourcePropsAPI {
+		if limits.ContextWindow > 0 && strings.TrimSpace(limits.ContextWindowSource) == "" {
+			limits.ContextWindowSource = limitSourceProviderAPI
+		}
+		if limits.MaxCompletionTokens > 0 && strings.TrimSpace(limits.MaxCompletionTokensSource) == "" {
+			limits.MaxCompletionTokensSource = limitSourceProviderAPI
+		}
+	}
 	result.Models = modelsFromIDs(ids, via, discoveredAt(capturedAt, meta.LastRefreshedAt), identity).Models
+	for i := range result.Models {
+		applyLimitEvidence(&result.Models[i], limits)
+	}
 	return result
 }
 
 func parseDiscoveryIDs(data []byte, providerName string) ([]string, time.Time, error) {
+	ids, capturedAt, _, err := parseDiscoveryPayload(data, providerName)
+	return ids, capturedAt, err
+}
+
+func parseDiscoveryPayload(data []byte, providerName string) ([]string, time.Time, limitEvidence, error) {
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {
-		return nil, time.Time{}, nil
+		return nil, time.Time{}, limitEvidence{}, nil
 	}
 	var list []string
 	if err := json.Unmarshal(data, &list); err == nil {
-		return uniqueSortedStrings(list), time.Time{}, nil
+		return uniqueSortedStrings(list), time.Time{}, limitEvidence{}, nil
 	}
 	var payload discoveryPayload
 	if err := json.Unmarshal(data, &payload); err == nil && (len(payload.Models) > 0 || !payload.CapturedAt.IsZero()) {
-		return uniqueSortedStrings(payload.Models), payload.CapturedAt, nil
+		return uniqueSortedStrings(payload.Models), payload.CapturedAt, limitEvidence{
+			ContextWindow:             payload.ContextWindow,
+			ContextWindowSource:       payload.ContextWindowSource,
+			MaxCompletionTokens:       payload.MaxCompletionTokens,
+			MaxCompletionTokensSource: payload.MaxCompletionTokensSource,
+		}, nil
 	}
 	var byRef map[string]json.RawMessage
 	if err := json.Unmarshal(data, &byRef); err != nil {
-		return nil, time.Time{}, fmt.Errorf("decode discovery cache: %w", err)
+		return nil, time.Time{}, limitEvidence{}, fmt.Errorf("decode discovery cache: %w", err)
 	}
 	ids := make([]string, 0, len(byRef))
 	var capturedAt time.Time
@@ -532,7 +633,7 @@ func parseDiscoveryIDs(data []byte, providerName string) ([]string, time.Time, e
 			}
 		}
 	}
-	return uniqueSortedStrings(ids), capturedAt, nil
+	return uniqueSortedStrings(ids), capturedAt, limitEvidence{}, nil
 }
 
 type discoveryIdentity struct {
@@ -580,31 +681,78 @@ func (r *providerDiscoveryResult) merge(other providerDiscoveryResult) {
 	for k, v := range other.Sources {
 		r.Sources[k] = v
 	}
-	seenFull := make(map[string]bool, len(r.Models)+len(other.Models))
-	seenGeneric := make(map[string]bool, len(r.Models)+len(other.Models))
-	for _, model := range r.Models {
-		seenFull[model.identityKey()] = true
-		seenGeneric[model.providerModelKey()] = true
-	}
 	for _, model := range other.Models {
 		if model.hasEndpointIdentity() {
-			if seenFull[model.identityKey()] {
+			if idx := indexModelByIdentity(r.Models, model.identityKey()); idx >= 0 {
+				applyLimitEvidence(&r.Models[idx], limitEvidenceFromModel(model))
 				continue
 			}
+			if idx := indexGenericModel(r.Models, model.Provider, model.ID); idx >= 0 {
+				applyLimitEvidence(&model, limitEvidenceFromModel(r.Models[idx]))
+			}
 			r.Models = removeGenericModel(r.Models, model.Provider, model.ID)
-			seenFull[model.identityKey()] = true
-			seenGeneric[model.providerModelKey()] = true
 			r.Models = append(r.Models, model)
 			continue
 		}
-		if seenGeneric[model.providerModelKey()] {
+		if applyLimitEvidenceByProviderModel(r.Models, model.providerModelKey(), limitEvidenceFromModel(model)) {
 			continue
 		}
-		seenFull[model.identityKey()] = true
-		seenGeneric[model.providerModelKey()] = true
 		r.Models = append(r.Models, model)
 	}
 	sort.Slice(r.Models, func(i, j int) bool { return discoveredModelSortKey(r.Models[i]) < discoveredModelSortKey(r.Models[j]) })
+}
+
+func limitEvidenceFromModel(model discoveredModel) limitEvidence {
+	return limitEvidence{
+		ContextWindow:             model.ContextWindow,
+		ContextWindowSource:       model.ContextWindowSource,
+		MaxCompletionTokens:       model.MaxCompletionTokens,
+		MaxCompletionTokensSource: model.MaxCompletionTokensSource,
+	}
+}
+
+func applyLimitEvidence(model *discoveredModel, evidence limitEvidence) {
+	if model.ContextWindow <= 0 && evidence.ContextWindow > 0 {
+		model.ContextWindow = evidence.ContextWindow
+		model.ContextWindowSource = evidence.ContextWindowSource
+	} else if model.ContextWindow > 0 && model.ContextWindowSource == "" && model.ContextWindow == evidence.ContextWindow {
+		model.ContextWindowSource = evidence.ContextWindowSource
+	}
+	if model.MaxCompletionTokens <= 0 && evidence.MaxCompletionTokens > 0 {
+		model.MaxCompletionTokens = evidence.MaxCompletionTokens
+		model.MaxCompletionTokensSource = evidence.MaxCompletionTokensSource
+	} else if model.MaxCompletionTokens > 0 && model.MaxCompletionTokensSource == "" && model.MaxCompletionTokens == evidence.MaxCompletionTokens {
+		model.MaxCompletionTokensSource = evidence.MaxCompletionTokensSource
+	}
+}
+
+func indexModelByIdentity(models []discoveredModel, key string) int {
+	for i := range models {
+		if models[i].identityKey() == key {
+			return i
+		}
+	}
+	return -1
+}
+
+func applyLimitEvidenceByProviderModel(models []discoveredModel, key string, evidence limitEvidence) bool {
+	found := false
+	for i := range models {
+		if models[i].providerModelKey() == key {
+			applyLimitEvidence(&models[i], evidence)
+			found = true
+		}
+	}
+	return found
+}
+
+func indexGenericModel(models []discoveredModel, provider, id string) int {
+	for i := range models {
+		if models[i].Provider == provider && models[i].ID == id && !models[i].hasEndpointIdentity() {
+			return i
+		}
+	}
+	return -1
 }
 
 func discoverySource(name string, ttl, deadline time.Duration) discoverycache.Source {

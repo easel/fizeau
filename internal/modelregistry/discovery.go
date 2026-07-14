@@ -28,20 +28,26 @@ const (
 	discoveryTTLPTY              = 24 * time.Hour
 	discoveryRefreshDeadlineHTTP = 10 * time.Second
 	discoveryRefreshDeadlinePTY  = 60 * time.Second
+	limitSourceProviderAPI       = "provider_api"
+	limitSourceCatalog           = "catalog"
 )
 
 type discoveredModel struct {
-	Provider        string
-	ProviderType    string
-	Harness         string
-	ID              string
-	CatalogID       string
-	Configured      bool
-	EndpointName    string
-	EndpointBaseURL string
-	ServerInstance  string
-	Via             Source
-	DiscoveredAt    time.Time
+	Provider                  string
+	ProviderType              string
+	Harness                   string
+	ID                        string
+	CatalogID                 string
+	Configured                bool
+	EndpointName              string
+	EndpointBaseURL           string
+	ServerInstance            string
+	Via                       Source
+	DiscoveredAt              time.Time
+	ContextWindow             int
+	ContextWindowSource       string
+	MaxCompletionTokens       int
+	MaxCompletionTokensSource string
 }
 
 type modelDiscoveryEndpoint struct {
@@ -56,10 +62,14 @@ type providerDiscoveryResult struct {
 }
 
 type discoveryPayload struct {
-	CapturedAt      time.Time `json:"captured_at"`
-	Models          []string  `json:"models,omitempty"`
-	ReasoningLevels []string  `json:"reasoning_levels,omitempty"`
-	Source          string    `json:"source,omitempty"`
+	CapturedAt                time.Time `json:"captured_at"`
+	Models                    []string  `json:"models,omitempty"`
+	ReasoningLevels           []string  `json:"reasoning_levels,omitempty"`
+	ContextWindow             int       `json:"context_window,omitempty"`
+	ContextWindowSource       string    `json:"context_window_source,omitempty"`
+	MaxCompletionTokens       int       `json:"max_completion_tokens,omitempty"`
+	MaxCompletionTokensSource string    `json:"max_completion_tokens_source,omitempty"`
+	Source                    string    `json:"source,omitempty"`
 }
 
 func discoverProvider(ctx context.Context, providerName string, pc config.ProviderConfig, cache *discoverycache.Cache, opts AssembleOptions) providerDiscoveryResult {
@@ -224,13 +234,26 @@ func fetchPropsDiscoveryPayload(ctx context.Context, baseURL string) ([]byte, er
 	if err != nil {
 		return nil, fmt.Errorf("props discovery: read body: %w", err)
 	}
-	ids, reasoningLevels := parsePropsDiscovery(body)
-	return json.Marshal(discoveryPayload{
-		CapturedAt:      time.Now().UTC(),
-		Models:          ids,
-		ReasoningLevels: reasoningLevels,
-		Source:          "props:/props",
-	})
+	return json.Marshal(propsDiscoveryPayload(body, time.Now().UTC()))
+}
+
+func propsDiscoveryPayload(body []byte, capturedAt time.Time) discoveryPayload {
+	details := parsePropsDiscoveryDetails(body)
+	payload := discoveryPayload{
+		CapturedAt:          capturedAt.UTC(),
+		Models:              details.IDs,
+		ReasoningLevels:     details.ReasoningLevels,
+		ContextWindow:       details.ContextWindow,
+		MaxCompletionTokens: details.MaxCompletionTokens,
+		Source:              "props:/props",
+	}
+	if payload.ContextWindow > 0 {
+		payload.ContextWindowSource = limitSourceProviderAPI
+	}
+	if payload.MaxCompletionTokens > 0 {
+		payload.MaxCompletionTokensSource = limitSourceProviderAPI
+	}
+	return payload
 }
 
 func discoveryRequestContext(parent, refreshCtx context.Context, mode RefreshMode) (context.Context, context.CancelFunc) {
@@ -246,10 +269,22 @@ func discoveryRequestContext(parent, refreshCtx context.Context, mode RefreshMod
 	return parent, func() {}
 }
 
+type propsDiscoveryDetails struct {
+	IDs                 []string
+	ReasoningLevels     []string
+	ContextWindow       int
+	MaxCompletionTokens int
+}
+
 func parsePropsDiscovery(body []byte) ([]string, []string) {
+	details := parsePropsDiscoveryDetails(body)
+	return details.IDs, details.ReasoningLevels
+}
+
+func parsePropsDiscoveryDetails(body []byte) propsDiscoveryDetails {
 	var raw map[string]any
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, nil
+		return propsDiscoveryDetails{}
 	}
 	ids := make([]string, 0, 4)
 	addString := func(v any) {
@@ -296,7 +331,71 @@ func parsePropsDiscovery(body []byte) ([]string, []string) {
 			}
 		}
 	}
-	return uniqueSortedStrings(ids), parsePropsReasoningLevels(raw)
+	return propsDiscoveryDetails{
+		IDs:                 uniqueSortedStrings(ids),
+		ReasoningLevels:     parsePropsReasoningLevels(raw),
+		ContextWindow:       parsePropsContextWindow(raw),
+		MaxCompletionTokens: parsePropsMaxCompletionTokens(raw),
+	}
+}
+
+func parsePropsContextWindow(raw map[string]any) int {
+	if settings, ok := raw["default_generation_settings"].(map[string]any); ok {
+		if n := positiveJSONInt(settings["n_ctx"]); n > 0 {
+			return n
+		}
+	}
+	if n := positiveJSONInt(raw["context_window"]); n > 0 {
+		return n
+	}
+	if runtime, ok := raw["runtime"].(map[string]any); ok {
+		return positiveJSONInt(runtime["max_ctx"])
+	}
+	return 0
+}
+
+func parsePropsMaxCompletionTokens(raw map[string]any) int {
+	if card, ok := raw["model_card"].(map[string]any); ok {
+		if n := positiveJSONInt(card["max_tokens"]); n > 0 {
+			return n
+		}
+	}
+	if n := positiveJSONInt(raw["max_completion_tokens"]); n > 0 {
+		return n
+	}
+	if settings, ok := raw["default_generation_settings"].(map[string]any); ok {
+		if params, ok := settings["params"].(map[string]any); ok {
+			return positiveJSONInt(params["max_tokens"])
+		}
+	}
+	return 0
+}
+
+func positiveJSONInt(value any) int {
+	var n int64
+	switch typed := value.(type) {
+	case float64:
+		n = int64(typed)
+		if float64(n) != typed {
+			return 0
+		}
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err != nil {
+			return 0
+		}
+		n = parsed
+	case int:
+		n = int64(typed)
+	case int64:
+		n = typed
+	default:
+		return 0
+	}
+	if n <= 0 || int64(int(n)) != n {
+		return 0
+	}
+	return int(n)
 }
 
 // modelNameFromPath recovers a model name from a server-reported weights path by
@@ -472,7 +571,7 @@ func readDiscoveryCache(cache *discoverycache.Cache, src discoverycache.Source, 
 	if read.Data == nil {
 		return result
 	}
-	ids, capturedAt, err := parseDiscoveryIDs(read.Data, providerName)
+	ids, capturedAt, limits, err := parseDiscoveryData(read.Data, providerName)
 	if err != nil {
 		meta.Error = err.Error()
 		result.Sources[src.Name] = meta
@@ -482,26 +581,51 @@ func readDiscoveryCache(cache *discoverycache.Cache, src discoverycache.Source, 
 		meta.LastRefreshedAt = capturedAt.UTC()
 		result.Sources[src.Name] = meta
 	}
-	result.Models = modelsFromIDs(ids, via, discoveredAt(capturedAt, meta.LastRefreshedAt), identity).Models
+	if via == SourcePropsAPI {
+		if limits.ContextWindow > 0 && strings.TrimSpace(limits.ContextWindowSource) == "" {
+			limits.ContextWindowSource = limitSourceProviderAPI
+		}
+		if limits.MaxCompletionTokens > 0 && strings.TrimSpace(limits.MaxCompletionTokensSource) == "" {
+			limits.MaxCompletionTokensSource = limitSourceProviderAPI
+		}
+	}
+	result.Models = modelsFromIDsWithLimits(ids, via, discoveredAt(capturedAt, meta.LastRefreshedAt), identity, limits).Models
 	return result
 }
 
 func parseDiscoveryIDs(data []byte, providerName string) ([]string, time.Time, error) {
+	ids, capturedAt, _, err := parseDiscoveryData(data, providerName)
+	return ids, capturedAt, err
+}
+
+type discoveryLimitEvidence struct {
+	ContextWindow             int
+	ContextWindowSource       string
+	MaxCompletionTokens       int
+	MaxCompletionTokensSource string
+}
+
+func parseDiscoveryData(data []byte, providerName string) ([]string, time.Time, discoveryLimitEvidence, error) {
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {
-		return nil, time.Time{}, nil
+		return nil, time.Time{}, discoveryLimitEvidence{}, nil
 	}
 	var list []string
 	if err := json.Unmarshal(data, &list); err == nil {
-		return uniqueSortedStrings(list), time.Time{}, nil
+		return uniqueSortedStrings(list), time.Time{}, discoveryLimitEvidence{}, nil
 	}
 	var payload discoveryPayload
 	if err := json.Unmarshal(data, &payload); err == nil && (len(payload.Models) > 0 || !payload.CapturedAt.IsZero()) {
-		return uniqueSortedStrings(payload.Models), payload.CapturedAt, nil
+		return uniqueSortedStrings(payload.Models), payload.CapturedAt, discoveryLimitEvidence{
+			ContextWindow:             payload.ContextWindow,
+			ContextWindowSource:       payload.ContextWindowSource,
+			MaxCompletionTokens:       payload.MaxCompletionTokens,
+			MaxCompletionTokensSource: payload.MaxCompletionTokensSource,
+		}, nil
 	}
 	var byRef map[string]json.RawMessage
 	if err := json.Unmarshal(data, &byRef); err != nil {
-		return nil, time.Time{}, fmt.Errorf("decode discovery cache: %w", err)
+		return nil, time.Time{}, discoveryLimitEvidence{}, fmt.Errorf("decode discovery cache: %w", err)
 	}
 	ids := make([]string, 0, len(byRef))
 	var capturedAt time.Time
@@ -533,7 +657,7 @@ func parseDiscoveryIDs(data []byte, providerName string) ([]string, time.Time, e
 			}
 		}
 	}
-	return uniqueSortedStrings(ids), capturedAt, nil
+	return uniqueSortedStrings(ids), capturedAt, discoveryLimitEvidence{}, nil
 }
 
 type discoveryIdentity struct {
@@ -546,6 +670,10 @@ type discoveryIdentity struct {
 }
 
 func modelsFromIDs(ids []string, via Source, at time.Time, identity discoveryIdentity) providerDiscoveryResult {
+	return modelsFromIDsWithLimits(ids, via, at, identity, discoveryLimitEvidence{})
+}
+
+func modelsFromIDsWithLimits(ids []string, via Source, at time.Time, identity discoveryIdentity, limits discoveryLimitEvidence) providerDiscoveryResult {
 	at = discoveredAt(at, time.Now().UTC())
 	out := make([]discoveredModel, 0, len(ids))
 	seen := make(map[string]bool, len(ids))
@@ -556,15 +684,19 @@ func modelsFromIDs(ids []string, via Source, at time.Time, identity discoveryIde
 		}
 		seen[id] = true
 		out = append(out, discoveredModel{
-			Provider:        identity.Provider,
-			ProviderType:    identity.ProviderType,
-			Harness:         identity.Harness,
-			ID:              id,
-			EndpointName:    identity.EndpointName,
-			EndpointBaseURL: identity.EndpointBaseURL,
-			ServerInstance:  identity.ServerInstance,
-			Via:             via,
-			DiscoveredAt:    at,
+			Provider:                  identity.Provider,
+			ProviderType:              identity.ProviderType,
+			Harness:                   identity.Harness,
+			ID:                        id,
+			EndpointName:              identity.EndpointName,
+			EndpointBaseURL:           identity.EndpointBaseURL,
+			ServerInstance:            identity.ServerInstance,
+			Via:                       via,
+			DiscoveredAt:              at,
+			ContextWindow:             limits.ContextWindow,
+			ContextWindowSource:       limits.ContextWindowSource,
+			MaxCompletionTokens:       limits.MaxCompletionTokens,
+			MaxCompletionTokensSource: limits.MaxCompletionTokensSource,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return discoveredModelSortKey(out[i]) < discoveredModelSortKey(out[j]) })
@@ -581,31 +713,64 @@ func (r *providerDiscoveryResult) merge(other providerDiscoveryResult) {
 	for k, v := range other.Sources {
 		r.Sources[k] = v
 	}
-	seenFull := make(map[string]bool, len(r.Models)+len(other.Models))
-	seenGeneric := make(map[string]bool, len(r.Models)+len(other.Models))
-	for _, model := range r.Models {
-		seenFull[model.identityKey()] = true
-		seenGeneric[model.providerModelKey()] = true
-	}
 	for _, model := range other.Models {
 		if model.hasEndpointIdentity() {
-			if seenFull[model.identityKey()] {
+			if mergeExactModelEvidence(r.Models, model) {
 				continue
 			}
+			for i := range r.Models {
+				if r.Models[i].providerModelKey() == model.providerModelKey() && !r.Models[i].hasEndpointIdentity() {
+					mergeMissingLimitEvidence(&model, r.Models[i])
+				}
+			}
 			r.Models = removeGenericModel(r.Models, model.Provider, model.ID)
-			seenFull[model.identityKey()] = true
-			seenGeneric[model.providerModelKey()] = true
 			r.Models = append(r.Models, model)
 			continue
 		}
-		if seenGeneric[model.providerModelKey()] {
+		if mergeProviderModelEvidence(r.Models, model) {
 			continue
 		}
-		seenFull[model.identityKey()] = true
-		seenGeneric[model.providerModelKey()] = true
 		r.Models = append(r.Models, model)
 	}
 	sort.Slice(r.Models, func(i, j int) bool { return discoveredModelSortKey(r.Models[i]) < discoveredModelSortKey(r.Models[j]) })
+}
+
+func mergeExactModelEvidence(models []discoveredModel, incoming discoveredModel) bool {
+	for i := range models {
+		if models[i].identityKey() != incoming.identityKey() {
+			continue
+		}
+		mergeMissingLimitEvidence(&models[i], incoming)
+		return true
+	}
+	return false
+}
+
+func mergeProviderModelEvidence(models []discoveredModel, incoming discoveredModel) bool {
+	found := false
+	for i := range models {
+		if models[i].providerModelKey() != incoming.providerModelKey() {
+			continue
+		}
+		mergeMissingLimitEvidence(&models[i], incoming)
+		found = true
+	}
+	return found
+}
+
+func mergeMissingLimitEvidence(dst *discoveredModel, src discoveredModel) {
+	if dst.ContextWindow <= 0 && src.ContextWindow > 0 {
+		dst.ContextWindow = src.ContextWindow
+		dst.ContextWindowSource = src.ContextWindowSource
+	} else if dst.ContextWindow > 0 && dst.ContextWindowSource == "" && dst.ContextWindow == src.ContextWindow {
+		dst.ContextWindowSource = src.ContextWindowSource
+	}
+	if dst.MaxCompletionTokens <= 0 && src.MaxCompletionTokens > 0 {
+		dst.MaxCompletionTokens = src.MaxCompletionTokens
+		dst.MaxCompletionTokensSource = src.MaxCompletionTokensSource
+	} else if dst.MaxCompletionTokens > 0 && dst.MaxCompletionTokensSource == "" && dst.MaxCompletionTokens == src.MaxCompletionTokens {
+		dst.MaxCompletionTokensSource = src.MaxCompletionTokensSource
+	}
 }
 
 func discoverySource(name string, ttl, deadline time.Duration) discoverycache.Source {

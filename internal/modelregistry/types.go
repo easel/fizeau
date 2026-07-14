@@ -53,14 +53,17 @@ type KnownModel struct {
 	Tier       modelcatalog.Tier `json:"tier,omitempty"`
 	PreRelease bool              `json:"pre_release,omitempty"`
 
-	Power            int           `json:"power,omitempty"`
-	CostInputPerM    float64       `json:"cost_input_per_m,omitempty"`
-	CostOutputPerM   float64       `json:"cost_output_per_m,omitempty"`
-	ContextWindow    int           `json:"context_window,omitempty"`
-	ReasoningLevels  []string      `json:"reasoning_levels,omitempty"`
-	QuotaPool        string        `json:"quota_pool,omitempty"`
-	QuotaRemaining   *int          `json:"quota_remaining,omitempty"`
-	RecentP50Latency time.Duration `json:"recent_p50_latency_ns,omitempty"`
+	Power                     int           `json:"power,omitempty"`
+	CostInputPerM             float64       `json:"cost_input_per_m,omitempty"`
+	CostOutputPerM            float64       `json:"cost_output_per_m,omitempty"`
+	ContextWindow             int           `json:"context_window,omitempty"`
+	ContextWindowSource       string        `json:"context_window_source,omitempty"`
+	MaxCompletionTokens       int           `json:"max_completion_tokens,omitempty"`
+	MaxCompletionTokensSource string        `json:"max_completion_tokens_source,omitempty"`
+	ReasoningLevels           []string      `json:"reasoning_levels,omitempty"`
+	QuotaPool                 string        `json:"quota_pool,omitempty"`
+	QuotaRemaining            *int          `json:"quota_remaining,omitempty"`
+	RecentP50Latency          time.Duration `json:"recent_p50_latency_ns,omitempty"`
 
 	Status                ModelStatus `json:"status,omitempty"`
 	HealthFreshnessAt     time.Time   `json:"health_freshness_at,omitempty"`

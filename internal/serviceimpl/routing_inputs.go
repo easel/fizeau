@@ -321,12 +321,12 @@ func SnapshotProviderContextWindows(pcfg ProviderEntry, cat *modelcatalog.Catalo
 			rowByID[id] = row
 		}
 	}
-	add := func(modelID string, snapshotWindow int) {
+	add := func(modelID string, snapshotWindow int, snapshotSource string) {
 		modelID = strings.TrimSpace(modelID)
 		if modelID == "" {
 			return
 		}
-		window, source := SnapshotContextWindow(pcfg, cat, modelID, snapshotWindow)
+		window, source := SnapshotContextWindow(pcfg, cat, modelID, snapshotWindow, snapshotSource)
 		if window <= 0 {
 			return
 		}
@@ -336,18 +336,18 @@ func SnapshotProviderContextWindows(pcfg ProviderEntry, cat *modelcatalog.Catalo
 	if defaultModel := strings.TrimSpace(pcfg.Model); defaultModel != "" {
 		row, ok := rowByID[defaultModel]
 		if ok {
-			add(defaultModel, row.ContextWindow)
+			add(defaultModel, row.ContextWindow, row.ContextWindowSource)
 		} else {
-			add(defaultModel, 0)
+			add(defaultModel, 0, "")
 		}
 	}
 	for _, id := range discoveredIDs {
 		row, ok := rowByID[id]
 		if ok {
-			add(id, row.ContextWindow)
+			add(id, row.ContextWindow, row.ContextWindowSource)
 			continue
 		}
-		add(id, 0)
+		add(id, 0, "")
 	}
 	if len(out) == 0 {
 		return nil, nil
@@ -357,11 +357,16 @@ func SnapshotProviderContextWindows(pcfg ProviderEntry, cat *modelcatalog.Catalo
 
 // SnapshotContextWindow preserves the current service precedence and source
 // projection for cache-backed context evidence.
-func SnapshotContextWindow(pcfg ProviderEntry, cat *modelcatalog.Catalog, modelID string, snapshotWindow int) (int, string) {
+func SnapshotContextWindow(pcfg ProviderEntry, cat *modelcatalog.Catalog, modelID string, snapshotWindow int, snapshotSource string) (int, string) {
 	if pcfg.ContextWindow > 0 {
 		return pcfg.ContextWindow, routing.ContextSourceProviderConfig
 	}
 	if snapshotWindow > 0 {
+		if strings.TrimSpace(snapshotSource) == routing.ContextSourceProviderAPI {
+			return snapshotWindow, routing.ContextSourceProviderAPI
+		}
+		// Empty sources come from legacy cache entries written before evidence
+		// provenance was persisted. Those values were catalog-enriched.
 		return snapshotWindow, routing.ContextSourceCatalog
 	}
 	if cat != nil {

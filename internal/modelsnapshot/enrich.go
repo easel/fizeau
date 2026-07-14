@@ -41,7 +41,10 @@ func EnrichModel(model KnownModel, includeByDefault bool, cat *modelcatalog.Cata
 		if entry, ok := cat.LookupModel(catalogID); ok {
 			model.CostInputPerM = catalogCostInput(entry)
 			model.CostOutputPerM = catalogCostOutput(entry)
-			model.ContextWindow = entry.ContextWindow
+			if model.ContextWindow <= 0 && entry.ContextWindow > 0 {
+				model.ContextWindow = entry.ContextWindow
+				model.ContextWindowSource = limitSourceCatalog
+			}
 			model.ReasoningLevels = append([]string(nil), entry.ReasoningLevels...)
 			model.QuotaPool = entry.EffectiveQuotaPool()
 			model.SupportsTools = !entry.NoTools

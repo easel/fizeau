@@ -194,6 +194,12 @@ func assertParityRows(t *testing.T, got []KnownModel, want []modelsnapshot.Known
 		if gotRow.SupportsTools != wantRow.SupportsTools || gotRow.DeploymentClass != wantRow.DeploymentClass {
 			t.Fatalf("row %s support mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
 		}
+		if gotRow.ContextWindow != wantRow.ContextWindow || gotRow.ContextWindowSource != wantRow.ContextWindowSource {
+			t.Fatalf("row %s context limit mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
+		}
+		if gotRow.MaxCompletionTokens != wantRow.MaxCompletionTokens || gotRow.MaxCompletionTokensSource != wantRow.MaxCompletionTokensSource {
+			t.Fatalf("row %s output limit mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
+		}
 		if string(gotRow.DiscoveredVia) != string(wantRow.DiscoveredVia) || !gotRow.DiscoveredAt.Equal(wantRow.DiscoveredAt) {
 			t.Fatalf("row %s discovery freshness mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
 		}

@@ -344,23 +344,15 @@ func runWithOptions(opts Options) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), runCancelSignals()...)
 	defer cancel()
 
-	resolvedContextWindow := 0
-	resolvedMaxTokens := 0
-	resolvedContextWindow = pc.ContextWindow
-	resolvedMaxTokens = pc.MaxTokens
-	if resolvedContextWindow == 0 && resolvedModel != "" {
-		if catalog, err := cfg.LoadModelCatalog(); err == nil && catalog != nil {
-			resolvedContextWindow = catalog.ContextWindowForModel(resolvedModel)
-		}
-	}
+	resolvedContextWindow, resolvedMaxTokens := resolveRunModelLimits(ctx, cfg, pc, resolvedModel)
 
 	// Build compaction config from resolved context window.
 	compactionCfg := fizeau.DefaultCompactionConfig()
 	if resolvedContextWindow > 0 {
 		compactionCfg.ContextWindow = resolvedContextWindow
-		if resolvedMaxTokens > 0 {
-			compactionCfg.ReserveTokens = resolvedMaxTokens
-		}
+	}
+	if resolvedMaxTokens > 0 {
+		compactionCfg.ReserveTokens = resolvedMaxTokens
 	}
 	if cfg.CompactionPercent > 0 {
 		compactionCfg.EffectivePercent = cfg.CompactionPercent
@@ -494,6 +486,38 @@ func runWithOptions(opts Options) int {
 	default:
 		return 1
 	}
+}
+
+var lookupRunModelLimits = func(ctx context.Context, pc agentConfig.ProviderConfig, model string) (int, int) {
+	observed := agentConfig.LookupModelLimits(ctx, pc, model)
+	return observed.ContextLength, observed.MaxCompletionTokens
+}
+
+// resolveRunModelLimits applies the field-by-field limit authority chain used
+// to configure execution: explicit provider config, then type-gated provider
+// API evidence, then a catalog context fallback. Output limits deliberately do
+// not fall back to the catalog; zero leaves that choice to the provider.
+func resolveRunModelLimits(ctx context.Context, cfg *agentConfig.Config, pc agentConfig.ProviderConfig, model string) (int, int) {
+	contextWindow := pc.ContextWindow
+	maxTokens := pc.MaxTokens
+	if strings.TrimSpace(model) == "" {
+		return contextWindow, maxTokens
+	}
+	if contextWindow == 0 || maxTokens == 0 {
+		observedContext, observedMax := lookupRunModelLimits(ctx, pc, model)
+		if contextWindow == 0 && observedContext > 0 {
+			contextWindow = observedContext
+		}
+		if maxTokens == 0 && observedMax > 0 {
+			maxTokens = observedMax
+		}
+	}
+	if contextWindow == 0 && cfg != nil {
+		if catalog, err := cfg.LoadModelCatalog(); err == nil && catalog != nil {
+			contextWindow = catalog.ContextWindowForModel(model)
+		}
+	}
+	return contextWindow, maxTokens
 }
 
 var executeViaServiceFn = executeViaService

@@ -1,8 +1,13 @@
 package modelsnapshot
 
 import (
+	"context"
+	"encoding/json"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/easel/fizeau/internal/discoverycache"
 )
 
 // realSindriProps is a trimmed but faithful capture of the GET /props payload
@@ -81,5 +86,90 @@ func TestHasPropsDiscovery_LlamaCppTypes(t *testing.T) {
 		if hasPropsDiscovery(typ) {
 			t.Errorf("hasPropsDiscovery(%q) = true, want false", typ)
 		}
+	}
+}
+
+func TestParsePropsLimitEvidence_Aliases(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantCtx    int
+		wantOutput int
+	}{
+		{
+			name:       "default settings and model card",
+			body:       `{"default_generation_settings":{"n_ctx":65536},"model_card":{"max_tokens":32768}}`,
+			wantCtx:    65536,
+			wantOutput: 32768,
+		},
+		{
+			name:       "top level fields",
+			body:       `{"context_window":131072,"max_completion_tokens":16384}`,
+			wantCtx:    131072,
+			wantOutput: 16384,
+		},
+		{
+			name:       "runtime context and generation params",
+			body:       `{"runtime":{"max_ctx":262144},"default_generation_settings":{"params":{"max_tokens":8192}}}`,
+			wantCtx:    262144,
+			wantOutput: 8192,
+		},
+		{
+			name:       "nonpositive generation max is not a limit",
+			body:       `{"runtime":{"max_ctx":32768},"default_generation_settings":{"params":{"max_tokens":-1}}}`,
+			wantCtx:    32768,
+			wantOutput: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parsePropsLimitEvidence([]byte(tt.body))
+			if got.ContextWindow != tt.wantCtx || got.MaxCompletionTokens != tt.wantOutput {
+				t.Fatalf("parsePropsLimitEvidence() = %+v, want context=%d output=%d", got, tt.wantCtx, tt.wantOutput)
+			}
+			if got.ContextWindow > 0 && got.ContextWindowSource != limitSourceProviderAPI {
+				t.Errorf("context source = %q, want %q", got.ContextWindowSource, limitSourceProviderAPI)
+			}
+			if got.MaxCompletionTokens > 0 && got.MaxCompletionTokensSource != limitSourceProviderAPI {
+				t.Errorf("output source = %q, want %q", got.MaxCompletionTokensSource, limitSourceProviderAPI)
+			}
+		})
+	}
+}
+
+func TestPropsLimitEvidence_CacheRoundTrip(t *testing.T) {
+	cache := &discoverycache.Cache{Root: t.TempDir()}
+	src := discoverySource("test-props", time.Hour, time.Second)
+	payload, err := json.Marshal(discoveryPayload{
+		CapturedAt:                time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC),
+		Models:                    []string{"served-alias"},
+		ContextWindow:             65536,
+		ContextWindowSource:       limitSourceProviderAPI,
+		MaxCompletionTokens:       32768,
+		MaxCompletionTokensSource: limitSourceProviderAPI,
+	})
+	if err != nil {
+		t.Fatalf("marshal discovery payload: %v", err)
+	}
+	if err := cache.Refresh(src, func(context.Context) ([]byte, error) { return payload, nil }); err != nil {
+		t.Fatalf("cache refresh: %v", err)
+	}
+
+	result := readDiscoveryCache(cache, src, "provider", SourcePropsAPI, discoveryIdentity{Provider: "provider"})
+	if len(result.Models) != 1 {
+		t.Fatalf("cached models = %+v, want one", result.Models)
+	}
+	got := result.Models[0]
+	if got.ContextWindow != 65536 || got.ContextWindowSource != limitSourceProviderAPI {
+		t.Errorf("cached context evidence = %d/%q, want 65536/%q", got.ContextWindow, got.ContextWindowSource, limitSourceProviderAPI)
+	}
+	if got.MaxCompletionTokens != 32768 || got.MaxCompletionTokensSource != limitSourceProviderAPI {
+		t.Errorf("cached output evidence = %d/%q, want 32768/%q", got.MaxCompletionTokens, got.MaxCompletionTokensSource, limitSourceProviderAPI)
+	}
+
+	legacyIDs, _, legacyLimits, err := parseDiscoveryPayload([]byte(`["legacy-model"]`), "provider")
+	if err != nil || len(legacyIDs) != 1 || legacyIDs[0] != "legacy-model" || legacyLimits != (limitEvidence{}) {
+		t.Errorf("legacy cache decode = ids=%v limits=%+v err=%v", legacyIDs, legacyLimits, err)
 	}
 }

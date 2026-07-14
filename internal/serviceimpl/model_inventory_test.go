@@ -64,6 +64,31 @@ func TestAssembleModelInventoryPreservesContextAndBilling(t *testing.T) {
 	}
 }
 
+func TestAssembleModelInventoryUsesCachedProviderAPIContextBeforeCatalog(t *testing.T) {
+	cat := loadRoutingInputsTestCatalog(t)
+	rows := AssembleModelInventory(context.Background(), ModelInventoryInput{
+		ProviderNames: []string{"runtime"},
+		Providers: map[string]ProviderEntry{
+			"runtime": {Type: "ds4", Model: "priced-model"},
+		},
+		Snapshot: modelsnapshot.ModelSnapshot{Models: []modelsnapshot.KnownModel{{
+			Provider:            "runtime",
+			ProviderType:        "ds4",
+			ID:                  "priced-model",
+			ContextWindow:       65536,
+			ContextWindowSource: routing.ContextSourceProviderAPI,
+		}}},
+		Catalog: cat,
+	})
+
+	if len(rows) != 1 {
+		t.Fatalf("row count = %d, want 1", len(rows))
+	}
+	if rows[0].Model.ContextWindow != 65536 || rows[0].ContextSource != routing.ContextSourceProviderAPI {
+		t.Fatalf("context = %d/%q, want 65536/%q", rows[0].Model.ContextWindow, rows[0].ContextSource, routing.ContextSourceProviderAPI)
+	}
+}
+
 func TestSubscriptionHarnessTierModelsPreservesOrderingAndBilling(t *testing.T) {
 	cat, err := modelcatalog.Default()
 	if err != nil {
