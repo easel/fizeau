@@ -108,3 +108,28 @@ sleep 2
 		t.Fatalf("cassette replay lost a tier: %#v", windows)
 	}
 }
+
+func TestGeminiQuotaCompleteRequiresRepeatedSubsetConfirmation(t *testing.T) {
+	partial := "  Flash    4% used      Resets 9:13 PM\n"
+	done := geminiQuotaComplete(time.Millisecond)
+
+	if done(partial) {
+		t.Fatal("first parsed tier must not complete an incrementally rendered dialog")
+	}
+	time.Sleep(2 * time.Millisecond)
+	for observation := 1; observation < geminiQuotaStableObservations; observation++ {
+		if done(partial) {
+			t.Fatalf("partial tier set completed after only %d stable observations", observation)
+		}
+	}
+	if !done(partial) {
+		t.Fatalf("stable partial tier set did not complete after %d confirmations", geminiQuotaStableObservations)
+	}
+}
+
+func TestGeminiQuotaCompleteAcceptsAllKnownTiersImmediately(t *testing.T) {
+	done := geminiQuotaComplete(time.Hour)
+	if !done(geminiModelManageFixture) {
+		t.Fatal("all known Gemini tiers are definitive completion evidence")
+	}
+}

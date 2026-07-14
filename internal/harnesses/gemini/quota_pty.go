@@ -12,7 +12,10 @@ import (
 	"github.com/easel/fizeau/internal/pty/session"
 )
 
-const geminiQuotaSettleTime = 150 * time.Millisecond
+const (
+	geminiQuotaSettleTime         = 500 * time.Millisecond
+	geminiQuotaStableObservations = 3
+)
 
 type quotaPTYOptions struct {
 	binary      string
@@ -123,15 +126,25 @@ func captureGeminiQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 // geminiQuotaComplete returns a DoneWhen predicate that waits for the parsed
 // tier set to stop changing. Gemini CLI renders /model manage incrementally, so
 // the first parsed row is not enough evidence that the dialog has settled.
+// Seeing every tier known to this parser is definitive completion evidence. A
+// CLI version or account that displays only a subset still completes after a
+// longer quiet period, but only after multiple observations confirm the same
+// screen. Requiring confirmations prevents a single delayed poll under load
+// from mistaking scheduler delay for output stability.
 func geminiQuotaComplete(stableFor time.Duration) func(string) bool {
 	var lastSignature string
 	var lastChange time.Time
+	var stableObservations int
 	return func(text string) bool {
 		windows := ParseGeminiModelManage(text)
 		if len(windows) == 0 {
 			lastSignature = ""
 			lastChange = time.Time{}
+			stableObservations = 0
 			return false
+		}
+		if len(windows) == len(geminiTiers) {
+			return true
 		}
 		if stableFor <= 0 {
 			return true
@@ -141,13 +154,20 @@ func geminiQuotaComplete(stableFor time.Duration) func(string) bool {
 		if signature != lastSignature {
 			lastSignature = signature
 			lastChange = now
+			stableObservations = 0
 			return false
 		}
 		if lastChange.IsZero() {
 			lastChange = now
+			stableObservations = 0
 			return false
 		}
-		return now.Sub(lastChange) >= stableFor
+		if now.Sub(lastChange) < stableFor {
+			stableObservations = 0
+			return false
+		}
+		stableObservations++
+		return stableObservations >= geminiQuotaStableObservations
 	}
 }
 
