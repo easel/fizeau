@@ -8,17 +8,19 @@ ddx:
     - ADR-004
     - ADR-011
     - ADR-014
+    - CONTRACT-003
     - CONTRACT-004
   child_of: fizeau-67f2d585
   review:
-    self_hash: 46d034ed1c9ce19800843caa4de14a6de29e7dff1b4bab05aef46fee50d4af55
+    self_hash: 28e0bf2781e3419d4672215b3604af7ea6f830b1e46bb48a2eaa0074597852c4
     deps:
-      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
-      ADR-004: e92b61b8d9f8d36b58d5189bd8c5ef6264597fdf6d23cd2205195177fd2e2984
+      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
-      ADR-014: 911d38f39ef1e377b40a3e1760e58d60eca7a5b6d147338801404a55986c92e7
-      CONTRACT-004: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
-    reviewed_at: "2026-07-14T05:16:22Z"
+      ADR-014: df628e6bb4c8918ee13cc858720f600b6585678b0d9b441a2f18ff5ba25cd709
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+      CONTRACT-004: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 
@@ -28,6 +30,7 @@ ddx:
 | 2026-05-17 | Re-proposed — CONTRACT-004 merged; awaiting empirical billing-observation evidence for acceptance | Fizeau maintainers | same | Medium |
 | 2026-05-18 | **Accepted** — Empirical subscription-billing observation cassette recorded; primary-harness capability baseline extended with claude-tui row; capability matrix evidence-ID wiring implemented | Fizeau maintainers | same | High |
 | 2026-06-04 | **Gate-E: Accept** — claude 2.1.160+ ships `--permission-mode bypassPermissions`, resolving the PermissionModes TUI-affordance gap; baseline promoted (12 of 14 capabilities `pass`, only `ListReasoning`/`SetReasoning` remain `gap`); amendments are documentation-only corrections requiring no code changes | Fizeau maintainers | same | High |
+| 2026-07-14 | **Lifecycle amendment** — one containment boundary per accepted invocation; service-owned cleanup and terminalization aligned with CONTRACT-003 v0.15 | Fizeau maintainers | ADR-002, ADR-004, ADR-011, ADR-014, CONTRACT-003, CONTRACT-004 | High |
 
 > **Acceptance note (2026-05-18):** Empirical subscription-mode billing observation
 > is now recorded as `billing-observation-subscription-mode-claude-tui` in
@@ -59,6 +62,57 @@ ddx:
 > corrections requiring no code changes. Promotion is ready for routing
 > integration once the ListReasoning/SetReasoning gaps are unblocked by a
 > documented TUI affordance from Anthropic.
+
+## Amendment — 2026-07-14: Per-Invocation Lifecycle Ownership
+
+This amendment is the active lifecycle design for `claude-tui`. It aligns this
+ADR with [CONTRACT-003 v0.15](../contracts/CONTRACT-003-fizeau-service.md) and
+supersedes every conflicting pool, process-ownership, cancellation, cleanup,
+and recovery statement retained below as historical context.
+
+Each accepted `Execute` or `Continue` invocation that selects `claude-tui`
+gets one dedicated Claude TUI PTY containment boundary. Fizeau registers that
+boundary durably before releasing the Claude process, retains process-birth
+identities for the supervisor and contained tree, and couples caller liveness
+to the supervisor through a control channel. A direct-child parent-death signal
+may supplement that channel; it does not replace descendant containment.
+
+The boundary is never returned to a package-global or service-global live
+session pool. A harness final payload, normal completion, failure, timeout, or
+caller-signalled context cancellation begins service-owned cleanup immediately.
+Cleanup requests graceful termination, escalates to forceful containment
+termination, reaps owned children, and waits for boundary emptiness before the
+public terminal event is emitted. `HarnessCleanupTimeout` bounds that wait. A
+missed deadline or containment escape produces
+`failed / cleanup_failed / cleanup` and preserves the primary execution tuple
+as required by CONTRACT-003.
+
+Stream abandonment means cancellation of the context passed to `Execute` or
+`Continue`. Merely ceasing to receive from the returned channel is not
+observable. Event delivery therefore cannot control cleanup or terminalization;
+the service retains capacity for the terminal fact and closes the stream after
+the cleanup decision. Caller death follows the same cleanup path through the
+supervisor control channel, with best-effort terminal persistence and no live
+delivery guarantee.
+
+Recovery uses the durable lifecycle record and process-birth identities. It
+must reject PID reuse and retain unresolved containment evidence; process-name
+scanning, a bare PID or PGID, and startup-only orphan reaping are not ownership
+proof. Startup stale recovery may supplement current-invocation cleanup after
+`StaleHarnessReaperGrace`; it never delays or replaces cleanup at invocation
+completion.
+
+`/clear` remains a Claude TUI protocol affordance, not a process-lifetime
+primitive. It may reset state inside one owned invocation when a protocol flow
+requires it, but it cannot justify reusing a live Claude process across Fizeau
+invocations. Continuation is exposed through CONTRACT-003 `Continue`; any
+route-specific resume support must use a fresh accepted invocation and report
+its continuation disposition without retaining a pooled PTY.
+
+**Key Points**: one containment boundary per accepted invocation | no shared
+live process pool | cleanup before terminal delivery or at
+`HarnessCleanupTimeout` | caller death through a supervisor control channel |
+durable birth-identity recovery, never process-name scanning.
 
 > **Historical status note (2026-05-14):** This ADR was withdrawn pending the
 > universal harness interface refactor in
@@ -144,6 +198,14 @@ ddx:
 >    events during the turn. claude-p is batch (only `Stop`); Fizeau's
 >    CONTRACT-004 requires intermediate `ProgressEvents` so this hook
 >    set is load-bearing.
+>
+> **Historical implementation reference — superseded 2026-07-14:** Items 4–6
+> below preserve the earlier pooled-session, no-PID-file, and startup-reaper
+> proposal so the design history remains reviewable. They are not active
+> lifecycle requirements. The amendment above and CONTRACT-003 v0.15 require
+> one containment boundary per accepted invocation, pre-launch durable
+> birth-identity registration, current-invocation cleanup before terminal
+> delivery, and independent stale recovery.
 >
 > 4. **Session lifetime**: **pooled long-lived sessions with `/clear`
 >    between turns, lifetime bounded by the fiz process**. Rationale:
@@ -259,22 +321,25 @@ tests, capability baseline rows, auto-routing eligibility).
 Fizeau will add a **new, separate primary harness identity `claude-tui`** that
 implements the existing `harnesses.Harness` interface
 (`internal/harnesses/types.go`, `Info`/`HealthCheck`/`Execute`) and runs the
-Claude CLI exclusively through the direct PTY transport. `claude-tui` is a
-fork — a sibling package alongside `internal/harnesses/claude/` — not a
-mode, flag, or conditional branch in the existing runner.
+Claude CLI exclusively through the direct PTY transport. Each accepted run uses
+one service-owned containment boundary and tears that boundary down before its
+public terminal event, subject to `HarnessCleanupTimeout`. `claude-tui` is a
+fork — a sibling package alongside `internal/harnesses/claude/` — not a mode,
+flag, conditional branch in the existing runner, or pooled live session.
 
-The existing `claude` harness keeps its current implementation, capability
-evidence, and auto-routing eligibility unchanged. Both harnesses coexist
-indefinitely; capability and routing decisions are tracked per-identity.
+This decision does not change the `claude` harness contract, capability
+evidence, or routing policy. Both identities may coexist; capability and
+routing decisions are tracked per identity.
 
 `claude-tui` is the identity through which subscription-billed Claude
 capacity is routed once it earns auto-routing eligibility. Until then, the
 existing `claude` harness continues to serve routed Claude traffic.
 
 **Key Points**: separate package + registry identity | PTY only, no batch
-flags, no Fizeau-side identification env/argv | both `claude` and
-`claude-tui` are primary harnesses with independent baseline rows | both
-implement the same `harnesses.Harness` interface.
+flags, no Fizeau-side identification env/argv | one containment boundary per
+accepted invocation | service-owned cleanup before terminal delivery | both
+identities implement the same CONTRACT-004 interface and have independent
+evidence rows.
 
 ## Harness Interface (Normative)
 
@@ -301,21 +366,38 @@ type Harness interface {
 
 `HarnessInfo`, `ExecuteRequest`, `Event`, `FinalData`, `FinalUsage`,
 `RoutingActual`, `ReasoningActual`, and the `EventType` closed union are
-defined in the same file and are not extended by this ADR. CONTRACT-003 is
-the public-surface contract that those internal shapes reflect; this ADR
-adds no new event types, no new request fields, and no new metadata keys.
+defined in the same file and are not extended by this ADR. CONTRACT-004 owns
+that internal adapter interface. CONTRACT-003 owns the public service stream,
+typed terminal fact, cleanup deadline, continuation, and process-lifecycle
+requirements. This ADR adds no public event type, request field, or metadata
+key.
 
-`claude-tui` therefore differs from `claude` only in:
+The `Harness.Execute` final event is adapter output, not permission to emit the
+public terminal fact immediately. `internal/serviceimpl` must hold that result
+until the invocation's containment boundary is empty or
+`HarnessCleanupTimeout` expires, then classify and emit exactly one public
+terminal event. The runner receives the request context for caller-signalled
+cancellation, while the service lifecycle supervisor performs cleanup under a
+service-owned context that survives request cancellation.
+
+`claude-tui` therefore differs from `claude` in:
 
 - transport mechanism (PTY vs. `os/exec` batch),
 - registry config (`HarnessConfig`) entry name, binary invocation, and
   baseline flags,
 - `HarnessInfo.Name` returned by `Info()`,
 - internal package layout and tests,
+- its per-invocation PTY launch plan and protocol adapter,
 
 not in interface, event shapes, or request semantics. A caller routing
 through `harnesses.Harness` cannot tell the two apart except by the
 `HarnessInfo.Name` it returns.
+
+CONTRACT-003 `Continue` does not change this boundary. A continued session is a
+new accepted Fizeau invocation. `claude-tui` may resume only through durable or
+Claude-supported continuation state that does not keep a live PTY process
+between invocations; otherwise the route reports continuation unsupported or
+uses the caller-selected fresh-session policy.
 
 A separate harness identity (rather than a `Transport` mode on a single
 `HarnessConfig`) is required because:
@@ -339,16 +421,18 @@ A separate harness identity (rather than a `Transport` mode on a single
 
 | Aspect | Detail |
 |--------|--------|
-| New package | `internal/harnesses/claude-tui/` (Go package `claudetui`) owns a `Runner` type implementing `harnesses.Harness`, the TUI stream parser, model/reasoning discovery, and Final/Progress event emission. |
-| Registry entry | Adds a `claude-tui` entry to `builtinHarnesses` (`internal/harnesses/registry.go`). `BaseArgs` is empty (no batch flags). `PermissionArgs` is empty (permission selection happens via TUI affordances or not at all — see Permissions below). `ModelFlag`/`ReasoningFlag`/`WorkDirFlag` are empty (`""`). `IsSubscription=true`. `AutoRoutingEligible=false` at introduction. `TUIQuotaCommand="/usage"` (shared command, shared cache). |
-| Transport | Exclusively `internal/pty/session` + `internal/pty/terminal`. No `os/exec` direct execution and no `claude --print`/`-p`/`--output-format` invocations from this package. Reuses the same direct-PTY library that `internal/harnesses/ptyquota` already drives. |
-| Invocation profile | `claude` (no `--print`, no `-p`, no `--output-format`, no `--stream-json`, no other batch/API-shaped flag). Workdir via the `session.Start` workdir argument (equivalent of `cmd.Dir`). Permissions/reasoning/model selected through the same TUI affordances a human uses (slash commands and selection menus) when such an affordance exists. |
+| Harness adapter | `internal/harnesses/claude-tui/` (Go package `claudetui`) must implement `harnesses.Harness` and only the CONTRACT-004 optional interfaces it supports. It owns Claude protocol driving, hook/transcript interpretation, model/reasoning discovery, and internal Final/Progress adapter events; it does not own public terminalization or live-process pooling. |
+| Registry identity | `builtinHarnesses` (`internal/harnesses/registry.go`) must carry a distinct `claude-tui` identity with subscription billing classification and TUI-only invocation arguments. Batch/output-format arguments remain forbidden. Auto-routing promotion remains an evidence-backed spec decision independent of `claude`. |
+| Lifecycle | `internal/serviceimpl` must acquire one `internal/processlifecycle` lease per accepted invocation before Claude starts. The lease owns durable birth-identity registration, the platform containment boundary, caller-liveness supervision, cleanup, and stale recovery. No live process crosses the invocation boundary. |
+| Transport | Claude runs through `internal/pty/session` under the lifecycle lease. Normal Execute output uses documented Claude hooks and the JSONL transcript path delivered by the stop hook; a minimal PTY startup-probe responder keeps the TUI operational. Full terminal-frame parsing remains available for TUI-only probes such as `/usage`, not as a required normal-Execute parser. No `claude --print`/`-p`/`--output-format` invocation is permitted on this path. |
+| Invocation profile | Start the user-facing `claude` TUI without batch/output-format flags. The workdir is fixed when the per-invocation containment boundary starts. Model, permission, and reasoning controls may use documented user-facing TUI arguments or affordances; absence of such an affordance remains a capability gap. |
 | Prompt delivery | The prompt is sent into the TUI input area using the terminal's bracketed-paste sequence (`ESC[200~` … `ESC[201~`) followed by `Enter`. Paste arrives as a single burst inside the bracketed-paste boundaries, matching the byte shape a real paste produces; Fizeau does not insert artificial inter-byte delays inside a paste. Single keystrokes for slash commands and menu navigation are sent one logical key per event with a small fixed inter-key delay (default 25–75ms) to avoid super-human keystroke bursts that could trip TUI input handling. |
+| Cancellation | Request-context cancellation is the caller's abandonment signal. The adapter may request graceful in-TUI cancellation, but the lifecycle lease must then terminate and reap the whole containment boundary under the service-owned cleanup context. Silent channel non-consumption is not a signal. |
 | Capability surface | Same baseline rows as `claude`, evidenced independently: `Run`, `FinalText`, `ProgressEvents`, `Cancel`, `WorkdirContext`, `PermissionModes`, `ListModels`, `SetModel`, `ListReasoning`, `SetReasoning`, `TokenUsage`, `QuotaStatus`, `ErrorStatus`, `RequestMetadata`. |
 | Cassettes | Record-mode and replay-mode follow ADR-002. Cassette `manifest.harness.name = "claude-tui"`; binary version, command, terminal, timing, and provenance fields are stamped from the PTY session as for `claude` quota cassettes. Live cassette evidence is required for promotion of any baseline row from `gap` to `pass`, identical to the `claude` rule. |
-| Quota | `claude-tui` consumes the same durable `ClaudeQuotaSnapshot` cache as `claude`. The quota probe drives `/usage` once via PTY and the parsed snapshot is shared. **Assumption**: both identities authenticate as the same Anthropic account; quota is per-account, not per-transport. If a future operator binds different accounts to different identities, the durable cache key must be extended to include account identity (out of scope for this ADR). |
-| Shared helpers | Helpers genuinely needed by both runners — quota-message classification (`IsClaudeQuotaExhaustedMessage`, `MarkClaudeQuotaExhaustedFromMessage`), account-info shapes, model/reasoning resolution helpers — move to a new `internal/harnesses/anthropic/` neutral package before being consumed from both runners. Not `internal/harnesses/claude/shared` (that would make `claude-tui` import from under `claude`). |
-| Auto-routing | `claude-tui` is `AutoRoutingEligible=false` at introduction. Promotion is gated on fresh complete account/quota evidence (same conditions as `claude`) **plus** at least one accepted live record-mode cassette per supported capability row. The promotion decision is a separate spec change once evidence lands. |
+| Quota | Both Claude identities may share account-scoped Anthropic evidence through a neutral `internal/harnesses/anthropic/` store/probe seam. Each identity projects that evidence only through CONTRACT-004 `QuotaHarness`/`AccountHarness`; neither imports the other's package or concrete snapshot type. **Assumption**: both identities authenticate as the same Anthropic account. A multi-account design must key durable evidence by stable account identity. |
+| Shared helpers | Pure Anthropic helpers, unexported durable cache/probe mechanics, account projection, quota-message classification, and model-name normalization belong in `internal/harnesses/anthropic/`. Runner-specific protocol state remains in its runner package. The neutral seam must not own live processes or bypass `internal/processlifecycle`. |
+| Auto-routing | Promotion requires fresh account/quota evidence, accepted live record-mode evidence for every supported capability row, lifecycle conformance, and benchmark deltas. Promotion is a separate spec change; this ADR does not infer current eligibility from implementation state. |
 
 ### Out of Scope
 
@@ -357,6 +441,8 @@ A separate harness identity (rather than a `Transport` mode on a single
 | Merging implementations | Sharing a runner with conditionals, build tags, or `if usePTY { ... } else { ... }` branching inside the `claude` package is explicitly rejected. The fork pays a one-time duplication cost so neither implementation contorts to fit the other. |
 | Retiring `claude` | Not part of this ADR. The subprocess `claude` harness keeps its tests, cassettes, capability rows, and auto-routing eligibility. Any future retirement is a separate ADR with its own promotion/deprecation gates. |
 | Multi-account support | Quota cache keying remains per-account-default. Operators with multiple Anthropic accounts continue to fall outside the supported routing model until a follow-up spec extends the cache key. |
+| Cross-invocation live sessions | Package-global and service-global Claude process pools, `/clear`-based reuse, daemons, and detached PTY sessions are forbidden by CONTRACT-003. Durable continuation metadata and durable quota/account caches are allowed. |
+| Process-name orphan reaping | Scanning for a process named `claude`, or trusting only a PID/PGID, is not a supported cleanup or recovery strategy. Recovery is scoped to a durable lifecycle record with process-birth identities. |
 | Tmux | Explicitly rejected by ADR-002. Reaffirmed here: `claude-tui` must not depend on tmux, screen, or any external terminal multiplexer. |
 | Operator UX changes | No new `fiz` flags or new operator commands. `claude-tui` is selectable through the same routing/identity mechanisms as any other primary harness. |
 | `codex`/`gemini` PTY forks | Out of scope. If those harnesses need the same treatment for the same subscription-pricing reason, follow-up ADRs will mirror this structure rather than generalize prematurely. |
@@ -399,12 +485,15 @@ channels that could be used to reclassify the request.
 - Use the bracketed-paste sequence to deliver a multi-line prompt in one
   event. Bracketed paste is the documented terminal mechanism for paste
   input and is what a real paste produces.
-- Read raw PTY bytes, derive frames through `internal/pty/terminal`, and
-  emit Fizeau service events from them. Service-event emission is internal
-  to Fizeau and is not visible to the Claude binary.
+- Read raw PTY bytes and derive frames through `internal/pty/terminal` for
+  TUI-only control flows. Normal Execute final text and tool-boundary evidence
+  should use the documented hook/transcript seam. The adapter emits internal
+  harness events; Fizeau constructs public service events above that boundary.
 - Cancel a turn with the key combination the TUI documents for cancellation
-  (Esc by default; Ctrl-C as a fallback that exits the session, in which
-  case `claude-tui` restarts a session for the next request).
+  (Esc by default; Ctrl-C as a fallback). Regardless of the TUI response, the
+  service lifecycle supervisor terminates and reaps the current containment
+  boundary. A later request starts a new boundary; it does not restart or reuse
+  the old live session.
 - Reuse the existing `internal/pty/cassette` recorder and
   `internal/ptytest` assertion framework with no modifications beyond a new
   harness name and scenario fixtures.
@@ -431,68 +520,79 @@ against captured evidence.
 ## Module Boundaries
 
 Per ADR-002, no package below `internal/pty` may import
-`internal/harnesses`. `claude-tui` honors that boundary:
+`internal/harnesses`. CONTRACT-003 adds the lifecycle boundary above both the
+PTY and harness packages:
 
 | Layer | Path | Owns |
 |-------|------|------|
-| Runner | `internal/harnesses/claude-tui/runner.go` | Implements `harnesses.Harness` (`Info`, `HealthCheck`, `Execute`); owns event emission, prompt delivery, slash-command drivers for model/reasoning/permission selection, cancellation, timeout enforcement, idle timeout, request-metadata stamping. |
-| TUI parser | `internal/harnesses/claude-tui/stream.go` | Frame-derived parsing of the Claude TUI: prompt echo recognition, assistant message extraction, tool-call/tool-result framing, usage extraction from `/cost` or equivalent TUI surfaces, final-event derivation. Must not import `internal/harnesses/claude`. |
-| Model/reasoning discovery | `internal/harnesses/claude-tui/model_discovery.go` | TUI-driven model and reasoning enumeration. Persists results into `internal/harnesses.ModelDiscoveryCache` keyed by `claude-tui` so it does not collide with `claude` evidence. |
-| Shared neutral helpers | `internal/harnesses/anthropic/` | `IsClaudeQuotaExhaustedMessage`, `MarkClaudeQuotaExhaustedFromMessage`, account-info shapes, model-name normalization. Consumed by both `claude` and `claude-tui`. Has no dependency on either harness package. |
-| Quota reuse | (consumed, not re-implemented) | `claude-tui` reads `ClaudeQuotaSnapshot` from the existing durable cache. It does not own a parallel quota probe. |
-| Cassettes/tests | `internal/harnesses/claude-tui/testdata/` and `internal/ptytest` scenarios | Live record cassettes per capability row; replay-only tests for default CI. |
+| Service orchestration | `internal/serviceimpl` | Accepts the invocation, acquires/releases the lifecycle lease, withholds the public terminal event until cleanup succeeds or times out, applies typed cleanup precedence, and projects adapter events onto CONTRACT-003. It must not parse Claude-native output. |
+| Lifecycle supervisor | `internal/processlifecycle` | Pre-launch durable ownership record, process-birth identities, launch gate, Unix process group/session or Windows job object, caller-liveness control channel, graceful/forceful cleanup, reaping, timeout decision, and stale recovery. It must not interpret Claude protocol, quota, or terminal frames. |
+| Raw PTY session | `internal/pty/session` | PTY descriptors, terminal sizing, raw input/output, resize, and wait behavior under a supplied lifecycle lease. It must not create a second ownership model, emit public service terminal facts, or retain sessions across invocations. |
+| Startup-probe responder | `internal/pty/` neutral helper | Minimal DA1/DA2/DSR/XTVERSION/window-size responses needed to keep the Claude TUI operational. It has no Claude quota or transcript semantics. |
+| Runner | `internal/harnesses/claude-tui/runner.go` | Implements CONTRACT-004 `Harness`; owns prompt delivery, hook registration, Claude commands/menus, request-local timeouts, and internal adapter events. Cancellation requests graceful protocol shutdown and then yields to the lifecycle supervisor. |
+| Transcript/hook parser | `internal/harnesses/claude-tui/stream.go` | Resolves the JSONL transcript path from documented hook payloads, derives final text/tool boundaries/usage, and reports malformed or missing protocol evidence as adapter failure. Full frame parsing is reserved for TUI-only probe flows. |
+| Model/reasoning discovery | `internal/harnesses/claude-tui/model_discovery.go` | TUI-driven model and reasoning enumeration and `ModelDiscoveryHarness` projection keyed by `claude-tui`. Discovery subprocesses use the same lifecycle boundary rules. |
+| Shared Anthropic seam | `internal/harnesses/anthropic/` | Pure classification/normalization helpers plus account-scoped durable quota/account store and probe mechanics shared without exporting a harness-owned snapshot. It has no dependency on either runner and owns no live process pool. |
+| Cassettes/tests | `internal/harnesses/claude-tui/testdata/` and `internal/ptytest` scenarios | Live record cassettes per capability row; replay-only tests for default CI; lifecycle tests use controlled subprocess fixtures rather than authenticated cassettes. |
 
 The `claude-tui` runner must not import `internal/harnesses/claude`, and the
 `claude` runner must not import `internal/harnesses/claude-tui`. The
 `internal/harnesses/anthropic` neutral package is the only allowed sharing
-seam.
+seam for Anthropic-specific cache and parsing helpers. Both runners consume
+process ownership through `internal/processlifecycle`; neither runner,
+`internal/pty`, nor the neutral Anthropic seam may maintain a package-global or
+service-global live process pool.
 
-## Capability Baseline Impact
+## Capability Evidence and Promotion Requirements
 
-`primary-harness-capability-baseline.md` adds a fifth row, `claude-tui`. The
-row was introduced all-`gap` (mirroring how `claude` quota status was
-originally gated), then promoted under the Gate-E ACCEPT disposition
-(2026-06-04): 12 of 14 capabilities are now `pass` with live harness
-evidence, and only `ListReasoning`/`SetReasoning` remain `gap`. The
-`AutoRoutingEligible` flag stays `false` for `claude-tui` until the remaining
-reasoning gaps are unblocked.
+`primary-harness-capability-baseline.md` must carry a separate `claude-tui`
+row. Capability and routing evidence for `claude` never promotes the sibling
+identity implicitly. The lifecycle amendment adds a promotion requirement:
+every supported live operation must also satisfy CONTRACT-003 containment,
+cleanup, cancellation, and caller-death conformance.
 
-Post-Gate-E baseline (12/14 `pass`; the two `gap` rows carry documented
-blockers, not optimistic "pending evidence"):
+The table below preserves the **historical 2026-06-04 Gate-E evidence record**.
+It is not a claim about the current worktree or a substitute for current
+baseline, cassette, conformance-test, and benchmark evidence:
 
 | Row | Status | Evidence / known blocker |
 |-----|--------|---------------|
-| Run, FinalText, ProgressEvents, Cancel, WorkdirContext, ListModels, SetModel, TokenUsage, QuotaStatus, ErrorStatus, RequestMetadata | `pass` | Live harness evidence (`harness.go`, `stream.go`, `contract004.go`, validated against installed claude 2.1.162+). |
-| PermissionModes | `pass` | claude 2.1.160+ `--permission-mode bypassPermissions` enables unrestricted mode on the Claude Max subscription. Evidence: harness.go:256-257, launch_args_test.go::TestBuildLaunchArgsBypassPermissions, validated against installed claude 2.1.162+. |
+| Run, FinalText, ProgressEvents, Cancel, WorkdirContext, ListModels, SetModel, TokenUsage, QuotaStatus, ErrorStatus, RequestMetadata | historical `pass` | Gate-E cited live harness evidence (`harness.go`, `stream.go`, `contract004.go`) against Claude 2.1.162+. |
+| PermissionModes | historical `pass` | Gate-E cited Claude 2.1.160+ `--permission-mode bypassPermissions` evidence in `launch_args_test.go::TestBuildLaunchArgsBypassPermissions`. |
 | ListReasoning | `gap`, no TUI affordance known | No documented Claude TUI slash command lists per-turn reasoning levels. |
 | SetReasoning | `gap`, no TUI affordance known | The `claude --print` path uses `--effort`; no documented Claude TUI slash command sets per-turn reasoning. Until one ships, `claude-tui` does not set reasoning and treats requested non-default values as a routing rejection. |
 
-Each `pass` row was accepted independently of `claude`. A `pass` on `claude`
-does not imply `pass` on `claude-tui`, and vice versa.
-
-`harness-golden-integration.md` extends the cassette scenario list to
-include `claude-tui` authenticated record mode plus replay cassettes for
-each capability row that has a TUI affordance.
+Every current `pass` row must be accepted independently of `claude`. A `pass`
+on one identity does not imply `pass` on the other. The current baseline is the
+source of status; `harness-golden-integration.md` must require authenticated
+record mode plus default-CI replay cassettes for each supported TUI capability.
 
 ## Performance and Cost Acknowledgement
 
-The fork is not free:
+The fork deliberately pays per-invocation lifecycle cost:
 
-- **Parsing cost**: Frame derivation through `internal/pty/terminal`
-  (vt10x-backed) on every spinner/render update is meaningfully more
-  expensive than parsing `stream-json` JSONL lines. For long turns with
-  many redraws the CPU and wall-clock cost is noticeable. The benchmark
-  suite (`scripts/benchmark/`) must include a `claude-tui` lane so this
-  cost is measured before promotion to auto-routing.
-- **Per-turn latency**: Inter-key delays for menu navigation add a fixed
-  overhead (commonly a few hundred ms total) per turn that selects
-  model/reasoning. Bracketed-paste prompts do not add latency.
-- **Code duplication**: Two runners, two parsers, two discovery paths, two
-  cassette suites. Estimated 1500–2500 LOC of additional code carried
-  indefinitely (the existing `claude` package is ~3.5k LOC across
-  runner/stream/quota; `claude-tui` will be smaller because it skips the
-  stream-json fallback path and the `--print` argument builder). Review
-  burden is the larger long-term cost.
+- **Cold start and cleanup**: every accepted invocation establishes a durable
+  ownership record, starts a new PTY containment boundary, completes Claude TUI
+  startup/auth negotiation, and reaps the boundary before terminal delivery.
+  No unverified latency estimate justifies weakening that guarantee, and
+  `/clear` cannot amortize it across invocations.
+- **Parsing cost**: normal Execute uses hook payloads and the JSONL transcript
+  seam instead of deriving a full terminal frame for every spinner redraw.
+  TUI-only quota/model probes may still pay frame-rendering cost and must be
+  measured separately.
+- **Input cost**: documented menu navigation and inter-key delays add bounded
+  latency when a request selects model, reasoning, or permission state.
+  Bracketed-paste prompt delivery does not require artificial per-byte delay.
+- **Code and lifecycle cost**: two harness adapters, a shared
+  `internal/processlifecycle` supervisor, independent evidence, and separate
+  cassette suites increase review surface. The design accepts this cost rather
+  than hiding transport and ownership differences behind one runner.
+
+The benchmark suite must compare `claude-tui` with `claude` across short runs,
+long tool-using runs, cancellation, and cleanup. It must report startup,
+request, transcript parsing, and teardown windows separately. Promotion to
+auto-routing requires measured deltas and lifecycle conformance; this ADR does
+not assert a current performance result.
 
 These costs are accepted because subscription pricing is the load-bearing
 economic constraint for primary-routing Claude capacity (ADR-011). If
@@ -503,8 +603,9 @@ without TUI-driven traffic, this ADR is open to revision.
 
 | Option | Pros | Cons | Evaluation |
 |--------|------|------|------------|
-| **Fork as `claude-tui` (selected)** | Two implementations evolve independently; capability evidence is unambiguous per identity; honors ADR-002 PTY-first design; allows `claude` to keep shipping while PTY work matures; lets the routing layer treat subscription-billed and API-billed Claude as distinct supply pools. | One-time duplication of runner scaffolding; risk of drift in shared parsing helpers (mitigated by extracting them to `internal/harnesses/anthropic`). | **Selected**: matches the subscription-pricing driver, matches ADR-002's library-first boundary, and avoids hidden conditional branches in the hot path. |
+| **Fork as `claude-tui` with per-invocation containment (selected)** | Implementations and capability evidence remain distinct; honors ADR-002 PTY transport and CONTRACT-003 lifecycle ownership; allows `claude` to coexist; lets routing distinguish subscription-billed and API-billed supply. | Duplicated adapter scaffolding plus cold-start and cleanup cost on every accepted invocation. | **Selected**: matches the subscription-pricing driver without weakening the public service lifecycle or hiding transport differences in one runner. |
 | Add a `Transport` mode to existing `claude.Runner` | No new package; smaller code footprint at first. | Conditionals in every hot path (Execute, stream parsing, model discovery, error classification); capability evidence becomes ambiguous because the harness identity collapses two transports into one row; auto-routing eligibility decisions cannot be expressed cleanly; `HarnessConfig` fields like `BaseArgs` and `ModelFlag` have no meaning for half the configurations of a single name. | Rejected: explicitly the failure mode the user called out. |
+| Pool live Claude TUI sessions and run `/clear` between invocations | Amortizes startup/auth negotiation and can reduce nominal latency. | Violates CONTRACT-003's per-invocation ownership and cleanup guarantee; turns `/clear` protocol behavior into a safety boundary; complicates cancellation, caller death, continuation, and stale recovery. | Rejected by the 2026-07-14 amendment. The earlier proposal is retained only as historical implementation reference. |
 | Replace `claude` with PTY-only implementation now | Single canonical path. | Throws away existing `--print` cassettes, runner tests, and quota/auto-routing evidence before PTY parity is proven; high risk of regressing primary subscription capacity. | Rejected: parity is unproven; coexistence is cheaper and safer. |
 | Drive PTY through tmux | Reuses well-trodden multiplexer patterns. | ADR-002 already rejected this for the core path; would inherit global tmux server state and weaken cassette determinism. | Rejected by ADR-002. |
 | Build a generic "TUI harness" abstraction now, parameterized per CLI | One library covers Claude, Codex, Gemini. | Premature: only Claude needs this today; the right shape is unclear until at least two consumers exist; would slow `claude-tui` shipping. | Rejected for now; revisit if a second consumer emerges. |
@@ -513,51 +614,61 @@ without TUI-driven traffic, this ADR is open to revision.
 
 | Type | Impact |
 |------|--------|
-| Positive | Subscription-billed Claude capacity is accessible through a stable, documented TUI surface. |
-| Positive | Capability evidence stays unambiguous: each harness identity owns its own baseline row. |
-| Positive | The existing `claude` harness, its tests, and its operator-visible behavior are unaffected during the rollout. |
-| Positive | The routing layer can treat subscription-billed (`claude-tui`) and API-billed (`claude`) Claude as distinct supply pools with distinct cost classes. |
-| Negative | The codebase carries two Claude runners until a future retirement ADR. Reviewers must keep them honestly separate. |
-| Negative | Frame-derived parsing has a real CPU cost relative to stream-json parsing. Benchmark lane required before auto-routing promotion. |
-| Negative | Live record-mode cassettes for `claude-tui` need authentication and quota windows; CI footprint grows on opt-in record runs. |
-| Negative | Some capability rows (`unrestricted` permissions, per-turn reasoning) are blocked indefinitely until Anthropic ships TUI affordances. |
-| Neutral | Quota evidence is shared across both Claude identities because Anthropic accounts limit per account, not per Fizeau-side transport — under the named single-account assumption. |
+| Positive | The design provides a TUI path for subscription-billed Claude capacity without conflating it with the API-shaped `claude` harness identity. |
+| Positive | Capability, billing, and lifecycle evidence stays attributable to one harness identity and one accepted invocation. |
+| Positive | Normal completion, cancellation, timeout, and caller death share one containment cleanup rule before terminal delivery. |
+| Positive | Durable birth identities make stale recovery refuse PID reuse and diagnose containment escape without process-name scanning. |
+| Negative | Every accepted `claude-tui` invocation pays PTY startup/auth and teardown cost; no live pool amortizes it. |
+| Negative | The codebase carries two Claude adapters plus a shared lifecycle supervisor until a future retirement decision. |
+| Negative | Authenticated record cassettes and caller-death/containment fixtures increase the evidence and CI surface. |
+| Negative | Capabilities without a documented TUI affordance remain gaps; the adapter cannot substitute batch flags. |
+| Neutral | Under the named single-account assumption, both identities may project the same account-scoped durable quota evidence through CONTRACT-004. Durable evidence sharing does not permit live process sharing. |
 
 ## Risks
 
 | Risk | Prob | Impact | Mitigation |
 |------|------|--------|------------|
-| Shared parsing helpers drift between `claude` and `claude-tui` | M | M | Extract genuinely shared helpers into `internal/harnesses/anthropic` before consuming from both runners; cover with helper-level tests; lint rule blocks cross-imports. |
-| TUI surface changes break the parser between Claude CLI releases | H | M | Cassette manifests pin binary version; replay tests pin manifest IDs and content digests (ADR-002 contract); a TUI surface change that breaks parsing surfaces as a capability `gap` in the matrix, not as silent execution failures. |
-| Operators conflate `claude` and `claude-tui` in routing config | M | L | Routing surface treats the two identities as fully distinct (already true via primary baseline rows); error messages from the routing layer name the exact identity that was selected. |
-| Single-account quota assumption fails for multi-account operators | L | M | Cache key gains an account dimension in a follow-up spec when the first multi-account user report lands; until then, document the assumption in the routing snapshot. |
-| Anthropic changes the boundary between subscription and API billing such that PTY no longer guarantees subscription routing | L | H | The ADR is open to revision; the fork's coexistence design means `claude` remains available as the API-billed path with no code change required to fall back. |
-| Performance regression on long turns from frame-derived parsing | M | M | Required benchmark lane in `scripts/benchmark/` covers a long-turn `claude-tui` scenario; promotion to auto-routing requires acceptable benchmark deltas vs. `claude`. |
+| Cleanup misses descendants after normal completion or cancellation | M | H | Establish containment before launch, exercise stubborn-grandchild fixtures, and withhold the terminal fact until the boundary is empty or `HarnessCleanupTimeout` yields typed `cleanup_failed`. |
+| Caller death bypasses request-context cancellation | M | H | Couple the trusted supervisor to caller liveness through a control channel; test with a separate caller process. Treat a direct-child parent-death signal only as secondary protection. |
+| PID reuse makes stale recovery target an unrelated process | L | H | Persist owner and containment process-birth identities, validate them before signaling, and retain unresolved evidence instead of trusting a PID, PGID, or process name. |
+| A harness daemonizes or escapes containment | L | H | Reject breakaway where the platform permits; classify a detected or indeterminate escape as `failed / cleanup_failed / cleanup`; never claim an escaped identity was reaped. |
+| Shared Anthropic evidence diverges between harness identities | M | M | Keep store/probe mechanics in the neutral Anthropic seam and expose only CONTRACT-004 `QuotaStatus`/`AccountSnapshot`; conformance tests forbid concrete snapshot and cross-harness imports. |
+| TUI or hook/transcript surfaces change between Claude releases | H | M | Pin cassette provenance, replay accepted fixtures, treat parser desynchronization as typed adapter failure, and demote affected capability rows rather than parsing rendered text heuristically. |
+| Single-account quota assumption fails for multi-account operators | L | M | Require a follow-up contract to key durable evidence by stable account identity before claiming multi-account support. |
+| Per-invocation cold start makes the route uncompetitive | M | M | Benchmark startup, request, and teardown separately. Let routing use measured cost/latency evidence; do not reintroduce a live pool as an optimization. |
+| Anthropic changes the subscription/API billing boundary | L | H | Revalidate the billing observation and revise the routing decision explicitly; keep `claude` and `claude-tui` evidence and cost classes distinct. |
 
 ## Validation
 
 | Success Metric | Review Trigger |
 |----------------|----------------|
-| `internal/harnesses/claude-tui/` exists as a sibling package with no imports of `internal/harnesses/claude` (and vice versa) | A code change makes `claude-tui` import `claude` or vice versa |
-| `internal/harnesses/anthropic/` exists and is the only shared seam | A shared helper appears in either harness package |
-| `claude-tui` registry entry has empty `BaseArgs`, empty `PermissionArgs`, and empty `ModelFlag`/`ReasoningFlag`/`WorkDirFlag` | A registry change adds any of those for `claude-tui` |
-| `claude-tui` runner uses `internal/pty/session` exclusively (no `os/exec` invocations of `claude`) | A code change introduces `os/exec` in the `claude-tui` runner hot path |
-| Environment passed to the `claude-tui` PTY session is exactly the documented allowlist; cassette manifests record it | A recording uses an env outside the allowlist or sets a Fizeau-introduced `CLAUDE_*`/`ANTHROPIC_*` variable |
-| `primary-harness-capability-baseline.md` shows a separate `claude-tui` row with independent per-capability status; known-blocker rows (`unrestricted`, `SetReasoning`) are annotated | A baseline change collapses both identities into one row or hides a known blocker |
-| Live record-mode cassettes for `claude-tui` capability rows live under `internal/harnesses/claude-tui/testdata/` and replay under default CI | A `pass` capability cell cites only `claude` evidence or only synthetic fixtures |
-| Both `claude` and `claude-tui` share the same `ClaudeQuotaSnapshot` durable cache under the documented single-account assumption | A change adds a second per-identity quota cache or runs a redundant probe |
-| Benchmark suite includes a `claude-tui` lane covering at least one long-turn scenario | Auto-routing promotion is proposed without a benchmark delta vs. `claude` |
-| `AutoRoutingEligible=true` for `claude-tui` is set only by an explicit follow-up spec change citing live evidence and benchmark deltas | `claude-tui` becomes auto-routing eligible without a documented promotion decision |
+| Structural import checks keep `claude-tui` and `claude` as sibling packages with no cross-imports; shared Anthropic code is neutral and exposes no harness-owned concrete snapshot | Either runner imports the other, or service code consumes a runner-specific quota/account type |
+| Every accepted `claude-tui` Execute/Continue or live probe acquires one lifecycle lease whose durable birth-identity record exists before the launch gate releases Claude | Claude or a probe subprocess can start before ownership registration, or one accepted invocation reuses another invocation's live boundary |
+| Unix fixtures prove dedicated group/session containment plus caller-control-channel liveness; Windows fixtures prove non-inheritable kill-on-job-close containment; unsupported platforms reject before launch | A supported platform launches without a proved containment boundary |
+| Normal completion, harness failure, timeout, and caller-signalled cancellation fixtures with a stubborn grandchild emit no public terminal event until cleanup succeeds or `HarnessCleanupTimeout` produces exactly one `cleanup_failed` terminal fact with the primary tuple | A terminal event races ahead of cleanup, cleanup uses the cancelled request context, or a cleanup failure loses the primary tuple |
+| A separate-process caller-death fixture proves cleanup begins through supervisor liveness signaling and accepts best-effort persistence without requiring live terminal delivery | Caller death relies only on the Execute context or direct-child parent-death behavior |
+| Recovery fixtures persist process-birth identities, refuse a reused PID, continue after per-invocation `cleanup_failed`, and never claim an escaped identity was reaped | Recovery scans by process name, trusts a bare PID/PGID, or startup recovery replaces current-invocation cleanup |
+| Static and behavioral tests prove no package-global or service-global live Claude pool, daemon, detached PTY, or `/clear`-based cross-invocation reuse exists | A later invocation can observe or acquire a live process created for an earlier invocation |
+| A non-draining caller that cancels its context still triggers cleanup and stream closure without consumer receive progress controlling lifecycle; silent non-consumption alone is never described as observable abandonment | Runner cleanup waits for channel reads or attempts to infer abandonment from absent reads |
+| `claude-tui` quota/account behavior conforms to CONTRACT-004 and shares account-scoped durable evidence only through the neutral Anthropic seam | `claude-tui` reads a `claude` concrete snapshot/cache helper or a shared quota probe escapes lifecycle containment |
+| Execute cassettes prove the hook/transcript seam; TUI-only probe cassettes prove frame-derived parsing; the environment allowlist and invocation arguments are recorded | Normal final text depends on rendered TUI scraping, or a recording adds batch flags or Fizeau-authored identity variables |
+| The capability baseline keeps an independent `claude-tui` row and every current `pass` cites accepted live evidence plus default-CI replay | A cell inherits `claude` evidence or relies only on synthetic fixtures |
+| Benchmarks report startup, request, parsing, and teardown deltas for short, long, cancellation, and cleanup scenarios | Auto-routing promotion is proposed without lifecycle conformance and measured deltas against `claude` |
+| `AutoRoutingEligible=true` is set only by an explicit follow-up spec change citing current capability, billing, lifecycle, and benchmark evidence | Eligibility changes through implementation drift or historical Gate-E prose alone |
 
 ## Concern Impact
 
 - **Resolves subscription-pricing access for Claude prompt execution**:
   Establishes a stable TUI-driven path so routed Claude traffic lands on
   subscribed capacity rather than per-token API pricing.
-- **Supports ADR-002**: Extends direct PTY ownership from the quota probe
-  into normal prompt execution without weakening the library boundary.
+- **Uses ADR-002 transport**: Extends the direct PTY transport from the quota
+  probe into normal prompt execution while leaving process-tree ownership with
+  `internal/processlifecycle`.
 - **Supports ADR-011**: Lets cost-based routing model subscription-billed
   and API-billed Claude as distinct supply pools.
+- **Aligns with CONTRACT-003 lifecycle intent**: Keeps the public terminal fact
+  behind per-invocation containment cleanup and preserves caller-death and
+  stale-recovery obligations without introducing global process state.
 - **Supports primary-harness capability baseline**: Adds a clean second
   primary identity for Claude rather than blurring evidence across transport
   modes.
@@ -567,6 +678,9 @@ without TUI-driven traffic, this ADR is open to revision.
 - [ADR-002 PTY Cassette Transport for Harness Golden Masters](./ADR-002-pty-cassette-transport.md)
 - [ADR-004 Terminal Harness Build-vs-Buy Boundary](./ADR-004-terminal-harness-build-vs-buy.md)
 - [ADR-011 Cost-Based Routing With Quota Pools](./ADR-011-cost-based-routing-with-quota-pools.md)
+- [ADR-014 Universal Harness Interface](./ADR-014-universal-harness-interface.md)
+- [CONTRACT-003 FizeauService Service Interface](../contracts/CONTRACT-003-fizeau-service.md)
+- [CONTRACT-004 Harness Implementation Contract](../contracts/CONTRACT-004-harness-implementation.md)
 - [Primary Harness Capability Baseline](../primary-harness-capability-baseline.md)
 - [Harness Golden-Master Integration](../harness-golden-integration.md)
 - [Implementation plan: claude-tui fork](../plan-2026-05-14-claude-tui-fork.md)
@@ -577,6 +691,9 @@ without TUI-driven traffic, this ADR is open to revision.
 - `internal/harnesses/claude/quota_pty.go` — existing direct-PTY `/usage` probe
 - `internal/harnesses/ptyquota/probe.go` — shared PTY probe scaffold
 - `internal/pty/session`, `internal/pty/terminal`, `internal/pty/cassette` — direct PTY library
+- `internal/processlifecycle` — required shared lifecycle-supervisor boundary;
+  this path names the design seam and does not assert current implementation
+  status
 
 ## Review Checklist
 

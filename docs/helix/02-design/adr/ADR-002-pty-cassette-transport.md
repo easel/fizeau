@@ -6,12 +6,12 @@ ddx:
     - helix.arch
     - CONTRACT-003
   review:
-    self_hash: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+    self_hash: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
     deps:
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
       helix.arch: 344acca10c549dbb281ccdc7de6edcf67f61f12f530f74f7654ec67ccafb0a9b
       helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # ADR-002: PTY Cassette Transport for Harness Golden Masters
 
@@ -439,6 +439,109 @@ never normalizes or rewrites the evidence.
 | Accepted cassettes contain manifest, input, output, frames, service events, final metadata, quota data when applicable, and scrub report | A cassette lacks any required version-1 artifact |
 | Record mode refuses missing auth/quota/binary cases before writing accepted evidence | CI or local record mode creates a passing cassette for an unauthenticated harness |
 | Inspection cannot alter the live PTY or recorded files | Viewer writes to stdin, resizes the authoritative PTY, or rewrites cassette artifacts |
+
+## Amendment — 2026-07-14: Shared Wrapped-Process Lifecycle
+
+**Status:** Accepted. This amendment narrows the process-ownership language in
+this ADR; it does not change the accepted direct-PTY, terminal-model, cassette,
+or tmux decisions.
+
+The phrases “direct PTY lifecycle” and “PTY session supervision” in the
+accepted text mean ownership of PTY descriptors, terminal state, and terminal
+I/O projection. They do not make `internal/pty/session` the owner of generic
+subprocess containment. Every wrapped harness invocation, whether it uses a PTY
+or harness-native batch pipes, uses the same neutral process-lifecycle layer:
+`internal/processlifecycle`.
+
+| Layer | Owns | Must Not Own |
+|-------|------|--------------|
+| `internal/processlifecycle` | Per-invocation supervisor, launch gate, platform containment, caller-liveness control channel, durable recovery record, graceful/forceful cleanup, boundary-empty verification, reaping, and cleanup-deadline result | PTY descriptors, ANSI/VT rendering, harness parsing, cassette schema, service-event projection |
+| `internal/pty/session` | PTY allocation, rows/columns, resize, terminal modes, raw input/output, descriptor close, and projection of child exit observed through the PTY | Process-tree ownership, cleanup policy, caller-death policy, durable recovery, Job Object policy |
+| Harness batch adapter | Pipe attachment and harness-native stream parsing | A separate process-group, Job Object, stale-reaper, or cleanup implementation |
+| `internal/pty/cassette` | Recorded terminal input/output, frames, lifecycle observations, and service-event evidence | Proof that an OS containment boundary held or that every live descendant was reaped |
+
+### Supervisor, control channel, and launch gate
+
+Each accepted wrapped invocation gets one trusted
+`internal/processlifecycle` supervisor process (or platform-equivalent
+supervisor) and one containment lease. PTY and batch launchers supply their I/O
+attachment requirements to that supervisor; neither launcher starts the
+harness independently.
+
+The supervisor establishes a private control channel before launch. The
+Fizeau side owns the liveness end. An explicit cleanup request, channel closure,
+or EOF caused by caller death tells the supervisor to stop the containment
+boundary. Platform parent-death signaling is additive defense where available;
+it does not replace the control channel or durable recovery record.
+
+Untrusted harness code cannot run until the launch gate completes:
+
+1. Allocate the invocation identity, supervisor, control channel, and recovery
+   record in a non-runnable `launching` state.
+2. Create the platform containment boundary and start the direct child behind a
+   gate that prevents normal harness execution.
+3. Verify boundary membership and durably record the owner identity, process
+   start identity, platform boundary identity, supervisor identity, and cleanup
+   state.
+4. Release the gate. If any earlier step fails, terminate and reap the gated
+   child and reject the spawn; no unowned harness code may continue.
+
+On Unix-like systems the trusted supervisor leads a dedicated process group or
+session. It retains the group and process-birth identities and observes the
+control channel. A parent-death signal is used when the platform provides one.
+On Windows the
+platform supervisor creates the direct child suspended, assigns it to a
+dedicated non-inheritable Job Object configured with kill-on-job-close,
+persists the owned identity, and only then resumes it. Failure to assign or
+persist terminates the suspended child.
+Other platforms provide an equivalent pre-execution boundary or report wrapped
+harness execution unsupported.
+
+The recovery record is not a PID file. It carries enough identity to reject PID
+reuse and resume cleanup safely: invocation/session ID, owner PID plus process
+start identity, supervisor/control-channel identity, platform boundary
+identity, direct-child identity, lifecycle state, cleanup deadline and attempt
+timestamps, and any observed escape or indeterminate-membership evidence. It is
+removed only after the boundary is proven empty. A later service startup may
+use it for stale recovery under CONTRACT-003.
+
+Normal completion, harness failure, timeout, context cancellation,
+caller-signalled stream abandonment, and caller death all enter this one
+cleanup state machine. Terminal delivery waits for either a proven-empty
+boundary or the CONTRACT-003 cleanup deadline. A missed deadline or containment
+escape produces the contract's cleanup-failure tuple while recovery ownership
+continues.
+
+`HarnessCleanupTimeout` is that current-invocation deadline.
+`StaleHarnessReaperGrace` controls only when a later service startup may adopt
+an old non-terminal lifecycle record. The stale-reaper grace period never
+postpones current-invocation cleanup, terminalization, or record retention.
+
+### Evidence boundary
+
+Cassettes prove deterministic terminal projection, parser behavior, lifecycle
+event ordering, and terminal-result mapping. They cannot prove kernel process
+group membership, Job Object assignment, caller-death behavior, containment
+escape handling, or the absence of a live descendant after cleanup. Those
+claims require live, platform-specific subprocess tests whose fixture starts at
+least one grandchild. Caller-death tests run Fizeau in a separate process;
+cleanup-deadline and escape tests observe the actual containment boundary.
+
+| Required live evidence | Failure condition |
+|------------------------|-------------------|
+| PTY and batch fixtures use the same lifecycle supervisor and cleanup state machine | Either transport owns a private process-tree cleanup path |
+| Unix cancellation, timeout, normal completion, and caller-death fixtures reap a live grandchild in the dedicated boundary | Only the direct child is observed, or a cassette is cited as containment proof |
+| Windows fixtures prove suspended creation, Job Object assignment before resume, kill-on-job-close, and grandchild cleanup | The child executes before Job Object membership is established |
+| Cleanup-deadline fixtures emit one cleanup-failure result, retain recovery ownership, and allow later reaping | Terminal delivery waits forever or the recovery record is deleted while membership is non-empty or indeterminate |
+| Escape fixtures reject launch or preserve unresolved identity without claiming reaping | Evidence reports an escaped descendant as successfully contained |
+
+The principal lifecycle risks are shared across PTY and batch execution:
+launch-before-containment races, control-channel loss, PID reuse during
+recovery, descendants escaping the boundary, and platform-specific cleanup
+drift. The unified supervisor, gated launch, start-identity-bearing recovery
+record, live grandchild fixtures, and common conformance suite are the required
+mitigations. Implementation gaps against this desired design belong in beads;
+they do not weaken the decision recorded here.
 
 ## Concern Impact
 

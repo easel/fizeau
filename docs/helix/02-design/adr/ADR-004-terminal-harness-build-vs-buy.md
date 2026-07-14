@@ -6,12 +6,12 @@ ddx:
     - ADR-003
     - CONTRACT-003
   review:
-    self_hash: e92b61b8d9f8d36b58d5189bd8c5ef6264597fdf6d23cd2205195177fd2e2984
+    self_hash: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
     deps:
-      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
-      ADR-003: d86a3efe43809bfb4aa55f830affa8621d10496744266f9e1fbc245d4b429749
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
-    reviewed_at: "2026-07-14T05:16:22Z"
+      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      ADR-003: e92a82cb3130952d3800c39674112f0ddeda09ede3c1f3a191580ce9d9f85b64
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # ADR-004: Terminal Harness Build-vs-Buy Boundary
 
@@ -179,6 +179,85 @@ working for DDX.
 | PTY code wraps adopted PTY/emulator dependencies behind package interfaces | Raw ANSI parsing or platform PTY code appears without a rejection rationale |
 | Cassette design reuses existing recording concepts where possible and explains every DDX-specific extension | New recording schema duplicates asciicast without service-event justification |
 | Project split is reconsidered after one working Claude/Codex cassette and before any public API promise | `internal/pty` grows into a reusable library with no extraction decision |
+
+## Amendment — 2026-07-14: Containment Is Not a PTY Primitive
+
+**Status:** Accepted. This amendment corrects the buy/build boundary for
+wrapped-process ownership while preserving the selected `creack/pty`, terminal
+emulator, cassette, and replay choices.
+
+`creack/pty` is a PTY primitive. It can allocate a pseudoterminal, attach a
+command, resize the terminal, and expose terminal I/O. Its `Start`/`StartWithSize`
+helpers do not, by themselves, satisfy CONTRACT-003 caller-death handling,
+durable recovery, service-owned cleanup deadlines, descendant containment, or
+Windows Job Object assignment. The earlier “PTY lifecycle” row is therefore
+read as a decision to buy PTY allocation and descriptor mechanics, not as a
+decision to delegate Fizeau's process-ownership policy to that dependency.
+
+Fizeau builds one small neutral lifecycle orchestrator at
+`internal/processlifecycle` and consumes it from both PTY and batch harness
+paths. This is DDX-specific orchestration around platform containment, not a
+terminal emulator or multiplexer.
+
+| Capability | Buy / Build | Boundary |
+|------------|-------------|----------|
+| PTY allocation, sizing, resize, terminal descriptor I/O | Buy | Wrap `creack/pty` or an equivalent maintained primitive under `internal/pty/session`. |
+| ANSI/VT screen model | Buy | Wrap the selected maintained emulator under `internal/pty/terminal`. |
+| Expect-style input and terminal projections | Build narrow glue | Keep terminal-only behavior above the PTY primitive and below harness parsing. |
+| Per-invocation supervisor and caller-liveness control channel | Build narrow glue | `internal/processlifecycle`; transport-neutral and used by PTY and batch launches. |
+| Pre-execution containment launch gate | Build platform adapters | Dedicated Unix process group/session; suspended process plus kill-on-job-close Job Object on Windows; unsupported elsewhere without an equivalent boundary. |
+| Durable recovery record and stale recovery | Build narrow glue | `internal/processlifecycle`; persist start identities and boundary state, never PID-only ownership. |
+| Graceful/forceful cleanup, deadline enforcement, boundary-empty verification, and reaping | Build policy once | `internal/processlifecycle`; return a typed cleanup result for service terminalization. |
+| Cassette schema, replay, scrub policy, and test assertions | Build DDX evidence layer | `internal/pty/cassette` and test support; never treated as OS-containment proof. |
+
+The supervisor/control-channel design is part of the build boundary. The
+service creates a trusted per-invocation supervisor process (or
+platform-equivalent supervisor) and liveness channel before the harness can
+run. The supervisor owns the containment lease after explicit completion,
+cancellation, timeout, stream abandonment, or control-channel EOF. It
+continues cleanup under a service-owned context and retains a durable recovery
+record until the boundary is proven empty. Losing the caller cannot silently
+convert the invocation to an unowned child tree.
+
+The service bounds current-invocation cleanup with `HarnessCleanupTimeout`.
+`StaleHarnessReaperGrace` applies only when a later startup considers adopting
+an old non-terminal recovery record; it is not an alternate cleanup timeout or
+a reason to defer terminalization.
+
+The launch gate is also part of the build boundary. Boundary identity and a
+recoverable ownership record are established before normal harness execution.
+On Windows the process is created suspended, assigned to the dedicated Job
+Object, recorded, and resumed in that order. A library that cannot expose this
+ordering may still serve as the PTY primitive, but it cannot serve as the
+Windows lifecycle launcher.
+
+### Unified lifecycle validation and risks
+
+Build-vs-buy approval for a PTY dependency does not approve containment.
+Containment is accepted only through live platform conformance:
+
+- the same supervisor API launches PTY and batch fixtures;
+- Unix and Windows fixtures spawn a live grandchild and prove normal,
+  cancellation, timeout, cleanup-deadline, and caller-death behavior;
+- the Windows fixture proves Job Object assignment before resume and
+  kill-on-job-close;
+- a separate-process caller-death fixture proves control-channel EOF reaches
+  the supervisor;
+- stale recovery rejects PID reuse by checking process start identity and
+  retains records for non-empty, escaped, or indeterminate boundaries;
+- cassette replay validates event/result projection only and is never cited as
+  proof that descendants were contained or reaped.
+
+The unified risks are launch races, a supervisor dying before ownership is
+durable, control-channel breakage, PID reuse, boundary escape, cleanup-deadline
+overrun, and Unix/Windows behavioral drift. The mandatory mitigations are a
+pre-execution gate, durable start identities, kill-on-channel-close semantics,
+one cleanup state machine, live grandchild tests on each supported platform,
+and recovery that persists beyond terminal delivery when cleanup fails.
+
+This amendment specifies the desired boundary. Missing adapters, recovery
+mechanics, or conformance cases are implementation gaps to track in beads, not
+reasons to weaken the ADR or reinterpret `creack/pty` as a containment system.
 
 ## References
 

@@ -9,20 +9,27 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 911d38f39ef1e377b40a3e1760e58d60eca7a5b6d147338801404a55986c92e7
+    self_hash: df628e6bb4c8918ee13cc858720f600b6585678b0d9b441a2f18ff5ba25cd709
     deps:
-      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
-      CONTRACT-004: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
-    reviewed_at: "2026-07-14T05:16:22Z"
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+      CONTRACT-004: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # ADR-014: Universal Harness Interface
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
 | 2026-05-14 | Accepted | Fizeau maintainers | CONTRACT-004, ADR-011, ADR-012, ADR-013 (withdrawn) | High |
+
+> **Implementation reference (2026-05-14):** The context, inventory counts,
+> and “today” statements below describe the pre-CONTRACT-004 implementation
+> that motivated this decision. They are retained as decision history, not as
+> claims about the current registry or import graph. The dated amendments after
+> the original review checklist state the active `claude-tui`, interface, and
+> lifecycle design.
 
 ## Context
 
@@ -290,3 +297,130 @@ References in the original ADR-014 decision record to ADR-013 as "withdrawn",
 They are not current status or a remaining gate. The current relationship is:
 ADR-014 supplies the universal harness boundary and accepted ADR-013 consumes
 that boundary for the `claude-tui` implementation.
+
+## Amendment — 2026-07-14: Universal Live-Process Lifecycle Ownership
+
+### Authority and historical scope
+
+CONTRACT-003 v0.15 is authoritative for accepted-session lifecycle, typed
+terminal facts, cleanup precedence, caller death, and recovery. This amendment
+extends ADR-014's universal harness boundary so every live subprocess-capable
+harness path can satisfy that contract.
+
+The original 2026-05-14 inventory, its references to five harnesses, and its
+description of ADR-013 or `claude-tui` as withdrawn or future remain historical
+implementation reference. The current built-in subprocess harness registry has
+six identities: `claude`, `claude-tui`, `codex`, `gemini`, `opencode`, and
+`pi`. This amendment does not erase the earlier context or reconsider the
+accepted `claude-tui` identity.
+
+Where ADR-013's earlier design-direction notes describe package- or
+service-scoped warm live-session pools, `/clear` reuse across Execute calls, or
+live-process recovery based only on parent/PID inspection, those notes are
+superseded by this amendment. They remain useful history, not current design.
+ADR-013 continues to govern the separate `claude-tui` identity and its TUI
+transport; CONTRACT-003, CONTRACT-004, and this amendment govern its process
+lifecycle.
+
+### Decision
+
+Fizeau will use one neutral internal owner, `internal/processlifecycle`, for
+every production path that can start a live child process. Harness packages
+continue to own argv, environment, protocol parsing, and harness-native result
+data. They do not independently own containment, cleanup contexts, stale
+recovery identity, or public terminalization.
+
+The lifecycle owner is mandatory for normal `Harness.Execute` calls, PTY
+sessions, quota/account/model-discovery probes, health or auxiliary commands,
+and adapter helpers. Each invocation or live probe receives its own lease and
+containment boundary. Immutable configuration and durable cache evidence may be
+shared. Live subprocesses, PTYs, supervisors, and containment leases may not be
+pooled or reused across invocations, including multiple invocations in the same
+Fizeau process.
+
+On Unix-like systems, the lifecycle owner starts a lifecycle supervisor as
+Fizeau's direct child. The supervisor leads a dedicated process group or
+session and starts the harness as a contained descendant only after a
+service-owned control channel and the strongest available parent-death
+mechanism are active. Control-channel close or EOF begins group/session
+shutdown; cleanup escalates and reaps until the boundary is empty or the
+cleanup deadline expires.
+
+On Windows, the lifecycle owner creates the child suspended, assigns it to a
+dedicated kill-on-job-close Job Object, and resumes the primary thread only
+after assignment succeeds. Assignment failure terminates and reaps the
+suspended child. A platform without an equivalent containment implementation
+reports live harness execution unsupported before creating a child.
+
+The service owns the one public terminal fact. A harness implementation final
+is primary execution evidence only. The service withholds caller-alive terminal
+delivery until containment cleanup succeeds or
+`ServiceOptions.HarnessCleanupTimeout` expires, then applies CONTRACT-003's
+cleanup-failure precedence. Request, idle, provider, tool, and probe timeouts
+may initiate cleanup; none shortens or replaces the service-owned cleanup
+deadline. Request-context cancellation likewise initiates cleanup but does not
+cancel its service-owned context.
+
+Lifecycle recovery records identify a process by containment identity plus an
+OS-derived process-birth/start token, not by PID, process name, or command line
+alone. Recovery proves that identity before signalling. A PID-reuse mismatch is
+retained as unresolved evidence and is not killed as if it were the recorded
+process.
+
+`ServiceOptions.HarnessCleanupTimeout` bounds current-invocation cleanup and
+caller-visible terminal waiting. `ServiceOptions.StaleHarnessReaperGrace`
+controls only when a later startup may adopt an old non-terminal lifecycle
+record. It never postpones cleanup for the invocation that created the record
+and never authorizes deletion of unresolved ownership evidence.
+
+The model-discovery interface description is also corrected to match the
+universal contract:
+
+- `ModelDiscoveryHarness.DefaultModelSnapshot()` returns
+  `(ModelDiscoverySnapshot, error)` and reports missing evidence rather than a
+  fabricated static success snapshot.
+- `ContextModelDiscoveryHarness` embeds `ModelDiscoveryHarness` and adds
+  `DefaultModelSnapshotWithContext(context.Context) (ModelDiscoverySnapshot,
+  error)` for cancellation-aware live probes. Service refreshers prefer this
+  extension when present.
+
+### Alternatives considered
+
+| Option | Evaluation |
+|--------|------------|
+| Harness-owned cleanup implementations | Rejected: repeats the per-harness contract drift ADR-014 exists to remove and cannot provide one caller-death or recovery guarantee. |
+| Cross-invocation warm live-session pools | Rejected: a final event would no longer delimit ownership, cleanup, or continuation; caller death could strand shared state whose owner cannot be attributed to one invocation. |
+| Request-context cleanup | Rejected: cancellation would cancel the only context able to reap the process tree. |
+| PID/name-based startup reaping | Rejected: PID reuse can target an unrelated process and process-name matching is not identity. |
+| Neutral per-invocation lifecycle leases (selected) | Selected: one containment and recovery contract covers all six harnesses and all auxiliary live probes while preserving harness protocol independence. |
+
+### Consequences
+
+| Type | Impact |
+|------|--------|
+| Positive | Unix, Windows, PTY, batch, and auxiliary probe paths share one containment and caller-death contract. |
+| Positive | Exactly-one terminalization remains service-owned and can deterministically apply cleanup-failure precedence. |
+| Positive | Process-birth identity prevents stale recovery from signalling a reused PID. |
+| Negative | `claude-tui` and any future interactive harness pay per-invocation process startup cost; provider-native continuation may preserve conversation state, but a live TUI process is not the continuation boundary. |
+| Negative | Platform launch code must establish containment before execution, including suspended-process setup on Windows. |
+| Neutral | ADR-014's interface encapsulation decision is unchanged; lifecycle ownership is an additional universal seam. |
+
+### Validation additions
+
+- Static enforcement rejects production child starts that bypass
+  `internal/processlifecycle`.
+- Unix subprocess tests prove control-channel/parent-death cleanup for a child
+  and grandchild. Windows tests prove Job Object assignment occurs before
+  resume and kill-on-close reaches descendants.
+- Unsupported-platform tests prove failure occurs before spawn.
+- Normal completion, harness failure, timeout, cancellation,
+  caller-signalled abandonment, and caller death all exercise containment
+  cleanup. Caller-alive terminal delivery occurs only after cleanup success or
+  `HarnessCleanupTimeout`.
+- A separate-process caller-death fixture proves the supervisor reacts when the
+  caller cannot emit a final event.
+- PID-reuse fixtures prove recovery checks process-birth identity before
+  signalling.
+- Structural tests reject cross-invocation live pools and verify the six
+  built-in subprocess harnesses use the corrected discovery signatures and
+  CONTRACT-004 lifecycle seam.

@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 7a668ef5cf2717269a6ad61ba45f074afddb80d36bb491e48cfe8f94349b1805
+    self_hash: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
     deps:
       ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:45:09Z"
+    reviewed_at: "2026-07-14T07:51:22Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -264,6 +264,19 @@ fresh failed health evidence can still make that provider ineligible with a
 typed dispatchability reason; unknown local health is a score penalty, not a
 hard gate when alternatives exist.
 
+### Caller-signalled cancellation and stream abandonment
+
+The caller signals stream abandonment by cancelling the context passed to
+`Execute` or `Continue`. Silently ceasing to receive from the returned Go
+channel is not observable and is not a cancellation signal. A caller that
+stops draining an event stream MUST cancel its context.
+
+Fizeau MUST NOT make cleanup or terminalization depend on consumer receive
+progress. It MAY coalesce or drop non-terminal events when necessary to retain
+capacity for the terminal fact and stream closure. Context cancellation begins
+wrapped-harness cleanup, but cleanup runs under a service-owned context bounded
+by `HarnessCleanupTimeout`, not under the cancelled request context.
+
 ## Session Continuation
 
 Callers request continuation without naming a concrete harness, provider-native
@@ -414,9 +427,11 @@ event containing that fact before closing the stream. Persistence is
 best-effort under the existing session-log reliability policy. After caller
 death, Fizeau still MUST terminalize the session and MUST attempt to persist the
 terminal fact when its cleanup supervisor or recovery path can write the log,
-but there may be neither a live event nor a durable record. Delivery and
-persistence failures do not create a second terminalization. Absence of an
-event or record after caller death MUST NOT be interpreted as success.
+but there may be neither a live event nor a durable terminal or session-log
+record. The pre-spawn lifecycle ownership record remains mandatory recovery
+evidence; it is not a successful terminal fact. Delivery and persistence
+failures do not create a second terminalization. Absence of a terminal event or
+terminal record after caller death MUST NOT be interpreted as success.
 
 The complete session-stage vocabulary is routing, spawn, harness, provider,
 tool-loop, timeout, cancellation, and cleanup. The Go/JSON value for tool-loop
@@ -482,14 +497,23 @@ DDx attempts; it is never sufficient proof that a bead is complete.
 Fizeau MUST launch every wrapped harness tree inside a platform containment
 boundary established before untrusted harness code runs:
 
-- On Unix-like systems, the direct child MUST lead a dedicated process group or
-  session. Fizeau MUST retain the group identity and MUST couple liveness with
-  a parent-death signal or supervisor control channel when the platform offers
-  one.
-- On Windows, the direct child and descendants MUST be assigned to a dedicated
-  job object configured for kill-on-job-close before normal execution begins.
+- On Unix-like systems, a trusted Fizeau supervisor MUST lead a dedicated
+  process group or session and release untrusted harness code only after the
+  ownership record and launch gate are established. Fizeau MUST retain the
+  group and process-birth identities and couple caller liveness through a
+  supervisor control channel. A direct-child `Pdeathsig` MAY provide secondary
+  protection, but it is not sufficient descendant containment.
+- On Windows, the direct child and descendants MUST be assigned to a dedicated,
+  non-inheritable job object configured for kill-on-job-close before the child
+  resumes normal execution.
 - Other platforms MUST provide an equivalent boundary or report wrapped
-  harness execution unsupported.
+  harness execution unsupported before untrusted code runs.
+
+The same boundary applies to batch runners, PTY sessions, quota and account
+probes, model discovery, and every other live harness subprocess. No accepted
+invocation may return a live harness process to a package-global or
+service-global pool. Shared durable caches are allowed; shared live process
+pools across accepted invocations are not.
 
 Fizeau ownership covers the direct child, PTY helpers, adapter supervisors, and
 all descendants that remain in the established containment boundary. A harness
@@ -498,14 +522,17 @@ otherwise escape that boundary. An observed or credibly detected escape is a
 harness-contract violation and produces `failed / cleanup_failed / cleanup`.
 Fizeau does not promise control of an intentionally escaped descendant; the
 cleanup guarantee applies to processes inside the boundary. Recovery evidence
-MUST retain enough identity to diagnose an escape rather than claiming the
-escaped process was reaped.
+MUST retain owner and containment process-birth identities, not only a PID or
+PGID, so recovery refuses reused identities and diagnoses an escape rather than
+claiming the escaped process was reaped.
 
-Ownership starts before harness execution and continues after terminalization
-when recovery is pending. A harness returning a final payload does not transfer
-ownership to the caller. On normal completion, failure, timeout, context
-cancellation, stream abandonment, or caller death, Fizeau MUST immediately
-begin cleanup under a service-owned context that survives request cancellation:
+Ownership starts when Fizeau durably registers the lifecycle boundary before
+the launch gate releases untrusted code, and it continues after terminalization
+when recovery is pending. Registration failure prevents harness launch. A
+harness returning a final payload does not transfer ownership to the caller.
+On normal completion, failure, timeout, caller-signalled context cancellation,
+or caller death, Fizeau MUST immediately begin cleanup under a service-owned
+context that survives request cancellation:
 
 1. Signal the containment boundary for graceful termination.
 2. Escalate to the platform's forceful containment termination before
@@ -514,7 +541,8 @@ begin cleanup under a service-owned context that survives request cancellation:
    Fizeau or its supervisor, and wait for the boundary to become empty until the
    deadline.
 4. If the boundary is empty by the deadline, terminalize using the primary
-   execution tuple. If any contained process remains or containment state is
+   execution tuple and remove the lifecycle record only after emptiness is
+   confirmed. If any contained process remains or containment state is
    indeterminate, terminalize as `failed / cleanup_failed / cleanup`, preserve
    the primary tuple, retain the recovery record, and close the caller-alive
    stream after its one terminal event.
@@ -530,8 +558,9 @@ Caller death MUST trigger the same containment cleanup through the strongest
 liveness mechanism available. The cleanup supervisor or recovery path MUST make
 a best-effort attempt to persist `cancelled / caller_died / cancellation`, or
 `failed / cleanup_failed / cleanup` when the cleanup deadline is missed. The
-caller is gone, so neither a live terminal event nor a durable record is
-guaranteed; cleanup and recovery obligations remain.
+caller is gone, so neither a live terminal event nor a durable terminal or
+session-log record is guaranteed. The lifecycle ownership record remains until
+the boundary is confirmed empty; cleanup and recovery obligations remain.
 
 ## Final Measurement Projection
 
@@ -923,7 +952,7 @@ Compatibility rules after v0.15 are:
 | Internal service failure outside cleanup | `failed / internal_error / <active-stage>` | Caller policy | Preserve the stage and diagnostics; never invent an `internal` stage. |
 | Cleanup misses `HarnessCleanupTimeout` after another result | `failed / cleanup_failed / cleanup` plus required primary tuple | No immediate retry | Terminal delivery proceeds after the deadline while the recovery reaper retains ownership. |
 | Harness escapes containment | `failed / cleanup_failed / cleanup` | No | Disable or fix the harness; report escaped identity as unresolved rather than reaped. |
-| Caller process dies | Required terminalization; best-effort persistence; live event unavailable | Outer orchestrator policy | Containment cleanup and recovery continue; absence of a terminal record is never success evidence. |
+| Caller process dies | Required terminalization; best-effort terminal persistence; live event unavailable | Outer orchestrator policy | Containment cleanup and recovery continue from the mandatory lifecycle ownership record; absence of a terminal record is never success evidence. |
 
 ## Examples
 
@@ -973,7 +1002,8 @@ that prove:
 2. Every accepted session creates exactly one immutable terminalization. A
    caller-alive session delivers that fact in exactly one terminal event before
    channel closure; a caller-death session may deliver no event and persist no
-   record without creating a second terminalization or implying success.
+   terminal record without creating a second terminalization or implying
+   success. Its lifecycle ownership record remains recovery evidence.
 3. No caller-alive terminal event is emitted before contained-process cleanup
    succeeds or `HarnessCleanupTimeout` expires. A missed deadline emits
    `cleanup_failed` once and leaves a recovery record without waiting forever.
@@ -983,7 +1013,7 @@ that prove:
 5. A caller-death fixture uses a separate caller process and proves the
    containment boundary receives cleanup, accepts either successful cleanup or
    `cleanup_failed` at `HarnessCleanupTimeout`, and permits neither a live event
-   nor a durable record to be required after the caller is gone.
+   nor a durable terminal record to be required after the caller is gone.
 6. Supported continuation reports `resumed`; unsupported `require_resume`
    returns `ErrContinuationUnsupported` without spawning; unsupported
    `prefer_resume` and explicit `fresh_session` create a child session reporting
@@ -1004,6 +1034,15 @@ that prove:
 12. A fixture that attempts containment escape is rejected or terminalizes as
     `cleanup_failed`; test evidence MUST NOT claim the escaped identity was
     reaped.
+13. A caller stops receiving events and cancels its context; cleanup begins,
+    terminalization remains bounded, and no receiver-liveness heuristic is
+    required.
+14. A successful Claude-TUI invocation leaves no live PTY or Claude process
+    after its terminal event.
+15. Recovery refuses a lifecycle record whose PID, PGID, or job identity has a
+    mismatched process-birth identity.
+16. Cleanup failure or indeterminate boundary state retains its lifecycle
+    ownership record until a later recovery confirms emptiness.
 
 ## Validation Checklist
 
@@ -1013,6 +1052,8 @@ that prove:
   facts.
 - [ ] Platform containment, per-invocation cleanup timeout, recovery reaping,
   and caller-death delivery/persistence modes pass subprocess conformance tests.
+- [ ] Caller-signalled cancellation, Claude-TUI per-invocation teardown,
+  process-birth identity reuse, and lifecycle-record retention have named tests.
 - [ ] Compatibility fixtures cover legacy logs and unknown additive values.
 - [ ] The full repository test gate passes with the public conformance suite.
 - [ ] Non-normative implementation notes cannot override this contract.

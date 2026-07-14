@@ -5,10 +5,10 @@ ddx:
     - CONTRACT-003
   child_of: fizeau-67f2d585
   review:
-    self_hash: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
+    self_hash: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
     deps:
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
-    reviewed_at: "2026-07-14T05:16:22Z"
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -16,19 +16,19 @@ ddx:
 |-------|-------|
 | Status | Draft |
 | Date | 2026-05-14 |
-| Scope | Internal interface every Fizeau harness package implements; service-side consumers depend only on this contract, never on harness-specific exports. |
+| Scope | Internal interface and live-process obligations every Fizeau harness package implements; service-side consumers depend only on this contract, never on harness-specific exports. |
 | Companion | CONTRACT-003 (service-facing API); ADR-014 (decision rationale) |
 
 ## Purpose
 
 CONTRACT-003 specifies the public Fizeau service surface. It does not specify
 the internal contract that each harness implementation
-(`internal/harnesses/<name>/`) satisfies. Today that internal contract is the
-3-method `harnesses.Harness` interface plus an ad-hoc collection of
-per-harness exported symbols (~80 of them across claude, codex, gemini)
-that the service imports directly: `ClaudeQuotaSnapshot`,
-`ReadClaudeQuota`, `DecideClaudeQuotaRouting`, `CodexAuthPath`,
-`ReadAuthEvidence`, `ResolveClaudeFamilyAlias`, and so on.
+(`internal/harnesses/<name>/`) satisfies.
+
+> **Implementation reference (2026-05-14):** The original inventory found a
+> 3-method `harnesses.Harness` interface plus roughly 80 ad-hoc per-harness
+> exports across Claude, Codex, and Gemini. That inventory explains why this
+> contract was created; it is not the desired interface or current registry.
 
 This contract closes that gap. It defines the complete normative interface
 every harness implementation MUST satisfy and constrains the service to
@@ -43,6 +43,8 @@ In scope:
   implements.
 - The universal types those interfaces return.
 - Cache and refresh ownership.
+- Live subprocess containment, cleanup, and recovery obligations shared by
+  normal execution, PTY sessions, and auxiliary probes.
 - Conformance evidence requirements.
 - Projection rules from internal harness types to the CONTRACT-003
   public types (`QuotaState`, `AccountStatus`, `HarnessInfo`,
@@ -57,11 +59,14 @@ Out of scope:
 
 ## Interface Set
 
-Every harness implementation MUST implement `Harness`. It MAY additionally
+All six built-in subprocess harness implementations (`claude`, `claude-tui`,
+`codex`, `gemini`, `opencode`, and `pi`) MUST implement `Harness`. A harness
+MAY additionally
 implement any of `QuotaHarness`, `AccountHarness`, and
-`ModelDiscoveryHarness`. The service uses Go interface assertions to
-discover which optional contracts a harness satisfies and consumes them
-through the interface only.
+`ModelDiscoveryHarness`; a cancellation-aware discovery implementation MAY
+also implement `ContextModelDiscoveryHarness`. The service uses Go interface
+assertions to discover which optional contracts a harness satisfies and
+consumes them through the interface only.
 
 ```go
 package harnesses
@@ -89,7 +94,8 @@ type Harness interface {
 }
 
 // QuotaHarness is implemented by harnesses that own a subscription or
-// quota window. claude, codex, gemini implement; opencode, pi do not.
+// quota window. claude, claude-tui, codex, and gemini implement;
+// opencode and pi do not.
 type QuotaHarness interface {
     Harness
 
@@ -180,14 +186,15 @@ type AccountHarness interface {
 // ModelDiscoveryHarness is implemented by harnesses whose model surface
 // extends beyond a single Info().DefaultModel — i.e. they support family
 // aliases (sonnet, gpt, gemini) that resolve through discovery evidence.
-// All five harnesses implement this in the current registry.
+// All six built-in subprocess harnesses implement this in the current
+// registry.
 type ModelDiscoveryHarness interface {
     Harness
 
-    // DefaultModelSnapshot returns the harness's seed/fallback discovery
-    // snapshot. Used to bootstrap the catalog before the first live
-    // refresh lands. Stable for the harness; cheap.
-    DefaultModelSnapshot() ModelDiscoverySnapshot
+    // DefaultModelSnapshot returns discovery evidence. It returns
+    // ErrModelDiscoveryEvidenceMissing when evidence cannot be obtained;
+    // it MUST NOT fabricate a static success snapshot.
+    DefaultModelSnapshot() (ModelDiscoverySnapshot, error)
 
     // ResolveModelAlias maps a family-style requested model (e.g.
     // "sonnet", "gpt", "gemini") to a concrete model ID using the
@@ -206,6 +213,18 @@ type ModelDiscoveryHarness interface {
     // Empty slice is allowed for harnesses that recognize no family
     // aliases (e.g. opencode, pi).
     SupportedAliases() []string
+}
+
+// ContextModelDiscoveryHarness is the optional cancellation-aware extension
+// preferred by service-owned refreshers for live discovery probes.
+type ContextModelDiscoveryHarness interface {
+    ModelDiscoveryHarness
+
+    // DefaultModelSnapshotWithContext honors ctx through probe execution and
+    // cleanup. It MUST NOT replace ctx with context.Background. Cancellation
+    // starts cleanup; the method returns only after cleanup succeeds or the
+    // service-owned cleanup deadline is reached.
+    DefaultModelSnapshotWithContext(ctx context.Context) (ModelDiscoverySnapshot, error)
 }
 ```
 
@@ -320,6 +339,7 @@ type AccountSnapshot struct {
 // Errors are reserved for call failure.
 var (
     ErrAliasNotResolvable = errors.New("model alias not resolvable from snapshot")
+    ErrModelDiscoveryEvidenceMissing = errors.New("model discovery evidence missing")
 )
 ```
 
@@ -344,6 +364,116 @@ directly. Operator-visible cache paths SHOULD be exposed through a single
 service-level diagnostic surface (e.g. `Service.DiagnosticPaths()`) that
 calls back into each harness via a documented method, rather than the
 service importing per-harness path functions.
+
+## Live Subprocess Lifecycle
+
+CONTRACT-003 v0.15 is authoritative for accepted-session lifecycle and typed
+terminal facts. This section defines the harness-side obligations needed to
+satisfy it.
+
+### One neutral lifecycle owner
+
+`internal/processlifecycle` MUST own the platform lifecycle implementation for
+every production path that can start a live child process. This includes:
+
+- `Harness.Execute` for all six built-in subprocess harnesses;
+- PTY-backed normal execution, including `claude-tui`;
+- quota and account refresh probes;
+- model-discovery probes, including the contextual extension;
+- health checks or auxiliary commands that spawn a process; and
+- adapter, recorder, or terminal helpers that start descendants.
+
+Harness packages own argv, environment, working directory, protocol parsing,
+and harness-native final data. For an accepted service invocation,
+`internal/serviceimpl` MUST acquire the per-invocation lifecycle lease and make
+it available to the selected harness adapter before untrusted harness code can
+run. For a standalone live probe, the component that owns that probe MUST
+acquire its own distinct lease. Harness packages bind their launch plans and
+I/O attachments to the supplied lease; they MUST NOT start a production child
+through a private `os/exec`, PTY-start, shell, or helper path that bypasses it.
+Low-level platform packages MAY use `os/exec` or PTY primitives only behind
+`internal/processlifecycle`.
+
+Each accepted service invocation and each standalone live probe receives a
+distinct lease and containment boundary. A runner MAY share immutable
+configuration and durable cache state; it MUST NOT retain or reuse a live
+process, PTY, supervisor, or containment lease across invocations. Package- or
+service-scoped live session pools are forbidden. Conversation continuation
+uses a new Fizeau invocation and a new containment boundary even when the
+upstream provider resumes logical conversation state.
+
+### Platform containment before execution
+
+On Unix-like systems, `internal/processlifecycle` MUST start a lifecycle
+supervisor as Fizeau's direct child. The supervisor leads a dedicated process
+group or session and starts the harness as a contained descendant only after
+its control channel and parent-death mechanism are active. Close or EOF on the
+service control channel triggers containment shutdown. Cleanup signals the
+whole group/session, escalates before the cleanup deadline, and waits until the
+boundary is empty while reaping every process parented by Fizeau or the
+supervisor.
+
+On Windows, `internal/processlifecycle` MUST create the child suspended, create
+a dedicated Job Object with kill-on-job-close semantics, assign the suspended
+child to the Job Object, and only then resume its primary thread. If assignment
+or policy configuration fails, it MUST terminate and reap the suspended child;
+uncontained harness code MUST NOT run.
+
+On any other platform, live subprocess harness execution is supported only
+when an equivalent containment implementation exists. Support is checked
+before process creation. An unsupported platform returns a setup failure before
+spawn and creates no child, PTY, or harness event stream.
+
+### Cleanup, terminal ownership, and deadlines
+
+The harness implementation final event is evidence for the primary execution
+tuple; it is not the public terminal fact. Fizeau service orchestration owns
+classification, cleanup precedence, persistence, and creation of exactly one
+public terminal event. A harness MUST NOT publish a service terminal event or
+write a service `session.end` record directly.
+
+Normal completion, harness failure, request timeout, context cancellation,
+caller-signalled stream abandonment, and caller death all begin cleanup
+immediately. The request context controls execution and initiates cleanup, but
+MUST NOT be used as the cleanup context after cancellation. Cleanup runs under
+a service-owned context bounded by `ServiceOptions.HarnessCleanupTimeout`.
+`ServiceExecuteRequest.Timeout`, idle timeout, provider timeout, and probe
+timeouts do not shorten or replace that cleanup deadline.
+
+The service MUST withhold the caller-alive terminal event until the containment
+boundary is empty or `HarnessCleanupTimeout` expires. Cleanup success preserves
+the primary tuple. A missed deadline, indeterminate containment state, or
+detected escape produces `failed / cleanup_failed / cleanup` and preserves the
+primary tuple as required by CONTRACT-003. Missing, malformed, or duplicate
+harness final events cannot create duplicate public terminal facts.
+
+### Durable recovery identity
+
+Every lease MUST expose and persist process-birth identity sufficient to reject
+PID reuse. A recovery record includes the Fizeau session or probe identifier,
+platform containment identifier, direct-child PID, an OS-derived birth/start
+token for that exact process, and lifecycle state. PID alone, process name, and
+command-line matching are not sufficient identity.
+
+Before signalling during recovery, the reaper MUST prove that the current
+process still matches the recorded birth identity and containment boundary. A
+mismatch is retained as unresolved evidence and MUST NOT be signalled as if it
+were the recorded process. Current-invocation cleanup starts immediately;
+`StaleHarnessReaperGrace` controls only when a later startup may adopt an old
+non-terminal record.
+
+## Lifecycle Error Semantics
+
+| Condition | Harness/service outcome | Recovery expectation |
+|-----------|-------------------------|----------------------|
+| Platform has no containment implementation | `Harness.Execute` returns a setup error before spawn; for an accepted service call, the service emits `failed / spawn_failed / spawn` | Choose a supported execution path. |
+| Unix supervisor or control-channel setup fails | `Harness.Execute` returns a setup error before harness execution; the service owns the `spawn_failed` terminal fact | Reap any partially created supervisor and child. |
+| Windows Job Object assignment fails | `Harness.Execute` returns a setup error before resume; the service owns the `spawn_failed` terminal fact | Terminate and reap the suspended child. |
+| Request context is cancelled | Harness stops work; service classifies `cancelled / context_cancelled / cancellation` after cleanup | Cleanup continues under the service-owned deadline. |
+| Execution or probe timeout expires | Harness stops work; service classifies `timed_out / deadline_exceeded / timeout` after cleanup | Cleanup continues under the service-owned deadline. |
+| Containment is non-empty or indeterminate at cleanup deadline | Service classifies `failed / cleanup_failed / cleanup` and retains recovery ownership | Recovery reaper continues after terminalization. |
+| Recorded PID has a different birth identity | Do not signal it; retain unresolved recovery evidence | Require operator diagnosis or a later identity-safe recovery path. |
+| Harness final event is missing, malformed, or duplicated | Service synthesizes or retains one typed terminal fact; raw invalid finals are not forwarded as service terminals | Preserve protocol diagnostics; never emit a second terminal fact. |
 
 ## Projection to CONTRACT-003
 
@@ -389,10 +519,13 @@ Every harness implementation MUST carry, at minimum:
 
 | Capability | Evidence |
 |------------|----------|
-| `Harness` (all) | Unit tests for `Info()`, `HealthCheck()`, and an `Execute` happy path with a final event of correct shape. |
-| `QuotaHarness` (claude, codex, gemini) | Unit tests for `QuotaStatus` against a synthetic cache fixture (fresh and stale cases); unit tests for `RefreshQuota` against a recorded cassette per ADR-002; unit test asserting `QuotaFreshness` is the documented constant; conformance assertion that every emitted `Windows[].LimitID` value is a member of `SupportedLimitIDs()`. |
-| `AccountHarness` (gemini; optional for claude/codex) | Unit tests for `AccountStatus` returning each documented state (Authenticated, Unauthenticated, no evidence) with correct `Fresh` against a synthetic file fixture. |
-| `ModelDiscoveryHarness` (all five) | Unit tests for `DefaultModelSnapshot` returning a non-empty model list. Conformance assertion that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` (positive path) and returns `ErrAliasNotResolvable` for an out-of-set family (negative path). The package documentation MUST enumerate the same set returned by `SupportedAliases()` for human readers; the conformance check is programmatic against `SupportedAliases()`. Stability rule: additive aliases are safe; removing or renaming an alias goes through a deprecation cycle (same as `Windows[].LimitID`). |
+| `Harness` (all six) | Unit tests for `Info()`, `HealthCheck()`, and an `Execute` happy path with one implementation final event of correct shape. |
+| `QuotaHarness` (claude, claude-tui, codex, gemini) | Unit tests for `QuotaStatus` against a synthetic cache fixture (fresh and stale cases); unit tests for `RefreshQuota` against a recorded cassette per ADR-002; unit test asserting `QuotaFreshness` is the documented constant; conformance assertion that every emitted `Windows[].LimitID` value is a member of `SupportedLimitIDs()`. |
+| `AccountHarness` (every implementing harness) | Unit tests for `AccountStatus` returning each documented state (Authenticated, Unauthenticated, no evidence) with correct `Fresh` against a synthetic file fixture. |
+| `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
+| `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
+| Live subprocess lifecycle (every spawning path) | Platform subprocess tests cover normal completion, failure, timeout, cancellation, caller-signalled abandonment, and caller death with a grandchild in the containment boundary. Static enforcement proves production child creation routes through `internal/processlifecycle`. |
+| Recovery identity | Tests simulate PID reuse or a changed process-birth token and prove the recovery reaper does not signal the mismatched process. |
 | Projection | Service-level test asserting CONTRACT-003 JSON shape (e.g. `HarnessInfo.Quota`) is identical before and after the harness migration — pinned to a recorded fixture. |
 
 ## Invariants
@@ -418,32 +551,45 @@ by `go vet`-shaped tooling:
    map contents or internal fields of the per-harness snapshot.
    `Windows` is the authoritative structured surface for tier or
    per-window facts.
-5. **No cross-harness imports.** `claude` does not import `codex`;
-   `claude-tui` (when introduced) does not import `claude`; etc. Shared
+5. **Every live child is lifecycle-owned.** All production subprocess and PTY
+   starts, including probes and auxiliary helpers, go through
+   `internal/processlifecycle` and acquire a distinct lease before harness code
+   runs. Unsupported platforms fail before spawn.
+6. **No cross-harness imports.** `claude` does not import `codex`;
+   `claude-tui` does not import `claude`; etc. Shared
    helpers go in a neutral package (e.g.
    `internal/harnesses/anthropic/`).
-6. **Runners are stateless wrappers around harness-owned cache files.**
+7. **Runners are stateless wrappers around harness-owned cache files.**
    The `Runner` struct MAY hold immutable configuration (binary path,
    discovery cache pointer) and lock handles; it MUST NOT hold mutable
-   quota or account state that would diverge across instances. Two
+   quota or account state that would diverge across instances, and no runner,
+   package singleton, or service object may pool a live process, PTY,
+   supervisor, or lifecycle lease across accepted invocations. Two
    `&Runner{}` instances of the same harness MUST observe identical
    `QuotaStatus`/`AccountSnapshot` results for the same cache state.
    The service MAY hold a single registered instance per harness or
    construct fresh instances per call; both patterns MUST produce
    equivalent observable behavior.
-7. **`RefreshQuota` and `RefreshAccount` are single-flight per harness
+8. **`RefreshQuota` and `RefreshAccount` are single-flight per harness
    instance, mediated by the harness's on-disk cache lock (ADR-012).**
    Concurrent callers block on the lock; once the in-flight refresh
    completes, queued callers observe the new cached state. Probe
    failure surfaces in the returned status's `State` field, not as an
    error return.
-8. **Errors are reserved for call failure.** `QuotaStatus`,
+9. **Errors are reserved for call failure.** `QuotaStatus`,
    `RefreshQuota`, `AccountStatus`, and `RefreshAccount` return an
    error ONLY for context cancellation, lock acquisition failure, or
    unrecoverable IO error. Absence of evidence, missing auth, blocked
    quota, and probe failures are reported as state on a valid
    returned value. This makes consumer code uniform across success and
    failure surfaces.
+10. **The service owns terminalization.** Harness implementation finals are
+    primary evidence only. The service waits for cleanup success or deadline,
+    applies cleanup precedence, emits at most one public terminal fact, and
+    writes the service-owned terminal projection.
+11. **Recovery is identity-safe.** Lifecycle records carry containment and
+    process-birth identity. No current process is signalled from a stale PID
+    alone.
 
 ## Non-Goals
 
@@ -455,25 +601,31 @@ by `go vet`-shaped tooling:
   registry struct; they are configuration, not part of the interface.
 - Introducing a plugin loader or out-of-tree harness support. Harnesses
   remain in-tree under `internal/harnesses/`.
-- Promoting `claude-tui` to a primary harness identity. ADR-013 is
-  withdrawn pending this contract; re-proposal is a follow-up spec.
+- Defining `claude-tui` product or billing behavior. ADR-013 owns that accepted
+  harness identity; this contract applies the same lifecycle rules to it as to
+  the other five built-in subprocess harnesses.
+- Maintaining warm live harness sessions between invocations. Durable caches
+  and provider-native continuation evidence may be reused; live processes and
+  containment leases may not.
 
 ## Acceptance Criteria
 
 1. `internal/harnesses/types.go` declares `Harness`, `QuotaHarness`,
-   `AccountHarness`, and `ModelDiscoveryHarness` interfaces with the
-   signatures above.
+   `AccountHarness`, `ModelDiscoveryHarness`, and
+   `ContextModelDiscoveryHarness` interfaces with the signatures above;
+   `DefaultModelSnapshot` returns `(ModelDiscoverySnapshot, error)`.
 2. `QuotaStatus`, `AccountSnapshot`, `QuotaStateValue`,
-   `RoutingPreference`, and the three sentinel errors are declared in
+   `RoutingPreference`, `ErrAliasNotResolvable`, and
+   `ErrModelDiscoveryEvidenceMissing` are declared in
    `internal/harnesses/types.go`.
-3. Every existing harness implementation in `internal/harnesses/<name>/`
-   satisfies `Harness` plus the documented optional sub-interfaces.
+3. The six built-in subprocess implementations (`claude`, `claude-tui`,
+   `codex`, `gemini`, `opencode`, and `pi`) satisfy `Harness` plus their
+   documented optional sub-interfaces.
 4. No `.go` file outside `internal/harnesses/` imports a symbol from
    `internal/harnesses/claude`, `internal/harnesses/codex`,
-   `internal/harnesses/gemini`, `internal/harnesses/opencode`, or
-   `internal/harnesses/pi` other than the runner constructor used by
-   `internal/serviceimpl/execute_dispatch.go`. A linter check enforces
-   this.
+   `internal/harnesses/claude-tui`, `internal/harnesses/gemini`,
+   `internal/harnesses/opencode`, or `internal/harnesses/pi` other than the
+   documented runner-construction seam. A linter check enforces this.
 5. Public CONTRACT-003 JSON shapes for `HarnessInfo`, `ProviderInfo`,
    `QuotaState`, and `AccountStatus` are byte-identical (modulo
    intentionally added fields) to pre-refactor fixtures.
@@ -482,9 +634,18 @@ by `go vet`-shaped tooling:
    `QuotaStatus.RoutingPreference`.
 8. Per-harness cache I/O functions (`Read*Quota`, `Write*Quota`,
    `*QuotaCachePath`) are unexported.
-9. Conformance evidence (above) lands for every existing harness.
+9. Conformance evidence (above) lands for all six built-in subprocess
+   harnesses.
 10. CONTRACT-003 cross-references CONTRACT-004 as the source for
     `HarnessInfo.Quota` and `HarnessInfo.Account` population.
+11. Every production live-child path uses `internal/processlifecycle`; static
+    checks reject direct bypasses, and Unix and Windows subprocess fixtures
+    prove containment is established before harness execution.
+12. Caller-alive terminal delivery waits for cleanup success or
+    `HarnessCleanupTimeout`; caller-death and PID-reuse fixtures prove control
+    channel cleanup, best-effort recovery, and identity-safe signalling.
+13. Structural tests reject any cross-invocation live process or PTY pool,
+    including package-scope pools in `claude-tui`.
 
 ## References
 
@@ -492,6 +653,7 @@ by `go vet`-shaped tooling:
 - [ADR-002 PTY Cassette Transport](../adr/ADR-002-pty-cassette-transport.md)
 - [ADR-011 Cost-Based Routing With Quota Pools](../adr/ADR-011-cost-based-routing-with-quota-pools.md)
 - [ADR-012 Per-Source On-Disk Cache](../adr/ADR-012-per-source-on-disk-cache.md)
+- [ADR-013 claude-tui PTY Harness](../adr/ADR-013-claude-tui-pty-harness-fork.md)
 - [ADR-014 Universal Harness Interface](../adr/ADR-014-universal-harness-interface.md)
 - [Primary Harness Capability Baseline](../primary-harness-capability-baseline.md)
 - [Implementation plan: harness interface refactor](../plan-2026-05-14-harness-interface-refactor.md)

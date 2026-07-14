@@ -5,11 +5,11 @@ ddx:
     - ADR-002
     - CONTRACT-003
   review:
-    self_hash: d86a3efe43809bfb4aa55f830affa8621d10496744266f9e1fbc245d4b429749
+    self_hash: e92a82cb3130952d3800c39674112f0ddeda09ede3c1f3a191580ce9d9f85b64
     deps:
-      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
-    reviewed_at: "2026-07-14T05:16:22Z"
+      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+    reviewed_at: "2026-07-14T08:00:37Z"
 ---
 # ADR-003: PTY Terminal Rendering and Screen Model
 
@@ -145,6 +145,33 @@ are designed.
 | `output.raw` and `frames.jsonl` are both generated from the same PTY stream | Cassette contains frames without raw evidence |
 | Terminal backend can be replaced behind one interface | Harness adapters import a concrete emulator package |
 | Cassettes record the emulator name/version used for frame derivation | Frame assertions pass or fail differently after an emulator upgrade with no manifest mismatch |
+
+## Amendment — 2026-07-14: Rendering Is Not Process Containment
+
+**Status:** Accepted. This amendment clarifies the ownership phrase in the
+original decision; it does not change the accepted terminal-emulator or
+screen-model choice.
+
+The statement that `internal/pty/session` “owns the PTY process” is limited to
+PTY allocation, terminal modes and sizing, file descriptors, raw input/output,
+and projection of child exit observed through the PTY. It does not assign
+generic process-tree ownership, caller-death handling, cleanup policy, or stale
+recovery to the PTY package.
+
+`internal/processlifecycle` owns the per-invocation supervisor, launch gate,
+platform containment boundary, caller-liveness control channel, durable
+process-birth identity record, graceful and forceful cleanup, reaping, and
+boundary-empty verification required by ADR-002 and CONTRACT-003. It
+establishes containment before untrusted harness code runs and supplies the I/O
+attachment needed by `internal/pty/session`. Batch and PTY harnesses use the
+same lifecycle authority; `internal/pty/terminal` only consumes ordered bytes
+after that boundary has been established.
+
+Rendered frames and cassette replay prove terminal projection and parser
+behavior. They do not prove process-group or Job Object membership,
+caller-death cleanup, descendant reaping, or safe recovery identity. Those
+claims require the live platform-specific lifecycle tests defined by ADR-002
+and CONTRACT-003.
 
 ## References
 
