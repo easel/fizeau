@@ -119,7 +119,23 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		s.annotateOpenrouterCreditFreshness(result)
 		return result, publicRoutingError(err, result.Candidates, req.Policy)
 	}
-	s.applyStickyRouteLease(req.CorrelationID, result)
+	if result != nil && s != nil && s.routeSticky != nil {
+		sticky := s.routeSticky.ApplyStickyLease(time.Now().UTC(), routehealth.StickyRequest{
+			StickyKey:      req.CorrelationID,
+			Harness:        result.Harness,
+			Provider:       result.Provider,
+			Endpoint:       result.Endpoint,
+			ServerInstance: result.ServerInstance,
+			Model:          result.Model,
+		})
+		result.Sticky = RouteStickyState{
+			KeyPresent:     sticky.KeyPresent,
+			Assignment:     sticky.Assignment,
+			ServerInstance: sticky.ServerInstance,
+			Reason:         sticky.Reason,
+			Bonus:          sticky.Bonus,
+		}
+	}
 	if result != nil && result.Endpoint == "" {
 		_, endpoint, _ := splitEndpointProviderRef(result.Provider)
 		result.Endpoint = endpoint
@@ -456,11 +472,7 @@ func (s *service) annotateProbeEvidence(c *RouteCandidate) {
 }
 
 func (s *service) routeUtilizationEvidence(provider, serverInstance, endpoint, model string) RouteUtilizationState {
-	if s == nil {
-		return RouteUtilizationState{}
-	}
-	store := s.routeUtilizationStore()
-	if store == nil {
+	if s == nil || s.routeSticky == nil {
 		return RouteUtilizationState{}
 	}
 	keyProvider := strings.TrimSpace(provider)
@@ -475,9 +487,9 @@ func (s *service) routeUtilizationEvidence(provider, serverInstance, endpoint, m
 	if keyServerInstance == "" {
 		keyServerInstance = keyEndpoint
 	}
-	sample, ok := store.Sample(keyProvider, keyServerInstance, model)
+	sample, ok := s.routeSticky.UtilizationSample(keyProvider, keyServerInstance, model)
 	if !ok && keyEndpoint != "" && keyEndpoint != keyServerInstance {
-		sample, ok = store.Sample(keyProvider, keyEndpoint, model)
+		sample, ok = s.routeSticky.UtilizationSample(keyProvider, keyEndpoint, model)
 	}
 	if !ok {
 		return RouteUtilizationState{}
@@ -770,6 +782,13 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 	// /api/v1/credits round-trip.
 	probeMaps := s.openrouterProbeMaps(ctx, now)
 
+	var endpointLoadResolver func(provider, endpoint, model string) (routing.EndpointLoad, bool)
+	var stickyServerInstanceResolver func(stickyKey string) (string, bool)
+	if s != nil && s.routeSticky != nil {
+		endpointLoadResolver = s.routeSticky.EndpointLoadResolver(now)
+		stickyServerInstanceResolver = s.routeSticky.StickyServerInstanceResolver(now)
+	}
+
 	inputs := serviceimpl.BuildRoutingInputs(serviceimpl.RoutingInputsInput{
 		Base: routing.Inputs{
 			ProviderSuccessRate:          successRate,
@@ -785,8 +804,8 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 			CooldownDuration:             healthCooldownTTL,
 			Now:                          now,
 			SurfacePreference:            routingSurfacePreference(),
-			EndpointLoadResolver:         s.routeEndpointLoadsResolver(now),
-			StickyServerInstanceResolver: s.routeStickyServerInstanceResolver(now),
+			EndpointLoadResolver:         endpointLoadResolver,
+			StickyServerInstanceResolver: stickyServerInstanceResolver,
 		},
 		Harnesses:               entries,
 		Providers:               providers,

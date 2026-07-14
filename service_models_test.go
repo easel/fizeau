@@ -16,6 +16,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/provider/utilization"
+	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/runtimesignals"
 	"github.com/easel/fizeau/internal/serverinstance"
 )
@@ -344,14 +345,15 @@ func TestListModels_catalogMetadataForKnownAndUnknownProviderModels(t *testing.T
 		defaultName: "bragi",
 	}
 	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
+	svc.routeSticky = routehealth.NewStickyState()
 	instance := serverinstance.FromBaseURL(ts.URL + "/v1")
-	svc.routeUtilizationStore().Record("bragi", instance, "qwen3.5-27b", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("bragi", instance, "qwen3.5-27b", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(2),
 		QueuedRequests: utilization.Int(1),
 		Source:         utilization.SourceVLLMMetrics,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	if sample, ok := svc.routeUtilizationStore().Sample("bragi", instance, "qwen3.5-27b"); !ok || sample.Source != utilization.SourceVLLMMetrics {
+	if sample, ok := svc.routeSticky.UtilizationSample("bragi", instance, "qwen3.5-27b"); !ok || sample.Source != utilization.SourceVLLMMetrics {
 		t.Fatalf("route utilization sample not recorded: ok=%v sample=%#v", ok, sample)
 	}
 

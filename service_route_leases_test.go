@@ -2,13 +2,15 @@ package fizeau
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/discoverycache"
-	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/provider/utilization"
 	"github.com/easel/fizeau/internal/routehealth"
+	"github.com/easel/fizeau/internal/routing"
 )
 
 func seedSnapshotDiscoveryFixtures(t *testing.T, fixtures map[string][]string) {
@@ -20,6 +22,43 @@ func seedSnapshotDiscoveryFixtures(t *testing.T, fixtures map[string][]string) {
 	capturedAt := time.Date(2026, 5, 12, 15, 0, 0, 0, time.UTC)
 	for source, models := range fixtures {
 		writeSnapshotDiscoveryFixture(t, cache, source, capturedAt, models)
+	}
+}
+
+func newStickyRouteService(t *testing.T, sc *fakeServiceConfig) *service {
+	t.Helper()
+	raw, err := New(ServiceOptions{
+		ServiceConfig:       sc,
+		QuotaRefreshContext: canceledRefreshContext(),
+		AlivenessProber: func(context.Context, string, string) bool {
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	svc, ok := raw.(*service)
+	if !ok {
+		t.Fatalf("New returned %T, want *service", raw)
+	}
+	return svc
+}
+
+func seedStickyRouteLease(t *testing.T, state *routehealth.StickyState, now time.Time, stickyKey, provider, endpoint, model string) {
+	t.Helper()
+	if state == nil {
+		t.Fatal("sticky state is nil")
+	}
+	decision := state.ApplyStickyLease(now, routehealth.StickyRequest{
+		StickyKey:      stickyKey,
+		Harness:        "fiz",
+		Provider:       provider + "@" + endpoint,
+		Endpoint:       endpoint,
+		ServerInstance: endpoint,
+		Model:          model,
+	})
+	if decision.Assignment != "acquired" {
+		t.Fatalf("seed sticky assignment=%q, want acquired", decision.Assignment)
 	}
 }
 
@@ -44,14 +83,7 @@ func TestResolveRouteStickyLeaseReusesEndpoint(t *testing.T) {
 		defaultName:    "local",
 		healthCooldown: 20 * time.Millisecond,
 	}
-	svc := &service{
-		opts:        ServiceOptions{ServiceConfig: sc},
-		registry:    harnesses.NewRegistry(),
-		hub:         newSessionHub(),
-		catalog:     newCatalogCache(catalogCacheOptions{}),
-		routeHealth: routehealth.NewStore(),
-		routeSticky: routehealth.NewStickyState(),
-	}
+	svc := newStickyRouteService(t, sc)
 
 	now := time.Now().UTC()
 	// Make desk-b the initial winner.
@@ -87,6 +119,17 @@ func TestResolveRouteStickyLeaseReusesEndpoint(t *testing.T) {
 	if !first.Sticky.KeyPresent || first.Sticky.Assignment != "acquired" {
 		t.Fatalf("first sticky evidence=%#v, want acquired sticky lease", first.Sticky)
 	}
+	firstStickyJSON, err := json.Marshal(first.Sticky)
+	if err != nil {
+		t.Fatalf("Marshal first sticky state: %v", err)
+	}
+	wantFirstStickyJSON := fmt.Sprintf(
+		`{"key_present":true,"assignment":"acquired","server_instance":%q,"reason":"new sticky lease acquired","bonus":0}`,
+		firstServer,
+	)
+	if string(firstStickyJSON) != wantFirstStickyJSON {
+		t.Fatalf("first sticky JSON=%s, want %s", firstStickyJSON, wantFirstStickyJSON)
+	}
 
 	time.Sleep(30 * time.Millisecond)
 	now = time.Now().UTC()
@@ -114,7 +157,7 @@ func TestResolveRouteStickyLeaseReusesEndpoint(t *testing.T) {
 		CorrelationID: "bead-sticky",
 	})
 	if err != nil {
-		t.Fatalf("ResolveRoute second: %v", err)
+		t.Fatalf("ResolveRoute second decision=%#v: %v", second, err)
 	}
 	if second.ServerInstance != firstServer {
 		t.Fatalf("sticky decision=%#v, want reused server %q despite reversed baseline", second, firstServer)
@@ -124,6 +167,21 @@ func TestResolveRouteStickyLeaseReusesEndpoint(t *testing.T) {
 	}
 	if second.Sticky.Bonus <= 0 {
 		t.Fatalf("second sticky evidence=%#v, want sticky bonus", second.Sticky)
+	}
+	if second.Sticky.Bonus != routing.StickyAffinityBonus {
+		t.Fatalf("second sticky bonus=%v, want routing bonus %v", second.Sticky.Bonus, routing.StickyAffinityBonus)
+	}
+	secondStickyJSON, err := json.Marshal(second.Sticky)
+	if err != nil {
+		t.Fatalf("Marshal second sticky state: %v", err)
+	}
+	wantSecondStickyJSON := fmt.Sprintf(
+		`{"key_present":true,"assignment":"reused","server_instance":%q,"reason":"live sticky lease reused","bonus":%v}`,
+		firstServer,
+		routing.StickyAffinityBonus,
+	)
+	if string(secondStickyJSON) != wantSecondStickyJSON {
+		t.Fatalf("second sticky JSON=%s, want %s", secondStickyJSON, wantSecondStickyJSON)
 	}
 }
 
@@ -147,33 +205,26 @@ func TestResolveRouteStickyLeasePrefersSameServerAcrossModels(t *testing.T) {
 		defaultName:    "local",
 		healthCooldown: 20 * time.Millisecond,
 	}
-	svc := &service{
-		opts:        ServiceOptions{ServiceConfig: sc},
-		registry:    harnesses.NewRegistry(),
-		hub:         newSessionHub(),
-		catalog:     newCatalogCache(catalogCacheOptions{}),
-		routeHealth: routehealth.NewStore(),
-		routeSticky: routehealth.NewStickyState(),
-	}
-	svc.routeUtilizationStore().Record("local", "desk-a", "model-a", utilization.EndpointUtilization{
+	svc := newStickyRouteService(t, sc)
+	svc.routeSticky.RecordUtilization("local", "desk-a", "model-a", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	svc.routeUtilizationStore().Record("local", "desk-b", "model-a", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("local", "desk-b", "model-a", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	svc.routeUtilizationStore().Record("local", "desk-a", "model-b", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("local", "desk-a", "model-b", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	svc.routeUtilizationStore().Record("local", "desk-b", "model-b", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("local", "desk-b", "model-b", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
@@ -228,13 +279,13 @@ func TestResolveRouteStickyLeasePrefersSameServerAcrossModels(t *testing.T) {
 			Duration:  90 * time.Millisecond,
 			Timestamp: now,
 		}))
-		svc.routeUtilizationStore().Record("local", "desk-a", "model-b", utilization.EndpointUtilization{
+		svc.routeSticky.RecordUtilization("local", "desk-a", "model-b", utilization.EndpointUtilization{
 			ActiveRequests: utilization.Int(1),
 			MaxConcurrency: utilization.Int(2),
 			Source:         utilization.SourceLlamaSlots,
 			Freshness:      utilization.FreshnessFresh,
 		})
-		svc.routeUtilizationStore().Record("local", "desk-b", "model-b", utilization.EndpointUtilization{
+		svc.routeSticky.RecordUtilization("local", "desk-b", "model-b", utilization.EndpointUtilization{
 			ActiveRequests: utilization.Int(0),
 			MaxConcurrency: utilization.Int(2),
 			Source:         utilization.SourceLlamaSlots,
@@ -257,13 +308,13 @@ func TestResolveRouteStickyLeasePrefersSameServerAcrossModels(t *testing.T) {
 			Duration:  90 * time.Millisecond,
 			Timestamp: now,
 		}))
-		svc.routeUtilizationStore().Record("local", "desk-a", "model-b", utilization.EndpointUtilization{
+		svc.routeSticky.RecordUtilization("local", "desk-a", "model-b", utilization.EndpointUtilization{
 			ActiveRequests: utilization.Int(0),
 			MaxConcurrency: utilization.Int(2),
 			Source:         utilization.SourceLlamaSlots,
 			Freshness:      utilization.FreshnessFresh,
 		})
-		svc.routeUtilizationStore().Record("local", "desk-b", "model-b", utilization.EndpointUtilization{
+		svc.routeSticky.RecordUtilization("local", "desk-b", "model-b", utilization.EndpointUtilization{
 			ActiveRequests: utilization.Int(1),
 			MaxConcurrency: utilization.Int(2),
 			Source:         utilization.SourceLlamaSlots,
@@ -277,7 +328,7 @@ func TestResolveRouteStickyLeasePrefersSameServerAcrossModels(t *testing.T) {
 		CorrelationID: "bead-cross-model",
 	})
 	if err != nil {
-		t.Fatalf("ResolveRoute second: %v", err)
+		t.Fatalf("ResolveRoute second decision=%#v: %v", second, err)
 	}
 	if second.ServerInstance != firstServer {
 		t.Fatalf("second decision=%#v, want same server instance %q across model change", second, firstServer)
@@ -311,21 +362,14 @@ func TestResolveRouteStickyLeaseDistributesNewKeysByLoad(t *testing.T) {
 		defaultName:    "local",
 		healthCooldown: 20 * time.Millisecond,
 	}
-	svc := &service{
-		opts:        ServiceOptions{ServiceConfig: sc},
-		registry:    harnesses.NewRegistry(),
-		hub:         newSessionHub(),
-		catalog:     newCatalogCache(catalogCacheOptions{}),
-		routeHealth: routehealth.NewStore(),
-		routeSticky: routehealth.NewStickyState(),
-	}
-	svc.routeUtilizationStore().Record("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
+	svc := newStickyRouteService(t, sc)
+	svc.routeSticky.RecordUtilization("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(1),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	svc.routeUtilizationStore().Record("local", "desk-b", "qwen/qwen3.6", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("local", "desk-b", "qwen/qwen3.6", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
@@ -356,7 +400,7 @@ func TestResolveRouteStickyLeaseDistributesNewKeysByLoad(t *testing.T) {
 		CorrelationID: "bead-new-b",
 	})
 	if err != nil {
-		t.Fatalf("ResolveRoute second: %v", err)
+		t.Fatalf("ResolveRoute second decision=%#v: %v", second, err)
 	}
 	if second.Provider != "local@desk-a" || second.Endpoint != "desk-a" {
 		t.Fatalf("second decision=%#v, want desk-a after desk-b lease increased load", second)
@@ -387,21 +431,14 @@ func TestResolveRouteStickyLeaseAvoidsSaturatedEndpointForNewKey(t *testing.T) {
 		defaultName:    "local",
 		healthCooldown: 20 * time.Millisecond,
 	}
-	svc := &service{
-		opts:        ServiceOptions{ServiceConfig: sc},
-		registry:    harnesses.NewRegistry(),
-		hub:         newSessionHub(),
-		catalog:     newCatalogCache(catalogCacheOptions{}),
-		routeHealth: routehealth.NewStore(),
-		routeSticky: routehealth.NewStickyState(),
-	}
-	svc.routeUtilizationStore().Record("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
+	svc := newStickyRouteService(t, sc)
+	svc.routeSticky.RecordUtilization("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(1),
 		MaxConcurrency: utilization.Int(1),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	svc.routeLeaseStore().Acquire(time.Now().UTC(), stickyRouteLeaseTTL, routehealth.NormalizeLeaseKey("seed-b"), "local", "desk-b", "qwen/qwen3.6")
+	seedStickyRouteLease(t, svc.routeSticky, time.Now().UTC(), "seed-b", "local", "desk-b", "qwen/qwen3.6")
 
 	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
 		Harness:       "fiz",
@@ -437,26 +474,20 @@ func TestResolveRouteStickyLeaseIgnoresStaleUtilizationFallback(t *testing.T) {
 		defaultName:    "local",
 		healthCooldown: 20 * time.Millisecond,
 	}
-	svc := &service{
-		opts:        ServiceOptions{ServiceConfig: sc},
-		registry:    harnesses.NewRegistry(),
-		hub:         newSessionHub(),
-		catalog:     newCatalogCache(catalogCacheOptions{}),
-		routeHealth: routehealth.NewStore(),
-		routeSticky: routehealth.NewStickyState(),
-	}
+	svc := newStickyRouteService(t, sc)
 	// Stale utilization should be ignored in favor of the in-process lease
 	// counts. Make desk-a look idle in stale telemetry but keep more leases
 	// on desk-a so desk-b should still win.
-	svc.routeUtilizationStore().Record("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
+	svc.routeSticky.RecordUtilization("local", "desk-a", "qwen/qwen3.6", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(0),
 		MaxConcurrency: utilization.Int(2),
 		Source:         utilization.SourceLlamaSlots,
 		Freshness:      utilization.FreshnessStale,
 	})
-	svc.routeLeaseStore().Acquire(time.Now().UTC(), stickyRouteLeaseTTL, routehealth.NormalizeLeaseKey("seed-a"), "local", "desk-a", "qwen/qwen3.6")
-	svc.routeLeaseStore().Acquire(time.Now().UTC(), stickyRouteLeaseTTL, routehealth.NormalizeLeaseKey("seed-b"), "local", "desk-a", "qwen/qwen3.6")
-	svc.routeLeaseStore().Acquire(time.Now().UTC(), stickyRouteLeaseTTL, routehealth.NormalizeLeaseKey("seed-c"), "local", "desk-b", "qwen/qwen3.6")
+	seedAt := time.Now().UTC()
+	seedStickyRouteLease(t, svc.routeSticky, seedAt, "seed-a", "local", "desk-a", "qwen/qwen3.6")
+	seedStickyRouteLease(t, svc.routeSticky, seedAt, "seed-b", "local", "desk-a", "qwen/qwen3.6")
+	seedStickyRouteLease(t, svc.routeSticky, seedAt, "seed-c", "local", "desk-b", "qwen/qwen3.6")
 
 	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
 		Harness:       "fiz",

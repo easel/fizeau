@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/easel/fizeau/internal/provider/utilization"
 	"github.com/easel/fizeau/internal/routing"
 )
 
@@ -42,8 +43,7 @@ func NewStickyState() *StickyState {
 	}
 }
 
-// LeaseStore exposes the underlying sticky lease store.
-func (s *StickyState) LeaseStore() *LeaseStore {
+func (s *StickyState) leaseStore() *LeaseStore {
 	if s == nil {
 		return nil
 	}
@@ -53,8 +53,7 @@ func (s *StickyState) LeaseStore() *LeaseStore {
 	return s.leases
 }
 
-// UtilizationStore exposes the underlying utilization sample store.
-func (s *StickyState) UtilizationStore() *UtilizationStore {
+func (s *StickyState) utilizationStore() *UtilizationStore {
 	if s == nil {
 		return nil
 	}
@@ -66,7 +65,7 @@ func (s *StickyState) UtilizationStore() *UtilizationStore {
 
 // ApplyStickyLease updates sticky-route state for the selected candidate and
 // returns the sticky evidence the root package should surface publicly.
-func (s *StickyState) ApplyStickyLease(now time.Time, ttl time.Duration, affinityBonus float64, req StickyRequest) StickyDecision {
+func (s *StickyState) ApplyStickyLease(now time.Time, req StickyRequest) StickyDecision {
 	if strings.TrimSpace(req.StickyKey) == "" {
 		return StickyDecision{}
 	}
@@ -92,11 +91,11 @@ func (s *StickyState) ApplyStickyLease(now time.Time, ttl time.Duration, affinit
 	}
 
 	key := NormalizeLeaseKey(req.StickyKey)
-	store := s.LeaseStore()
+	store := s.leaseStore()
 	if lease, ok := store.Live(now, key); ok && lease.Endpoint == selectedServer {
 		decision.Assignment = "reused"
 		decision.ServerInstance = selectedServer
-		decision.Bonus = affinityBonus
+		decision.Bonus = routing.StickyAffinityBonus
 		decision.Reason = "live sticky lease reused"
 	} else if ok {
 		decision.Assignment = "moved"
@@ -108,8 +107,20 @@ func (s *StickyState) ApplyStickyLease(now time.Time, ttl time.Duration, affinit
 		decision.Reason = "new sticky lease acquired"
 	}
 
-	store.Acquire(now, ttl, key, baseProvider, selectedServer, req.Model)
+	store.Acquire(now, DefaultLeaseTTL, key, baseProvider, selectedServer, req.Model)
 	return decision
+}
+
+// RecordUtilization retains the latest provider endpoint/model utilization
+// sample for routing and public evidence projection.
+func (s *StickyState) RecordUtilization(provider, endpoint, model string, sample utilization.EndpointUtilization) {
+	s.utilizationStore().Record(provider, endpoint, model, sample)
+}
+
+// UtilizationSample returns the latest provider endpoint/model utilization
+// sample, including the provider-wide fallback owned by the utilization store.
+func (s *StickyState) UtilizationSample(provider, endpoint, model string) (utilization.EndpointUtilization, bool) {
+	return s.utilizationStore().Sample(provider, endpoint, model)
 }
 
 // EndpointLoadResolver returns the routing-engine load resolver that combines
@@ -118,8 +129,8 @@ func (s *StickyState) EndpointLoadResolver(now time.Time) func(provider, endpoin
 	if s == nil {
 		return nil
 	}
-	leaseStore := s.LeaseStore()
-	utilStore := s.UtilizationStore()
+	leaseStore := s.leaseStore()
+	utilStore := s.utilizationStore()
 	return func(provider, endpoint, model string) (routing.EndpointLoad, bool) {
 		leaseCounts := leaseStore.LeaseCounts(now, provider, model)
 		loads := utilStore.EndpointLoads(provider, model, leaseCounts)
@@ -149,7 +160,7 @@ func (s *StickyState) StickyServerInstanceResolver(now time.Time) func(stickyKey
 	if s == nil {
 		return nil
 	}
-	store := s.LeaseStore()
+	store := s.leaseStore()
 	return func(stickyKey string) (string, bool) {
 		if strings.TrimSpace(stickyKey) == "" {
 			return "", false

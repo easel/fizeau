@@ -61,7 +61,6 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 		"service_projection.go",
 		"service_providers.go",
 		"service_reasoning.go",
-		"service_route_leases.go",
 		"service_routestatus.go",
 		"service_routing.go",
 		"service_routing_quality.go",
@@ -75,5 +74,48 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 
 	if !slices.Equal(got, want) {
 		t.Fatalf("root source allowlist mismatch\nwant: %v\ngot:  %v", want, got)
+	}
+}
+
+// TestRootStickyStateOwnershipBoundary prevents the deleted sticky adapter
+// from returning under a different filename or through direct concrete-store
+// access. Root production may retain the service-owned StickyState and narrow
+// API-neutral calls, but lease/utilization mechanics belong to routehealth.
+func TestRootStickyStateOwnershipBoundary(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir(.): %v", err)
+	}
+
+	forbidden := []string{
+		"routeStickyState",
+		"routeLeaseStore",
+		"routeUtilizationStore",
+		"routeEndpointLoadsResolver",
+		"routeStickyServerInstanceResolver",
+		"stickyRouteLeaseTTL",
+		"stickyRouteAffinityBonus",
+		"routehealth.LeaseStore",
+		"routehealth.UtilizationStore",
+		"NewLeaseStore(",
+		"NewUtilizationStore(",
+		".LeaseStore()",
+		".UtilizationStore()",
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		contents, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("ReadFile(%s): %v", name, err)
+		}
+		for _, needle := range forbidden {
+			if strings.Contains(string(contents), needle) {
+				t.Errorf("root production file %s contains forbidden sticky implementation seam %q", name, needle)
+			}
+		}
 	}
 }
