@@ -771,7 +771,26 @@ func TestConsumeStream_ReasoningStall_StructuredErrorAndEvent(t *testing.T) {
 	assert.Equal(t, "sess-stall/i1/a1", stall.PromptID)
 	assert.NotEmpty(t, stall.ReasoningTail, "reasoning tail should be captured")
 	assert.LessOrEqual(t, len(stall.ReasoningTail), 64, "tail must respect reasoningTailBytes")
-	assert.Contains(t, stall.ReasoningTail, "step-3", "tail should hold the most recent reasoning")
+
+	// Race instrumentation can make the 50ms deadline fire after step-2 or
+	// step-3. Derive the last reasoning delta that actually arrived instead of
+	// assuming scheduler timing, then prove the captured tail ends with that
+	// observed reasoning.
+	latestReasoning := ""
+	for _, event := range events {
+		if event.Type == EventReasoningStall {
+			break
+		}
+		if event.Type != EventLLMDelta {
+			continue
+		}
+		var delta StreamDelta
+		if json.Unmarshal(event.Data, &delta) == nil && delta.ReasoningContent != "" {
+			latestReasoning = delta.ReasoningContent
+		}
+	}
+	require.NotEmpty(t, latestReasoning, "expected a reasoning delta before the stall")
+	assert.Contains(t, stall.ReasoningTail, latestReasoning, "tail should hold the most recent observed reasoning")
 
 	// Event emission: a reasoning.stall event must be present in the session
 	// log with model, timeout_ms, reasoning_tail, prompt_id, and the code.
@@ -792,7 +811,7 @@ func TestConsumeStream_ReasoningStall_StructuredErrorAndEvent(t *testing.T) {
 	assert.Equal(t, ReasoningStallCode, payload["code"])
 	tail, ok := payload["reasoning_tail"].(string)
 	require.True(t, ok, "reasoning_tail should be a JSON string")
-	assert.Contains(t, tail, "step-3")
+	assert.Contains(t, tail, latestReasoning)
 }
 
 func TestConsumeStream_AdaptiveStallDeadline(t *testing.T) {
