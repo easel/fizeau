@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 func TestHarnessCleanupTimeoutDefaultAndValidation(t *testing.T) {
@@ -59,41 +60,21 @@ func TestRunSubprocessForwardsLifecycleOptions(t *testing.T) {
 	logDir := filepath.Join(t.TempDir(), "sessions")
 	wantStateDir := filepath.Join(filepath.Dir(logDir), "harness-sessions")
 	svc := &service{opts: ServiceOptions{SessionLogDir: logDir, HarnessCleanupTimeout: 175 * time.Millisecond}}
+	stateDir, err := processlifecycle.StateDirectory(svc.serviceSessionLogDir())
+	if err != nil {
+		t.Fatalf("lifecycle state directory: %v", err)
+	}
 	captured := make(chan harnesses.ExecuteRequest, 1)
-	out := make(chan ServiceEvent, 8)
-	var seq atomic.Int64
-	svc.runSubprocess(context.Background(), ServiceExecuteRequest{SessionLogDir: filepath.Join(t.TempDir(), "request-override")}, RouteDecision{Harness: "codex"}, nil, out, &seq, time.Now(), nil, "svc-forward", lifecycleForwardingHarness{request: captured})
+	serviceimpl.RunSubprocess(context.Background(), serviceimpl.SubprocessRequest{
+		SessionID:         "svc-forward",
+		LifecycleStateDir: stateDir,
+		CleanupTimeout:    svc.opts.harnessCleanupTimeout(),
+		Decision:          serviceimpl.ExecuteRunnerDecision{Harness: "codex"},
+	}, lifecycleForwardingHarness{request: captured}, serviceimpl.SubprocessCallbacks{
+		EmitEvent: func(harnesses.Event) bool { return true },
+	})
 	got := <-captured
 	if got.SessionID != "svc-forward" || got.LifecycleStateDir != wantStateDir || got.CleanupTimeout != 175*time.Millisecond {
 		t.Fatalf("lifecycle forwarding = session %q dir %q timeout %s", got.SessionID, got.LifecycleStateDir, got.CleanupTimeout)
 	}
-}
-
-func TestFinalDeliverySurvivesBackpressure(t *testing.T) {
-	out := make(chan ServiceEvent, 1)
-	out <- ServiceEvent{Type: harnesses.EventTypeProgress}
-	var seq atomic.Int64
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		emitFinal(out, &seq, nil, harnesses.FinalData{Status: "success"})
-	}()
-
-	// The former best-effort send returned after one second and silently lost
-	// the final. A terminal send remains blocked until the consumer makes room.
-	select {
-	case <-done:
-		t.Fatal("terminal send returned while the public stream was backpressured")
-	case <-time.After(1100 * time.Millisecond):
-	}
-	<-out
-	select {
-	case event := <-out:
-		if event.Type != harnesses.EventTypeFinal {
-			t.Fatalf("delivered event type = %q", event.Type)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("terminal event was not delivered after backpressure cleared")
-	}
-	<-done
 }

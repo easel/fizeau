@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/transcript"
 )
 
 type subprocessProgressHarness struct {
@@ -183,27 +183,39 @@ func TestSubprocessProgress_BoundsSessionLogSummaries(t *testing.T) {
 func runSubprocessProgressEvents(t *testing.T, harnessEvents []harnesses.Event, mutateReq ...func(*ServiceExecuteRequest)) []ServiceEvent {
 	t.Helper()
 	req := ServiceExecuteRequest{
-		Prompt:        "subprocess prompt",
-		SessionLogDir: t.TempDir(),
+		Prompt: "subprocess prompt",
 	}
 	for _, mutate := range mutateReq {
 		mutate(&req)
 	}
-	decision := RouteDecision{Harness: "codex", Provider: "codex", Model: "gpt-test"}
-	svc := &service{}
-	sl := svc.openSessionLog(req, decision, "subprocess-progress-session")
-	defer sl.close()
 
-	out := make(chan ServiceEvent, 16)
-	var seq atomic.Int64
-	svc.runSubprocess(context.Background(), req, decision, nil, out, &seq, time.Now(), sl, "subprocess-progress-session", &subprocessProgressHarness{events: harnessEvents})
-	close(out)
-
-	var events []ServiceEvent
-	for ev := range out {
-		events = append(events, ev)
+	// Runtime progress projection belongs to internal/transcript. Exercise it
+	// at that ownership boundary rather than reaching through the former root
+	// runSubprocess implementation helper.
+	progress := transcript.NewSubprocessProgressState(req.Prompt, req.SystemPrompt)
+	events := []ServiceEvent{progressEvent(t, progress.NoteRequestStart())}
+	for _, event := range harnessEvents {
+		event = progress.AnnotateToolResultDuration(event)
+		if payload, ok := progress.NoteEvent(event); ok && event.Type != harnesses.EventTypeProgress {
+			events = append(events, progressEvent(t, payload))
+		}
+		if event.Type == harnesses.EventTypeFinal {
+			if payload, ok := progress.NoteFinalEvent(event); ok {
+				events = append(events, progressEvent(t, payload))
+			}
+		}
+		events = append(events, event)
 	}
 	return events
+}
+
+func progressEvent(t *testing.T, payload transcript.ProgressPayload) ServiceEvent {
+	t.Helper()
+	raw, err := json.Marshal(fromTranscriptProgress(payload))
+	if err != nil {
+		t.Fatalf("marshal progress: %v", err)
+	}
+	return ServiceEvent{Type: harnesses.EventTypeProgress, Data: raw}
 }
 
 func subprocessProgressEvents(events []ServiceEvent) []ServiceProgressData {

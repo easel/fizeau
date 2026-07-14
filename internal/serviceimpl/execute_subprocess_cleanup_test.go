@@ -219,6 +219,34 @@ func TestCleanupFailureSupersedesPrimaryTuple(t *testing.T) {
 	}
 }
 
+func TestCommitFinalPreservesCleanupPrimaryTuple(t *testing.T) {
+	dir := t.TempDir()
+	registry := processlifecycle.NewFileRegistry(dir)
+	record := cleanupTestRecord("session-commit-final", processlifecycle.StateCleaning)
+	if err := registry.Create(context.Background(), record); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	harness := cleanupTestHarness{execute: func(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+		ch := make(chan harnesses.Event, 1)
+		ch <- cleanupFinalEvent("success")
+		close(ch)
+		return ch, nil
+	}}
+	committed := make(chan harnesses.FinalData, 1)
+	RunSubprocess(context.Background(), SubprocessRequest{
+		SessionID: "session-commit-final", LifecycleStateDir: dir, CleanupTimeout: 25 * time.Millisecond,
+	}, harness, SubprocessCallbacks{CommitFinal: func(_ harnesses.Event, final harnesses.FinalData) {
+		committed <- final
+	}})
+	final := <-committed
+	if final.Cause != harnesses.TerminalCauseCleanupFailed || final.Stage != harnesses.SessionStageCleanup {
+		t.Fatalf("cleanup tuple = %q/%q", final.Cause, final.Stage)
+	}
+	if final.PrimaryOutcome != harnesses.SessionOutcomeSuccess || final.PrimaryCause != harnesses.TerminalCauseCompleted || final.PrimaryStage != harnesses.SessionStageHarness {
+		t.Fatalf("primary tuple = %q/%q/%q", final.PrimaryOutcome, final.PrimaryCause, final.PrimaryStage)
+	}
+}
+
 func TestCleanupFailureRetainsRecoveryRecord(t *testing.T) {
 	_, registry := runCleanupFailureFixture(t, processlifecycle.StateCleaning, nil)
 	record, err := registry.Get(context.Background(), "cleanup-record")

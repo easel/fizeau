@@ -2,22 +2,15 @@ package fizeau
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
-	"github.com/easel/fizeau/internal/compaction"
-	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
-	"github.com/easel/fizeau/internal/processlifecycle"
-	"github.com/easel/fizeau/internal/reasoning"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serviceimpl"
-	"github.com/easel/fizeau/internal/tool"
 )
 
 // generateSessionID returns a unique session identifier for a new Execute.
@@ -65,10 +58,8 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 	// Generate a session ID and register it in the hub so TailSessionLog
 	// callers can subscribe before or during execution.
 	sessionID := generateSessionID()
-	fanout := s.executeEventFanout()
-	fanout.OpenSession(sessionID)
-
-	outer := make(chan ServiceEvent, 64)
+	s.hub.OpenSession(sessionID)
+	coordinator := serviceimpl.ExecuteCoordinator{Hub: s.hub, Registry: s.registry}
 
 	// ADR-006 §3/§4: capture the override context (user pin + unconstrained
 	// auto decision) before route resolution so we can fire the matching
@@ -85,7 +76,7 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 	s.recordRoutingQualityForRequest(overrideCtx)
 
 	// Resolve the route.
-	decision, err := s.executeRouteResolver().resolveExecuteRouteContext(ctx, req)
+	decision, err := s.resolveExecuteRouteContext(ctx, req)
 	if err != nil {
 		// NoViableProviderForNow is a transient quota signal — DDx
 		// callers pause their drain loop on RetryAfter and resume.
@@ -93,7 +84,7 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 		// typed error reaches errors.As without log scraping.
 		var quotaErr *NoViableProviderForNow
 		if errors.As(err, &quotaErr) {
-			fanout.CloseSession(sessionID, ServiceEvent{})
+			s.hub.CloseSession(sessionID, ServiceEvent{})
 			return nil, err
 		}
 		if isExplicitPinError(err) {
@@ -105,7 +96,7 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 			pinErr := err
 			if overrideCtx != nil {
 				if rejectedEv, payload, ok := makeRejectedOverrideEvent(overrideCtx, sessionID, pinErr, req.Metadata); ok {
-					fanout.BroadcastEvent(sessionID, rejectedEv)
+					s.hub.BroadcastEvent(sessionID, rejectedEv)
 					// Persist the rejected_override to the session log so
 					// UsageReport's windowed scan (which sources from
 					// session logs, not the in-memory ring) sees this
@@ -117,42 +108,17 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 					pinErr = &ErrRejectedOverride{Inner: err, Event: payload}
 				}
 			}
-			fanout.CloseSession(sessionID, ServiceEvent{})
+			s.hub.CloseSession(sessionID, ServiceEvent{})
 			return nil, pinErr
 		}
-		// Still return a channel that yields a single failed final event so
-		// downstream consumers don't have to special-case the error path.
-		// Also close the hub session so TailSessionLog subscribers unblock.
-		go func() {
-			emitFatalFinal(outer, req.Metadata, "failed", err.Error())
-			// Drain outer to get the final event and forward to hub.
-			// emitFatalFinal closes outer; read the single event from it.
-		}()
-		// We can't easily intercept emitFatalFinal here, so close the hub
-		// session with an empty final immediately — callers on TailSessionLog
-		// for a failed-route session get an empty close.
-		go func() {
-			// Wait briefly for emitFatalFinal to write.
-			time.Sleep(10 * time.Millisecond)
-			fanout.CloseSession(sessionID, ServiceEvent{})
-		}()
-		return outer, nil
+		return coordinator.RoutingFailure(sessionID, req.Metadata, err.Error()), nil
 	}
 
-	// Metadata seam: every event we emit echoes req.Metadata.
-	meta := req.Metadata
-
-	// Wrap the inner channel through the hub so every event is broadcast to
-	// TailSessionLog subscribers. The fan-out goroutine owns outer's close
-	// and is responsible for inserting the override event (if any) immediately
-	// before the final event per ADR-006 §7.
-	inner := wrapExecuteWithHub(fanout, sessionID, outer, overrideCtx, meta)
-
-	// Emit start-of-execution routing_decision so consumers know the picked
-	// chain before any real work fires. The actual chain (post-fallback) is
-	// stamped onto the final event's RoutingActual field.
-	go s.runExecute(ctx, req, *decision, meta, inner, sessionID, overrideCtx)
-	return outer, nil
+	return coordinator.RunResolved(
+		ctx,
+		s.executeCoordinatorRequest(req, *decision, sessionID, overrideCtx),
+		s.executeCoordinatorPorts(req, *decision, sessionID, overrideCtx),
+	), nil
 }
 
 // resolveExecuteRoute reduces the request to a concrete RouteDecision.
@@ -166,125 +132,7 @@ func (s *service) resolveExecuteRoute(req ServiceExecuteRequest) (*RouteDecision
 }
 
 func (s *service) resolveExecuteRouteContext(ctx context.Context, req ServiceExecuteRequest) (*RouteDecision, error) {
-	// If Harness is omitted, route through the engine. The engine defaults to
-	// local-first and auto-selects from configured endpoints when no other
-	// constraints are specified — an empty request is valid if providers exist.
-	if req.Harness == "" {
-		return s.resolveExecuteRouteWithEngine(ctx, req)
-	}
-	canonical := harnesses.ResolveHarnessAlias(req.Harness)
-	if !s.registry.Has(canonical) {
-		return nil, fmt.Errorf("unknown harness %q", req.Harness)
-	}
-	cfg, _ := s.registry.Get(canonical)
-
-	// Run per-field validators first so callers get the most specific error.
-	// Empty-model routing checks run after these, right before model resolution.
-	if err := validateExplicitHarnessPolicy(canonical, cfg, req.Policy); err != nil {
-		return nil, err
-	}
-	if err := validateExplicitProvider(s.opts.ServiceConfig, cfg, req.Provider); err != nil {
-		return nil, err
-	}
-	if err := validateExplicitHarnessModel(canonical, cfg, req.Model, req.Provider); err != nil {
-		return nil, err
-	}
-	if err := validateExplicitHarnessReasoning(canonical, cfg, req.Reasoning); err != nil {
-		return nil, err
-	}
-	if err := validateExplicitHarnessQuota(canonical, cfg); err != nil {
-		return nil, err
-	}
-
-	// Empty-model routing: only applies to subprocess harnesses with concrete
-	// model semantics. TestOnly (virtual/script), HTTP-provider (openrouter/
-	// lmstudio/etc.), and "fiz" harnesses skip this block — they either use
-	// DefaultModel directly or have provider-side model semantics.
-	if !cfg.TestOnly && !cfg.IsHTTPProvider && canonical != "fiz" && req.Model == "" {
-		if req.Policy == "" && req.MinPower == 0 {
-			// Under-specified: no model, no routing inputs → silent empty model
-			// avoided by failing early with a clear diagnostic.
-			return nil, fmt.Errorf("under-specified routing for harness=%q: "+
-				"supply --model, --policy, or --min-power", canonical)
-		}
-		// Policy or MinPower present: run the routing engine within the
-		// harness's eligible models. Class 2 harnesses (AutoRoutingEligible=false:
-		// gemini, opencode, pi) require an explicit --model.
-		if !cfg.AutoRoutingEligible {
-			return nil, fmt.Errorf("no auto-resolution available for harness=%q: "+
-				"harness does not support auto-routing; supply an explicit --model", canonical)
-		}
-		return s.resolveExecuteRouteWithEngine(ctx, req)
-	}
-
-	resolvedModel := resolveSubprocessModelAliasWithCatalog(canonical, req.Model, serviceRoutingCatalog())
-	decision := &RouteDecision{
-		Harness:        canonical,
-		Provider:       req.Provider,
-		ServerInstance: explicitProviderServerInstance(s.opts.ServiceConfig, req.Provider),
-		Model:          resolvedModel,
-		Reason:         "explicit",
-		Power:          catalogPowerForModel(serviceRoutingCatalog(), resolvedModel),
-	}
-	if decision.Endpoint == "" {
-		_, endpoint, _ := splitEndpointProviderRef(decision.Provider)
-		decision.Endpoint = endpoint
-	}
-	return decision, nil
-}
-
-func explicitProviderServerInstance(sc ServiceConfig, provider string) string {
-	if sc == nil || strings.TrimSpace(provider) == "" {
-		return ""
-	}
-	if _, entry, ok := selectConfiguredEndpointProvider(sc, provider); ok {
-		return strings.TrimSpace(entry.ServerInstance)
-	}
-	entry, ok := sc.Provider(strings.TrimSpace(provider))
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(entry.ServerInstance)
-}
-
-func validateExplicitHarnessQuota(name string, cfg harnesses.HarnessConfig) error {
-	if harnessPaymentKind(name, cfg) != modelcatalog.BillingModelSubscription {
-		return nil
-	}
-	now := time.Now()
-	qs, ok := subscriptionQuotaForHarness(name, now)
-	if !ok || !qs.Present || !qs.Fresh || qs.OK {
-		return nil
-	}
-	return explicitQuotaUnavailable(name, qs.Windows, now)
-}
-
-func explicitQuotaUnavailable(name string, windows []harnesses.QuotaWindow, now time.Time) error {
-	retryAfter := earliestQuotaResetAfter(windows, now)
-	if retryAfter.IsZero() {
-		retryAfter = now.Add(defaultQuotaRecoveryFallbackInterval)
-	}
-	return &NoViableProviderForNow{
-		RetryAfter:         retryAfter,
-		ExhaustedProviders: []string{name},
-	}
-}
-
-func earliestQuotaResetAfter(windows []harnesses.QuotaWindow, now time.Time) time.Time {
-	var earliest time.Time
-	for _, window := range windows {
-		if window.ResetsAtUnix <= 0 {
-			continue
-		}
-		reset := time.Unix(window.ResetsAtUnix, 0)
-		if !reset.After(now) {
-			continue
-		}
-		if earliest.IsZero() || reset.Before(earliest) {
-			earliest = reset
-		}
-	}
-	return earliest
+	return s.resolveExecuteRouteInternal(ctx, req)
 }
 
 func validateExplicitHarnessPolicy(name string, cfg harnesses.HarnessConfig, policy string) error {
@@ -347,30 +195,6 @@ func isExplicitPinError(err error) bool {
 	}
 	var providerErr *ErrUnknownProvider
 	return errors.As(err, &providerErr)
-}
-
-// validateExplicitProvider rejects pre-dispatch when the caller pinned a
-// provider name that the service configuration does not recognize. Returns
-// nil when no provider was pinned, when no ServiceConfig is configured (no
-// provider catalog to validate against), when the provider name is known,
-// or when the harness is test-only / does not consume Provider (virtual,
-// script, etc. have no real provider lookup).
-func validateExplicitProvider(sc ServiceConfig, cfg harnesses.HarnessConfig, provider string) error {
-	if provider == "" || sc == nil {
-		return nil
-	}
-	if cfg.TestOnly {
-		return nil
-	}
-	lookup := provider
-	if base, _, ok := splitEndpointProviderRef(provider); ok {
-		lookup = base
-	}
-	if _, ok := sc.Provider(lookup); ok {
-		return nil
-	}
-	known := sc.ProviderNames()
-	return &ErrUnknownProvider{Provider: provider, KnownProviders: append([]string(nil), known...)}
 }
 
 func validateExplicitHarnessModel(name string, cfg harnesses.HarnessConfig, model, provider string) error {
@@ -443,549 +267,9 @@ func (s *service) validateEngineResolvedExecuteDecision(req ServiceExecuteReques
 	return nil
 }
 
-func validateExplicitHarnessReasoning(name string, cfg harnesses.HarnessConfig, value Reasoning) error {
-	if cfg.TestOnly {
-		return nil
-	}
-	if len(cfg.ReasoningLevels) == 0 && cfg.MaxReasoningTokens <= 0 {
-		return nil
-	}
-	policy, err := reasoning.ParseString(string(value))
-	if err != nil {
-		return fmt.Errorf("unsupported reasoning %q for harness %q: %w", value, name, err)
-	}
-	switch policy.Kind {
-	case reasoning.KindUnset, reasoning.KindAuto, reasoning.KindOff:
-		return nil
-	case reasoning.KindTokens:
-		if cfg.MaxReasoningTokens <= 0 {
-			return fmt.Errorf("unsupported reasoning %q for harness %q; token budgets are not supported", value, name)
-		}
-		if policy.Tokens > cfg.MaxReasoningTokens {
-			return fmt.Errorf("unsupported reasoning %q for harness %q; max token budget is %d", value, name, cfg.MaxReasoningTokens)
-		}
-		return nil
-	case reasoning.KindNamed:
-		for _, supported := range cfg.ReasoningLevels {
-			if string(policy.Value) == supported {
-				return nil
-			}
-		}
-		return fmt.Errorf("unsupported reasoning %q for harness %q; supported reasoning: %s", value, name, strings.Join(cfg.ReasoningLevels, ", "))
-	default:
-		return fmt.Errorf("unsupported reasoning %q for harness %q", value, name)
-	}
-}
-
 func harnessSource(req ServiceExecuteRequest) string {
 	if strings.TrimSpace(req.Harness) != "" {
 		return "request_harness"
 	}
 	return "auto_route"
-}
-
-// runExecute is the per-Execute goroutine. It owns the channel close path
-// and the final event emit. All termination paths funnel through emitFinal
-// so the channel always sees a final event before close.
-func (s *service) runExecute(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, sessionID string, overrideCtx *overrideContext) {
-	defer close(out)
-
-	start := time.Now()
-	var seq atomic.Int64
-
-	// Open the service-owned session log writer and guarantee a terminal
-	// session.end record plus a clean file close even on unexpected exits.
-	// CONTRACT-003 makes session-log lifecycle a service responsibility; the
-	// per-path finalizeAndEmit calls below feed writeEnd in lock-step with
-	// the public final event.
-	sl := s.executeSessionLogOpener().openSessionLog(req, decision, sessionID)
-	if overrideCtx != nil {
-		sl.override = overrideCtx
-	}
-	defer func() {
-		if !sl.endWritten() {
-			final := serviceimpl.ClassifyTerminalFinal(harnesses.FinalData{
-				Status:     "cancelled",
-				Error:      "session ended without final event",
-				DurationMS: time.Since(start).Milliseconds(),
-				RoutingActual: &harnesses.RoutingActual{
-					Harness:  decision.Harness,
-					Provider: decision.Provider,
-					Model:    decision.Model,
-				},
-			}, terminalOriginForDecision(decision), ctx.Err())
-			sl.writeEnd(req, meta, final)
-		}
-		sl.close()
-	}()
-
-	// Wall-clock cap.
-	runCtx := ctx
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-		defer cancel()
-	}
-
-	// Emit routing_decision start event. Include session_id so callers can
-	// extract it and pass to TailSessionLog. Per CONTRACT-003 the
-	// top-level Role + CorrelationID are echoed into routing_decision
-	// event Metadata (top-level wins over caller Metadata for these
-	// reserved keys).
-	routingMeta := metaWithRoleAndCorrelation(meta, req.Role, req.CorrelationID)
-	emitJSON(out, &seq, harnesses.EventTypeRoutingDecision, routingMeta, serviceRoutingDecisionDataFromDecision(req, decision, sessionID))
-	emitProgress(out, &seq, sl, sessionID, meta, routeProgressData(decision))
-
-	s.executeRunnerInvoker().dispatchExecuteRun(runCtx, executeRunContext{
-		req:      req,
-		decision: decision,
-		meta:     meta,
-		out:      out,
-		seq:      &seq,
-		start:    start,
-		sl:       sl,
-		session:  sessionID,
-	})
-}
-
-func terminalOriginForDecision(decision RouteDecision) serviceimpl.TerminalOrigin {
-	if decision.Harness == "fiz" || decision.Harness == "" {
-		return serviceimpl.TerminalOriginProvider
-	}
-	return serviceimpl.TerminalOriginHarness
-}
-
-func (s *service) runVirtual(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string) {
-	progress := newSubprocessProgressState(req)
-	emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
-	result := serviceimpl.RunVirtual(ctx, executeRunnerRequest(req, decision, meta, start))
-	final := result.Final
-	if result.EmitText {
-		emitJSONRaw(out, seq, harnesses.EventTypeTextDelta, meta, harnesses.TextDeltaData{Text: result.Text})
-	}
-	if progressFinal := progress.noteResponseComplete(final); progressFinal != nil {
-		emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
-	}
-	s.recordRouteAttemptFromFinal(final)
-	finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginHarness, ctx.Err())
-}
-
-func (s *service) runScript(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string) {
-	progress := newSubprocessProgressState(req)
-	emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
-	result := serviceimpl.RunScript(ctx, executeRunnerRequest(req, decision, meta, start))
-	final := result.Final
-	if result.EmitText {
-		emitJSONRaw(out, seq, harnesses.EventTypeTextDelta, meta, harnesses.TextDeltaData{Text: result.Text})
-	}
-	if progressFinal := progress.noteResponseComplete(final); progressFinal != nil {
-		emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
-	}
-	s.recordRouteAttemptFromFinal(final)
-	finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginHarness, ctx.Err())
-}
-
-func executeRunnerRequest(req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, start time.Time) serviceimpl.ExecuteRunnerRequest {
-	return serviceimpl.ExecuteRunnerRequest{
-		Prompt:   req.Prompt,
-		Metadata: meta,
-		Decision: serviceimpl.ExecuteRunnerDecision{
-			Harness:        decision.Harness,
-			Provider:       decision.Provider,
-			ServerInstance: decision.ServerInstance,
-			Model:          decision.Model,
-		},
-		Started: start,
-	}
-}
-
-func nativeToolsForRequest(req ServiceExecuteRequest) []agentcore.Tool {
-	if req.Tools != nil {
-		return req.Tools
-	}
-	return tool.BuiltinToolsForPreset(req.WorkDir, req.ToolPreset, tool.BashOutputFilterConfig{})
-}
-
-// runNative drives the in-process agent loop (loop.go's Run). The provider
-// is wrapped so per-HTTP timeouts fire independently of the request wall-clock
-// cap.
-func (s *service) runNative(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string) {
-	progress := newNativeProgressState()
-	observeAgentEvent := func(ev agentcore.Event) {
-		sl.writeEvent(ev)
-		switch ev.Type {
-		case agentcore.EventLLMRequest:
-			var payload nativeLLMRequestPayload
-			if err := json.Unmarshal(ev.Data, &payload); err == nil {
-				emitProgress(out, seq, sl, sessionID, meta, progress.noteRequest(payload))
-			}
-		case agentcore.EventLLMResponse:
-			var payload nativeLLMResponsePayload
-			if err := json.Unmarshal(ev.Data, &payload); err == nil {
-				emitProgress(out, seq, sl, sessionID, meta, progress.noteResponse(payload))
-			}
-		case agentcore.EventToolCall:
-			var payload nativeToolCallPayload
-			_ = json.Unmarshal(ev.Data, &payload)
-			toolName := payload.Tool
-			input := payload.Input
-			if input == nil {
-				if rawIn, err := json.Marshal(map[string]any{"tool": toolName}); err == nil {
-					input = rawIn
-				}
-			}
-			callID := fmt.Sprintf("call-%d", ev.Seq)
-			_, completeProgress := progress.noteToolCall(callID, payload)
-			emitJSONRaw(out, seq, harnesses.EventTypeToolCall, meta, harnesses.ToolCallData{
-				ID:    callID,
-				Name:  toolName,
-				Input: input,
-			})
-			emitJSONRaw(out, seq, harnesses.EventTypeToolResult, meta, harnesses.ToolResultData{
-				ID:         callID,
-				Output:     payload.Output,
-				Error:      payload.Error,
-				DurationMS: payload.DurationMS,
-			})
-			emitProgress(out, seq, sl, sessionID, meta, completeProgress)
-		case agentcore.EventCompactionEnd:
-			var payload nativeCompactionPayload
-			_ = json.Unmarshal(ev.Data, &payload)
-			emitJSONRaw(out, seq, harnesses.EventTypeCompaction, meta, map[string]any{
-				"messages_before": payload.MessagesBefore,
-				"messages_after":  payload.MessagesAfter,
-				"tokens_freed":    payload.TokensBefore - payload.TokensAfter,
-			})
-			compactionProgress, contextProgress := progress.noteCompaction(payload)
-			emitProgress(out, seq, sl, sessionID, meta, compactionProgress)
-			emitProgress(out, seq, sl, sessionID, meta, contextProgress)
-		}
-	}
-
-	var stallMaxReadOnlyIterations *int
-	if req.StallPolicy != nil {
-		stallMaxReadOnlyIterations = &req.StallPolicy.MaxReadOnlyToolIterations
-	}
-	serviceimpl.RunNative(ctx, serviceimpl.NativeRequest{
-		Prompt:                    req.Prompt,
-		SystemPrompt:              req.SystemPrompt,
-		Model:                     req.Model,
-		Provider:                  req.Provider,
-		Harness:                   req.Harness,
-		WorkDir:                   req.WorkDir,
-		Temperature:               req.Temperature,
-		TopP:                      req.TopP,
-		TopK:                      req.TopK,
-		MinP:                      req.MinP,
-		RepetitionPenalty:         req.RepetitionPenalty,
-		Seed:                      req.Seed,
-		SamplingSource:            req.SamplingSource,
-		Reasoning:                 effectiveReasoning(req.Reasoning),
-		NoStream:                  req.NoStream,
-		Permissions:               req.Permissions,
-		Tools:                     nativeToolsForRequest(req),
-		ToolPreset:                req.ToolPreset,
-		PlanningMode:              req.PlanningMode,
-		MaxIterations:             req.MaxIterations,
-		MaxTokens:                 req.MaxTokens,
-		ReasoningByteLimit:        req.ReasoningByteLimit,
-		ProviderTimeout:           req.ProviderTimeout,
-		Timeout:                   req.Timeout,
-		CachePolicy:               req.CachePolicy,
-		CostCapUSD:                req.CostCapUSD,
-		StallMaxReadOnlyIteration: stallMaxReadOnlyIterations,
-		Metadata:                  meta,
-		Decision:                  nativeDecision(decision),
-		Started:                   start,
-		SessionID:                 sessionID,
-	}, serviceimpl.NativeCallbacks{
-		ResolveProvider: func(nreq serviceimpl.NativeProviderRequest) serviceimpl.NativeProviderResolution {
-			resolved := s.resolveNativeProvider(ServiceExecuteRequest{
-				Provider: nreq.Provider,
-				Harness:  nreq.Harness,
-				Model:    nreq.Model,
-			})
-			return serviceimpl.NativeProviderResolution{
-				Provider: resolved.Provider,
-				Name:     resolved.Name,
-				Model:    resolved.Entry.Model,
-			}
-		},
-		ProviderNotConfiguredError: func(nreq serviceimpl.NativeProviderRequest, ndecision serviceimpl.NativeDecision) string {
-			return s.nativeProviderNotConfiguredError(ServiceExecuteRequest{
-				Provider: nreq.Provider,
-				Harness:  nreq.Harness,
-				Model:    nreq.Model,
-			}, routeDecision(ndecision))
-		},
-		Compactor: func(model string) agentcore.Compactor {
-			return newServiceCompactor(req, model)
-		},
-		ObserveAgentEvent: observeAgentEvent,
-		EmitEvent: func(t harnesses.EventType, payload any) {
-			emitJSONRaw(out, seq, t, meta, payload)
-		},
-		BeforeFinal: func(final harnesses.FinalData) {
-			if progressFinal := progress.noteFinal(final); progressFinal != nil {
-				emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
-			}
-		},
-		Finalize: func(final harnesses.FinalData, origin serviceimpl.TerminalOrigin) {
-			s.recordRouteAttemptFromFinal(final)
-			finalizeAndEmit(out, seq, meta, req, sl, final, origin, ctx.Err())
-		},
-		ToolWiringHook:          s.toolWiringHook(),
-		PromptAssertionHook:     s.promptAssertionHook(),
-		CompactionAssertionHook: s.compactionAssertionHook(),
-		ObserveTokenUsage:       s.observeTokenUsage,
-	})
-}
-
-func nativeDecision(decision RouteDecision) serviceimpl.NativeDecision {
-	return serviceimpl.NativeDecision{
-		Harness:        decision.Harness,
-		Provider:       decision.Provider,
-		ServerInstance: decision.ServerInstance,
-		Model:          decision.Model,
-		Candidates:     nativeRouteCandidates(decision.Candidates),
-	}
-}
-
-func routeDecision(decision serviceimpl.NativeDecision) RouteDecision {
-	return RouteDecision{
-		Harness:        decision.Harness,
-		Provider:       decision.Provider,
-		ServerInstance: decision.ServerInstance,
-		Model:          decision.Model,
-	}
-}
-
-func nativeRouteCandidates(in []RouteCandidate) []serviceimpl.NativeRouteCandidate {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]serviceimpl.NativeRouteCandidate, len(in))
-	for i, candidate := range in {
-		out[i] = serviceimpl.NativeRouteCandidate{
-			Provider:       candidate.Provider,
-			Endpoint:       candidate.Endpoint,
-			ServerInstance: candidate.ServerInstance,
-			Model:          candidate.Model,
-			Eligible:       candidate.Eligible,
-		}
-	}
-	return out
-}
-
-func newServiceCompactor(req ServiceExecuteRequest, model string) agentcore.Compactor {
-	cfg := compaction.DefaultConfig()
-	if req.CompactionContextWindow > 0 {
-		cfg.ContextWindow = req.CompactionContextWindow
-		if cfg.ReserveTokens >= cfg.ContextWindow {
-			cfg.ReserveTokens = 0
-		}
-		if cfg.KeepRecentTokens > cfg.ContextWindow {
-			cfg.KeepRecentTokens = cfg.ContextWindow / 2
-		}
-	}
-	if req.CompactionReserveTokens > 0 {
-		cfg.ReserveTokens = req.CompactionReserveTokens
-	}
-	if catalog, err := modelcatalog.Default(); err == nil && catalog != nil && model != "" && req.CompactionContextWindow <= 0 {
-		if contextWindow := catalog.ContextWindowForModel(model); contextWindow > 0 {
-			cfg.ContextWindow = contextWindow
-		}
-	}
-	return compaction.NewCompactor(cfg)
-}
-
-// runSubprocess delegates to a Runner under internal/harnesses/<name>. It
-// re-uses the wall-clock-bounded ctx so PTY/orphan reaping is automatic
-// when our ctx (which already carries the request Timeout) cancels.
-func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string, runner harnesses.Harness) {
-	progress := newSubprocessProgressState(req)
-	serviceimpl.RunSubprocess(ctx, serviceimpl.SubprocessRequest{
-		Prompt:            req.Prompt,
-		SystemPrompt:      req.SystemPrompt,
-		WorkDir:           req.WorkDir,
-		Permissions:       req.Permissions,
-		Temperature:       req.Temperature,
-		Seed:              req.Seed,
-		Reasoning:         effectiveReasoning(req.Reasoning),
-		Timeout:           req.Timeout,
-		IdleTimeout:       req.IdleTimeout,
-		SessionLogDir:     req.SessionLogDir,
-		SessionID:         sessionID,
-		LifecycleStateDir: s.harnessLifecycleStateDir(),
-		CleanupTimeout:    s.opts.harnessCleanupTimeout(),
-		Metadata:          meta,
-		Decision: serviceimpl.ExecuteRunnerDecision{
-			Harness:        decision.Harness,
-			Provider:       decision.Provider,
-			ServerInstance: decision.ServerInstance,
-			Model:          decision.Model,
-		},
-		Started:        start,
-		SessionLogPath: sessionLogPath(sl),
-	}, runner, serviceimpl.SubprocessCallbacks{
-		BeforeExecute: func() {
-			emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
-		},
-		ObserveFinal: s.observeRouteAttemptFromFinal,
-		ObserveEvent: func(ev harnesses.Event) harnesses.Event {
-			ev = progress.annotateToolResultDuration(ev)
-			if payload, ok := progress.noteEvent(ev); ok && ev.Type != harnesses.EventTypeProgress {
-				emitProgress(out, seq, sl, sessionID, meta, payload)
-			}
-			if ev.Type == harnesses.EventTypeFinal {
-				if payload, ok := progress.noteFinal(ev); ok {
-					emitProgress(out, seq, sl, sessionID, meta, payload)
-				}
-			}
-			return ev
-		},
-		EmitEvent: func(ev harnesses.Event) bool {
-			ev.Sequence = seq.Add(1) - 1
-			if ev.Type == harnesses.EventTypeFinal {
-				// The request context initiates subprocess cleanup; it must not
-				// also suppress the terminal fact after service-owned cleanup has
-				// finished or reached its independent deadline.
-				out <- ev
-				return true
-			}
-			select {
-			case out <- ev:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		},
-		Finalize: func(final harnesses.FinalData) {
-			finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginSpawn, ctx.Err())
-		},
-		WriteEnd: func(finalMeta map[string]string, final harnesses.FinalData) {
-			sl.writeEnd(req, finalMeta, final)
-		},
-	})
-}
-
-func (s *service) harnessLifecycleStateDir() string {
-	// Lifecycle evidence belongs to the service, not to a per-request
-	// transcript override. Startup recovery scans this same stable directory.
-	dir, err := processlifecycle.StateDirectory(s.serviceSessionLogDir())
-	if err != nil {
-		return ""
-	}
-	return dir
-}
-
-func sessionLogPath(sl *serviceSessionLog) string {
-	if sl == nil {
-		return ""
-	}
-	return sl.path
-}
-
-// emitFinal wraps a FinalData into a ServiceEvent and writes it to out.
-// The channel close happens in the caller via defer; this only writes the
-// terminator event.
-func emitFinal(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]string, final harnesses.FinalData) {
-	raw, err := json.Marshal(final)
-	if err != nil {
-		raw = []byte(`{"status":"failed","error":"marshal final"}`)
-	}
-	ev := harnesses.Event{
-		Type:     harnesses.EventTypeFinal,
-		Sequence: seq.Add(1) - 1,
-		Time:     time.Now().UTC(),
-		Metadata: meta,
-		Data:     raw,
-	}
-	out <- ev
-}
-
-// emitFatalFinal is used when Execute itself can't construct a route. It
-// writes a single failed final event then closes the channel — used for
-// the "no consumer goroutine" path so we still satisfy the channel
-// contract.
-func emitFatalFinal(out chan<- ServiceEvent, meta map[string]string, status, errMsg string) {
-	defer close(out)
-	final := serviceimpl.ClassifyTerminalFinal(harnesses.FinalData{Status: status, Error: errMsg}, serviceimpl.TerminalOriginRouting, nil)
-	raw, _ := json.Marshal(final)
-	ev := harnesses.Event{
-		Type:     harnesses.EventTypeFinal,
-		Sequence: 0,
-		Time:     time.Now().UTC(),
-		Metadata: meta,
-		Data:     raw,
-	}
-	out <- ev
-}
-
-// emitJSON marshals payload and writes a typed event to out.
-func emitJSON(out chan<- ServiceEvent, seq *atomic.Int64, t harnesses.EventType, meta map[string]string, payload any) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	ev := harnesses.Event{
-		Type:     t,
-		Sequence: seq.Add(1) - 1,
-		Time:     time.Now().UTC(),
-		Metadata: meta,
-		Data:     raw,
-	}
-	select {
-	case out <- ev:
-	case <-time.After(time.Second):
-	}
-}
-
-// emitJSONRaw is the typed-payload variant used inside the loop callback.
-func emitJSONRaw(out chan<- ServiceEvent, seq *atomic.Int64, t harnesses.EventType, meta map[string]string, payload any) {
-	emitJSON(out, seq, t, meta, payload)
-}
-
-// finalizeAndEmit stamps the service-owned session-log path onto final,
-// records the terminal session.end event, and forwards the final to the
-// public event stream. Every terminal emit path in runExecute funnels
-// through this helper so the session log and the event channel stay in
-// lock-step (CONTRACT-003).
-//
-// finalizeAndEmit also performs the CONTRACT-003 echo of top-level Role
-// and CorrelationID into the final event Metadata (top-level wins over
-// any caller-supplied Metadata entry under the same reserved key) and
-// stamps RoutingActual.Power from the catalog projection of the
-// actually-dispatched Model. When the caller set both top-level
-// Role/CorrelationID and the same reserved Metadata key, a
-// MetadataKeyCollision warning is appended to final.Warnings.
-func finalizeAndEmit(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]string, req ServiceExecuteRequest, sl *serviceSessionLog, final harnesses.FinalData, origin serviceimpl.TerminalOrigin, ctxErr error) {
-	final = serviceimpl.ClassifyTerminalFinal(final, origin, ctxErr)
-	if sl != nil && sl.path != "" {
-		final.SessionLogPath = sl.path
-	}
-	// Stamp catalog power onto the actually-dispatched RoutingActual.
-	// final.RoutingActual is set by the caller (one per terminal path);
-	// when nil we leave it nil to avoid synthesizing routing evidence.
-	if final.RoutingActual != nil && final.RoutingActual.Power == 0 {
-		final.RoutingActual.Power = catalogPowerForModel(serviceRoutingCatalog(), final.RoutingActual.Model)
-	}
-	// Detect reserved metadata-key collisions and append a warning so the
-	// caller learns when their caller-supplied Metadata entries were
-	// overridden by the top-level Role / CorrelationID fields.
-	if collisions := metadataReservedKeyCollisions(req.Metadata, req.Role, req.CorrelationID); len(collisions) > 0 {
-		final.Warnings = append(final.Warnings, harnesses.FinalWarning{
-			Code:    MetadataWarningCodeKeyCollision,
-			Message: metadataKeyCollisionMessage(collisions),
-		})
-	}
-	// Echo Role + CorrelationID onto the final event Metadata.
-	finalMeta := metaWithRoleAndCorrelation(meta, req.Role, req.CorrelationID)
-	if sl != nil {
-		if ovr := sl.override; ovr != nil && !ovr.emitted.Load() {
-			sl.writeOverrideEvent(ServiceEventTypeOverride, ovr.payload)
-		}
-		sl.writeEnd(req, finalMeta, final)
-	}
-	emitFinal(out, seq, finalMeta, final)
 }

@@ -1080,39 +1080,6 @@ func providerUsesLiveDiscovery(providerType string) bool {
 	}
 }
 
-// resolveExecuteRouteWithEngine is the post-engine variant of resolveExecuteRoute.
-// It is invoked by Execute when the request is under-specified
-// (no PreResolved, no fully-specified Harness). Returns nil when the request
-// is already specific enough that the legacy resolveExecuteRoute path applies.
-func (s *service) resolveExecuteRouteWithEngine(ctx context.Context, req ServiceExecuteRequest) (*RouteDecision, error) {
-	rr := RouteRequest{
-		Policy:                req.Policy,
-		Model:                 req.Model,
-		Provider:              req.Provider,
-		Harness:               req.Harness,
-		Reasoning:             req.Reasoning,
-		Permissions:           req.Permissions,
-		CachePolicy:           req.CachePolicy,
-		MinPower:              req.MinPower,
-		MaxPower:              req.MaxPower,
-		EstimatedPromptTokens: req.EstimatedPromptTokens,
-		RequiresTools:         req.RequiresTools,
-		Role:                  req.Role,
-		CorrelationID:         req.CorrelationID,
-	}
-	dec, err := s.ResolveRoute(ctx, rr)
-	if err != nil {
-		if isExplicitPinError(err) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("ResolveRoute: %w", err)
-	}
-	if err := s.validateEngineResolvedExecuteDecision(req, dec); err != nil {
-		return nil, err
-	}
-	return dec, nil
-}
-
 func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error) {
 	if policy == "" {
 		return routing.ProviderPreferenceLocalFirst, nil

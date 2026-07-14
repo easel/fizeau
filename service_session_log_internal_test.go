@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,17 +96,14 @@ func TestRunSubprocessFirstFinalWinsLiveAndDurable(t *testing.T) {
 	decision := RouteDecision{Harness: "codex", Provider: "codex", Model: "gpt-test"}
 	svc := &service{}
 	sl := svc.openSessionLog(req, decision, sessionID)
-	out := make(chan ServiceEvent, 8)
-	var seq atomic.Int64
-	svc.runSubprocess(context.Background(), req, decision, nil, out, &seq, time.Now(), sl, sessionID, &subprocessProgressHarness{events: []harnesses.Event{
+	liveEvents := runSessionLogSubprocess(t, req, decision, sl, sessionID, &subprocessProgressHarness{events: []harnesses.Event{
 		harnessEvent(t, harnesses.EventTypeFinal, harnesses.FinalData{Status: "failed", Error: "first"}),
 		harnessEvent(t, harnesses.EventTypeFinal, harnesses.FinalData{Status: "success", FinalText: "second"}),
 	}})
-	close(out)
 	sl.close()
 
 	var live []ServiceFinalData
-	for event := range out {
+	for _, event := range liveEvents {
 		if event.Type != harnesses.EventTypeFinal {
 			continue
 		}
@@ -168,14 +164,11 @@ func TestRunSubprocessInvalidTerminalBecomesOneInternalHarnessFinal(t *testing.T
 			decision := RouteDecision{Harness: "codex", Provider: "codex", Model: "gpt-test"}
 			svc := &service{}
 			sl := svc.openSessionLog(req, decision, sessionID)
-			out := make(chan ServiceEvent, 8)
-			var seq atomic.Int64
-			svc.runSubprocess(context.Background(), req, decision, nil, out, &seq, time.Now(), sl, sessionID, &subprocessProgressHarness{events: tt.events})
-			close(out)
+			liveEvents := runSessionLogSubprocess(t, req, decision, sl, sessionID, &subprocessProgressHarness{events: tt.events})
 			sl.close()
 
 			var live []ServiceFinalData
-			for event := range out {
+			for _, event := range liveEvents {
 				if event.Type != harnesses.EventTypeFinal {
 					continue
 				}
@@ -215,6 +208,32 @@ func TestRunSubprocessInvalidTerminalBecomesOneInternalHarnessFinal(t *testing.T
 			}
 		})
 	}
+}
+
+func runSessionLogSubprocess(t *testing.T, req ServiceExecuteRequest, decision RouteDecision, sl *serviceSessionLog, sessionID string, runner harnesses.Harness) []ServiceEvent {
+	t.Helper()
+	var events []ServiceEvent
+	serviceimpl.RunSubprocess(context.Background(), serviceimpl.SubprocessRequest{
+		Prompt:         req.Prompt,
+		SessionID:      sessionID,
+		SessionLogPath: sl.path,
+		Decision: serviceimpl.ExecuteRunnerDecision{
+			Harness:        decision.Harness,
+			Provider:       decision.Provider,
+			ServerInstance: decision.ServerInstance,
+			Model:          decision.Model,
+		},
+		Started: time.Now(),
+	}, runner, serviceimpl.SubprocessCallbacks{
+		EmitEvent: func(event harnesses.Event) bool {
+			events = append(events, event)
+			return true
+		},
+		WriteEnd: func(meta map[string]string, final harnesses.FinalData) {
+			sl.writeEnd(req, meta, final)
+		},
+	})
+	return events
 }
 
 func TestServiceSessionLogPersistsHarnessProvenance(t *testing.T) {

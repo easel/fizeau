@@ -1,6 +1,7 @@
 package fizeau
 
 import (
+	"encoding/json"
 	"time"
 
 	agentcore "github.com/easel/fizeau/internal/core"
@@ -16,6 +17,7 @@ type serviceSessionLog struct {
 	impl      *serviceimpl.SessionLog
 	path      string
 	sessionID string
+	req       ServiceExecuteRequest
 	decision  RouteDecision
 	override  *overrideContext
 }
@@ -76,9 +78,54 @@ func (s *service) openSessionLog(req ServiceExecuteRequest, decision RouteDecisi
 		impl:      impl,
 		path:      impl.Path(),
 		sessionID: sessionID,
+		req:       req,
 		decision:  decision,
 	}
 }
+
+// Enabled reports whether this request has a durable session log.
+func (sl *serviceSessionLog) Enabled() bool { return sl.enabled() }
+
+// Path returns the durable session-log path, or an empty string when disabled.
+func (sl *serviceSessionLog) Path() string {
+	if sl == nil {
+		return ""
+	}
+	return sl.path
+}
+
+// EndWritten reports whether the first terminal record has already won.
+func (sl *serviceSessionLog) EndWritten() bool { return sl.endWritten() }
+
+// ProgressIntervalMS returns the interval since the previous persisted
+// progress record.
+func (sl *serviceSessionLog) ProgressIntervalMS(now time.Time) int64 {
+	return sl.progressIntervalMS(now)
+}
+
+// WriteCoreEvent persists one internal agent-loop event.
+func (sl *serviceSessionLog) WriteCoreEvent(ev agentcore.Event) { sl.writeEvent(ev) }
+
+// WriteOverride persists the API-neutral override payload after projecting it
+// back onto the public session-log type.
+func (sl *serviceSessionLog) WriteOverride(eventType agentcore.EventType, raw json.RawMessage) {
+	if sl == nil || len(raw) == 0 {
+		return
+	}
+	var payload ServiceOverrideData
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return
+	}
+	sl.writeOverrideEvent(string(eventType), payload)
+}
+
+// WriteEnd projects and persists the first terminal record for this request.
+func (sl *serviceSessionLog) WriteEnd(meta map[string]string, final harnesses.FinalData) {
+	sl.writeEnd(sl.req, meta, final)
+}
+
+// Close releases the durable writer.
+func (sl *serviceSessionLog) Close() { sl.close() }
 
 // writeEnd records the terminal session.end event. It is idempotent: the
 // first call wins. Callers should invoke this whenever a harnesses.FinalData

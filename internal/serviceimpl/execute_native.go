@@ -9,8 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/easel/fizeau/internal/compaction"
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/modelcatalog"
 )
 
 const (
@@ -75,6 +77,8 @@ type NativeRequest struct {
 	MaxIterations             int
 	MaxTokens                 int
 	ReasoningByteLimit        int
+	CompactionContextWindow   int
+	CompactionReserveTokens   int
 	ProviderTimeout           time.Duration
 	Timeout                   time.Duration
 	CachePolicy               string
@@ -228,6 +232,8 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	var compactor agentcore.Compactor
 	if cb.Compactor != nil {
 		compactor = cb.Compactor(actualModel)
+	} else {
+		compactor = newNativeCompactor(req, actualModel)
 	}
 	var temperature *float64
 	if req.Temperature != nil {
@@ -363,6 +369,28 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
 	}
 	finalize(cb, final, nativeTerminalOrigin(runErr))
+}
+
+func newNativeCompactor(req NativeRequest, model string) agentcore.Compactor {
+	cfg := compaction.DefaultConfig()
+	if req.CompactionContextWindow > 0 {
+		cfg.ContextWindow = req.CompactionContextWindow
+		if cfg.ReserveTokens >= cfg.ContextWindow {
+			cfg.ReserveTokens = 0
+		}
+		if cfg.KeepRecentTokens > cfg.ContextWindow {
+			cfg.KeepRecentTokens = cfg.ContextWindow / 2
+		}
+	}
+	if req.CompactionReserveTokens > 0 {
+		cfg.ReserveTokens = req.CompactionReserveTokens
+	}
+	if catalog, err := modelcatalog.Default(); err == nil && catalog != nil && model != "" && req.CompactionContextWindow <= 0 {
+		if contextWindow := catalog.ContextWindowForModel(model); contextWindow > 0 {
+			cfg.ContextWindow = contextWindow
+		}
+	}
+	return compaction.NewCompactor(cfg)
 }
 
 func nativeExecutionProvider(req NativeRequest, resolver func(NativeProviderRequest) NativeProviderResolution) agentcore.Provider {

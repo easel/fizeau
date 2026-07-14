@@ -49,8 +49,15 @@ type SubprocessCallbacks struct {
 	ObserveFinal  func(harnesses.FinalData) error
 	ObserveEvent  func(harnesses.Event) harnesses.Event
 	EmitEvent     func(harnesses.Event) bool
-	Finalize      func(harnesses.FinalData)
-	WriteEnd      func(map[string]string, harnesses.FinalData)
+	// CommitFinal receives the already-classified, cleanup-backed terminal
+	// fact. Callers must not classify it again: cleanup supersession carries
+	// the primary execution tuple in fields that reclassification would erase.
+	CommitFinal func(harnesses.Event, harnesses.FinalData)
+	// Finalize and WriteEnd are retained for callers that have not migrated to
+	// CommitFinal. New service orchestration should use CommitFinal so one
+	// coordinator owns durable and live terminal ordering.
+	Finalize func(harnesses.FinalData)
+	WriteEnd func(map[string]string, harnesses.FinalData)
 }
 
 // RunSubprocess executes a subprocess harness and forwards its event stream.
@@ -196,11 +203,18 @@ func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb Subproce
 				ev = replaceSubprocessFinal(ev, final)
 			}
 		}
-		if cb.WriteEnd != nil {
-			var written harnesses.FinalData
-			_ = json.Unmarshal(ev.Data, &written)
-			cb.WriteEnd(req.Metadata, written)
+	}
+	if cb.CommitFinal != nil {
+		if cb.ObserveEvent != nil {
+			ev = cb.ObserveEvent(ev)
 		}
+		cb.CommitFinal(ev, final)
+		return
+	}
+	if cb.WriteEnd != nil {
+		var written harnesses.FinalData
+		_ = json.Unmarshal(ev.Data, &written)
+		cb.WriteEnd(req.Metadata, written)
 	}
 	if cb.ObserveEvent != nil {
 		ev = cb.ObserveEvent(ev)

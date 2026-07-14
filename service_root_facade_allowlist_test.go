@@ -47,6 +47,7 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 		"service_execute.go",
 		"service_execute_dispatch.go",
 		"service_execute_fanout.go",
+		"service_execute_route.go",
 		"service_execute_seam_prod.go",
 		"service_execute_seam_testseam.go",
 		"service_harness_instances.go",
