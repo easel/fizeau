@@ -1005,12 +1005,15 @@ func TestNewStartupQuotaRefreshContinuesAfterTimeout(t *testing.T) {
 	setFakeCodexHarness(t, fake)
 
 	start := time.Now()
-	if _, err := New(ServiceOptions{
+	svc, err := New(ServiceOptions{
 		ServiceConfig:           &fakeServiceConfig{},
 		QuotaRefreshStartupWait: 20 * time.Millisecond,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	concreteSvc := svc.(*service)
+	t.Cleanup(concreteSvc.refreshScheduler.Stop)
 	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
 		t.Fatalf("New blocked too long: %v", elapsed)
 	}
@@ -1026,6 +1029,8 @@ func TestNewStartupQuotaRefreshContinuesAfterTimeout(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
+	waitForPrimaryQuotaRefreshIdle(t, "claude", "codex")
+	concreteSvc.refreshScheduler.Stop()
 }
 
 func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
