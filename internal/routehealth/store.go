@@ -15,23 +15,25 @@ const DefaultCooldown = 30 * time.Second
 
 // Attempt records availability feedback for one routed attempt.
 type Attempt struct {
-	Harness   string
-	Provider  string
-	Model     string
-	Endpoint  string
-	Status    string
-	Reason    string
-	Error     string
-	Duration  time.Duration
-	Timestamp time.Time
+	Harness        string
+	Provider       string
+	Model          string
+	Endpoint       string
+	ServerInstance string
+	Status         string
+	Reason         string
+	Error          string
+	Duration       time.Duration
+	Timestamp      time.Time
 }
 
 // Key is the normalized route-attempt identity.
 type Key struct {
-	Harness  string
-	Provider string
-	Model    string
-	Endpoint string
+	Harness        string
+	Provider       string
+	Model          string
+	Endpoint       string
+	ServerInstance string
 }
 
 // Record is an active route-attempt failure.
@@ -126,10 +128,11 @@ func (s *Store) recordMetricLocked(key Key, success bool, duration time.Duration
 // NormalizeKey returns the normalized route-attempt key for attempt.
 func NormalizeKey(attempt Attempt) Key {
 	return Key{
-		Harness:  strings.TrimSpace(attempt.Harness),
-		Provider: strings.TrimSpace(attempt.Provider),
-		Model:    strings.TrimSpace(attempt.Model),
-		Endpoint: strings.TrimSpace(attempt.Endpoint),
+		Harness:        strings.TrimSpace(attempt.Harness),
+		Provider:       strings.TrimSpace(attempt.Provider),
+		Model:          strings.TrimSpace(attempt.Model),
+		Endpoint:       strings.TrimSpace(attempt.Endpoint),
+		ServerInstance: strings.TrimSpace(attempt.ServerInstance),
 	}
 }
 
@@ -163,6 +166,9 @@ func KeysMatch(existing, query Key) bool {
 		return false
 	}
 	if query.Endpoint != "" && existing.Endpoint != query.Endpoint {
+		return false
+	}
+	if query.ServerInstance != "" && existing.ServerInstance != query.ServerInstance {
 		return false
 	}
 	return true

@@ -708,15 +708,16 @@ type RouteUtilizationState struct {
 // Status="success" clears matching active failures; any other non-empty status
 // records a same-process failure until the service health cooldown expires.
 type RouteAttempt struct {
-	Harness   string
-	Provider  string
-	Model     string
-	Endpoint  string
-	Status    string
-	Reason    string
-	Error     string
-	Duration  time.Duration
-	Timestamp time.Time // zero = time.Now()
+	Harness        string
+	Provider       string
+	Model          string
+	Endpoint       string
+	ServerInstance string
+	Status         string
+	Reason         string
+	Error          string
+	Duration       time.Duration
+	Timestamp      time.Time // zero = time.Now()
 }
 
 // RouteStatusReport is returned by RouteStatus.

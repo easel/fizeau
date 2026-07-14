@@ -137,7 +137,7 @@ func runStartupAlivenessProbes(
 }
 
 func (s *service) persistProbeStore() {
-	s.persistRouteHealthSnapshot()
+	_ = s.persistRouteHealthSnapshot()
 }
 
 // requestLocalHealthRefreshForRouting starts at most one asynchronous refresh

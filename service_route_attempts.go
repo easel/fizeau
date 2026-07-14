@@ -14,20 +14,20 @@ func (s *service) RecordRouteAttempt(_ context.Context, attempt RouteAttempt) er
 		s = &service{}
 	}
 	if err := s.routeHealthStore().RecordAttempt(routehealth.Attempt{
-		Harness:   attempt.Harness,
-		Provider:  attempt.Provider,
-		Model:     attempt.Model,
-		Endpoint:  attempt.Endpoint,
-		Status:    attempt.Status,
-		Reason:    attempt.Reason,
-		Error:     attempt.Error,
-		Duration:  attempt.Duration,
-		Timestamp: attempt.Timestamp,
+		Harness:        attempt.Harness,
+		Provider:       attempt.Provider,
+		Model:          attempt.Model,
+		Endpoint:       attempt.Endpoint,
+		ServerInstance: attempt.ServerInstance,
+		Status:         attempt.Status,
+		Reason:         attempt.Reason,
+		Error:          attempt.Error,
+		Duration:       attempt.Duration,
+		Timestamp:      attempt.Timestamp,
 	}); err != nil {
 		return err
 	}
-	s.persistRouteHealthSnapshot()
-	return nil
+	return s.persistRouteHealthSnapshot()
 }
 
 func (s *service) recordRouteAttemptFromFinal(final harnesses.FinalData) {
@@ -50,12 +50,13 @@ func routeAttemptFromFinal(final harnesses.FinalData) (RouteAttempt, bool) {
 		return RouteAttempt{}, false
 	}
 	attempt := RouteAttempt{
-		Harness:  strings.TrimSpace(final.RoutingActual.Harness),
-		Provider: strings.TrimSpace(final.RoutingActual.Provider),
-		Model:    strings.TrimSpace(final.RoutingActual.Model),
-		Status:   strings.TrimSpace(final.Status),
-		Reason:   routeAttemptFailureClass(final),
-		Error:    strings.TrimSpace(final.Error),
+		Harness:        strings.TrimSpace(final.RoutingActual.Harness),
+		Provider:       strings.TrimSpace(final.RoutingActual.Provider),
+		Model:          strings.TrimSpace(final.RoutingActual.Model),
+		ServerInstance: strings.TrimSpace(final.RoutingActual.ServerInstance),
+		Status:         strings.TrimSpace(final.Status),
+		Reason:         routeAttemptFailureClass(final),
+		Error:          strings.TrimSpace(final.Error),
 	}
 	if attempt.Status == "" || (attempt.Harness == "" && attempt.Provider == "") {
 		return RouteAttempt{}, false
@@ -161,9 +162,9 @@ func (s *service) routeMetricSignals(now time.Time, ttl time.Duration) (map[stri
 	return s.routeHealth.MetricSignals(now, ttl)
 }
 
-func (s *service) persistRouteHealthSnapshot() {
+func (s *service) persistRouteHealthSnapshot() error {
 	if s == nil || s.opts.PersistRouteHealth == "" {
-		return
+		return nil
 	}
-	_ = routehealth.SavePersistedState(s.opts.PersistRouteHealth, s.routeHealth, s.providerProbe)
+	return routehealth.SavePersistedState(s.opts.PersistRouteHealth, s.routeHealth, s.providerProbe)
 }

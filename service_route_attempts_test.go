@@ -12,6 +12,7 @@ import (
 
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
@@ -228,6 +229,113 @@ func TestRecordRouteAttempt_SuccessClearsFailure(t *testing.T) {
 	}
 	if dec.Provider != "bragi" {
 		t.Fatalf("Provider after success clear: got %q, want bragi", dec.Provider)
+	}
+}
+
+func TestRouteAttemptPreservesServerInstance(t *testing.T) {
+	svc := newTestService(t, ServiceOptions{})
+	now := time.Date(2026, 7, 14, 15, 30, 0, 0, time.UTC)
+
+	for _, serverInstance := range []string{"desk-a", "desk-b"} {
+		if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
+			Harness:        " fiz ",
+			Provider:       " local ",
+			Endpoint:       " primary ",
+			ServerInstance: " " + serverInstance + " ",
+			Model:          " qwen ",
+			Status:         "failed",
+			Timestamp:      now,
+		}); err != nil {
+			t.Fatalf("RecordRouteAttempt(%s): %v", serverInstance, err)
+		}
+	}
+
+	records := svc.activeRouteAttempts(now, time.Minute)
+	if len(records) != 2 {
+		t.Fatalf("activeRouteAttempts len = %d, want 2 exact server routes: %+v", len(records), records)
+	}
+	byServer := make(map[string]routehealth.Key, len(records))
+	for _, record := range records {
+		byServer[record.Key.ServerInstance] = record.Key
+	}
+	for _, serverInstance := range []string{"desk-a", "desk-b"} {
+		key, ok := byServer[serverInstance]
+		if !ok {
+			t.Fatalf("active route for server instance %q missing: %+v", serverInstance, records)
+		}
+		if key.Harness != "fiz" || key.Provider != "local" || key.Endpoint != "primary" || key.Model != "qwen" {
+			t.Fatalf("key for %s = %+v, want exact normalized fiz/local/primary/%s/qwen route", serverInstance, key, serverInstance)
+		}
+	}
+
+	if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
+		Harness:        "fiz",
+		Provider:       "local",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "qwen",
+		Status:         "success",
+		Timestamp:      now.Add(time.Second),
+	}); err != nil {
+		t.Fatalf("RecordRouteAttempt(success): %v", err)
+	}
+	records = svc.activeRouteAttempts(now.Add(time.Second), time.Minute)
+	if len(records) != 1 || records[0].Key.ServerInstance != "desk-b" {
+		t.Fatalf("success should clear only desk-a; active routes = %+v", records)
+	}
+
+	attempt, ok := routeAttemptFromFinal(harnesses.FinalData{
+		Status: "success",
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:        "fiz",
+			Provider:       "local@primary",
+			ServerInstance: " desk-c ",
+			Model:          "qwen",
+		},
+	})
+	if !ok || attempt.ServerInstance != "desk-c" {
+		t.Fatalf("routeAttemptFromFinal ServerInstance = %q, ok=%v; want desk-c, true", attempt.ServerInstance, ok)
+	}
+}
+
+func TestRecordRouteAttemptReturnsPersistenceFailureAfterMemoryUpdate(t *testing.T) {
+	blockingFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockingFile, []byte("block snapshot directory"), 0o600); err != nil {
+		t.Fatalf("write blocking file: %v", err)
+	}
+	svc := newTestService(t, ServiceOptions{
+		PersistRouteHealth: filepath.Join(blockingFile, "routehealth.json"),
+	})
+	now := time.Date(2026, 7, 14, 15, 30, 0, 0, time.UTC)
+	err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
+		Harness:        "fiz",
+		Provider:       "local",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "qwen",
+		Status:         "failed",
+		Timestamp:      now,
+	})
+	if err == nil {
+		t.Fatal("RecordRouteAttempt error = nil, want snapshot persistence failure")
+	}
+	if !strings.Contains(err.Error(), "route health snapshot") {
+		t.Fatalf("RecordRouteAttempt error = %q, want route health snapshot context", err)
+	}
+
+	records := svc.activeRouteAttempts(now, time.Minute)
+	if len(records) != 1 {
+		t.Fatalf("activeRouteAttempts len = %d, want retained in-memory attempt: %+v", len(records), records)
+	}
+	want := routehealth.Key{
+		Harness:        "fiz",
+		Provider:       "local",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "qwen",
+	}
+	if records[0].Key != want {
+		t.Fatalf("retained route key = %+v, want %+v", records[0].Key, want)
 	}
 }
 
