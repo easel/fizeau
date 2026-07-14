@@ -211,7 +211,7 @@ func runSubprocessProgressEvents(t *testing.T, harnessEvents []harnesses.Event, 
 
 func progressEvent(t *testing.T, payload transcript.ProgressPayload) ServiceEvent {
 	t.Helper()
-	raw, err := json.Marshal(fromTranscriptProgress(payload))
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal progress: %v", err)
 	}

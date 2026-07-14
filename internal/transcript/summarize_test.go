@@ -22,6 +22,13 @@ func TestSummarizeToolCallSamples(t *testing.T) {
 			wantTarget: "cli/internal/file.go",
 		},
 		{
+			name:       "write file",
+			tool:       "write",
+			input:      `{"path":"cli/internal/file.go","content":"package cli"}`,
+			wantAction: "write file",
+			wantTarget: "cli/internal/file.go",
+		},
+		{
 			name:       "sed range",
 			tool:       "bash",
 			input:      `{"command":"sed -n '240,320p' cli/internal/agent/session_log_format.go"}`,

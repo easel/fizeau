@@ -3,8 +3,11 @@ package fizeau
 import (
 	"encoding/json"
 
+	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/serviceimpl"
+	"github.com/easel/fizeau/internal/session"
+	"github.com/easel/fizeau/internal/transcript"
 )
 
 // executeCoordinatorRequest converts the public Execute contract into the
@@ -75,7 +78,7 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 			Candidates:     nativeRouteCandidates(decision.Candidates),
 		},
 		RoutingDecisionData: routingDecisionData,
-		RouteProgress:       toTranscriptProgress(routeProgressData(decision)),
+		RouteProgress:       transcript.RouteProgressData(toTranscriptRouteDecision(decision)),
 		OverridePayload:     executeOverridePayload(ovr, sessionID),
 	}
 }
@@ -85,7 +88,7 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 func (s *service) executeCoordinatorPorts(req ServiceExecuteRequest, decision RouteDecision, sessionID string, ovr *overrideContext) serviceimpl.ExecutePorts {
 	return serviceimpl.ExecutePorts{
 		OpenSessionLog: func() serviceimpl.ExecuteSessionLog {
-			return s.openSessionLog(req, decision, sessionID)
+			return s.openExecuteSessionLog(req, decision, sessionID)
 		},
 		ResolveNativeProvider: func(nreq serviceimpl.NativeProviderRequest) serviceimpl.NativeProviderResolution {
 			resolved := s.resolveNativeProvider(ServiceExecuteRequest{
@@ -126,6 +129,123 @@ func (s *service) executeCoordinatorPorts(req ServiceExecuteRequest, decision Ro
 	}
 }
 
+// openExecuteSessionLog is the narrow public-to-internal projection seam for
+// durable execution history. The internal runtime owns writing, terminal
+// merge semantics, first-end-wins, and progress timing.
+func (s *service) openExecuteSessionLog(req ServiceExecuteRequest, decision RouteDecision, sessionID string) *serviceimpl.SessionLog {
+	headerMeta := metaWithRoleAndCorrelation(req.Metadata, req.Role, req.CorrelationID)
+	start := session.SessionStartData{
+		Provider:               s.providerTypeLabel(decision.Provider),
+		Model:                  decision.Model,
+		SelectedProvider:       decision.Provider,
+		SelectedEndpoint:       decision.Endpoint,
+		SelectedServerInstance: decision.ServerInstance,
+		SelectedRoute:          req.SelectedRoute,
+		Sticky: session.RoutingStickyState{
+			KeyPresent:     req.CorrelationID != "",
+			Assignment:     decision.Sticky.Assignment,
+			ServerInstance: decision.Sticky.ServerInstance,
+			Reason:         decision.Sticky.Reason,
+			Bonus:          decision.Sticky.Bonus,
+		},
+		Utilization: session.RoutingUtilizationState{
+			Source:         decision.Utilization.Source,
+			Freshness:      decision.Utilization.Freshness,
+			ActiveRequests: decision.Utilization.ActiveRequests,
+			QueuedRequests: decision.Utilization.QueuedRequests,
+			MaxConcurrency: decision.Utilization.MaxConcurrency,
+			CachePressure:  decision.Utilization.CachePressure,
+			ObservedAt:     decision.Utilization.ObservedAt,
+		},
+		RequestedHarness: req.Harness,
+		ResolvedHarness:  decision.Harness,
+		HarnessSource:    harnessSource(req),
+		RequestedModel:   req.Model,
+		ResolvedModel:    decision.Model,
+		Reasoning:        req.Reasoning,
+		WorkDir:          req.WorkDir,
+		MaxIterations:    req.MaxIterations,
+		Prompt:           req.Prompt,
+		SystemPrompt:     req.SystemPrompt,
+		Metadata:         headerMeta,
+	}
+	endBase := session.SessionEndData{
+		SelectedRoute:    req.SelectedRoute,
+		SelectedEndpoint: decision.Endpoint,
+		Sticky: session.RoutingStickyState{
+			KeyPresent:     req.CorrelationID != "",
+			Assignment:     decision.Sticky.Assignment,
+			ServerInstance: decision.Sticky.ServerInstance,
+			Reason:         decision.Sticky.Reason,
+			Bonus:          decision.Sticky.Bonus,
+		},
+		Utilization: session.RoutingUtilizationState{
+			Source:         decision.Utilization.Source,
+			Freshness:      decision.Utilization.Freshness,
+			ActiveRequests: decision.Utilization.ActiveRequests,
+			QueuedRequests: decision.Utilization.QueuedRequests,
+			MaxConcurrency: decision.Utilization.MaxConcurrency,
+			CachePressure:  decision.Utilization.CachePressure,
+			ObservedAt:     decision.Utilization.ObservedAt,
+		},
+		RequestedHarness: req.Harness,
+		HarnessSource:    harnessSource(req),
+		RequestedModel:   req.Model,
+		Reasoning:        req.Reasoning,
+	}
+	if req.CostCapUSD > 0 {
+		cap := req.CostCapUSD
+		endBase.CostCapUSD = &cap
+	}
+
+	var routingDecision any
+	if decision.Harness != "" || decision.Provider != "" || decision.Model != "" || len(decision.Candidates) > 0 || !decision.SnapshotCapturedAt.IsZero() {
+		routingDecision = serviceRoutingDecisionDataFromDecision(req, decision, sessionID)
+	}
+	return serviceimpl.OpenSessionLog(serviceimpl.SessionLogOptions{
+		Dir:       req.SessionLogDir,
+		SessionID: sessionID,
+		Start:     start,
+		EndBase:   endBase,
+		Decision: serviceimpl.SessionLogDecision{
+			ServerInstance: decision.ServerInstance,
+		},
+		RoutingDecision:     routingDecision,
+		RoutingDecisionType: agentcore.EventType(ServiceEventTypeRoutingDecision),
+	})
+}
+
+// persistRejectedOverride records pre-dispatch pin rejection evidence through
+// the same internal runtime used by accepted execution.
+func (s *service) persistRejectedOverride(req ServiceExecuteRequest, sessionID string, payload ServiceOverrideData) {
+	if req.SessionLogDir == "" || sessionID == "" {
+		return
+	}
+	sl := s.openExecuteSessionLog(req, RouteDecision{}, sessionID)
+	if sl == nil || !sl.Enabled() {
+		return
+	}
+	defer sl.Close()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	sl.WriteOverride(agentcore.EventType(ServiceEventTypeRejectedOverride), raw)
+}
+
+// providerTypeLabel maps a configured provider name to its concrete type for
+// the durable session.start projection.
+func (s *service) providerTypeLabel(name string) string {
+	if s == nil || s.opts.ServiceConfig == nil || name == "" {
+		return name
+	}
+	entry, ok := s.opts.ServiceConfig.Provider(name)
+	if !ok || entry.Type == "" {
+		return name
+	}
+	return entry.Type
+}
+
 func executeCollisionWarning(req ServiceExecuteRequest) *harnesses.FinalWarning {
 	collisions := metadataReservedKeyCollisions(req.Metadata, req.Role, req.CorrelationID)
 	if len(collisions) == 0 {
@@ -158,6 +278,34 @@ func nativeRouteCandidates(in []RouteCandidate) []serviceimpl.NativeRouteCandida
 			ServerInstance: candidate.ServerInstance,
 			Model:          candidate.Model,
 			Eligible:       candidate.Eligible,
+		}
+	}
+	return out
+}
+
+func toTranscriptRouteDecision(decision RouteDecision) transcript.RouteProgressDecision {
+	out := transcript.RouteProgressDecision{
+		Harness:  decision.Harness,
+		Provider: decision.Provider,
+		Model:    decision.Model,
+		Power:    decision.Power,
+	}
+	if len(decision.Candidates) == 0 {
+		return out
+	}
+	out.Candidates = make([]transcript.RouteProgressCandidate, len(decision.Candidates))
+	for i, candidate := range decision.Candidates {
+		out.Candidates[i] = transcript.RouteProgressCandidate{
+			Harness:            candidate.Harness,
+			Provider:           candidate.Provider,
+			Model:              candidate.Model,
+			CostUSDPer1kTokens: candidate.CostUSDPer1kTokens,
+			CostSource:         candidate.CostSource,
+			Components: transcript.RouteProgressComponents{
+				Power:     candidate.Components.Power,
+				SpeedTPS:  candidate.Components.SpeedTPS,
+				CostClass: candidate.Components.CostClass,
+			},
 		}
 	}
 	return out

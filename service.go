@@ -38,6 +38,13 @@ type FizeauService interface {
 	ReplaySession(ctx context.Context, sessionID string, w io.Writer) error
 }
 
+// TailSessionLog streams events from an in-progress or completed session by
+// ID. The internal session hub owns subscription and fan-out mechanics; this
+// receiver preserves the public facade and event identity.
+func (s *service) TailSessionLog(ctx context.Context, sessionID string) (<-chan ServiceEvent, error) {
+	return serviceimpl.TailSessionLog(ctx, sessionID, s.hub.Subscribe)
+}
+
 // ServiceConfig provides provider and routing data to the service without
 // creating an import cycle from the root package into agent/config.
 // Callers wrap their loaded *config.Config in a type that satisfies this interface.
@@ -1060,7 +1067,7 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		opts:             opts,
 		registry:         harnesses.NewRegistry(),
 		harnessInstances: defaultHarnessInstances(),
-		hub:              newSessionHub(),
+		hub:              serviceimpl.NewSessionHub(),
 		runtime:          serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
 		catalog:          newCatalogCache(catalogCacheOptions{AsyncRefreshTimeout: opts.catalogRefreshTimeout()}),
 		routeHealth:      routehealth.NewStore(),
