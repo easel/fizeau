@@ -1073,6 +1073,13 @@ func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
+
+	// Cancel the periodic worker and wait for refreshes that were already
+	// dispatched before allowing t.TempDir cleanup to remove their cache root.
+	// Cancellation alone is not a join: a fake refresh may have passed its
+	// initial context check and still be finishing an atomic cache write.
+	cancel()
+	waitForPrimaryQuotaRefreshIdle(t, "claude", "codex")
 }
 
 func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
@@ -1146,6 +1153,29 @@ func resetPrimaryQuotaRefreshForTest(t *testing.T) {
 		primaryQuotaRefresh.inFlight = oldInFlight
 		primaryQuotaRefresh.mu.Unlock()
 	})
+}
+
+func waitForPrimaryQuotaRefreshIdle(t *testing.T, harnessNames ...string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		idle := true
+		primaryQuotaRefresh.mu.Lock()
+		for _, name := range harnessNames {
+			if primaryQuotaRefresh.inFlight[name] {
+				idle = false
+				break
+			}
+		}
+		primaryQuotaRefresh.mu.Unlock()
+		if idle {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for primary quota refreshes to become idle: %v", harnessNames)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func waitForQuotaRefreshes(t *testing.T, done <-chan string, want ...string) {
