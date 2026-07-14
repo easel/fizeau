@@ -18,6 +18,13 @@ const CodexModelDiscoveryFreshnessWindow = 24 * time.Hour
 var codexModelPattern = regexp.MustCompile(`\bgpt-[A-Za-z0-9][A-Za-z0-9._-]*\b`)
 
 func ReadCodexModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
+	return ReadCodexModelDiscoveryViaPTYWithContext(context.Background(), timeout, opts...)
+}
+
+// ReadCodexModelDiscoveryViaPTYWithContext discovers Codex models while the
+// caller's context owns the PTY process lifecycle. ptyquota.Run waits for the
+// PTY session and its process group to be reaped before returning an error.
+func ReadCodexModelDiscoveryViaPTYWithContext(ctx context.Context, timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
 	cfg := quotaPTYOptions{binary: "codex", args: []string{"--no-alt-screen"}}
 	for _, opt := range opts {
 		if opt != nil {
@@ -25,7 +32,7 @@ func ReadCodexModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption
 		}
 	}
 	var snapshot harnesses.ModelDiscoverySnapshot
-	_, err := ptyquota.Run(context.Background(), ptyquota.Config{
+	_, err := ptyquota.Run(ctx, ptyquota.Config{
 		HarnessName:        "codex",
 		Binary:             cfg.binary,
 		Args:               cfg.args,

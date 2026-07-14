@@ -3,6 +3,7 @@ package serviceimpl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -12,6 +13,104 @@ import (
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 )
+
+type legacyModelDiscoveryHarness struct {
+	harnesses.ModelDiscoveryHarness
+	snapshot harnesses.ModelDiscoverySnapshot
+	err      error
+	calls    int
+}
+
+func (h *legacyModelDiscoveryHarness) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
+	h.calls++
+	return h.snapshot, h.err
+}
+
+type contextualModelDiscoveryHarness struct {
+	*legacyModelDiscoveryHarness
+	contexts chan context.Context
+}
+
+func (h *contextualModelDiscoveryHarness) DefaultModelSnapshotWithContext(ctx context.Context) (harnesses.ModelDiscoverySnapshot, error) {
+	h.contexts <- ctx
+	<-ctx.Done()
+	return harnesses.ModelDiscoverySnapshot{}, ctx.Err()
+}
+
+func TestSubprocessDiscoveryRefresher_UsesContextualModelSnapshot(t *testing.T) {
+	legacy := &legacyModelDiscoveryHarness{
+		snapshot: harnesses.ModelDiscoverySnapshot{Models: []string{"must-not-be-used"}},
+	}
+	contextual := &contextualModelDiscoveryHarness{
+		legacyModelDiscoveryHarness: legacy,
+		contexts:                    make(chan context.Context, 1),
+	}
+	refresher := subprocessDiscoveryRefresher("codex", contextual)
+
+	type refreshContextKey struct{}
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), refreshContextKey{}, "refresh-owner"))
+	result := make(chan struct {
+		data []byte
+		err  error
+	}, 1)
+	go func() {
+		data, err := refresher(ctx)
+		result <- struct {
+			data []byte
+			err  error
+		}{data: data, err: err}
+	}()
+
+	select {
+	case received := <-contextual.contexts:
+		if received != ctx {
+			t.Fatal("contextual model discovery did not receive the exact refresh context")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("contextual model discovery was not called")
+	}
+	cancel()
+
+	select {
+	case got := <-result:
+		if !errors.Is(got.err, context.Canceled) {
+			t.Fatalf("refresher error = %v, want context.Canceled", got.err)
+		}
+		if got.data != nil {
+			t.Fatalf("cancelled refresher returned commit data: %q", got.data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled contextual refresh did not return")
+	}
+	if legacy.calls != 0 {
+		t.Fatalf("legacy DefaultModelSnapshot calls = %d, want 0", legacy.calls)
+	}
+}
+
+func TestSubprocessDiscoveryRefresher_SupportsLegacyModelSnapshot(t *testing.T) {
+	want := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC().Round(0),
+		Models:          []string{"gpt-5.5"},
+		ReasoningLevels: []string{"high"},
+		Source:          "legacy",
+	}
+	legacy := &legacyModelDiscoveryHarness{snapshot: want}
+
+	data, err := subprocessDiscoveryRefresher("legacy", legacy)(context.Background())
+	if err != nil {
+		t.Fatalf("legacy refresher failed: %v", err)
+	}
+	if legacy.calls != 1 {
+		t.Fatalf("legacy DefaultModelSnapshot calls = %d, want 1", legacy.calls)
+	}
+	payload, ok := decodeSubprocessDiscoveryPayload(data)
+	if !ok {
+		t.Fatalf("decode legacy payload %q", data)
+	}
+	if payload.Source != want.Source || len(payload.Models) != 1 || payload.Models[0] != want.Models[0] {
+		t.Fatalf("legacy payload = %#v, want snapshot %#v", payload, want)
+	}
+}
 
 // withTestDiscoveryCache repoints the subprocess discovery cache root at a
 // temp dir and installs a fake refresher, restoring both on cleanup. It

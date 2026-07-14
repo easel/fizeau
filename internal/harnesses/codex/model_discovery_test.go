@@ -1,10 +1,14 @@
 package codex
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -12,6 +16,120 @@ import (
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCodexDefaultModelSnapshotWithContext_UsesCallerContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-backed PTY probes require Unix PTY support")
+	}
+	dir := t.TempDir()
+	startedPath := filepath.Join(dir, "started")
+	script := filepath.Join(dir, "fake-codex")
+	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
+script_dir=$(dirname "$0")
+printf started > "$script_dir/started"
+printf '› '
+IFS= read line
+sleep 30
+`), 0o700))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := (&Runner{Binary: script}).DefaultModelSnapshotWithContext(ctx)
+		result <- err
+	}()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(startedPath)
+		return err == nil
+	}, time.Second, 10*time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-result:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(2 * time.Second):
+		t.Fatal("DefaultModelSnapshotWithContext ignored caller cancellation")
+	}
+}
+
+func TestReadCodexModelDiscoveryViaPTY_ContextCancellationReapsProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY process groups require Unix support")
+	}
+	dir := t.TempDir()
+	parentPIDPath := filepath.Join(dir, "parent.pid")
+	childPIDPath := filepath.Join(dir, "child.pid")
+	lateWritePath := filepath.Join(dir, "late-write")
+	cassetteDir := filepath.Join(dir, "cassette")
+	script := filepath.Join(dir, "fake-codex")
+	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
+printf '%s' "$$" > "$1"
+(sleep 1; printf late > "$3") &
+child=$!
+printf '%s' "$child" > "$2"
+printf '› '
+IFS= read line
+wait "$child"
+`), 0o700))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := ReadCodexModelDiscoveryViaPTYWithContext(
+			ctx,
+			30*time.Second,
+			WithQuotaPTYCommand(script, parentPIDPath, childPIDPath, lateWritePath),
+			WithQuotaPTYCassetteDir(cassetteDir),
+		)
+		result <- err
+	}()
+
+	require.Eventually(t, func() bool {
+		return fileContainsPID(parentPIDPath) && fileContainsPID(childPIDPath)
+	}, time.Second, 10*time.Millisecond)
+	parentPID := readPIDFile(t, parentPIDPath)
+	childPID := readPIDFile(t, childPIDPath)
+	cancelledAt := time.Now()
+	cancel()
+
+	select {
+	case err := <-result:
+		require.ErrorIs(t, err, context.Canceled)
+		require.Less(t, time.Since(cancelledAt), 2*time.Second)
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelled Codex model discovery did not return after process cleanup")
+	}
+
+	require.Eventually(t, func() bool { return processReaped(parentPID) }, 2*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool { return processReaped(childPID) }, 2*time.Second, 20*time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
+	_, err := os.Stat(lateWritePath)
+	require.ErrorIs(t, err, os.ErrNotExist, "reaped child must not write after discovery returns")
+	_, err = os.Stat(filepath.Join(cassetteDir, cassette.ManifestFile))
+	require.ErrorIs(t, err, os.ErrNotExist, "cancelled discovery must not commit cassette evidence")
+}
+
+func fileContainsPID(path string) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	_, err = strconv.Atoi(strings.TrimSpace(string(raw)))
+	return err == nil
+}
+
+func readPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	return pid
+}
+
+func processReaped(pid int) bool {
+	return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+}
 
 func TestParseCodexModels(t *testing.T) {
 	models := parseCodexModels("Select model\r\n> gpt-5.4\r\n  gpt-5.4-mini\r\n  gpt-5.4\r\n")

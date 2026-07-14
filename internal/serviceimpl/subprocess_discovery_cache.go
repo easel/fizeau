@@ -76,8 +76,16 @@ func discoveryCache() *discoverycache.Cache {
 // tests can inject a fake refresher and observe call counts. The default runs
 // the harness PTY scrape via DefaultModelSnapshot.
 var subprocessDiscoveryRefresher = func(name string, mdh harnesses.ModelDiscoveryHarness) discoverycache.Refresher {
-	return func(context.Context) ([]byte, error) {
-		snapshot, err := mdh.DefaultModelSnapshot()
+	return func(ctx context.Context) ([]byte, error) {
+		var (
+			snapshot harnesses.ModelDiscoverySnapshot
+			err      error
+		)
+		if contextual, ok := mdh.(harnesses.ContextModelDiscoveryHarness); ok {
+			snapshot, err = contextual.DefaultModelSnapshotWithContext(ctx)
+		} else {
+			snapshot, err = mdh.DefaultModelSnapshot()
+		}
 		if err != nil {
 			return nil, err
 		}

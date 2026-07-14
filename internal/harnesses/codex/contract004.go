@@ -213,12 +213,19 @@ func readCodexAccountSnapshot(now time.Time) harnesses.AccountSnapshot {
 // the live PTY discovery helper with a sensible timeout; on failure,
 // returns a snapshot with empty Models and error detail.
 func (r *Runner) DefaultModelSnapshot() (harnesses.ModelDiscoverySnapshot, error) {
+	return r.DefaultModelSnapshotWithContext(context.Background())
+}
+
+// DefaultModelSnapshotWithContext implements
+// harnesses.ContextModelDiscoveryHarness. The caller's context owns the live
+// PTY probe and is preserved through process cleanup.
+func (r *Runner) DefaultModelSnapshotWithContext(ctx context.Context) (harnesses.ModelDiscoverySnapshot, error) {
 	timeout := 10 * time.Second
 	var opts []QuotaPTYOption
 	if r.Binary != "" {
 		opts = append(opts, WithQuotaPTYCommand(r.Binary))
 	}
-	snapshot, err := ReadCodexModelDiscoveryViaPTY(timeout, opts...)
+	snapshot, err := ReadCodexModelDiscoveryViaPTYWithContext(ctx, timeout, opts...)
 	if err != nil {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("model discovery PTY: %w", err)
 	}
@@ -337,8 +344,9 @@ func codexAccountSnapshotFromQuotaSnapshot(snap *codexQuotaSnapshot, now time.Ti
 
 // Compile-time interface satisfaction.
 var (
-	_ harnesses.Harness               = (*Runner)(nil)
-	_ harnesses.QuotaHarness          = (*Runner)(nil)
-	_ harnesses.AccountHarness        = (*Runner)(nil)
-	_ harnesses.ModelDiscoveryHarness = (*Runner)(nil)
+	_ harnesses.Harness                      = (*Runner)(nil)
+	_ harnesses.QuotaHarness                 = (*Runner)(nil)
+	_ harnesses.AccountHarness               = (*Runner)(nil)
+	_ harnesses.ModelDiscoveryHarness        = (*Runner)(nil)
+	_ harnesses.ContextModelDiscoveryHarness = (*Runner)(nil)
 )

@@ -486,3 +486,17 @@ type ModelDiscoveryHarness interface {
 	// recognize no family aliases.
 	SupportedAliases() []string
 }
+
+// ContextModelDiscoveryHarness is the optional cancellation-aware extension
+// to ModelDiscoveryHarness. Service-owned refreshers prefer this interface so
+// their exact lifecycle context reaches live model-discovery probes. The
+// context-free DefaultModelSnapshot method remains available for legacy
+// callers and harness implementations.
+type ContextModelDiscoveryHarness interface {
+	ModelDiscoveryHarness
+
+	// DefaultModelSnapshotWithContext returns live discovery evidence while
+	// honoring ctx. Implementations must not replace ctx with a background
+	// context, and must finish process cleanup before returning cancellation.
+	DefaultModelSnapshotWithContext(ctx context.Context) (ModelDiscoverySnapshot, error)
+}
