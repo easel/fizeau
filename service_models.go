@@ -11,14 +11,12 @@ package fizeau
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/runtimesignals"
-	"github.com/easel/fizeau/internal/serverinstance"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -112,38 +110,20 @@ func (s *service) listModelsForSubprocessHarness(filter ModelFilter) []ModelInfo
 // IDs. Shared by the harness-pinned ListModels path and the unfiltered path.
 func (s *service) subscriptionHarnessTierModels(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []ModelInfo {
 	modelIDs := subprocessHarnessModelIDs(name, cfg)
-	if len(modelIDs) == 0 {
-		return nil
-	}
-	out := make([]ModelInfo, 0, len(modelIDs))
-	for i, id := range modelIDs {
-		info := ModelInfo{
-			ID:             id,
-			Provider:       name,
-			Harness:        name,
-			EndpointName:   name,
-			ServerInstance: name,
-			Capabilities:   []string{"streaming", "tool_use"},
-			Available:      true,
-			IsDefault:      cfg.DefaultModel != "" && id == cfg.DefaultModel,
-			Billing:        harnessPaymentKind(name, cfg),
-			RankPosition:   i,
-		}
-		if cat != nil {
-			info.ContextLength, info.ContextSource = resolveContextEvidence(context.Background(), ServiceProviderEntry{}, id, cat)
-			info.Cost, info.PerfSignal = catalogCostAndPerf(cat, id)
-			info.Power, info.AutoRoutable, info.ExactPinOnly = catalogPowerEligibility(cat, id)
-			if cost, ok := catalogCostUSDPer1kTokens(cat, id); ok {
-				info.EffectiveCost = cost
-				if info.Billing == BillingModelSubscription {
-					info.EffectiveCostSource = "subscription_shadow"
-				} else {
-					info.EffectiveCostSource = "catalog"
-				}
-			}
-		}
+	rows := serviceimpl.SubscriptionHarnessTierModels(context.Background(), serviceimpl.SubscriptionHarnessInventoryInput{
+		Name:     name,
+		Config:   cfg,
+		ModelIDs: modelIDs,
+		Catalog:  cat,
+		EffectiveCostForModel: func(id string) (float64, bool) {
+			return catalogCostUSDPer1kTokens(cat, id)
+		},
+	})
+	out := make([]ModelInfo, 0, len(rows))
+	for _, row := range rows {
+		info := modelInfoFromServiceImplInventoryRow(row)
 		attachRuntimeSignalToModelInfo(&info, name)
-		info.Utilization = s.routeUtilizationEvidence(name, info.ServerInstance, info.EndpointName, id)
+		info.Utilization = s.routeUtilizationEvidence(name, info.ServerInstance, info.EndpointName, info.ID)
 		out = append(out, info)
 	}
 	return out
@@ -193,7 +173,6 @@ func appendUniqueModelIDs(values []string, additions ...string) []string {
 }
 
 func (s *service) listModelsFromSnapshot(ctx context.Context, sc ServiceConfig, cat *modelcatalog.Catalog, snapshot modelsnapshot.ModelSnapshot, filter ModelFilter) []ModelInfo {
-	defaultProviderName := sc.DefaultProviderName()
 	entries := make(map[string]ServiceProviderEntry, len(sc.ProviderNames()))
 	for _, name := range sc.ProviderNames() {
 		if filter.Provider != "" && filter.Provider != name {
@@ -206,55 +185,45 @@ func (s *service) listModelsFromSnapshot(ctx context.Context, sc ServiceConfig, 
 		entries[name] = entry
 	}
 
-	modelsByProvider := make(map[string][]modelsnapshot.KnownModel, len(snapshot.Models))
-	for _, model := range snapshot.Models {
-		if filter.Provider != "" && filter.Provider != model.Provider {
-			continue
-		}
-		if _, ok := entries[model.Provider]; !ok {
-			continue
-		}
-		modelsByProvider[model.Provider] = append(modelsByProvider[model.Provider], model)
+	implEntries := make(map[string]serviceimpl.ProviderEntry, len(entries))
+	for name, entry := range entries {
+		implEntries[name] = serviceImplProviderEntry(entry)
 	}
-
-	rankByEndpoint := make(map[string]int, len(snapshot.Models))
-	out := make([]ModelInfo, 0, len(snapshot.Models))
-	for _, providerName := range sc.ProviderNames() {
-		if filter.Provider != "" && filter.Provider != providerName {
-			continue
-		}
-		entry, ok := entries[providerName]
-		if !ok {
-			continue
-		}
-		for _, model := range modelsByProvider[providerName] {
-			normalizedModel := model
-			normalizedModel.ServerInstance = serverinstance.Normalize(model.EndpointBaseURL, model.ServerInstance)
-			rankKey := strings.Join([]string{normalizedModel.Provider, normalizedModel.EndpointName, normalizedModel.EndpointBaseURL, normalizedModel.ServerInstance}, "\x00")
-			rank := rankByEndpoint[rankKey]
-			rankByEndpoint[rankKey] = rank + 1
-			out = append(out, s.modelInfoFromSnapshotModel(ctx, providerName, entry, defaultProviderName, cat, normalizedModel, rank))
-		}
+	rows := serviceimpl.AssembleModelInventory(ctx, serviceimpl.ModelInventoryInput{
+		ProviderNames:   sc.ProviderNames(),
+		Providers:       implEntries,
+		DefaultProvider: sc.DefaultProviderName(),
+		ProviderFilter:  filter.Provider,
+		Snapshot:        snapshot,
+		Catalog:         cat,
+	})
+	out := make([]ModelInfo, 0, len(rows))
+	for _, row := range rows {
+		info := modelInfoFromServiceImplInventoryRow(row)
+		info.Utilization = s.routeUtilizationEvidence(info.Provider, info.ServerInstance, info.EndpointName, info.ID)
+		out = append(out, info)
 	}
 	return out
 }
 
-func (s *service) modelInfoFromSnapshotModel(ctx context.Context, providerName string, entry ServiceProviderEntry, defaultProviderName string, cat *modelcatalog.Catalog, model modelsnapshot.KnownModel, rankPosition int) ModelInfo {
-	info := ModelInfo{
+func modelInfoFromServiceImplInventoryRow(row serviceimpl.ModelInventoryRow) ModelInfo {
+	model := row.Model
+	return ModelInfo{
 		ID:              model.ID,
-		Provider:        providerName,
+		Provider:        model.Provider,
 		ProviderType:    model.ProviderType,
 		Harness:         model.Harness,
 		EndpointName:    model.EndpointName,
 		EndpointBaseURL: model.EndpointBaseURL,
 		ServerInstance:  model.ServerInstance,
 		ContextLength:   model.ContextWindow,
-		Utilization:     s.routeUtilizationEvidence(providerName, model.ServerInstance, model.EndpointName, model.ID),
-		Capabilities:    providerCapabilities(entry),
+		ContextSource:   row.ContextSource,
+		Capabilities:    append([]string(nil), row.Capabilities...),
 		Cost: CostInfo{
 			InputPerMTok:  model.CostInputPerM,
 			OutputPerMTok: model.CostOutputPerM,
 		},
+		PerfSignal:                    adaptServiceImplPerfSignal(row.PerfSignal),
 		Power:                         model.Power,
 		AutoRoutable:                  model.AutoRoutable,
 		ExactPinOnly:                  model.ExactPinOnly,
@@ -270,18 +239,10 @@ func (s *service) modelInfoFromSnapshotModel(ctx context.Context, providerName s
 		QuotaFreshnessSource:          model.QuotaFreshnessSource,
 		ModelDiscoveryFreshnessAt:     model.DiscoveredAt,
 		ModelDiscoveryFreshnessSource: string(model.DiscoveredVia),
-		Available:                     true,
-		RankPosition:                  rankPosition,
+		Available:                     row.Available,
+		IsDefault:                     row.IsDefault,
+		RankPosition:                  row.RankPosition,
 	}
-	if info.Harness == "" {
-		info.Harness = "fiz"
-	}
-	info.ContextLength, info.ContextSource = resolveContextEvidence(ctx, entry, model.ID, cat)
-	if cat != nil {
-		_, info.PerfSignal = catalogCostAndPerf(cat, model.ID)
-	}
-	info.IsDefault = providerName == defaultProviderName && entry.Model != "" && model.ID == entry.Model
-	return info
 }
 
 type modelDiscoveryEndpoint struct {
