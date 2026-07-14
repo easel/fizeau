@@ -1,4 +1,4 @@
-package fizeau
+package serviceimpl
 
 import (
 	"context"
@@ -13,6 +13,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var testDiscoveryUnsupported = errors.New("test: discovery unsupported")
+
+// Keep the moved white-box suite mechanically recognizable while exercising
+// the API-neutral internal cache types and caller-supplied sentinel seam.
+type catalogCache = CatalogCache
+type catalogCacheKey = CatalogCacheKey
+type catalogCacheOptions = CatalogCacheOptions
+
+func newCatalogCache(opts catalogCacheOptions) *catalogCache {
+	if opts.DiscoveryUnsupported == nil {
+		opts.DiscoveryUnsupported = testDiscoveryUnsupported
+	}
+	return NewCatalogCache(opts)
+}
+
+func newCatalogCacheKey(baseURL, apiKey string, headers map[string]string) catalogCacheKey {
+	return NewCatalogCacheKey(baseURL, apiKey, headers)
+}
 
 // stubClock is a deterministic time source for tests.
 type stubClock struct {
@@ -119,6 +138,8 @@ func TestCatalogCache_StaleServesCachedAndAsyncRefreshes(t *testing.T) {
 	r2, err := cache.Get(context.Background(), key, probe)
 	require.NoError(t, err)
 	assert.True(t, r2.FromCache, "still within FreshTTL of the refresh")
+	assert.Equal(t, clock.Now(), r2.FetchedAt,
+		"refresh at a repeated injected timestamp must replace the fetch timestamp exactly")
 }
 
 func TestCatalogCache_AsyncRefreshUsesConfiguredDeadline(t *testing.T) {
@@ -180,6 +201,37 @@ func TestCatalogCache_AsyncRefreshUsesConfiguredDeadline(t *testing.T) {
 	}
 
 	assert.EqualValues(t, 1, callCount.Load(), "one async refresh probe should run under the configured deadline")
+}
+
+func TestCatalogCache_AsyncRefreshDetachesParentCancellation(t *testing.T) {
+	clock := newStubClock()
+	cache := newCatalogCache(catalogCacheOptions{
+		FreshTTL:            10 * time.Second,
+		StaleTTL:            60 * time.Second,
+		AsyncRefreshTimeout: time.Second,
+		Now:                 clock.Now,
+	})
+	key := testKey("http://host/v1")
+	_, err := cache.Get(context.Background(), key, func(context.Context) ([]string, error) {
+		return []string{"seed"}, nil
+	})
+	require.NoError(t, err)
+	clock.advance(20 * time.Second)
+
+	parent, cancel := context.WithCancel(context.Background())
+	cancel()
+	observed := make(chan error, 1)
+	_, err = cache.Get(parent, key, func(ctx context.Context) ([]string, error) {
+		observed <- ctx.Err()
+		return []string{"refreshed"}, nil
+	})
+	require.NoError(t, err)
+	select {
+	case err := <-observed:
+		assert.NoError(t, err, "context.WithoutCancel must detach stale refresh from caller cancellation")
+	case <-time.After(time.Second):
+		t.Fatal("detached async refresh did not run")
+	}
 }
 
 func TestCatalogCache_ColdMissCoalesces(t *testing.T) {
@@ -261,6 +313,32 @@ func TestCatalogCache_ReachabilityErrorCooldown(t *testing.T) {
 	assert.EqualValues(t, 2, callCount.Load(), "must re-probe after cooldown expires")
 }
 
+func TestCatalogCache_ZeroJitterDoesNotRandomizeCooldown(t *testing.T) {
+	clock := newStubClock()
+	cache := newCatalogCache(catalogCacheOptions{
+		FreshTTL:            10 * time.Second,
+		StaleTTL:            60 * time.Second,
+		UnreachableCooldown: 5 * time.Second,
+		UnreachableJitter:   0,
+		Now:                 clock.Now,
+		RandInt63n: func(int64) int64 {
+			t.Fatal("zero jitter must not invoke the random source")
+			return 0
+		},
+	})
+	key := testKey("http://host/v1")
+	reachErr := &openai.ReachabilityError{Cause: errors.New("bad gateway")}
+	_, _ = cache.Get(context.Background(), key, func(context.Context) ([]string, error) {
+		return nil, reachErr
+	})
+	clock.advance(2 * time.Second)
+	_, err := cache.Get(context.Background(), key, func(context.Context) ([]string, error) {
+		t.Fatal("cooldown hit must not re-probe")
+		return nil, nil
+	})
+	require.ErrorIs(t, err, openai.ErrEndpointUnreachable)
+}
+
 func TestCatalogCache_DiscoveryUnsupportedFallsBackToPassthrough(t *testing.T) {
 	clock := newStubClock()
 	cache := testCache(clock)
@@ -269,7 +347,7 @@ func TestCatalogCache_DiscoveryUnsupportedFallsBackToPassthrough(t *testing.T) {
 	var callCount atomic.Int32
 	probe := func(ctx context.Context) ([]string, error) {
 		callCount.Add(1)
-		return nil, ErrDiscoveryUnsupported()
+		return nil, fmt.Errorf("wrapped: %w", testDiscoveryUnsupported)
 	}
 
 	r, err := cache.Get(context.Background(), key, probe)
@@ -482,6 +560,52 @@ func TestCatalogCache_FreshTTLLocalDefault(t *testing.T) {
 func TestCatalogCache_FreshTTLLocalConfigurable(t *testing.T) {
 	cache := newCatalogCache(catalogCacheOptions{LocalFreshTTL: 3 * time.Second})
 	assert.Equal(t, 3*time.Second, cache.freshTTLFor("local_free"))
+}
+
+func TestCatalogCache_LocalFreshTTLRemainsUnusedByGet(t *testing.T) {
+	clock := newStubClock()
+	cache := newCatalogCache(catalogCacheOptions{
+		FreshTTL:      time.Minute,
+		LocalFreshTTL: time.Nanosecond,
+		Now:           clock.Now,
+	})
+	key := testKey("http://local/v1")
+	var calls atomic.Int32
+	probe := func(context.Context) ([]string, error) {
+		calls.Add(1)
+		return []string{"local-model"}, nil
+	}
+	_, err := cache.Get(context.Background(), key, probe)
+	require.NoError(t, err)
+	clock.advance(time.Second)
+	r, err := cache.Get(context.Background(), key, probe)
+	require.NoError(t, err)
+	assert.True(t, r.FromCache)
+	assert.EqualValues(t, 1, calls.Load(), "Get must continue using FreshTTL until deployment class is wired")
+}
+
+func TestCatalogCache_ClassifiersPreserveExactMarkers(t *testing.T) {
+	for status := 500; status <= 505; status++ {
+		assert.True(t, IsServerError(fmt.Sprintf("request failed: HTTP %d: upstream", status)), "HTTP %d", status)
+	}
+	for _, message := range []string{"HTTP 499: client", "HTTP 506: variant", "http 500: lowercase"} {
+		assert.False(t, IsServerError(message), message)
+	}
+
+	for _, marker := range []string{
+		"connection refused", "connection reset", "no such host", "tls: handshake",
+		"TLS handshake", "i/o timeout", "dial tcp", "broken pipe",
+	} {
+		assert.True(t, IsNetworkFailure(errors.New("wrapped "+marker)), marker)
+	}
+	assert.False(t, IsNetworkFailure(context.DeadlineExceeded))
+	assert.False(t, IsNetworkFailure(errors.New("Tls handshake")), "marker casing is part of the compatibility contract")
+	assert.True(t, IsNetworkFailure(fmt.Errorf("opaque: %w", ErrDialishNetwork)))
+
+	assert.True(t, IsDispatchReachabilityFailure(errors.New("HTTP 500: upstream")))
+	assert.True(t, IsDispatchReachabilityFailure(errors.New("dial tcp: connection refused")))
+	assert.False(t, IsDispatchReachabilityFailure(errors.New("HTTP 404: not found")))
+	assert.False(t, IsDispatchReachabilityFailure(nil))
 }
 
 // Ensure helper functions don't cause data races under concurrent Get calls.

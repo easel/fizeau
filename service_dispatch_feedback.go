@@ -8,6 +8,7 @@ import (
 
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/routehealth"
+	serviceimpl "github.com/easel/fizeau/internal/serviceimpl"
 )
 
 // RecordRouteAttempt preserves the public service facade while the internal
@@ -127,7 +128,7 @@ func (s *service) recordDispatchFailure(provider, endpoint string, err error) {
 	if s == nil || err == nil {
 		return
 	}
-	if !isDispatchReachabilityFailure(err) {
+	if !serviceimpl.IsDispatchReachabilityFailure(err) {
 		return
 	}
 	providerName := strings.TrimSpace(provider)

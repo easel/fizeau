@@ -114,9 +114,7 @@ models:
 	// Catalog cache: the feedback hook must have stamped UnreachableAt on
 	// the cache key derived from the provider's baseURL/apiKey/headers.
 	cacheKey := newCatalogCacheKey(aBaseURL, "", nil)
-	svc.catalog.mu.Lock()
-	entry, ok := svc.catalog.mem[cacheKey]
-	svc.catalog.mu.Unlock()
+	entry, ok := svc.catalog.snapshot(cacheKey)
 	if !ok {
 		t.Fatal("catalog cache missing entry for aaa-down after dispatch failure")
 	}

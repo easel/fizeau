@@ -580,7 +580,7 @@ parameter types, and field-level documentation, follow the
 | `CachePolicyDefault` | const | Valid CachePolicy values |
 | `CachePolicyOff` | const | Valid CachePolicy values |
 | `CatalogProbeFunc` | type (func) | CatalogProbeFunc performs a single /v1/models discovery request against a |
-| `CatalogResult` | type (struct) | CatalogResult is what callers receive from Get |
+| `CatalogResult` | type (struct) | CatalogResult is what callers receive from catalog discovery |
 | `CompactionConfig` | type (alias) |  |
 | `ContextSourceCatalog` | const |  |
 | `ContextSourceDefault` | const |  |
@@ -755,11 +755,11 @@ parameter types, and field-level documentation, follow the
 | `axesOverridden` | func (func axesOverridden(req ServiceExecuteRequest) []string) | axesOverridden returns the canonical, ordered list of axes the caller |
 | `candidateBaseProviderName` | func (func candidateBaseProviderName(identity string) string) | candidateBaseProviderName strips any "@endpoint" suffix from a candidate |
 | `capabilityScoreForCostClass` | func (func capabilityScoreForCostClass(class string) float64) | capabilityScoreForCostClass maps the harness cost class to a coarse |
-| `catalogCache` | type (struct) | catalogCache is the service-scope live-catalog cache with stale-while- |
-| `catalogCacheKey` | type (struct) | catalogCacheKey identifies the cache entry |
-| `catalogCacheOptions` | type (struct) | catalogCacheOptions controls timings + test hooks |
+| `catalogCache` | type (struct) |  |
+| `catalogCacheKey` | type (struct) |  |
+| `catalogCacheOptions` | type (struct) | The private types below form a temporary root delegate while the remaining |
+| `catalogCacheSnapshot` | type (struct) |  |
 | `catalogCostAndPerf` | func (func catalogCostAndPerf(cat *modelcatalog.Catalog, modelID string) (CostInfo, PerfSignal)) | catalogCostAndPerf extracts CostInfo and PerfSignal for a model from the catalog |
-| `catalogEntry` | type (struct) | catalogEntry is the per-key cached state |
 | `catalogModelsForHarness` | func (func catalogModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []string) |  |
 | `catalogPowerEligibility` | func (func catalogPowerEligibility(cat *modelcatalog.Catalog, modelID string) (int, bool, bool)) |  |
 | `catalogPowerForModel` | func (func catalogPowerForModel(cat *modelcatalog.Catalog, modelID string) int) | catalogPowerForModel returns the catalog-projected power for a model |
@@ -770,16 +770,9 @@ parameter types, and field-level documentation, follow the
 | `copyScoreComponents` | func (func copyScoreComponents(in map[string]float64) map[string]float64) |  |
 | `correlationIDMaxLen` | const | CorrelationID normalization bounds (CONTRACT-003) |
 | `credentialMissingForProvider` | func (func credentialMissingForProvider(name string, pcfg ServiceProviderEntry) (string, bool)) | credentialMissingForProvider returns (location, true) when the named |
-| `cryptoRandInt63n` | func (func cryptoRandInt63n(n int64) int64) | cryptoRandInt63n uses crypto/rand for the jitter randomization |
 | `decodeServicePayload` | func (func decodeServicePayload(ev ServiceEvent, dst any) error) |  |
-| `defaultCatalogAsyncRefreshTimeout` | const | Default cache timings |
-| `defaultCatalogFreshTTL` | const | Default cache timings |
-| `defaultCatalogLocalFreshTTL` | const | Default cache timings |
 | `defaultCatalogProbeTimeout` | const |  |
 | `defaultCatalogReloadTimeout` | const |  |
-| `defaultCatalogStaleTTL` | const | Default cache timings |
-| `defaultCatalogUnreachableCooldown` | const | Default cache timings |
-| `defaultCatalogUnreachableJitter` | const | Default cache timings |
 | `defaultHarnessCleanupTimeout` | const |  |
 | `defaultHarnessInstances` | func (func defaultHarnessInstances() map[string]harnesses.Harness) | defaultHarnessInstances returns the production map of registered |
 | `defaultHealthProbeInterval` | const |  |
@@ -791,8 +784,7 @@ parameter types, and field-level documentation, follow the
 | `endpointDisplayName` | func (func endpointDisplayName(name, baseURL string) string) |  |
 | `endpointProviderRef` | func (func endpointProviderRef(providerName, endpointName string) string) |  |
 | `endpointStatus` | func (func endpointStatus(status string) string) |  |
-| `errDialishNetworkError` | var | errDialishNetworkError is a sentinel for errors |
-| `errDiscoveryUnsupported` | var | errDiscoveryUnsupported is the sentinel for "endpoint exists but /v1/models |
+| `errDiscoveryUnsupported` | var | errDiscoveryUnsupported is the public-package sentinel for an endpoint |
 | `errHarnessModelIncompatible` | var |  |
 | `errModelConstraintAmbiguous` | var |  |
 | `errModelConstraintNoMatch` | var |  |
@@ -815,17 +807,9 @@ parameter types, and field-level documentation, follow the
 | `harnessRunsInProcessOrHTTP` | func (func harnessRunsInProcessOrHTTP(cfg harnesses.HarnessConfig) bool) |  |
 | `harnessSource` | func (func harnessSource(req ServiceExecuteRequest) string) |  |
 | `harnessType` | func (func harnessType(cfg harnesses.HarnessConfig) string) | harnessType returns "native" for HTTP/embedded harnesses, "subprocess" for CLI-invoked ones |
-| `hashHeaders` | func (func hashHeaders(headers map[string]string) [sha256.Size]byte) | hashHeaders fingerprints a headers map in a deterministic way so ordering |
-| `hexDigit` | func (func hexDigit(b byte) byte) |  |
 | `internalRouteAttempt` | func (func internalRouteAttempt(attempt RouteAttempt) routehealth.Attempt) |  |
-| `isDiscoveryUnsupported` | func (func isDiscoveryUnsupported(err error) bool) |  |
-| `isDispatchReachabilityFailure` | func (func isDispatchReachabilityFailure(err error) bool) | isDispatchReachabilityFailure reports whether a chat-completions dispatch |
 | `isDispatchabilityFailure` | func (func isDispatchabilityFailure(errMsg string) bool) |  |
 | `isExplicitPinError` | func (func isExplicitPinError(err error) bool) |  |
-| `isLocalDeploymentClass` | func (func isLocalDeploymentClass(s string) bool) | isLocalDeploymentClass reports whether deployment_class names a |
-| `isNetworkFailure` | func (func isNetworkFailure(err error) bool) | isNetworkFailure returns true when err looks like a transport-level |
-| `isReachabilityErr` | func (func isReachabilityErr(err error) bool) | isReachabilityErr reports whether err carries the openai |
-| `isServerError` | func (func isServerError(msg string) bool) | isServerError returns true when the error message indicates a 5xx |
 | `isSnapshotDialFailure` | func (func isSnapshotDialFailure(errMsg string) bool) | isSnapshotDialFailure preserved as a back-compat alias for the v0 |
 | `lastDecisionEntry` | type (struct) |  |
 | `loadRoutingCatalog` | var |  |

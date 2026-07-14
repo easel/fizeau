@@ -37,7 +37,7 @@ func TestProbeOpenAIModels_404ReturnsDiscoveryUnsupported(t *testing.T) {
 	defer srv.Close()
 	_, err := probeOpenAIModels(context.Background(), srv.URL+"/v1", "")
 	require.Error(t, err)
-	assert.True(t, isDiscoveryUnsupported(err),
+	assert.True(t, errors.Is(err, ErrDiscoveryUnsupported()),
 		"404 must classify as discovery-unsupported so the cache enables passthrough")
 }
 
@@ -69,7 +69,7 @@ func TestProbeOpenAIModels_AuthErrorBubbles(t *testing.T) {
 	require.Error(t, err)
 	// 401 is neither reachability nor discovery-unsupported; it's a plain error.
 	assert.False(t, errors.Is(err, openai.ErrEndpointUnreachable))
-	assert.False(t, isDiscoveryUnsupported(err))
+	assert.False(t, errors.Is(err, ErrDiscoveryUnsupported()))
 }
 
 func TestExtractStatusCode(t *testing.T) {
