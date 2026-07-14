@@ -5,12 +5,13 @@ import (
 
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/routing"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 // TestServiceModelEligibilityResolvesHaikuAlias verifies that
-// serviceRoutingModelEligibility, given a claude subscription harness that
-// lists the canonical model IDs ("claude-haiku-5.5", "haiku-5.5") in
-// SupportedModels, returns a lookup closure that also resolves the bare alias
+// the internal service routing eligibility builder, given a claude subscription
+// harness that lists the canonical model IDs ("claude-haiku-5.5", "haiku-5.5")
+// in SupportedModels, returns a lookup closure that also resolves the bare alias
 // "haiku" to ExactPinOnly=true.
 //
 // This is the service-layer counterpart to TestHaikuAliasEligibilityLookupReturnsExactPinOnly
@@ -23,7 +24,7 @@ func TestServiceModelEligibilityResolvesHaikuAlias(t *testing.T) {
 	}
 
 	// Simulate the claude subscription harness entry that
-	// buildRoutingInputsWithCatalog produces after the catalog-surface override:
+	// routingInputs produces after the catalog-surface override:
 	// SupportedModels contains both canonical and surface-ID forms.
 	entries := []routing.HarnessEntry{{
 		Name:            "claude",
@@ -34,9 +35,9 @@ func TestServiceModelEligibilityResolvesHaikuAlias(t *testing.T) {
 		SupportedModels: []string{"claude-haiku-5.5", "haiku-5.5", "sonnet-4.6"},
 	}}
 
-	lookup := serviceRoutingModelEligibility(entries, cat)
+	lookup := serviceimpl.RoutingModelEligibility(entries, cat)
 	if lookup == nil {
-		t.Fatal("serviceRoutingModelEligibility returned nil; expected a populated closure")
+		t.Fatal("RoutingModelEligibility returned nil; expected a populated closure")
 	}
 
 	// The primary surface IDs must be found and carry ExactPinOnly.

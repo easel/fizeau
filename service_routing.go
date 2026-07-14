@@ -5,14 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
-	"github.com/easel/fizeau/internal/modeleligibility"
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/provider/utilization"
 	"github.com/easel/fizeau/internal/routehealth"
@@ -70,7 +67,7 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 			PowerPolicy:     powerPolicy,
 		}, err
 	}
-	in, snapshot := s.buildRoutingInputsWithCatalog(ctx, cat, modelsnapshot.RefreshBackground)
+	in, snapshot := s.routingInputs(ctx, cat, modelsnapshot.RefreshBackground)
 
 	resolvedModel, modelCandidates, modelErr := s.resolveModelConstraint(req.Harness, req.Provider, req.Model, in, cat)
 	if modelErr != nil {
@@ -677,11 +674,13 @@ func (s *service) buildRoutingInputs(ctx context.Context) routing.Inputs {
 	// Route hot paths are cache-first: stale or missing provider facts may
 	// request a coordinated background refresh, but routing never blocks on
 	// local provider probes or model discovery before scoring candidates.
-	inputs, _ := s.buildRoutingInputsWithCatalog(ctx, serviceRoutingCatalog(), modelsnapshot.RefreshBackground)
+	inputs, _ := s.routingInputs(ctx, serviceRoutingCatalog(), modelsnapshot.RefreshBackground)
 	return inputs
 }
 
-func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelcatalog.Catalog, refresh modelsnapshot.RefreshMode) (routing.Inputs, modelsnapshot.ModelSnapshot) {
+// routingInputs gathers service-owned live state and delegates API-neutral
+// snapshot, catalog, eligibility, and cost projection to internal/serviceimpl.
+func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, refresh modelsnapshot.RefreshMode) (routing.Inputs, modelsnapshot.ModelSnapshot) {
 	if refresh == modelsnapshot.RefreshBackground {
 		s.requestLocalHealthRefreshForRouting(ctx)
 	}
@@ -692,7 +691,16 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 	}
 	now := time.Now().UTC()
 	var snapshot modelsnapshot.ModelSnapshot
+	var providerNames []string
+	var providers map[string]serviceimpl.ProviderEntry
 	if s.opts.ServiceConfig != nil {
+		providerNames = s.opts.ServiceConfig.ProviderNames()
+		providers = make(map[string]serviceimpl.ProviderEntry, len(providerNames))
+		for _, name := range providerNames {
+			if entry, ok := s.opts.ServiceConfig.Provider(name); ok {
+				providers[name] = serviceImplProviderEntry(entry)
+			}
+		}
 		if cacheRoot, err := serviceSnapshotCacheRoot(); err == nil {
 			snapshot, _ = assembleModelSnapshotFromServiceConfigWithOptions(
 				ctx,
@@ -712,9 +720,6 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 		}
 		st := statusByName[name]
 		entry := routingHarnessEntryFromMetadata(name, cfg, st)
-		if name == "fiz" && s.opts.ServiceConfig == nil {
-			entry.AutoRoutingEligible = false
-		}
 
 		if qs, ok := subscriptionQuotaForHarness(name, time.Now()); ok {
 			entry.QuotaOK = qs.OK
@@ -731,33 +736,6 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 			entry.QuotaReason = qs.Reason
 		}
 
-		// Native "fiz" harness: enumerate snapshot-derived provider rows.
-		if name == "fiz" && s.opts.ServiceConfig != nil {
-			entry.Providers = s.snapshotProviderEntries(ctx, cat, snapshot)
-			// Tool support for the agent harness is per-(provider, model);
-			// the harness-level baseline is whether ANY provider supports
-			// tools. Engine OR-combines harness and provider SupportsTools
-			// so this lets a per-model no_tools catalog flag actually fire
-			// the RequiresTools gate when every provider's resolved model
-			// is no-tools.
-			if len(entry.Providers) > 0 {
-				entry.SupportsTools = anyProviderSupportsTools(entry.Providers)
-			} else {
-				entry.Available = false
-			}
-		}
-		// Subscription harnesses (claude/codex/gemini) expose multiple tiers
-		// under one auth. Use the catalog surface to enumerate the active
-		// concrete tier IDs so the engine emits one candidate per tier and
-		// the cost-aware scorer can pick the cheapest viable tier instead of
-		// silently collapsing to DefaultModel.
-		if entry.IsSubscription {
-			if tiers := catalogTierModelsForHarnessSurface(cat, entry.Surface); len(tiers) > 0 {
-				entry.AutoRoutingModels = tiers
-				entry.SupportedModels = appendUniqueModelIDs(entry.SupportedModels, tiers...)
-			}
-		}
-		s.applySubscriptionRoutingCost(&entry, cat)
 		entries = append(entries, entry)
 	}
 	successRate, latencyMS := s.routeMetricSignals(now, s.routeAttemptTTL())
@@ -792,26 +770,33 @@ func (s *service) buildRoutingInputsWithCatalog(ctx context.Context, cat *modelc
 	// /api/v1/credits round-trip.
 	probeMaps := s.openrouterProbeMaps(ctx, now)
 
-	return routing.Inputs{
-		Harnesses:                    entries,
-		ProviderSuccessRate:          successRate,
-		ObservedLatencyMS:            latencyMS,
-		ProviderQuotaExhaustedUntil:  s.providerQuotaExhaustedUntil(now),
-		ProviderUnreachable:          providerUnreachable,
-		ProbeUnreachable:             probeUnreachable,
-		ProbeUnknown:                 probeUnknown,
-		ProviderCredentialMissing:    providerCredentialMissing,
-		ProviderCreditExhausted:      probeMaps.CreditExhausted,
-		ProviderCredentialInvalid:    probeMaps.CredentialInvalid,
-		ProviderProbeUnreachable:     probeMaps.ProviderUnreachable,
-		CooldownDuration:             healthCooldownTTL,
-		Now:                          now,
-		SurfacePreference:            routingSurfacePreference(),
-		ModelEligibility:             serviceRoutingModelEligibility(entries, cat),
-		ReasoningResolver:            serviceRoutingReasoningResolver(cat),
-		EndpointLoadResolver:         s.routeEndpointLoadsResolver(now),
-		StickyServerInstanceResolver: s.routeStickyServerInstanceResolver(now),
-	}, snapshot
+	inputs := serviceimpl.BuildRoutingInputs(serviceimpl.RoutingInputsInput{
+		Base: routing.Inputs{
+			ProviderSuccessRate:          successRate,
+			ObservedLatencyMS:            latencyMS,
+			ProviderQuotaExhaustedUntil:  s.providerQuotaExhaustedUntil(now),
+			ProviderUnreachable:          providerUnreachable,
+			ProbeUnreachable:             probeUnreachable,
+			ProbeUnknown:                 probeUnknown,
+			ProviderCredentialMissing:    providerCredentialMissing,
+			ProviderCreditExhausted:      probeMaps.CreditExhausted,
+			ProviderCredentialInvalid:    probeMaps.CredentialInvalid,
+			ProviderProbeUnreachable:     probeMaps.ProviderUnreachable,
+			CooldownDuration:             healthCooldownTTL,
+			Now:                          now,
+			SurfacePreference:            routingSurfacePreference(),
+			EndpointLoadResolver:         s.routeEndpointLoadsResolver(now),
+			StickyServerInstanceResolver: s.routeStickyServerInstanceResolver(now),
+		},
+		Harnesses:               entries,
+		Providers:               providers,
+		ProviderNames:           providerNames,
+		HasServiceConfig:        s.opts.ServiceConfig != nil,
+		Snapshot:                snapshot,
+		Catalog:                 cat,
+		LocalCostUSDPer1kTokens: s.opts.LocalCostUSDPer1kTokens,
+	})
+	return inputs, snapshot
 }
 
 // routingSurfacePreference returns the surface→harness preference that makes
@@ -967,286 +952,6 @@ type ServiceConfigSource interface {
 	ProviderNames() []string
 }
 
-func (s *service) snapshotProviderEntries(ctx context.Context, cat *modelcatalog.Catalog, snapshot modelsnapshot.ModelSnapshot) []routing.ProviderEntry {
-	if s == nil || s.opts.ServiceConfig == nil {
-		return nil
-	}
-	providerNames := s.opts.ServiceConfig.ProviderNames()
-	if len(providerNames) == 0 || len(snapshot.Models) == 0 {
-		return nil
-	}
-	grouped := make(map[snapshotProviderGroupKey][]modelsnapshot.KnownModel)
-	for _, row := range snapshot.Models {
-		harness := strings.TrimSpace(row.Harness)
-		if harness != "" && harness != "fiz" {
-			continue
-		}
-		providerName := strings.TrimSpace(row.Provider)
-		if providerName == "" {
-			continue
-		}
-		if _, ok := s.opts.ServiceConfig.Provider(providerName); !ok {
-			continue
-		}
-		key := snapshotProviderGroupKey{
-			Provider:        providerName,
-			EndpointName:    strings.TrimSpace(row.EndpointName),
-			EndpointBaseURL: strings.TrimSpace(row.EndpointBaseURL),
-			ServerInstance:  strings.TrimSpace(row.ServerInstance),
-		}
-		grouped[key] = append(grouped[key], row)
-	}
-	groupCountByProvider := make(map[string]int)
-	for key := range grouped {
-		groupCountByProvider[key.Provider]++
-	}
-	if len(grouped) == 0 {
-		return nil
-	}
-
-	keys := make([]snapshotProviderGroupKey, 0, len(grouped))
-	for key := range grouped {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].Provider != keys[j].Provider {
-			return keys[i].Provider < keys[j].Provider
-		}
-		if keys[i].EndpointName != keys[j].EndpointName {
-			return keys[i].EndpointName < keys[j].EndpointName
-		}
-		if keys[i].EndpointBaseURL != keys[j].EndpointBaseURL {
-			return keys[i].EndpointBaseURL < keys[j].EndpointBaseURL
-		}
-		return keys[i].ServerInstance < keys[j].ServerInstance
-	})
-
-	var entries []routing.ProviderEntry
-	for _, key := range keys {
-		pcfg, ok := s.opts.ServiceConfig.Provider(key.Provider)
-		if !ok || pcfg.ConfigError != "" {
-			continue
-		}
-		rows := append([]modelsnapshot.KnownModel(nil), grouped[key]...)
-		sort.Slice(rows, func(i, j int) bool {
-			if rows[i].EndpointName != rows[j].EndpointName {
-				return rows[i].EndpointName < rows[j].EndpointName
-			}
-			if rows[i].EndpointBaseURL != rows[j].EndpointBaseURL {
-				return rows[i].EndpointBaseURL < rows[j].EndpointBaseURL
-			}
-			if rows[i].ServerInstance != rows[j].ServerInstance {
-				return rows[i].ServerInstance < rows[j].ServerInstance
-			}
-			return rows[i].ID < rows[j].ID
-		})
-		discoveredIDs := snapshotModelIDs(rows)
-		if defaultModel := strings.TrimSpace(pcfg.Model); defaultModel != "" {
-			discoveredIDs = appendUniqueModelIDs(discoveredIDs, defaultModel)
-		}
-		ctxWindows, ctxSources := snapshotProviderContextWindows(ctx, pcfg, cat, rows, discoveredIDs)
-		endpointName := snapshotEndpointName(pcfg, key)
-		routeName := key.Provider
-		if groupCountByProvider[key.Provider] > 1 {
-			switch {
-			case endpointName != "":
-				routeName = endpointProviderRef(key.Provider, endpointName)
-			case key.ServerInstance != "":
-				routeName = endpointProviderRef(key.Provider, key.ServerInstance)
-			case key.EndpointBaseURL != "":
-				routeName = endpointProviderRef(key.Provider, key.EndpointBaseURL)
-			}
-		}
-		baseURL := key.EndpointBaseURL
-		if baseURL == "" {
-			baseURL = pcfg.BaseURL
-		}
-		serverInstance := key.ServerInstance
-		if serverInstance == "" {
-			serverInstance = pcfg.ServerInstance
-		}
-		serverInstance = serverinstance.Normalize(baseURL, serverInstance)
-		entry := routing.ProviderEntry{
-			Name:                      routeName,
-			BaseURL:                   baseURL,
-			ServerInstance:            serverInstance,
-			EndpointName:              endpointName,
-			EndpointBaseURL:           baseURL,
-			DefaultModel:              pcfg.Model,
-			Billing:                   pcfg.Billing,
-			CostClass:                 providerRoutingCostClass(pcfg.Type),
-			DiscoveredIDs:             discoveredIDs,
-			CatalogIDByModel:          snapshotCatalogIDByModel(rows),
-			DiscoveryAttempted:        true,
-			ContextWindows:            ctxWindows,
-			ContextWindowSources:      ctxSources,
-			ContextWindow:             pcfg.ContextWindow,
-			ContextWindowSource:       contextWindowSourceForProviderConfig(pcfg),
-			SupportsTools:             providerSupportsTools(cat, pcfg.Model, discoveredIDs),
-			ExcludeFromDefaultRouting: pcfg.IncludeByDefaultSet && !pcfg.IncludeByDefault,
-		}
-		s.applyEndpointRoutingCost(&entry, pcfg, cat)
-		entries = append(entries, entry)
-	}
-	return entries
-}
-
-type snapshotProviderGroupKey struct {
-	Provider        string
-	EndpointName    string
-	EndpointBaseURL string
-	ServerInstance  string
-}
-
-func snapshotEndpointName(pcfg ServiceProviderEntry, key snapshotProviderGroupKey) string {
-	endpoints := modelDiscoveryEndpoints(pcfg)
-	trimmedEndpointName := strings.TrimSpace(key.EndpointName)
-	trimmedBaseURL := strings.TrimSpace(key.EndpointBaseURL)
-	trimmedServerInstance := strings.TrimSpace(key.ServerInstance)
-	if len(endpoints) == 0 {
-		if trimmedEndpointName != "" {
-			if strings.EqualFold(trimmedEndpointName, strings.TrimSpace(key.Provider)) {
-				return "default"
-			}
-			return trimmedEndpointName
-		}
-		if trimmedServerInstance != "" {
-			return trimmedServerInstance
-		}
-		if trimmedBaseURL != "" {
-			return trimmedBaseURL
-		}
-		return ""
-	}
-	for _, endpoint := range endpoints {
-		if trimmedEndpointName != "" && strings.EqualFold(endpoint.Name, trimmedEndpointName) {
-			return endpoint.Name
-		}
-		if trimmedBaseURL != "" && strings.TrimSpace(endpoint.BaseURL) == trimmedBaseURL {
-			return endpoint.Name
-		}
-		if trimmedServerInstance != "" && strings.TrimSpace(endpoint.ServerInstance) == trimmedServerInstance {
-			return endpoint.Name
-		}
-	}
-	if len(endpoints) == 1 {
-		return endpoints[0].Name
-	}
-	if trimmedEndpointName != "" {
-		return trimmedEndpointName
-	}
-	if trimmedServerInstance != "" {
-		return trimmedServerInstance
-	}
-	if trimmedBaseURL != "" {
-		return trimmedBaseURL
-	}
-	return ""
-}
-
-// snapshotCatalogIDByModel maps each row's wire model ID to its /props-recovered
-// catalog identity (when the two differ), so the routing engine can resolve power
-// against the real model while invoking the server with the served alias.
-func snapshotCatalogIDByModel(rows []modelsnapshot.KnownModel) map[string]string {
-	var out map[string]string
-	for _, row := range rows {
-		id := strings.TrimSpace(row.ID)
-		catalogID := strings.TrimSpace(row.CatalogID)
-		if id == "" || catalogID == "" || catalogID == id {
-			continue
-		}
-		if out == nil {
-			out = make(map[string]string, len(rows))
-		}
-		out[id] = catalogID
-	}
-	return out
-}
-
-func snapshotModelIDs(rows []modelsnapshot.KnownModel) []string {
-	if len(rows) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(rows))
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		id := strings.TrimSpace(row.ID)
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	return ids
-}
-
-func snapshotProviderContextWindows(ctx context.Context, pcfg ServiceProviderEntry, cat *modelcatalog.Catalog, rows []modelsnapshot.KnownModel, discoveredIDs []string) (map[string]int, map[string]string) {
-	_ = ctx
-	out := make(map[string]int)
-	sources := make(map[string]string)
-	rowByID := make(map[string]modelsnapshot.KnownModel, len(rows))
-	for _, row := range rows {
-		id := strings.TrimSpace(row.ID)
-		if id == "" {
-			continue
-		}
-		if _, exists := rowByID[id]; !exists {
-			rowByID[id] = row
-		}
-	}
-	add := func(modelID string, snapshotWindow int) {
-		modelID = strings.TrimSpace(modelID)
-		if modelID == "" {
-			return
-		}
-		window, source := snapshotContextWindow(pcfg, cat, modelID, snapshotWindow)
-		if window <= 0 {
-			return
-		}
-		out[modelID] = window
-		sources[modelID] = source
-	}
-	if defaultModel := strings.TrimSpace(pcfg.Model); defaultModel != "" {
-		row, ok := rowByID[defaultModel]
-		if ok {
-			add(defaultModel, row.ContextWindow)
-		} else {
-			add(defaultModel, 0)
-		}
-	}
-	for _, id := range discoveredIDs {
-		row, ok := rowByID[id]
-		if ok {
-			add(id, row.ContextWindow)
-			continue
-		}
-		add(id, 0)
-	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	return out, sources
-}
-
-func snapshotContextWindow(pcfg ServiceProviderEntry, cat *modelcatalog.Catalog, modelID string, snapshotWindow int) (int, string) {
-	if pcfg.ContextWindow > 0 {
-		return pcfg.ContextWindow, ContextSourceProviderConfig
-	}
-	if snapshotWindow > 0 {
-		return snapshotWindow, ContextSourceCatalog
-	}
-	if cat != nil {
-		if n := cat.ContextWindowForModel(modelID); n > 0 {
-			return n, ContextSourceCatalog
-		}
-	}
-	return compaction.DefaultContextWindow, ContextSourceDefault
-}
-
 // providerQuotaExhaustedUntil snapshots the per-provider quota state machine
 // at the given instant for the routing engine. Returns nil when no provider
 // is currently in quota_exhausted state, which keeps the routing path
@@ -1366,531 +1071,12 @@ func routingPolicyForName(cat *modelcatalog.Catalog, name string) string {
 	}
 }
 
-func serviceRoutingCatalogResolver(cat *modelcatalog.Catalog) func(ref, surface string) (string, bool) {
-	if cat == nil {
-		return nil
-	}
-	return func(ref, surface string) (string, bool) {
-		catalogSurface, ok := serviceRoutingCatalogSurface(surface)
-		if !ok {
-			return "", false
-		}
-		resolved, err := cat.Resolve(ref, modelcatalog.ResolveOptions{
-			Surface:         catalogSurface,
-			AllowDeprecated: true,
-		})
-		if err != nil || resolved.ConcreteModel == "" {
-			return "", false
-		}
-		return resolved.ConcreteModel, true
-	}
-}
-
-func serviceRoutingCatalogCandidatesResolver(cat *modelcatalog.Catalog) func(ref, surface string) ([]string, bool) {
-	if cat == nil {
-		return nil
-	}
-	return func(ref, surface string) ([]string, bool) {
-		catalogSurface, ok := serviceRoutingCatalogSurface(surface)
-		if !ok {
-			return nil, false
-		}
-		resolved, err := cat.Resolve(ref, modelcatalog.ResolveOptions{
-			Surface:         catalogSurface,
-			AllowDeprecated: true,
-		})
-		if err != nil || resolved.CanonicalID == "" {
-			return nil, false
-		}
-		candidates := cat.CandidatesFor(catalogSurface, resolved.CanonicalID)
-		if len(candidates) == 0 {
-			if resolved.ConcreteModel == "" {
-				return nil, false
-			}
-			return []string{resolved.ConcreteModel}, true
-		}
-		return candidates, true
-	}
-}
-
-func serviceRoutingModelEligibility(entries []routing.HarnessEntry, cat *modelcatalog.Catalog) func(model string) (routing.ModelEligibility, bool) {
-	if cat == nil {
-		return nil
-	}
-	eligibility := make(map[string]routing.ModelEligibility)
-
-	// mergeInto merges src into the eligibility map entry for key, or inserts
-	// if absent. Called from both add and addShortAlias so alias entries receive
-	// the same conservative merge semantics as primary entries.
-	mergeInto := func(key string, src routing.ModelEligibility) {
-		if existing, ok := eligibility[key]; ok {
-			if src.Power > existing.Power {
-				existing.Power = src.Power
-			}
-			existing.ExactPinOnly = existing.ExactPinOnly || src.ExactPinOnly
-			existing.AutoRoutable = existing.AutoRoutable || src.AutoRoutable
-			eligibility[key] = existing
-			return
-		}
-		eligibility[key] = src
-	}
-
-	// addShortAlias also registers the bare tier-suffix alias (e.g. "haiku" for
-	// "haiku-5.5" or "claude-haiku-5.5") in the eligibility map. This ensures
-	// CheckPowerEligibility gates the bare alias correctly even when the
-	// subscription-harness tier enrollment emits it before the catalog-surface
-	// override can replace it with a versioned surface ID. Without this, a
-	// lookup("haiku") returning ok=false would let the alias slip through the
-	// exact_pin_only gate when the request carries no explicit power bounds.
-	addShortAlias := func(modelID string, known routing.ModelEligibility) {
-		parsed := modelcatalog.Parse(modelID)
-		if parsed.Tier == modelcatalog.TierUnknown || parsed.Family == "" {
-			return
-		}
-		tiers, ok := modelcatalog.FamilyTiers[parsed.Family]
-		if !ok {
-			return
-		}
-		for suffix, tier := range tiers {
-			if tier == parsed.Tier && suffix != "" {
-				mergeInto(suffix, known)
-				break
-			}
-		}
-	}
-
-	add := func(modelID string, includeByDefault bool, status string) {
-		modelID = strings.TrimSpace(modelID)
-		if modelID == "" {
-			return
-		}
-		view := modeleligibility.Resolve(modelID, includeByDefault, status, cat)
-		known := routing.ModelEligibility{
-			Power:        view.Power,
-			ExactPinOnly: view.ExactPinOnly,
-			AutoRoutable: view.AutoRoutable,
-		}
-		mergeInto(modelID, known)
-		addShortAlias(modelID, eligibility[modelID])
-	}
-	for _, h := range entries {
-		status := "available"
-		if !h.Available {
-			status = "unreachable"
-		}
-		if h.DefaultModel != "" {
-			add(h.DefaultModel, true, status)
-		}
-		for _, modelID := range h.SupportedModels {
-			add(modelID, true, status)
-		}
-		for _, p := range h.Providers {
-			includeByDefault := !p.ExcludeFromDefaultRouting
-			add(p.DefaultModel, includeByDefault, status)
-			for _, modelID := range p.DiscoveredIDs {
-				add(modelID, includeByDefault, status)
-			}
-			// Register /props-recovered catalog identities so the power gate can
-			// resolve a served alias's real model (e.g. "dflash" routes via the
-			// "Qwen3.6-27B" eligibility entry; see ProviderEntry.CatalogIDByModel).
-			for _, catalogID := range p.CatalogIDByModel {
-				add(catalogID, includeByDefault, status)
-			}
-		}
-	}
-	if len(eligibility) == 0 {
-		return nil
-	}
-	return func(model string) (routing.ModelEligibility, bool) {
-		known, ok := eligibility[strings.TrimSpace(model)]
-		return known, ok
-	}
-}
-
-// serviceRoutingReasoningResolver returns the catalog's surface_policy
-// reasoning_default for a (policy, surface) pair. Used by the routing engine
-// to resolve Reasoning=auto to a concrete level before the capability gate.
-func serviceRoutingReasoningResolver(cat *modelcatalog.Catalog) func(policy, surface string) (string, bool) {
-	if cat == nil {
-		return nil
-	}
-	return func(policy, surface string) (string, bool) {
-		if policy == "" {
-			return "", false
-		}
-		catalogSurface, ok := serviceRoutingCatalogSurface(surface)
-		if !ok {
-			return "", false
-		}
-		resolved, err := cat.Resolve(policy, modelcatalog.ResolveOptions{
-			Surface:         catalogSurface,
-			AllowDeprecated: true,
-		})
-		if err != nil {
-			return "", false
-		}
-		def := string(resolved.SurfacePolicy.ReasoningDefault)
-		if def == "" {
-			return "", false
-		}
-		return def, true
-	}
-}
-
-// catalogTierModelsForHarnessSurface enumerates the active concrete tier IDs
-// the catalog publishes for a harness surface, sorted deterministically by
-// power (descending) then by ID. Returns nil when the surface is unknown to
-// the catalog or the catalog has no active models on that surface.
-func catalogTierModelsForHarnessSurface(cat *modelcatalog.Catalog, harnessSurface string) []string {
-	if cat == nil {
-		return nil
-	}
-	catalogSurface, ok := serviceRoutingCatalogSurface(harnessSurface)
-	if !ok {
-		return nil
-	}
-	concrete := cat.AllConcreteModels(catalogSurface)
-	if len(concrete) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(concrete))
-	for id := range concrete {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		pi, _, _ := catalogPowerEligibility(cat, ids[i])
-		pj, _, _ := catalogPowerEligibility(cat, ids[j])
-		if pi != pj {
-			return pi > pj
-		}
-		return ids[i] < ids[j]
-	})
-	return ids
-}
-
-func serviceRoutingCatalogSurface(surface string) (modelcatalog.Surface, bool) {
-	switch surface {
-	case "embedded-openai":
-		return modelcatalog.SurfaceAgentOpenAI, true
-	case "embedded-anthropic":
-		return modelcatalog.SurfaceAgentAnthropic, true
-	case "codex":
-		return modelcatalog.SurfaceCodex, true
-	case "claude":
-		return modelcatalog.SurfaceClaudeCode, true
-	case "gemini":
-		return modelcatalog.SurfaceGemini, true
-	default:
-		return "", false
-	}
-}
-
-// buildProviderContextWindows assembles the ContextWindows map for a
-// ProviderEntry from the model catalog. Entries are added for the provider's
-// configured DefaultModel and every DiscoveredID that has a non-zero
-// context_window declared in the catalog. Models the catalog does not know
-// about are omitted (engine treats missing entries as unknown context).
-func buildProviderContextWindows(ctx context.Context, pcfg ServiceProviderEntry, cat *modelcatalog.Catalog, discoveredIDs []string) (map[string]int, map[string]string) {
-	out := make(map[string]int)
-	sources := make(map[string]string)
-	if defaultModel := strings.TrimSpace(pcfg.Model); defaultModel != "" {
-		if length, source := resolveContextEvidence(ctx, pcfg, defaultModel, cat); length > 0 {
-			out[defaultModel] = length
-			sources[defaultModel] = source
-		}
-	}
-	for _, id := range discoveredIDs {
-		if id == "" {
-			continue
-		}
-		if _, exists := out[id]; exists {
-			continue
-		}
-		if length, source := resolveContextEvidence(ctx, pcfg, id, cat); length > 0 {
-			out[id] = length
-			sources[id] = source
-		}
-	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	return out, sources
-}
-
-func contextWindowSourceForProviderConfig(pcfg ServiceProviderEntry) string {
-	if pcfg.ContextWindow > 0 {
-		return ContextSourceProviderConfig
-	}
-	return ""
-}
-
-// providerSupportsTools returns whether the provider should be advertised as
-// supporting tools to the routing engine. Defaults to true; only flips to
-// false when the catalog explicitly marks every relevant model (the
-// DefaultModel and any DiscoveredIDs) with no_tools=true.
-func providerSupportsTools(cat *modelcatalog.Catalog, defaultModel string, discoveredIDs []string) bool {
-	if cat == nil {
-		return true
-	}
-	checked := false
-	if defaultModel != "" {
-		if cat.SupportsToolsForModel(defaultModel) {
-			return true
-		}
-		checked = true
-	}
-	for _, id := range discoveredIDs {
-		if id == "" {
-			continue
-		}
-		if cat.SupportsToolsForModel(id) {
-			return true
-		}
-		checked = true
-	}
-	if !checked {
-		return true
-	}
-	return false
-}
-
-func modelSupportsToolsByID(cat *modelcatalog.Catalog, modelIDs []string) map[string]bool {
-	if len(modelIDs) == 0 {
-		return nil
-	}
-	support := make(map[string]bool, len(modelIDs))
-	for _, id := range modelIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if cat == nil {
-			support[id] = true
-			continue
-		}
-		support[id] = cat.SupportsToolsForModel(id)
-	}
-	if len(support) == 0 {
-		return nil
-	}
-	return support
-}
-
-func anyProviderSupportsTools(providers []routing.ProviderEntry) bool {
-	for _, p := range providers {
-		if p.SupportsTools {
-			return true
-		}
-	}
-	return false
-}
-
 func providerUsesLiveDiscovery(providerType string) bool {
 	switch normalizeServiceProviderType(providerType) {
 	case "openai", "openrouter", "lmstudio", "llama-server", "ds4", "omlx", "rapid-mlx", "ollama", "lucebox", "vllm", "minimax", "qwen", "zai":
 		return true
 	default:
 		return false
-	}
-}
-
-func (s *service) applyEndpointRoutingCost(entry *routing.ProviderEntry, pcfg ServiceProviderEntry, cat *modelcatalog.Catalog) {
-	if entry == nil {
-		return
-	}
-	if providerTypeUsesFixedBilling(pcfg.Type) {
-		entry.ActualCashSpend = false
-		if s.opts.LocalCostUSDPer1kTokens > 0 {
-			entry.CostUSDPer1kTokens = s.opts.LocalCostUSDPer1kTokens
-			entry.CostSource = routing.CostSourceUserConfig
-		} else {
-			entry.CostUSDPer1kTokens = 0
-			entry.CostSource = routing.CostSourceUnknown
-		}
-		return
-	}
-	if cost, ok := catalogCostUSDPer1kTokens(cat, entry.DefaultModel); ok {
-		entry.ActualCashSpend = true
-		entry.CostUSDPer1kTokens = cost
-		entry.CostSource = routing.CostSourceCatalog
-		return
-	}
-	entry.ActualCashSpend = true
-	entry.CostUSDPer1kTokens = 0
-	entry.CostSource = routing.CostSourceUnknown
-}
-
-func (s *service) applySubscriptionRoutingCost(entry *routing.HarnessEntry, cat *modelcatalog.Catalog) {
-	if !routingHarnessUsesAccountBilling(entry) {
-		return
-	}
-	baseCost, ok := catalogCostUSDPer1kTokens(cat, entry.DefaultModel)
-	if !ok {
-		baseCost, ok = catalogCostUSDPer1kTokens(cat, subscriptionFallbackPolicy(entry.Name))
-		if !ok {
-			baseCost = 0
-		}
-	}
-	cost := baseCost
-	ctxWindows, ctxSources := buildProviderContextWindows(context.Background(), ServiceProviderEntry{}, cat, entry.AutoRoutingModels)
-	modelTools := modelSupportsToolsByID(cat, entry.AutoRoutingModels)
-	supportsTools := providerSupportsTools(cat, entry.DefaultModel, entry.AutoRoutingModels)
-	costByModel := subscriptionCostByModel(cat, entry.AutoRoutingModels)
-	entry.Providers = []routing.ProviderEntry{{
-		Billing:                   modelcatalog.BillingModelSubscription,
-		CostUSDPer1kTokens:        cost,
-		CostUSDPer1kTokensByModel: costByModel,
-		CostSource:                routing.CostSourceSubscription,
-		ActualCashSpend:           false,
-		ContextWindows:            ctxWindows,
-		ContextWindowSources:      ctxSources,
-		SupportsTools:             supportsTools,
-		SupportsToolsByModel:      modelTools,
-	}}
-}
-
-// subscriptionCostByModel resolves the catalog cost per modelID so the engine
-// can attach a per-tier cost to each candidate emitted under the same
-// subscription provider. Returns nil when the catalog has no cost evidence
-// for any of the listed models.
-func subscriptionCostByModel(cat *modelcatalog.Catalog, modelIDs []string) map[string]float64 {
-	if cat == nil || len(modelIDs) == 0 {
-		return nil
-	}
-	out := make(map[string]float64, len(modelIDs))
-	for _, id := range modelIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		if cost, ok := catalogCostUSDPer1kTokens(cat, id); ok {
-			out[id] = cost
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func providerRoutingCostClass(providerType string) string {
-	if providerTypeUsesFixedBilling(providerType) {
-		return "local"
-	}
-	return "medium"
-}
-
-func subscriptionFallbackPolicy(harnessName string) string {
-	switch harnessName {
-	case "claude", "codex", "gemini":
-		return "default"
-	default:
-		return ""
-	}
-}
-
-func catalogCostUSDPer1kTokens(cat *modelcatalog.Catalog, modelID string) (float64, bool) {
-	if cat == nil || strings.TrimSpace(modelID) == "" {
-		return 0, false
-	}
-	entry, ok := cat.LookupModel(modelID)
-	if !ok {
-		resolved := resolveCatalogCostModel(cat, modelID)
-		if resolved == "" {
-			return 0, false
-		}
-		entry, ok = cat.LookupModel(resolved)
-		if !ok {
-			return 0, false
-		}
-	}
-	input := entry.CostInputPerM
-	if input == 0 {
-		input = entry.CostInputPerMTok
-	}
-	output := entry.CostOutputPerM
-	if output == 0 {
-		output = entry.CostOutputPerMTok
-	}
-	switch {
-	case input > 0 && output > 0:
-		return ((input + output) / 2) / 1000, true
-	case input > 0:
-		return input / 1000, true
-	case output > 0:
-		return output / 1000, true
-	default:
-		return 0, false
-	}
-}
-
-func resolveCatalogCostModel(cat *modelcatalog.Catalog, ref string) string {
-	for _, surface := range []modelcatalog.Surface{
-		modelcatalog.SurfaceAgentOpenAI,
-		modelcatalog.SurfaceAgentAnthropic,
-		modelcatalog.SurfaceCodex,
-		modelcatalog.SurfaceClaudeCode,
-		modelcatalog.SurfaceGemini,
-	} {
-		resolved, err := cat.Resolve(ref, modelcatalog.ResolveOptions{
-			Surface:         surface,
-			AllowDeprecated: true,
-		})
-		if err == nil && resolved.ConcreteModel != "" {
-			return resolved.ConcreteModel
-		}
-	}
-	return ""
-}
-
-func (s *service) subscriptionCostCurve() SubscriptionCostCurve {
-	if s.opts.SubscriptionCostCurve == nil {
-		return defaultSubscriptionCostCurve()
-	}
-	curve := *s.opts.SubscriptionCostCurve
-	def := defaultSubscriptionCostCurve()
-	if curve.FreeUntilPercent == 0 {
-		curve.FreeUntilPercent = def.FreeUntilPercent
-	}
-	if curve.LowUntilPercent == 0 {
-		curve.LowUntilPercent = def.LowUntilPercent
-	}
-	if curve.MediumUntilPercent == 0 {
-		curve.MediumUntilPercent = def.MediumUntilPercent
-	}
-	if curve.LowMultiplier == 0 {
-		curve.LowMultiplier = def.LowMultiplier
-	}
-	if curve.MediumMultiplier == 0 {
-		curve.MediumMultiplier = def.MediumMultiplier
-	}
-	if curve.HighMultiplier == 0 {
-		curve.HighMultiplier = def.HighMultiplier
-	}
-	return curve
-}
-
-func defaultSubscriptionCostCurve() SubscriptionCostCurve {
-	return SubscriptionCostCurve{
-		FreeUntilPercent:   70,
-		LowUntilPercent:    80,
-		MediumUntilPercent: 90,
-		LowMultiplier:      0.1,
-		MediumMultiplier:   0.3,
-		HighMultiplier:     1.2,
-	}
-}
-
-func subscriptionEffectiveCostUSDPer1kTokens(baseCost float64, quotaPercentUsed int, curve SubscriptionCostCurve) float64 {
-	switch {
-	case quotaPercentUsed <= curve.FreeUntilPercent:
-		return 0
-	case quotaPercentUsed <= curve.LowUntilPercent:
-		return baseCost * curve.LowMultiplier
-	case quotaPercentUsed <= curve.MediumUntilPercent:
-		return baseCost * curve.MediumMultiplier
-	default:
-		return baseCost * curve.HighMultiplier
 	}
 }
 

@@ -116,7 +116,7 @@ func (s *service) subscriptionHarnessTierModels(name string, cfg harnesses.Harne
 		ModelIDs: modelIDs,
 		Catalog:  cat,
 		EffectiveCostForModel: func(id string) (float64, bool) {
-			return catalogCostUSDPer1kTokens(cat, id)
+			return serviceimpl.CatalogCostUSDPer1kTokens(cat, id)
 		},
 	})
 	out := make([]ModelInfo, 0, len(rows))

@@ -21,6 +21,7 @@ import (
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routing"
+	"github.com/easel/fizeau/internal/serviceimpl"
 	"gopkg.in/yaml.v3"
 )
 
@@ -954,7 +955,7 @@ func TestRoutingInputsUseClaudeQuotaWindows(t *testing.T) {
 	}
 	svc := &service{opts: ServiceOptions{}, registry: registry}
 
-	inputs, _ := svc.buildRoutingInputsWithCatalog(context.Background(), nil, modelsnapshot.RefreshBackground)
+	inputs, _ := svc.routingInputs(context.Background(), nil, modelsnapshot.RefreshBackground)
 	claudeEntry, ok := findRoutingHarnessEntry(inputs.Harnesses, "claude")
 	if !ok {
 		t.Fatalf("missing claude entry in %#v", inputs.Harnesses)
@@ -1112,7 +1113,6 @@ models:
       claude-code: priced-model
       gemini: priced-model
 `)
-	svc := &service{}
 	tests := []struct {
 		name string
 		want float64
@@ -1131,7 +1131,7 @@ models:
 					DefaultModel:     "priced-model",
 					QuotaPercentUsed: 92,
 				}
-				svc.applySubscriptionRoutingCost(&entry, catalog)
+				serviceimpl.ApplySubscriptionRoutingCost(&entry, catalog)
 				if len(entry.Providers) != 1 {
 					t.Fatalf("providers=%#v, want one subscription provider", entry.Providers)
 				}
@@ -1196,7 +1196,6 @@ models:
     surfaces:
       claude-code: opus-4.7
 `)
-	svc := &service{}
 	entry := routing.HarnessEntry{
 		Name:              "claude",
 		Surface:           "claude",
@@ -1204,7 +1203,7 @@ models:
 		DefaultModel:      "opus-4.7",
 		AutoRoutingModels: []string{"opus-4.7", "sonnet-4.6"},
 	}
-	svc.applySubscriptionRoutingCost(&entry, catalog)
+	serviceimpl.ApplySubscriptionRoutingCost(&entry, catalog)
 	if len(entry.Providers) != 1 {
 		t.Fatalf("providers=%d, want 1 subscription provider", len(entry.Providers))
 	}
@@ -1258,7 +1257,7 @@ models:
 		ExactPinSupport:     true,
 		SupportsTools:       true,
 	}
-	svc.applySubscriptionRoutingCost(&claude, catalog)
+	serviceimpl.ApplySubscriptionRoutingCost(&claude, catalog)
 
 	openrouterProvider := routing.ProviderEntry{
 		Name:          "openrouter",
@@ -1266,11 +1265,11 @@ models:
 		DefaultModel:  "sonnet-4.6",
 		SupportsTools: true,
 	}
-	svc.applyEndpointRoutingCost(&openrouterProvider, ServiceProviderEntry{
+	serviceimpl.ApplyEndpointRoutingCost(&openrouterProvider, serviceImplProviderEntry(ServiceProviderEntry{
 		Type:    "openrouter",
 		BaseURL: "https://openrouter.ai/api/v1",
 		Model:   "sonnet-4.6",
-	}, catalog)
+	}), catalog, svc.opts.LocalCostUSDPer1kTokens)
 
 	in := routing.Inputs{
 		Harnesses: []routing.HarnessEntry{

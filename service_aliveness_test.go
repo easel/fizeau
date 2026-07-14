@@ -258,7 +258,7 @@ func TestServiceStartup_FailedProbeHardGatesRouting(t *testing.T) {
 	}
 	svc := rawSvc.(*service)
 	svc.startupAlivenessProbe(context.Background())
-	inputs, _ := svc.buildRoutingInputsWithCatalog(context.Background(), serviceRoutingCatalog(), modelsnapshot.RefreshBackground)
+	inputs, _ := svc.routingInputs(context.Background(), serviceRoutingCatalog(), modelsnapshot.RefreshBackground)
 	if _, ok := inputs.ProbeUnreachable["down"]; !ok {
 		t.Fatalf("ProbeUnreachable missing down: %#v", inputs.ProbeUnreachable)
 	}

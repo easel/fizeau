@@ -112,7 +112,7 @@ func catalogModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *mode
 	if name == "pi" {
 		surface = "gemini"
 	}
-	models := appendUniqueModelIDs(nil, catalogTierModelsForHarnessSurface(cat, surface)...)
+	models := appendUniqueModelIDs(nil, serviceimpl.CatalogTierModelsForHarnessSurface(cat, surface)...)
 	if surface == "claude" {
 		for _, model := range models {
 			if strings.HasPrefix(model, "opus-") || strings.HasPrefix(model, "sonnet-") ||
@@ -145,14 +145,14 @@ func resolveSubprocessModelAliasWithCatalog(harness, model string, cat *modelcat
 	switch strings.ToLower(strings.TrimSpace(harness)) {
 	case "codex":
 		if strings.EqualFold(strings.TrimSpace(model), "gpt") {
-			if tiers := catalogTierModelsForHarnessSurface(cat, "codex"); len(tiers) > 0 {
+			if tiers := serviceimpl.CatalogTierModelsForHarnessSurface(cat, "codex"); len(tiers) > 0 {
 				return tiers[0]
 			}
 		}
 	case "gemini":
 		normalized := strings.ToLower(strings.TrimSpace(model))
 		if normalized == "gemini" || normalized == "gemini-2.5" {
-			if tiers := catalogTierModelsForHarnessSurface(cat, "gemini"); len(tiers) > 0 {
+			if tiers := serviceimpl.CatalogTierModelsForHarnessSurface(cat, "gemini"); len(tiers) > 0 {
 				return tiers[0]
 			}
 		}
