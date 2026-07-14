@@ -7,14 +7,27 @@ ddx:
     - FEAT-002
     - FEAT-003
     - FEAT-005
-    - ADR-009
+  review:
+    self_hash: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      FEAT-002: 1f53e72517347be0932a7b315aa1cc00cc48fc526ca3c53506cd179e8d0231a9
+      FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+      FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-006 — Standalone CLI
 
 **Feature ID**: FEAT-006
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: CLI Proof Surface
+**Covered PRD Requirements**: FR-6
+**Cross-Subsystem Rationale**: Proves the public service, routing, tools, and
+measurement surfaces through a thin command adapter.
+**User Stories**: [US-006 — Exercise the Public Service from a CLI](../user-stories/US-006-cli-proof-surface.md)
 
 ## Overview
 

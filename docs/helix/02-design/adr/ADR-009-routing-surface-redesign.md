@@ -4,13 +4,20 @@ ddx:
   depends_on:
     - ADR-005
     - ADR-006
-    - CONTRACT-003
+    - FEAT-004
+  review:
+    self_hash: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
+    deps:
+      ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
+      ADR-006: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+      FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-009: Routing Surface Redesign
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
-| 2026-05-09 | Proposed | Fizeau maintainers | `ADR-005`, `ADR-006`, `CONTRACT-003`, `FEAT-003`, `FEAT-004`, `FEAT-006` | High |
+| 2026-05-09 | Accepted | Fizeau maintainers | `ADR-005`, `ADR-006`, `CONTRACT-003`, `FEAT-003`, `FEAT-004`, `FEAT-006` | High |
 
 ## Context
 

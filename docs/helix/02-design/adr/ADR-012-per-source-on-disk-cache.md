@@ -4,6 +4,11 @@ ddx:
   depends_on:
     - ADR-009
   child_of: fizeau-67f2d585
+  review:
+    self_hash: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
+    deps:
+      ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-012: Per-Source On-Disk Cache for Discovery + Runtime Signals
 

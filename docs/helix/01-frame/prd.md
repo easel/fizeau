@@ -1,6 +1,10 @@
 ---
 ddx:
   id: helix.prd
+  review:
+    self_hash: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Product Requirements Document — Fizeau
 
@@ -81,11 +85,12 @@ each being rebuilt per tool, with local backends as an afterthought.
    quotas, and session logs as first-class primitives. Other tools embed
    `fizeau.New(...).Execute(ctx, request)` instead of writing their own agent
    harness.
-2. **Make the loop measurable.** Per-turn timing (TTFT, prefill, decode, tool
-   latency), the four token streams (input, output, cached-input,
-   retried-input), known-or-unknown cost-per-trial, subscription-quota
-   accounting, and route-attempt feedback are first-class outputs of every
-   `Execute` call, not optional observability.
+2. **Make the loop measurable.** Per-turn timing availability and source,
+   observable TTFT/prefill/decode/tool-latency windows, the four token streams
+   (input, output, cache-read, cache-write), known-or-unknown cost-per-trial,
+   subscription-quota accounting, and route-attempt feedback are first-class
+   outputs of every `Execute` call, not optional observability. Unavailable
+   timing windows are explicit unknowns, never synthesized numbers.
 3. **Make local models a real option.** One provider surface across cloud
    (OpenAI, Anthropic, OpenRouter, Google) and local (vLLM, MLX, LM Studio,
    Ollama, native local) backends. Routing, billing, instrumentation, and
@@ -106,7 +111,7 @@ each being rebuilt per tool, with local backends as an afterthought.
 | Metric | Target | Measurement Method |
 |--------|--------|--------------------|
 | Embeddable adoption | ≥1 external tool (DDx, benchmark runner) consumes Fizeau as a library through CONTRACT-003 | Integration test + downstream consumer wiring |
-| Measurement coverage | Every `llm.request → llm.response` chain emits TTFT, prefill, decode, four token streams, and known-or-unknown cost; no silent gaps | CONTRACT-001 conformance tests |
+| Measurement coverage | Every `llm.request → llm.response` chain reports timing availability/source, supported timing windows, four token streams, and known-or-unknown cost; no silent gaps | CONTRACT-001 conformance tests |
 | Local-vs-cloud parity | Local serving runtimes (vLLM, MLX, LM Studio, Ollama) and cloud providers expose the same provider-shaped surface so benchmark deltas are honest | Benchmark catalog profile definitions |
 | Local model completion rate | ≥70% of routine coding tasks succeed on local 7B+ under `cheap`/`default` policies | HELIX/build-pass logs |
 | Cost per task (blended) | <$0.05 average for routine coding tasks | `fiz usage` report |
@@ -173,8 +178,9 @@ session logs, or measurement as first-class outputs.
 4. **Anthropic provider** — Claude API support for cloud use
 5. **Structured I/O** — accept prompt as string or structured envelope, return
    structured result (status, output, tool calls made, tokens, duration, error)
-6. **Go library API** — `agent.Run(ctx, request) (Result, error)` as the
-   primary interface. Library takes a Config struct; no global state.
+6. **Go library API** — `fizeau.New(...).Execute(ctx, request)` through the
+   public `FizeauService` contract is the primary interface. The library takes
+   explicit configuration and has no global state.
 7. **Token tracking** — count and report input/output tokens per invocation
 8. **Iteration limit** — configurable max tool-call iterations to prevent
    runaway loops
@@ -187,7 +193,8 @@ session logs, or measurement as first-class outputs.
 11. **Cost tracking** — preserve provider- or gateway-reported cost when
     available. If no reported cost exists, use only runtime-specific configured
     pricing for the exact provider system and resolved model; otherwise record
-    cost as unknown. `agent.Result` includes `CostUSD` (`-1` when unknown).
+    cost as unknown. The public final projection preserves the numeric cost and
+    whether its source is reported, configured, or unknown.
 12. **Standalone CLI** — `fiz` binary wrapping the library. Proves the library
     works, serves as an embeddable harness backend (see CONTRACT-003). Reads its
     own config file. Accepts prompt via `-p` flag or stdin.
@@ -197,7 +204,7 @@ session logs, or measurement as first-class outputs.
 1. **System prompt composition** — base system prompt + caller-provided
    additions (persona, project context, conventions)
 2. **Session continuity** — option to carry conversation history across
-   multiple `Run` calls within a session
+   multiple public `Execute` calls within a session
 3. **Streaming callbacks** — caller can receive tool call events and partial
    responses in real time
 4. **Timeout management** — per-invocation and per-tool-call timeouts
@@ -215,24 +222,83 @@ session logs, or measurement as first-class outputs.
    the standard.
 9. **Conversation compaction** — auto-summarize long conversation histories
    to fit within model context windows
-10. **Shared model catalog** — an agent-owned catalog and publishable
+10. **Shared model catalog** — a Fizeau-owned catalog and publishable
     updateable manifest for concrete model metadata, canonical routing
     policies (`cheap`, `default`, `smart`, `air-gapped`), provider surface
     strings, billing/default-inclusion metadata, and deprecation metadata, kept
     separate from prompt presets
+11. **Policy/provider/model routing** — request a canonical policy, numeric
+    power bounds, or exact pin and let the embedded runtime choose among
+    equivalent configured providers with recorded attribution. Routing treats
+    local and cloud provider systems through the same eligibility and evidence
+    model; callers own semantic retry and cross-harness escalation.
 
 ### Nice to Have (P2)
 
 1. **Caching** — cache file reads within a session to reduce redundant I/O
-2. **Policy/provider/model routing** — request a policy, numeric power bounds,
-   or exact pin and let the embedded runtime choose among equivalent configured
-   providers with recorded attribution.
-3. **Multi-model consensus** — run same prompt on N models, return majority
+2. **Multi-model consensus** — run same prompt on N models, return majority
    answer (multi-harness quorum is a caller concern)
-4. **Model selection optimization** — choose model based on task
+3. **Model selection optimization** — choose model based on task
    characteristics (context length, complexity heuristics)
 
 ## Functional Requirements
+
+The following eight product-level requirements are the canonical decomposition
+of the product vision. Each subsystem maps to one approved feature spec; the
+mechanics that follow elaborate these outcomes without creating additional
+product authorities.
+
+### Subsystem: Embedded Execution
+
+**FR-1** — An embedder MUST be able to construct a public `FizeauService` with
+`fizeau.New(...)` and execute a bounded, cancellable tool-calling run through
+`Execute(ctx, request)`, receiving structured results and service-owned events
+without importing concrete runtime internals.
+
+### Subsystem: Workspace Tools
+
+**FR-2** — An embedder MUST be able to supply or use Fizeau's workspace tools
+through stable schemas and explicit working-directory semantics, with every
+tool attempt represented in the execution result and measurement stream.
+
+### Subsystem: Provider Parity
+
+**FR-3** — Local serving runtimes, cloud APIs, and subprocess harnesses MUST
+participate through provider-neutral contracts so the same request, event, and
+usage surfaces apply regardless of where inference runs.
+
+### Subsystem: Routing & Catalog
+
+**FR-4** — An embedder MUST be able to select canonical policy intent, power
+bounds, or exact pins against a Fizeau-owned model catalog and live inventory;
+Fizeau selects and attributes one dispatch route while the caller retains
+ownership of semantic retry and cross-harness escalation.
+
+### Subsystem: Measurement & Replay
+
+**FR-5** — Every execution MUST expose a replayable service-owned record of LLM
+turns and tool attempts with four-stream token usage, timing, route identity,
+and known-or-explicitly-unknown cost semantics.
+
+### Subsystem: CLI Proof Surface
+
+**FR-6** — The `fiz` command MUST remain a thin consumer of the same public
+service facade, proving library behavior and offering machine-readable harness
+and inspection surfaces without becoming a second execution architecture.
+
+### Subsystem: Distribution
+
+**FR-7** — Operators MUST be able to install, verify, and explicitly update the
+proof CLI using versioned, platform-specific release artifacts without coupling library
+execution to network update checks.
+
+### Subsystem: Benchmark Evidence
+
+**FR-8** — Benchmark consumers MUST be able to inspect self-describing result
+cells and compare local and cloud runs without losing provenance, measurement
+semantics, or the curated narrative views built from the same evidence.
+
+## Detailed Product Mechanics
 
 ### Agent Loop
 
@@ -283,18 +349,19 @@ session logs, or measurement as first-class outputs.
   releases and an explicit local refresh/install flow that does not introduce
   network access into ordinary request execution
 - Callers MUST be able to select routing policies and exact model pins through
-  the agent-owned catalog without duplicating model policy in their own repos
+  the Fizeau-owned catalog without duplicating model policy in their own repos
 - HELIX stage intent MUST remain above this layer; HELIX selects intent, callers
-  resolve harness/provider/model details using agent-owned catalog data
+  express policy or pin constraints, and Fizeau resolves harness/provider/model
+  details using its catalog and live evidence
 
 ### Structured I/O
 
 - Input: plain string prompt, or structured envelope (JSON with kind, id,
   prompt, inputs, response_schema fields)
-- Output: `Result` struct with: status (success/failure/timeout/cancelled),
-  output (final text), tool_calls (log of all tool calls), tokens
-  (input/output/total), duration_ms, error (if any), model (which model was
-  used)
+- Output: `DrainExecuteResult` with: status (success/failure/timeout/cancelled),
+  output (final text), tool_calls (log of all tool calls), four token streams
+  (input/output/cache-read/cache-write, plus any derived total), duration_ms,
+  error (if any), and the actual harness/provider/model route
 
 ## Acceptance Test Sketches
 
@@ -305,17 +372,17 @@ tests, review findings, or execution beads.
 
 | Requirement | Scenario | Input | Expected Output |
 |-------------|----------|-------|-----------------|
-| Agent loop basics | Simple file read task | "Read main.go and tell me the package name" | Result with status=success, output contains package name |
+| Agent loop basics | Simple file read task | "Read main.go and tell me the package name" | `DrainExecuteResult` with status=success and output containing the package name |
 | Tool: edit | Find-replace in file | Prompt to rename a function | File on disk is modified, result shows edit tool call |
 | Tool: bash | Run tests | "Run `go test ./...` and report results" | Result includes test output, exit code |
 | LM Studio provider | Connect to local model | Prompt with LM Studio running Qwen 3.5 | Successful completion with token count |
-| Iteration limit | Prevent runaway | Max 3 iterations, task needs 10 | Result with status=failure after 3 rounds |
-| Structured I/O | Structured envelope | JSON envelope with prompt and response_schema | Result matches schema |
-| Token tracking | Count tokens | Any successful completion | Result.tokens has non-zero input and output counts |
+| Iteration limit | Prevent runaway | Max 3 iterations, task needs 10 | `DrainExecuteResult` has failure status after 3 rounds |
+| Structured I/O | Structured envelope | JSON envelope with prompt and response_schema | Drained final projection matches schema |
+| Token tracking | Count tokens | Any successful completion | Drained final usage has non-zero input and output counts |
 | Session logging | Run any task | Any successful completion | JSONL log entry with full prompt, response, tool calls, tokens, timing |
 | Session replay | Read logged session | `fiz replay <id>` on a completed session | Human-readable dump of every turn, tool call, and result |
-| Cost tracking | Run cloud task with billed cost returned | Claude or gateway completion with reported billing | Result.CostUSD > 0 and matches reported cost |
-| Cost tracking | Run task without pricing data | Unconfigured runtime or provider with no reported billing | Result.CostUSD == -1 (unknown, not guessed) |
+| Cost tracking | Run cloud task with billed cost returned | Claude or gateway completion with reported billing | `DrainExecuteResult.CostUSD > 0` and matches reported cost |
+| Cost tracking | Run task without pricing data | Unconfigured runtime or provider with no reported billing | `DrainExecuteResult.CostUSD == -1` (unknown, not guessed) |
 | Standalone CLI | End-to-end | `fiz -p "Read main.go"` with config file | Successful completion, session logged |
 | Shared model catalog | Select policy and route | `fiz run --policy smart "hi"` | Concrete route selected from the catalog and live inventory for the requested policy |
 | Harness path | Structured harness invocation | Prompt envelope or harness execution path (CONTRACT-003) | Machine-readable JSON output includes tokens, session ID, and cost semantics |
@@ -362,11 +429,11 @@ tests, review findings, or execution beads.
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| Local model tool calling unreliable | Medium | High | Test against specific model versions (Qwen 3.5, Llama 3.2); implement retry with cloud fallback |
+| Local model tool calling unreliable | Medium | High | Test against specific model versions (Qwen 3.5, Llama 3.2); return route and failure evidence so the caller can retry or escalate with task context |
 | LM Studio API breaks compatibility | Low | Medium | Pin to known-good LM Studio version; test in CI against local instance |
 | openai-go SDK doesn't handle LM Studio edge cases | Medium | Medium | Thin adapter layer that can work around SDK limitations |
 | Harness interface changes during development | Low | Low | Fizeau defines its own API first; the adapter is a thin shim |
-| Local model context window too small for large tasks | Medium | Medium | Model routing considers context length; auto-escalate large prompts to cloud |
+| Local model context window too small for large tasks | Medium | Medium | Routing rejects ineligible contexts clearly; the caller may retry or escalate using its own task semantics |
 
 ## Resolved Decisions
 

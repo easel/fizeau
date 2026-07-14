@@ -4,8 +4,29 @@ ddx:
   created: 2026-05-15
   depends_on:
     - FEAT-008
+  review:
+    self_hash: ec847be580408d23190b47f052551b4f7638365ab373de68e57d8ee06fb2bc4a
+    deps:
+      FEAT-008: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # User Stories: Benchmark Workbench
+
+**Status**: Approved
+**Feature**: FEAT-008
+**Feature Requirements**: self-describing benchmark evidence exploration
+**PRD Requirements**: FR-8
+
+The detailed journeys below share two stable feature-level acceptance
+criteria. Their existing bullets remain scenario-specific elaboration.
+
+- **US-008-AC1** — **Given** the published static result artifact, **when** the
+  workbench loads its raw-data view, **then** the rendered row count matches the
+  artifact and the default grid exposes outcome, model/quantization, runtime,
+  hardware, token/cost/timing measurement, provider, and provenance columns.
+- **US-008-AC2** — **Given** the static evidence artifact, **when** a reader
+  filters, aggregates, compares, or deep-links a pane, **then** each view uses
+  that artifact and preserves the curated benchmark story pages.
 
 ## US-008-001 - Inspect Every Result-Bearing Cell
 

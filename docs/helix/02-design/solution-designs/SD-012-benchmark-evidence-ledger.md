@@ -1,6 +1,15 @@
 ---
-ddx: true
-id: SD-012
+ddx:
+  id: SD-012
+  depends_on:
+    - FEAT-008
+    - SD-009
+  review:
+    self_hash: bf30b7ba2939970dc4b6f94343403b37d72bc5626314a689682abcdd93d3acb2
+    deps:
+      FEAT-008: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
+      SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+    reviewed_at: "2026-07-14T05:16:22Z"
 title: Benchmark Evidence Ledger and Derived Model Power
 status: draft
 updated: 2026-05-06

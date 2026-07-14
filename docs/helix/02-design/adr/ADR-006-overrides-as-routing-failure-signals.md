@@ -3,7 +3,13 @@ ddx:
   id: ADR-006
   depends_on:
     - ADR-005
-    - CONTRACT-003
+    - FEAT-004
+  review:
+    self_hash: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+    deps:
+      ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
+      FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-006: Manual Overrides Are Auto-Routing Failure Signals
 
@@ -15,7 +21,7 @@ routing-intent fields.
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
-| 2026-04-25 | Proposed | Fizeau maintainers | `ADR-005`, `CONTRACT-003`, `SD-005` | High |
+| 2026-04-25 | Accepted | Fizeau maintainers | `ADR-005`, `CONTRACT-003`, `SD-005` | High |
 
 ## Context
 

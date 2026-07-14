@@ -10,6 +10,15 @@ ddx:
     - ADR-014
     - CONTRACT-004
   child_of: fizeau-67f2d585
+  review:
+    self_hash: 46d034ed1c9ce19800843caa4de14a6de29e7dff1b4bab05aef46fee50d4af55
+    deps:
+      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+      ADR-004: e92b61b8d9f8d36b58d5189bd8c5ef6264597fdf6d23cd2205195177fd2e2984
+      ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
+      ADR-014: 911d38f39ef1e377b40a3e1760e58d60eca7a5b6d147338801404a55986c92e7
+      CONTRACT-004: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 

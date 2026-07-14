@@ -2,8 +2,12 @@
 ddx:
   id: ADR-005
   depends_on:
-    - CONTRACT-003
-    - SD-005
+    - FEAT-004
+  review:
+    self_hash: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
+    deps:
+      FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-005: Power-Based Routing Replaces `model_routes`
 
@@ -20,7 +24,7 @@ while preserving `actual_cash_spend=false`.
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
-| 2026-04-25 | Proposed | Fizeau maintainers | `CONTRACT-003`, `SD-005`, `FEAT-004` | Medium |
+| 2026-04-25 | Accepted | Fizeau maintainers | `CONTRACT-003`, `SD-005`, `FEAT-004` | Medium |
 
 ## Context
 

@@ -22,8 +22,9 @@
 
 ### go-std
 
-- **CLI framework**: None. Fizeau CLI is minimal enough for `flag` stdlib. Cobra
-  is not needed.
+- **CLI framework**: Cobra is the approved thin command-tree adapter for the
+  mountable `agentcli` surface and generated command documentation. Command
+  handlers delegate to `FizeauService`; Cobra does not own runtime mechanics.
 - **Test framework**: Use `testing` stdlib + `testify/assert` for assertions.
   No external test runner.
 - **Structured logging**: Use `log/slog` from stdlib. No third-party logger.
@@ -32,10 +33,9 @@
 
 #### Quality Gates Linter Override
 
-The declared baseline in `.ddx/plugins/helix/workflows/concerns/go-std/practices.md` (lines 36–42)
-lists seven individual linters: `govet`, `staticcheck`, `ineffassign`, `misspell`, `unconvert`, `gosec`, and `gocritic`.
-This project uses equivalent tooling via the Makefile and pre-push gates (Makefile:138, lefthook.yml pre-push),
-which provides comparable quality assurance:
+The HELIX `go-std` concern is consumed from the installed marketplace plugin;
+no repository-local plugin copy is authoritative. This project records its
+specific enforcement through the Makefile and pre-push gates:
 
 1. **govet** — Enforced via `make vet` (Makefile:119), invoked in pre-push (lefthook.yml:14).
    Maps to `go vet ./...`; detects vet-eligible issues.

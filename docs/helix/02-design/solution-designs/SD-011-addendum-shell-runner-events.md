@@ -4,6 +4,12 @@ ddx:
   depends_on:
     - SD-011
     - plan-2026-05-15-benchmark-runner-simplification
+  review:
+    self_hash: 0b6b0bf3aaa0917ee71b1fe86b316e5ed27bf85eb4787542d00cd03be8e5e176
+    deps:
+      SD-011: be2debae8cab7ad3d66b0123c6ef7f240abaf9b4e99129288d4c203b96d1ebd2
+      plan-2026-05-15-benchmark-runner-simplification: 18c1a107428efab189b5fd298ff898d195c3f70130ee856660f54c1f0e97bd40
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # SD-011 Addendum: Shell-Runner Progress Event Taxonomy

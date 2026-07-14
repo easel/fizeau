@@ -2,9 +2,16 @@
 ddx:
   id: ADR-008
   depends_on:
-    - CONTRACT-003
-    - ADR-005
-    - ADR-006
+    - FEAT-001
+    - FEAT-005
+    - FEAT-006
+  review:
+    self_hash: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+      FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-008: Service Package and Transcript Boundaries
 

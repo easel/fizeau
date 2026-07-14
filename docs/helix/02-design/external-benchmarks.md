@@ -3,6 +3,10 @@ ddx:
   id: external-benchmarks
   bead: agent-6d6ae2f6
   created: 2026-04-27
+  review:
+    self_hash: f3c142d16dd5e2ace34eef23c3c2c515f72e3699c1bc4fec2b63ba192264191a
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # External Benchmark Adapters

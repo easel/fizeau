@@ -8,6 +8,10 @@ ddx:
   status: FINAL
   supersedes_for: terminal-bench-2 local-model baseline
   sibling_of: benchmark-baseline-2026-04-08.md
+  review:
+    self_hash: 7b641932d66e783dec26836d3af25e0b1f3f7373c75e2b4eb6a628c5992b3f2d
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # TB-2 Baseline: Qwen3.6-27B via fizeau — 2026-05-01
 

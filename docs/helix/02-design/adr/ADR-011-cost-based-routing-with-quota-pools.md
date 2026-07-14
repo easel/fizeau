@@ -5,12 +5,19 @@ ddx:
     - ADR-005
     - ADR-006
     - ADR-007
+  review:
+    self_hash: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
+    deps:
+      ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
+      ADR-006: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+      ADR-007: 8a70a46a9efdc916ea7e3146dce7050a12d054c1c9d56c006bb4c3245b4d4300
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-011: Cost-Based Routing With Quota Pools
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
-| 2026-05-12 | Proposed | Fizeau maintainers | `ADR-005`, `ADR-006`, `ADR-007`, `fizeau-c04be6b0`, `fizeau-d18e11f5` | Medium |
+| 2026-05-12 | Accepted | Fizeau maintainers | `ADR-005`, `ADR-006`, `ADR-007`, `fizeau-c04be6b0`, `fizeau-d18e11f5` | Medium |
 
 ## Context
 

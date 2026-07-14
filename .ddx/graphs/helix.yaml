@@ -1,0 +1,13 @@
+# Keep DDx document discovery on the canonical HELIX artifact stack.
+# Checked-in benchmark evidence contains historical verify-worktree snapshots
+# with copied frontmatter IDs; those are evidence, not live specifications.
+roots:
+  - docs/helix
+id_to_path:
+  website/DESIGN.md: website/DESIGN.md
+  METRIC-test-coverage: docs/helix/06-iterate/metrics/test-coverage.yaml
+required_roots:
+  - helix.product-vision
+  - helix.prd
+  - helix.arch
+  - TP-001

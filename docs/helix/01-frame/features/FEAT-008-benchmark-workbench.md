@@ -3,16 +3,26 @@ ddx:
   id: FEAT-008
   created: 2026-05-15
   depends_on:
+    - helix.prd
     - FEAT-005
-    - SD-014
-    - website/DESIGN.md
+  review:
+    self_hash: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
+    deps:
+      FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-008 - Benchmark Workbench
 
 **Feature ID**: FEAT-008
-**Status**: Accepted
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Benchmark Evidence
+**Covered PRD Requirements**: FR-8
+**Cross-Subsystem Rationale**: Makes the provider-neutral measurement record
+inspectable without turning the evidence UI into a runtime dependency.
+**User Stories**: [US-008 — Explore Benchmark Evidence](../user-stories/US-008-benchmark-workbench.md)
 
 > **Update 2026-05-16**: ADR-016 ("Cells Are Self-Describing Evidence")
 > replaces the historical `lane:`/`recipe:` data-model blocks with profiles

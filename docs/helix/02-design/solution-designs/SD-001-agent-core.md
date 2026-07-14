@@ -7,11 +7,55 @@ ddx:
     - FEAT-003
     - FEAT-004
     - FEAT-005
+  review:
+    self_hash: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      FEAT-002: 1f53e72517347be0932a7b315aa1cc00cc48fc526ca3c53506cd179e8d0231a9
+      FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+      FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+      FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-001 — Fizeau Core Library
 
 **Features**: FEAT-001 (Agent Loop), FEAT-002 (Tools), FEAT-003 (Providers),
 FEAT-004 (Provider Config), FEAT-005 (Logging & Cost)
+
+**Status:** Historical implementation reference; superseded as public/package
+authority by [ADR-008](../adr/ADR-008-service-package-and-transcript-boundaries.md),
+[CONTRACT-003](../contracts/CONTRACT-003-fizeau-service.md), and the current
+[architecture](../architecture.md).
+
+> The original design below records the first `agent.Run`/`fiz` package
+> decomposition. References to a public `fiz` package, public `agent.Run`,
+> `agent/provider`, `agent/tool`, or `agent/session` are historical and
+> non-normative. They must not be used to reintroduce those surfaces.
+
+## Current Authority and Package Mapping
+
+The root `fizeau` package is the public facade. Embedders call
+`fizeau.New(...).Execute(...)` through `FizeauService` and consume typed public
+events and projections. Fizeau owns routing, native/provider or subprocess
+harness dispatch, event normalization, transcript semantics, and session-log
+persistence.
+
+| Original concern | Current package / boundary |
+|---|---|
+| Public execution API | root `fizeau` facade and CONTRACT-003 |
+| Service execution and dispatch | `internal/serviceimpl` |
+| Agent loop and provider/tool contracts | `internal/core` |
+| Native providers | `internal/provider` |
+| Built-in tools | `internal/tool` |
+| Transcript and replay semantics | `internal/transcript` |
+| Session artifact support | `internal/session` and `internal/sessionlog` behind public projections |
+| Subprocess harnesses | `internal/harnesses` through CONTRACT-004 |
+| First-party CLI | mountable Cobra tree in `agentcli`, thin `cmd/fiz` process wrapper |
+
+Per ADR-017, the service attempts one selected route and reports evidence; the
+embedding caller owns semantic retry or escalation as a new request.
+
+## Historical Design Record
 
 ## Scope
 
@@ -377,8 +421,9 @@ LLM turn has unknown cost.
   interfaces in consumer package
 - **ADRs referenced**: ADR-001
 - **Contracts referenced**: CONTRACT-001
-- **Departures**: CLI framework override — using `flag` stdlib instead of Cobra
-  (applies to SD-002, not this design)
+- **Departures in the historical design**: the former `flag`-based CLI choice
+  has been superseded. SD-002 now specifies the mountable Cobra tree in
+  `agentcli`.
 
 ## Constraints & Assumptions
 

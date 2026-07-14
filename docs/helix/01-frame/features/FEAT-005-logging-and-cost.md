@@ -5,13 +5,25 @@ ddx:
     - helix.prd
     - FEAT-001
     - FEAT-003
+  review:
+    self_hash: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-005 — Logging, Replay, and Cost Tracking
 
 **Feature ID**: FEAT-005
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Measurement & Replay
+**Covered PRD Requirements**: FR-5
+**Cross-Subsystem Rationale**: Projects execution, tool, provider, and routing
+facts into one measured and replayable service-owned record.
+**User Stories**: [US-005 — Measure and Replay an Execution](../user-stories/US-005-measurement-replay.md)
 
 ## Overview
 
@@ -59,7 +71,7 @@ loop.
 
 #### Session Logging
 
-1. Each `agent.Run()` call creates a session with a unique ID
+1. Each public `Execute` call creates a session with a unique ID
 2. The session log captures events in order:
    - `session.start`: timestamp, config (provider, model, working dir, max
      iterations), prompt
@@ -116,25 +128,27 @@ loop.
     when available
 19. Token usage is captured as **four distinct streams** per `llm.response`
     and accumulated per session: `input_tokens`, `output_tokens`,
-    `cached_input_tokens`, and `retried_input_tokens`. These four streams are
-    the cost-bearing axes; any one may be zero but none may be folded into
-    another (e.g. cached input is not added to input). This matches the
-    telemetry schema lifted from SD-010 (see SD-009 §9.2 / SD-010 D4).
+    `cache_read_tokens`, and `cache_write_tokens`. Any stream may be zero or
+    unavailable, but cache traffic is not silently folded into input/output.
+    This is the runtime measurement contract; benchmark retry accounting is a
+    separate cell-level concern.
 20. If no reported cost exists, Fizeau may compute cost only from explicit
     pricing configuration for the exact runtime/provider system and resolved
-    model. The authoritative `$-per-Mtok` numbers (input, output,
-    cached-input, retried-input) come from the SD-010 pricing schema
-    (`scripts/benchmark/profiles/<id>.yaml`, loaded by
-    `internal/benchmark/profile/`). Fizeau does not maintain a separate
-    generic pricing table and does not price by routing policy.
+    model. The four `$-per-Mtok` numbers (input, output, cache-read,
+    cache-write) come from the exact runtime pricing map supplied to telemetry.
+    Fizeau does not price by routing policy or silently substitute a generic
+    price table.
 21. If neither reported cost nor a matching runtime/model pricing entry exists,
     cost remains unknown and is never guessed from generic pricing tables
 22. Local inference runtimes are not implicitly free; `$0` cost must come from
     reported billing or explicit configuration
 23. Session totals are accumulated only when all contributing turn costs are
     known; otherwise the session total is unknown
-24. `Result.CostUSD` reflects the known total session cost or `-1` when
-    unknown
+24. Public `DrainExecuteResult` and the terminal `ServiceFinalData` projection expose both
+    `CostUSD` and the public `CostSource` classification defined by
+    CONTRACT-003: `reported`, `configured`, or `unknown`. Unknown cost uses
+    `CostUSD = -1`; a known zero remains distinguishable from unknown by its
+    non-unknown source.
 25. Usage reporting aggregates token and timing data for all sessions, known
     costs for priced sessions, unknown-cost session counts, concrete model
     attribution, and v0.11 policy/power routing attribution when present
@@ -145,7 +159,7 @@ loop.
     session total reaches or exceeds the cap, Fizeau halts the loop
     deterministically before issuing the next `llm.request`, writes a
     `session.end` event with `process_outcome=budget_halted`, and returns a
-    `Result` whose status reflects the halt.
+    `DrainExecuteResult` whose status reflects the halt.
 27. `budget_halted` is a first-class terminal `process_outcome` (per the
     SD-010 / SD-009 §9 failure taxonomy). It is distinct from `completed`,
     `timeout`, and `harness_crash`, and survives resume semantics: a
@@ -199,7 +213,7 @@ proceeds normally.
 ## Edge Cases and Error Handling
 
 - **Log directory not writable**: Warn once, continue without logging.
-  `Result` still has token counts and cost.
+  `DrainExecuteResult` still has token counts and cost.
 - **Session interrupted (context cancelled)**: Write `session.end` with
   status=cancelled and whatever data was collected
 - **Provider/runtime does not expose cost and no explicit pricing exists**:
@@ -225,12 +239,13 @@ proceeds normally.
 |----|-----------|------------------------|
 | AC-FEAT-005-01 | JSONL session logs contain ordered `session.start`, `llm.request`, `llm.response`, `tool.call`, and `session.end` events with stable `session_id`, `seq`, timestamps, correlation metadata, and full prompt/response bodies subject only to documented truncation rules. | `go test ./session ./...` |
 | AC-FEAT-005-02 | Replay renders a human-readable transcript of prompts, assistant turns, tool calls, tokens, timing, workdir/model/provider metadata, and known-vs-unknown cost state without mutating the underlying log. | `go test ./session ./...` |
-| AC-FEAT-005-03 | Provider-reported cost wins over configured pricing, configured runtime pricing applies only on exact runtime/model matches, and mixed or unknown constituent costs force the session total to remain unknown rather than guessed. The four token streams (input, output, cached-input, retried-input) are tracked separately per turn and per session and never folded into one another. Pricing is sourced from the SD-010 pricing schema and never inferred from routing policy. | `go test ./session ./telemetry ./...` |
+| AC-FEAT-005-03 | Provider-reported cost wins over configured pricing, configured runtime pricing applies only on exact runtime/model matches, and mixed or unknown constituent costs force the session total to remain unknown rather than guessed. The four token streams (input, output, cache-read, cache-write) are tracked separately per turn and per session and never folded into one another. Pricing is never inferred from routing policy. | `go test ./session ./telemetry ./...` |
 | AC-FEAT-005-08 | v0.11 session-log and usage projections preserve `policy` / `power_policy` routing attribution while replay remains tolerant of pre-v0.11 routing fields. | `go test ./internal/session ./telemetry ./...` |
-| AC-FEAT-005-07 | A configured per-run cost cap halts the loop before the next `llm.request` once the known running total meets or exceeds the cap, the `session.end` event records `process_outcome=budget_halted`, and `Result` surfaces the halt; if cost is unknown the cap does not fire and the run proceeds. | `go test ./session ./...` |
+| AC-FEAT-005-07 | A configured per-run cost cap halts the loop before the next `llm.request` once the known running total meets or exceeds the cap, the `session.end` event records `process_outcome=budget_halted`, and `DrainExecuteResult` surfaces the halt; if cost is unknown the cap does not fire and the run proceeds. | `go test ./session ./...` |
 | AC-FEAT-005-04 | OTel export conforms to `CONTRACT-001`, including span taxonomy, identity fields, cost/timing attributes, tool error semantics, and throughput formulas derived only from valid timing windows. | `go test ./telemetry ./...` |
 | AC-FEAT-005-05 | `fiz usage` preserves known-cost and unknown-cost session semantics across time-window filtering and supports the documented table, JSON, and CSV output modes. | `go test ./cmd/fiz ./session ./...` |
 | AC-FEAT-005-06 | Unwritable log directories and telemetry-export failures are best-effort failures: the run still completes, operators receive a warning, and whatever partial log/telemetry data exists remains readable. | `go test ./session ./telemetry ./...` |
+| AC-FEAT-005-09 | Public `DrainExecuteResult` and terminal `ServiceFinalData` preserve the session cost amount plus `reported`, `configured`, or `unknown` provenance; known zero is not conflated with unknown. | Root facade and service-event contract tests |
 
 ## Constraints and Assumptions
 
@@ -241,9 +256,10 @@ proceeds normally.
   for gaps such as cost source and runtime-specific timing
 - `CONTRACT-001` is authoritative for telemetry field names, formulas, and
   capture semantics
-- SD-010's pricing schema is authoritative for `$-per-Mtok` rates across the
-  four token streams; FEAT-005 consumes those rates and does not define a
-  parallel pricing source
+- The runtime pricing map is authoritative for `$-per-Mtok` rates across the
+  four token streams. Benchmark profiles may supply that map for benchmark
+  runs, but FEAT-005 does not make the benchmark profile store a universal
+  runtime dependency.
 - Log format is Fizeau-specific but designed to be consumable by DDx's
   session inspection tooling with a thin adapter
 - No log rotation or retention policy in P0

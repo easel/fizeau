@@ -10,6 +10,15 @@ ddx:
     - SD-012
   supersedes_scope_of:
     - plan-2026-05-15-benchmark-runner-simplification
+  review:
+    self_hash: ac33068859c7d86a3e11b375abe0e2a1e37175db533918c48a449dd370b8df72
+    deps:
+      ADR-007: 8a70a46a9efdc916ea7e3146dce7050a12d054c1c9d56c006bb4c3245b4d4300
+      ADR-015: eacf3702878a7101f78e029e8e8e1717a5789a60830748c5d493970cfb9c9ca1
+      SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+      SD-010: 12f0b391c23a5a2b7e2abbbc6fec88ec6c7a57a7ff0a20e39c3a065a6c818e7a
+      SD-012: bf30b7ba2939970dc4b6f94343403b37d72bc5626314a689682abcdd93d3acb2
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-016: Cells Are Self-Describing Evidence
 

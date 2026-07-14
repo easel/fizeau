@@ -6,6 +6,14 @@ ddx:
     - FEAT-004
     - FEAT-006
     - SD-001
+  review:
+    self_hash: f7fcaedf895c1336816b1d71229989746acc3364aed4cf958465ab8a98c2485e
+    deps:
+      FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+      FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+      FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+      SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-005 — Provider Sources, Model Catalog, and Power Routing
 
@@ -17,7 +25,7 @@ but real use has separate concerns:
 
 1. **Provider source and endpoint setup** — concrete transport/auth data for
    model discovery and dispatch.
-2. **Shared model policy** — one agent-owned catalog for model aliases, numeric
+2. **Shared model policy** — one Fizeau-owned catalog for model identity, numeric
    power, per-surface projections, deprecations, cost, context, and benchmark
    provenance.
 3. **Automatic selection** — one routing decision per request based on live
@@ -61,14 +69,16 @@ Caller boundary (see CONTRACT-003):
   automatic selection. If a hard pin cannot be satisfied, routing fails with
   detailed no-candidate evidence and never substitutes a broader model, source,
   endpoint, or harness.
-- Embedded `fiz` chooses the concrete provider candidate, constructs the
+- The Fizeau service chooses the concrete provider candidate, constructs the
   adapter, dispatches exactly one candidate, and reports the attempted route
   outcome.
 - Callers receive attribution facts from the embedded run: selected candidate,
   rejected candidates, filter reasons, score components, and the actual
   harness/provider-source/endpoint/model used.
-- Callers own all retry and task-level escalation. The agent reports route
-  evidence but does not dispatch another candidate in the same request.
+- Fizeau may retry transient transport failures against the selected route.
+  Callers own semantic retry, task-level retry, and every cross-route
+  escalation. Fizeau reports route evidence but does not dispatch another
+  candidate in the same request.
 
 ## Config Format
 
@@ -78,50 +88,35 @@ does not encode route order, model-strength policy, or fallback chains.
 ```yaml
 # .fizeau/config.yaml
 model_catalog:
-  manifest: ~/.config/fiz/models.yaml   # optional local override
+  manifest: ~/.config/fizeau/models.yaml   # optional local override
 
-provider_sources:
-  - type: lmstudio
+providers:
+  lmstudio:
+    type: lmstudio
+    api_key: lmstudio
+    reasoning: off
     endpoints:
-      - label: vidar
+      - name: vidar
         base_url: http://vidar:1234/v1
-        api_key: lmstudio
-        reasoning: off
-      - label: grendel
+      - name: grendel
         base_url: http://grendel:1234/v1
-        api_key: lmstudio
 
-  - type: omlx
-    endpoints:
-      - label: vidar-omlx
-        base_url: http://vidar:1235/v1
-        api_key: omlx
-        model: Qwen3.5-27B-4bit
-        reasoning: off
+  vidar-omlx:
+    type: omlx
+    base_url: http://vidar:1235/v1
+    api_key: omlx
+    model: Qwen3.5-27B-4bit
+    reasoning: off
 
-  - type: vllm
-    endpoints:
-      - label: bragi-vllm
-        base_url: http://bragi:8000/v1
-
-  - type: llama-server
-    endpoints:
-      - label: local-llama
-        base_url: http://localhost:8080/v1
-
-  - type: openrouter
-    endpoints:
-      - label: openrouter
-        base_url: https://openrouter.ai/api/v1
-        api_key: ${OPENROUTER_API_KEY}
-        headers:
-          HTTP-Referer: https://github.com/easel/fizeau
-          X-Title: Fizeau
-
-  - type: anthropic
-    endpoints:
-      - label: anthropic
-        api_key: ${ANTHROPIC_API_KEY}
+  openrouter:
+    type: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    headers:
+      HTTP-Referer: https://github.com/easel/fizeau
+      X-Title: Fizeau
+    include_by_default: false
+    billing: per_token
 
 routing:
   health_cooldown: 30s
@@ -132,9 +127,11 @@ max_iterations: 20
 session_log_dir: .fizeau/sessions
 ```
 
-Current implementation may still load older `providers:` entries during the
-migration window. Those entries should be treated as endpoint definitions under
-their declared source type, not as the primary routing API.
+The top-level `providers:` map is the current named-source schema. A provider
+may use one `base_url` or an endpoint list. The endpoint-first `endpoints:`
+schema is also accepted for serving targets that do not need a stable
+user-facing provider name. Both forms declare transport and authentication;
+neither encodes route order.
 
 the removed route-table field was deprecated by ADR-005 and its compatibility parser has now
 been removed. Automatic routing covers the same intent by combining provider
@@ -143,18 +140,18 @@ per-candidate route order in YAML.
 
 ### Provider Source and Endpoint Fields
 
-Source fields:
+Provider-source fields:
 
 | Field | Type | Description |
 |---|---|---|
 | `type` | enum | Provider source type such as `lmstudio`, `omlx`, `vllm`, `llama-server`, `ollama`, `openrouter`, `anthropic`, or harness-backed sources where applicable |
-| `endpoints` | list | Concrete transport/auth locations for this source |
+| `endpoints` | list | Concrete serving locations for this source |
 
 Endpoint fields:
 
 | Field | Type | Description |
 |---|---|---|
-| `label` | string | Optional diagnostic and explicit endpoint selector |
+| `name` | string | Optional diagnostic and explicit endpoint selector |
 | `base_url` | string | API base URL when the source uses HTTP |
 | `api_key` | string | Secret reference or literal token for the endpoint |
 | `headers` | map | Optional endpoint-specific HTTP headers |
@@ -223,11 +220,12 @@ exact-pin-only.
 The catalog manifest stores concrete model metadata at the model entry level:
 family, display name, status, cost, cache cost, context window, benchmark
 metadata, OpenRouter ID, reasoning metadata, provider/deployment class, power,
-power provenance, and consumer surface strings. Target entries define policy
-and ordered candidates, not duplicated model metadata.
+power provenance, and consumer surface strings. Top-level policy entries define
+power and placement intent without duplicating model metadata or candidate
+order.
 
 ```yaml
-version: 4
+version: 5
 models:
   qwen3.5-27b:
     family: qwen
@@ -243,15 +241,17 @@ models:
     context_window: 262144
     surfaces:
       fizeau.openai: qwen3.5-27b
-targets:
-  code-work:
-    family: coding
-    status: active
-    context_window_min: 131072
-    candidates: [qwen3.5-27b]
-    surface_policy:
-      fizeau.openai:
-        reasoning_default: off
+    reasoning_default: off
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+providers:
+  lmstudio:
+    type: lmstudio
+    include_by_default: true
+    billing: fixed
 ```
 
 Bootstrap power from normalized benchmark evidence, model capabilities
@@ -277,7 +277,7 @@ projection.
 
 Per request, the service:
 
-1. Loads provider source config and the agent model catalog.
+1. Loads provider source config and the Fizeau model catalog.
 2. Assembles or reads the current available-model snapshot:
    1. Enumerates every configured harness, provider source, endpoint, and
       discovered concrete model.
@@ -449,9 +449,11 @@ snapshot remains the safe default, but operators and callers can install a
 newer shared manifest from a versioned published bundle via an explicit update
 flow.
 
-**D2B: Manifest v4 separates concrete models from target policy.** Top-level
-model entries carry concrete model metadata. Target entries define policy,
-replacement metadata, ordered candidates, and per-surface defaults.
+**D2B: Manifest v5 separates concrete models from routing policy.** Top-level
+model entries carry concrete model metadata. Top-level policies define power
+bounds, locality, and requirements; provider entries define source type,
+default inclusion, and billing. Schema v5 has no target, alias, or ordered
+candidate routing layer.
 
 **D3: Preserve prompt preset terminology for prompts only.** The top-level
 `preset` field and CLI `--preset` flag refer to system prompt presets defined
@@ -476,15 +478,15 @@ tool support), and `Reasoning` (filter by reasoning support). No prose
 heuristic complexity classifier. `RequiresTools` is explicit caller intent, or
 derived only when a request surface has unambiguously enabled tool execution.
 
-**D7: No agent-owned retry.** The routing engine ranks candidates with explicit
+**D7: No Fizeau-owned semantic retry.** The routing engine ranks candidates with explicit
 components. `Execute` dispatches the top candidate once and returns the ranked
 trace plus attempted-route outcome. DDx or another caller owns any follow-up
 request with a stronger `MinPower`, capped `MaxPower`, or different hard pins.
 Per-(harness, provider source, endpoint, model) availability/latency replaces
 coarser health memory.
 
-**D7A: Placement is provider-candidate metadata.** `agent` as a native harness
-may front local/free, prepaid, and metered providers. Routing placement filters
+**D7A: Placement is provider-candidate metadata.** The native execution path
+may front local/fixed, prepaid, and metered providers. Routing placement filters
 operate on the provider-source/endpoint candidate, not the harness. Default
 placement comes from source type and catalog deployment class, with endpoint
 override available only as metadata.
@@ -641,11 +643,12 @@ The compatibility flag remains temporarily, but it is not the preferred UX.
 
 ## Library and Package Boundaries
 
-The library runtime boundary does not change: `agent.Run()` still takes a
-single `Provider` in the `Request`.
+The public runtime boundary is `FizeauService.Execute`. It resolves one route,
+constructs the selected native provider or harness internally, dispatches once,
+and emits normalized public events. `internal/core.Run` and its single-provider
+request are implementation details, not an embedding API.
 
-Config and CLI code grow a catalog-aware layer above that boundary. Expected
-package split:
+Package split:
 
 - `internal/config/` — load provider source/endpoint config, routing defaults,
   and optional manifest override path
@@ -653,8 +656,11 @@ package split:
 - `internal/reasoning/` — shared leaf package for the Reasoning scalar,
   parser, normalization, constants, `ReasoningTokens(n)`, and resolved policy
   representation
-- `cmd/fiz/` and `agentcli/` — translate CLI flags into request intent and
-  expose `fiz models`; routing resolution remains service-owned
+- root `fizeau` package — public service, request, event, inventory, and route
+  projections
+- `internal/serviceimpl/` — service execution and native/subprocess dispatch
+- `cmd/fiz/` and `agentcli/` — thin consumers that translate CLI flags into
+  public request intent and expose `fiz models`
 
 ## Traceability
 

@@ -5,6 +5,10 @@ ddx:
   extends:
     - external-benchmarks
     - routing
+  review:
+    self_hash: 6232876e14c2047d85b45b5f7cfcada0ca836c4018e9756145e01bad1b6bff15
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # TerminalBench Fiz-Wrapper Comparison

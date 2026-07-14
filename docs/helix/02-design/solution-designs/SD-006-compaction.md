@@ -4,6 +4,12 @@ ddx:
   depends_on:
     - FEAT-001
     - SD-001
+  review:
+    self_hash: 07e0138c482daa54314d15188f1273ce002ff66e8a56dbfec67d67778163e7e2
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-006 — Conversation Compaction
 

@@ -1609,6 +1609,19 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 				}
 			}
 
+			// Proactive probe gate: endpoints known unreachable from background/startup
+			// probing are hard-gated. An explicit provider pin bypasses the gate so
+			// operators can still force a dead-endpoint route. Evaluate this before
+			// snapshot dial failures so the more specific endpoint_unreachable
+			// classification wins deterministically when both signals exist.
+			if eligible && p.Name != "" && req.Provider != candidateProviderIdentity(h, p) {
+				if _, ok := in.ProbeUnreachable[p.Name]; ok {
+					eligible = false
+					candidateReason = fmt.Sprintf("provider %s endpoint unreachable (aliveness probe failed)", candidateProviderIdentity(h, p))
+					filterReason = FilterReasonEndpointUnreachable
+				}
+			}
+
 			// FEAT-004 AC-28: known-down endpoints (provider snapshot says
 			// unreachable) are dispatchability failures — hard-gate them so the
 			// router doesn't burn ~30s per cell dialing a host that's already
@@ -1624,17 +1637,6 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 					eligible = false
 					candidateReason = fmt.Sprintf("provider %s known unreachable (last dial failure %s ago)", candidateProviderIdentity(h, p), in.Now.Sub(failedAt).Truncate(time.Second))
 					filterReason = FilterReasonUnhealthy
-				}
-			}
-
-			// Proactive probe gate: endpoints known unreachable from background/startup
-			// probing are hard-gated. An explicit provider pin bypasses the gate so
-			// operators can still force a dead-endpoint route.
-			if eligible && p.Name != "" && req.Provider != candidateProviderIdentity(h, p) {
-				if _, ok := in.ProbeUnreachable[p.Name]; ok {
-					eligible = false
-					candidateReason = fmt.Sprintf("provider %s endpoint unreachable (aliveness probe failed)", candidateProviderIdentity(h, p))
-					filterReason = FilterReasonEndpointUnreachable
 				}
 			}
 

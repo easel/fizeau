@@ -65,6 +65,7 @@ type workbenchSnapshot struct {
 	VisibleColumns          []string `json:"visibleColumns"`
 }
 
+// @covers US-008-AC1
 func TestBenchmarkWorkbenchSmoke(t *testing.T) {
 	buildDir := t.TempDir()
 	listener, baseURL := reserveListener(t)
@@ -313,6 +314,7 @@ func TestBenchmarkWorkbenchSmoke(t *testing.T) {
 	})
 }
 
+// @covers US-008-AC2
 func TestBenchmarkWorkbenchInteractionCoverage(t *testing.T) {
 	buildDir := t.TempDir()
 	listener, baseURL := reserveListener(t)

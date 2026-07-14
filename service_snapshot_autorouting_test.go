@@ -39,6 +39,7 @@ type snapshotAutoroutingDiscoveryFixture struct {
 	Stale      bool      `json:"stale,omitempty"`
 }
 
+// @covers US-004-AC2
 func TestSnapshotAutoroutingFromFixtures(t *testing.T) {
 	t.Setenv("PATH", "")
 	cacheRoot := tempDiscoveryCacheDir(t)

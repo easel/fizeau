@@ -396,6 +396,7 @@ func TestAutoRoutingUsesUnifiedModelSnapshot(t *testing.T) {
 	require.True(t, rejected, "expected beta candidate to be rejected by the air-gapped policy gate")
 }
 
+// @covers US-004-AC1
 func TestExecuteRouteEvidenceMatchesModelsSnapshot(t *testing.T) {
 	fixture := newUnifiedSnapshotFixture(t)
 	alphaModelsBefore := fixture.alpha.modelsCallCount()

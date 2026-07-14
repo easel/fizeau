@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// @covers US-004-AC3
 func TestExecuteRouteEvidenceNoRetryAfterSelectedDispatchFailure(t *testing.T) {
 	policyStatement := "agent does not retry candidate 2 after selected candidate dispatch failure"
 	sc := &fakeServiceConfig{

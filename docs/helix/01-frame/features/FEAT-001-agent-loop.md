@@ -3,13 +3,23 @@ ddx:
   id: FEAT-001
   depends_on:
     - helix.prd
+  review:
+    self_hash: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+    deps:
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-001 — Agent Loop
 
 **Feature ID**: FEAT-001
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Embedded Execution
+**Covered PRD Requirements**: FR-1
+**Cross-Subsystem Rationale**: Owns the public execution lifecycle that tools,
+providers, measurement, and the proof CLI compose around.
+**User Stories**: [US-001 — Execute an Embedded Agent Run](../user-stories/US-001-embedded-execution.md)
 
 ## Overview
 
@@ -37,10 +47,13 @@ implements PRD P0 requirements 1, 8, 10, and 11.
 
 ### Functional Requirements
 
-1. `agent.Run(ctx, Request) (Result, error)` is the primary entry point
-2. Request contains: prompt (string), system prompt (string), provider config,
-   tool set, max iterations, working directory, callback (optional)
-3. The loop sends messages to the configured LLM provider and processes the
+1. `fizeau.New(...).Execute(ctx, Request)` through `FizeauService` is the
+   primary entry point
+2. The public request contains prompt and system instructions, routing intent
+   or exact pins, tool/permission policy, iteration bounds, working directory,
+   and optional callbacks
+3. The service resolves and dispatches one provider or harness route, then the
+   internal loop sends messages to that resolved provider and processes the
    response
 4. When the response contains tool calls, each tool is executed sequentially
    and results are appended to the conversation
@@ -61,7 +74,7 @@ implements PRD P0 requirements 1, 8, 10, and 11.
   < 1ms per iteration
 - **Memory**: Conversation history is bounded by max_iterations × typical
   response size — no unbounded growth
-- **Concurrency**: Multiple `agent.Run` calls can execute concurrently with
+- **Concurrency**: Multiple public `Execute` calls can run concurrently with
   independent state
 - **Testability**: Provider interface is mockable for unit tests
 
@@ -78,12 +91,18 @@ implements PRD P0 requirements 1, 8, 10, and 11.
 
 ## Success Metrics
 
-- Agent loop can complete a multi-step task (read file → edit → verify) in a
-  single `Run` call
+- The public service can complete a multi-step task (read file → edit →
+  verify) in a single `Execute` call
 - Loop correctly terminates on all exit conditions (success, limit, cancel, error)
 - Token counts match provider-reported usage
 
 ## Acceptance Criteria
+
+The criteria below are an **implementation reference** for the internal native
+loop. They preserve the verified mechanics behind the public service but do not
+replace US-001's public `FizeauService.Execute` acceptance criteria. Harness
+dispatch and route selection are specified by CONTRACT-003, FEAT-003, and
+FEAT-004.
 
 | ID | Criterion | Suggested Verification |
 |----|-----------|------------------------|
@@ -104,8 +123,9 @@ File Changes sections).
 
 ## Constraints and Assumptions
 
-- The caller provides a fully configured provider — Fizeau does not manage API
-  keys or provider selection (that's model routing, FEAT-004)
+- The caller supplies service configuration and routing intent. Fizeau owns
+  provider/harness selection and construction; the internal native loop
+  receives the already-resolved concrete provider.
 - Tool set is fixed at compile time for P0; extensible tool registration is P2
 
 ## Dependencies
@@ -117,5 +137,5 @@ File Changes sections).
 ## Out of Scope
 
 - Interactive/streaming output to a terminal (headless only)
-- Conversation persistence across `Run` calls (P1 session continuity)
+- Conversation persistence across `Execute` calls (P1 session continuity)
 - Parallel tool execution (tools execute sequentially)

@@ -22,6 +22,7 @@ const harnessCassetteRoot = "testdata/harness-cassettes"
 const harnessGoldenRecordText = "harness golden record ok"
 const harnessGoldenRecordPrompt = "Reply with exactly: " + harnessGoldenRecordText
 
+// @covers US-001-AC1
 func TestHarnessGoldenReplay_ServiceExecute(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("replay cassette scripts are POSIX shell fixtures")

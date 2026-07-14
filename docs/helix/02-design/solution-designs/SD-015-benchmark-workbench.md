@@ -7,6 +7,14 @@ ddx:
     - ADR-015
     - SD-014
     - website/DESIGN.md
+  review:
+    self_hash: 6191c30eab07fe4fa7de4b1c4b4ffe20b7fc9142f152f487bbaffb8a4bbfc735
+    deps:
+      ADR-015: eacf3702878a7101f78e029e8e8e1717a5789a60830748c5d493970cfb9c9ca1
+      FEAT-008: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
+      SD-014: 65cd79f7118efef8d5f05ed4a5dd067de2925394eff229f0af3f6aa73c7faff7
+      website/DESIGN.md: 920c3b6fb2b3daed4a4b409de13f57f3c07f7c5732e4a32bc1ad42f389aa842b
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-015 - Benchmark Workbench
 

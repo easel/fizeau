@@ -196,6 +196,7 @@ default: local
 	assert.NotContains(t, res.stderr, "{")
 }
 
+// @covers US-006-AC2
 func TestCLI_JSONOutput_IsMachineReadable(t *testing.T) {
 	exe := buildAgentCLI(t)
 	workDir := t.TempDir()
@@ -232,6 +233,7 @@ default: local
 	assert.GreaterOrEqual(t, parsed.Tokens.Output, 0)
 }
 
+// @covers US-006-AC1
 func TestCLI_ExecuteUsesServiceContract(t *testing.T) {
 	exe := buildAgentCLI(t)
 	workDir := t.TempDir()

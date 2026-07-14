@@ -3,13 +3,25 @@ ddx:
   id: FEAT-007
   depends_on:
     - helix.prd
+    - FEAT-006
+  review:
+    self_hash: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
+    deps:
+      FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-007 — Self-Update and Installer
 
-**Feature ID**: FEAT-007  
-**Status**: Draft  
-**Priority**: P1  
+**Feature ID**: FEAT-007
+**Status**: Approved
+**Priority**: P1
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Distribution
+**Covered PRD Requirements**: FR-7
+**Cross-Subsystem Rationale**: Distributes the CLI proof surface while keeping
+update networking outside embedded library execution.
+**User Stories**: [US-007 — Install and Explicitly Update the Proof CLI](../user-stories/US-007-distribution.md)
 
 ## Overview
 
@@ -38,9 +50,12 @@ pattern — great library proven by a usable CLI app.
 3. If outdated, show changelog summary (release notes from GitHub API)
 4. Prompt user: "Update to v0.0.9? [y/N]"
 5. Download new binary to temp location
-6. Verify download (checksum if available, or basic file size check)
+6. Validate the download before replacement by rejecting empty or implausibly
+   small artifacts. Checksum verification becomes required when the release
+   workflow publishes a checksum manifest; the current release contract does
+   not publish one.
 7. Atomically replace old binary with new one
-8. Preserve permissions and ownership
+8. Preserve executable permissions
 9. Show success message with new version
 
 #### Update Check Only (`fiz update --check-only`)
@@ -250,9 +265,9 @@ func getLatestRelease(repo string) (*GitHubRelease, error) {
 
 ## Dependencies
 
-- **Other features**: None (standalone CLI feature)
+- **Other features**: FEAT-006 (the distributed proof CLI)
 - **External services**: GitHub API, GitHub releases CDN
-- **PRD requirements**: P0-5 (prove it with an app)
+- **PRD requirements**: FR-7 (Distribution)
 
 ## Out of Scope
 

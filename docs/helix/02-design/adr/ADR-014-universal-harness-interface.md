@@ -8,6 +8,15 @@ ddx:
     - ADR-011
     - ADR-012
   child_of: fizeau-67f2d585
+  review:
+    self_hash: 911d38f39ef1e377b40a3e1760e58d60eca7a5b6d147338801404a55986c92e7
+    deps:
+      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+      ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
+      ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
+      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      CONTRACT-004: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -268,3 +277,16 @@ Out of scope:
 - [x] Validation section defines review triggers
 - [x] Concern impact is complete
 - [x] ADR is consistent with governing feature spec and PRD requirements
+
+## Amendment — 2026-07-14: ADR-013 Prerequisite Complete
+
+ADR-014 and CONTRACT-004 are implemented and accepted. The prerequisite that
+originally caused ADR-013 to be withdrawn is therefore complete. ADR-013 was
+re-proposed after CONTRACT-004 merged, accepted on 2026-05-18 with empirical
+billing evidence, and received its Gate-E acceptance on 2026-06-04.
+
+References in the original ADR-014 decision record to ADR-013 as "withdrawn",
+"future", or awaiting this refactor are retained only as historical context.
+They are not current status or a remaining gate. The current relationship is:
+ADR-014 supplies the universal harness boundary and accepted ADR-013 consumes
+that boundary for the `claude-tui` implementation.

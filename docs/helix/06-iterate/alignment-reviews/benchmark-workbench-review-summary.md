@@ -1,5 +1,10 @@
 # Benchmark Workbench Functional-Area Review Summary
 
+> **Historical snapshot (2026-05-17).** This summary preserves the evidence
+> considered by the May review. It is superseded for current alignment status
+> by `AR-2026-07-14-repo.md`. Manual verification plus one browser smoke test
+> did not establish full acceptance-criterion test coverage.
+
 **Review Bead:** fizeau-a880e449  
 **Functional Area:** benchmark-workbench (FEAT-008, US-008)  
 **Classification:** ALIGNED  
@@ -14,7 +19,10 @@ The benchmark workbench functional area is **ALIGNED** with vision, requirements
 - **Feature**: FEAT-008 (benchmark workbench), US-008 (benchmark workbench user story)
 - **Architecture**: ADR-015 (browser analytical workbench), ADR-016 (cells as self-describing evidence)
 - **Solution Design**: SD-014 (terminal benchmark integration), SD-015 (benchmark workbench)
-- **Implementation**: Complete and tested; smoke test command `make benchmark-workbench-smoke` shipped 2026-05-15
+- **Implementation evidence**: Browser smoke command
+  `make benchmark-workbench-smoke` and manual observations were recorded on
+  2026-05-15; that evidence does not prove every acceptance criterion is
+  automated or fully tested.
 - **Prior Work**: Bead fizeau-857f3b8e ("benchmark workbench: add automated browser smoke") — **CLOSED** (2026-05-15)
 
 ## Acceptance Criteria Status
@@ -23,12 +31,12 @@ Per AR-2026-05-15-benchmark-model-browser (still authoritative):
 
 | Criterion | Test Reference | Status |
 |-----------|---|---|
-| Workbench data pipeline loads cells from Parquet | `website/benchmark_workbench_smoke_test.go` | ✓ SATISFIED |
-| Model picker functional | manual verification + smoke test | ✓ SATISFIED |
-| Enum filters (outcome, task, model, engine, GPU, RAM) | manual verification + smoke test | ✓ SATISFIED |
-| Pairwise comparison table | manual verification + smoke test | ✓ SATISFIED |
-| Task link generation | manual verification + smoke test | ✓ SATISFIED |
-| Absence of default `terminalbench_task_url` column | smoke test assertion | ✓ SATISFIED |
+| Workbench data pipeline loads cells from Parquet | `website/benchmark_workbench_smoke_test.go` | Point-in-time smoke evidence |
+| Model picker functional | manual verification + smoke test | Point-in-time evidence |
+| Enum filters (outcome, task, model, engine, GPU, RAM) | manual verification + smoke test | Point-in-time evidence |
+| Pairwise comparison table | manual verification + smoke test | Point-in-time evidence |
+| Task link generation | manual verification + smoke test | Point-in-time evidence |
+| Absence of default `terminalbench_task_url` column | smoke test assertion | Point-in-time smoke evidence |
 
 ## Quality Finding: ADR-016 Compatibility Banner
 
@@ -51,4 +59,7 @@ Per AR-2026-05-15-benchmark-model-browser (still authoritative):
 
 ## Conclusion
 
-Benchmark workbench implementation is complete and fully tested. All acceptance criteria satisfied. One low-severity documentation task filed for ADR-016 compatibility banner. No blocking issues.
+The May review classified the workbench as aligned from the smoke and manual
+evidence available then. This snapshot does not claim complete automated
+acceptance coverage. Use the current alignment report and `TP-001` for present
+traceability status.

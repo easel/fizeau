@@ -16,6 +16,7 @@ func float64Ptr(v float64) *float64 {
 	return &v
 }
 
+// @covers US-005-AC3
 func TestReplay(t *testing.T) {
 	dir := t.TempDir()
 	sessionID := "replay-test"
@@ -94,6 +95,13 @@ func TestReplay(t *testing.T) {
 	assert.Contains(t, output, "The package is main.")
 	assert.Contains(t, output, "End (success)")
 	assert.Contains(t, output, "$0 (local)")
+	ordered := []string{"[System]", "You are a helpful assistant.", "[User]", "Read main.go", "> read", "package main", "The package is main.", "End (success)"}
+	previous := -1
+	for _, marker := range ordered {
+		index := strings.Index(output, marker)
+		assert.Greater(t, index, previous, "replay marker %q must appear in event order", marker)
+		previous = index
+	}
 }
 
 func intPtr(v int) *int {

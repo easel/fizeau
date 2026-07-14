@@ -4,6 +4,11 @@ ddx:
   depends_on:
     - CONTRACT-003
   child_of: fizeau-67f2d585
+  review:
+    self_hash: 81034b21e3585506776265f15d543eb0f9be15f1c02dd15c3d4141017c3f848d
+    deps:
+      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 

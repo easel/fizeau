@@ -4,6 +4,12 @@
 **Status**: DRAFT
 **Refinement Rounds**: 1
 
+> **Historical, non-normative plan.** This records an abandoned intermediate
+> rename toward `ddx-agent` / `DocumentDrivenDX/agent`. The repository is now
+> Fizeau: the module is `github.com/easel/fizeau`, the public package is
+> `fizeau`, and the first-party binary is `fiz`. Product vision, ADR-008,
+> CONTRACT-003, and `architecture.md` are authoritative.
+
 ## Problem Statement
 
 The project is currently named "DDX Agent" across code, module metadata, CLI

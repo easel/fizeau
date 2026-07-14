@@ -3,13 +3,23 @@ ddx:
   id: FEAT-002
   depends_on:
     - helix.prd
+  review:
+    self_hash: 1f53e72517347be0932a7b315aa1cc00cc48fc526ca3c53506cd179e8d0231a9
+    deps:
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-002 — Tool Set
 
 **Feature ID**: FEAT-002
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Workspace Tools
+**Covered PRD Requirements**: FR-2
+**Cross-Subsystem Rationale**: Supplies the auditable action surface consumed
+by embedded execution and projected by measurement and replay.
+**User Stories**: [US-002 — Use Auditable Workspace Tools](../user-stories/US-002-workspace-tools.md)
 
 ## Overview
 

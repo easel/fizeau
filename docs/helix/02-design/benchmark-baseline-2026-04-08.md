@@ -6,6 +6,10 @@ ddx:
   model: anthropic/claude-4.5-haiku-20251001 (via OpenRouter)
   provider: openai-compat (openrouter)
   fizeau-version: dev (commit from master, 2026-04-08; pre-rename build then known as fiz f3b980c)
+  review:
+    self_hash: 3d28ddc0759f2a3ff403ba888b2377b60e3efa8e91d702fce86db25ee849f827
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Fizeau Benchmark Baseline — 2026-04-08
 

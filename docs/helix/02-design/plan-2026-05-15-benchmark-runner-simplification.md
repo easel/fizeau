@@ -1,3 +1,14 @@
+---
+ddx:
+  id: plan-2026-05-15-benchmark-runner-simplification
+  depends_on:
+    - ADR-016
+  review:
+    self_hash: 18c1a107428efab189b5fd298ff898d195c3f70130ee856660f54c1f0e97bd40
+    deps:
+      ADR-016: ac33068859c7d86a3e11b375abe0e2a1e37175db533918c48a449dd370b8df72
+    reviewed_at: "2026-07-14T05:16:22Z"
+---
 # Plan: Benchmark Runner Simplification
 
 **Date**: 2026-05-15 (filed) / 2026-05-16 (rewritten)
@@ -136,7 +147,7 @@ profile:                              # embedded resolved snapshot
   concurrency_group: vidar-gpu
   sampling:        {temperature, reasoning, top_p, top_k}
   limits:          {max_output_tokens, context_tokens}
-  pricing:         {input_usd_per_mtok, output_usd_per_mtok, cached_input_usd_per_mtok}
+  pricing:         {input_usd_per_mtok, output_usd_per_mtok, cache_read_usd_per_mtok, cache_write_usd_per_mtok}
   agent_timeout_multiplier: 8.0
   metadata:        {model_family, model_id, quant_label, runtime, server, backend, …}
   versioning:      {resolved_at, snapshot, snapshot_notes}

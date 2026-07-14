@@ -5,6 +5,13 @@ ddx:
     - helix.prd
     - helix.arch
     - CONTRACT-003
+  review:
+    self_hash: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+    deps:
+      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      helix.arch: 344acca10c549dbb281ccdc7de6edcf67f61f12f530f74f7654ec67ccafb0a9b
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-002: PTY Cassette Transport for Harness Golden Masters
 

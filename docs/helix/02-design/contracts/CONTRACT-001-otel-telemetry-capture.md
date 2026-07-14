@@ -247,21 +247,45 @@ Span start and end timestamps are authoritative for:
 
 Harnesses MUST NOT duplicate these timestamps in custom attributes.
 
-### DDX timing extensions
+### DDX timing availability and extensions
 
-Custom timing attributes MAY be added on `chat` spans when exposed by the
-provider or gateway:
+Every `chat` span MUST make timing availability observable. A consumer must be
+able to distinguish a measured timing window from an unavailable one without
+inferring meaning from a missing number.
 
-| Attribute | Type | Unit | Meaning |
+| Attribute | Type | Requirement | Meaning |
 |---|---|---|---|
-| `ddx.timing.first_token_ms` | double | ms | Milliseconds from span start to first streamed token |
-| `ddx.timing.queue_ms` | double | ms | Time spent queued before provider processing |
-| `ddx.timing.prefill_ms` | double | ms | Prompt/prefill processing duration excluding generation |
-| `ddx.timing.generation_ms` | double | ms | Output generation window |
-| `ddx.timing.cache_read_ms` | double | ms | Cache read processing window |
-| `ddx.timing.cache_write_ms` | double | ms | Cache write processing window |
+| `ddx.timing.availability` | string enum | Required | `available`, `partial`, or `unknown` |
+| `ddx.timing.source` | string enum | Required | `provider_reported`, `gateway_reported`, `harness_measured`, `mixed`, or `unknown` |
+| `ddx.timing.available_fields` | string array | Required when availability is `available` or `partial` | Names of the numeric `ddx.timing.*` windows carried by the span |
 
-If the provider does not expose a timing window, the attribute MUST be omitted.
+`available` means every timing window the provider or harness claims for that
+request mode is present. `partial` means at least one timing window is present
+but other applicable windows are unavailable. `unknown` means no phase timing
+is available beyond the authoritative span start/end timestamps; in that case
+`ddx.timing.source` MUST be `unknown`, `ddx.timing.available_fields` MUST be
+omitted or empty, and numeric timing attributes MUST be omitted.
+
+When timing is available from more than one source,
+`ddx.timing.source=mixed`. A harness-derived value is permitted only when it is
+measured from observable request/stream boundaries; it must not be estimated
+from token counts or model characteristics.
+
+Numeric timing attributes use milliseconds:
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `ddx.timing.first_token_ms` | double | Milliseconds from span start to first streamed token |
+| `ddx.timing.queue_ms` | double | Time spent queued before provider processing |
+| `ddx.timing.prefill_ms` | double | Prompt/prefill processing duration excluding generation |
+| `ddx.timing.generation_ms` | double | Output generation window |
+| `ddx.timing.cache_read_ms` | double | Cache read processing window |
+| `ddx.timing.cache_write_ms` | double | Cache write processing window |
+
+An unavailable numeric window MUST be omitted, never encoded as zero. Each
+present numeric window MUST appear by its suffix in
+`ddx.timing.available_fields` (for example, `first_token_ms`). Zero is valid
+only when the source explicitly reports a real zero-duration window.
 
 ## Throughput Derivation Rules
 
@@ -428,6 +452,8 @@ A harness implementation is conformant when all of the following are true:
 - [ ] known cost uses `ddx.cost.*` fields exactly as defined here
 - [ ] mixed known-cost provenance preserves the root amount and omits unrepresentable provenance fields
 - [ ] unknown cost is explicit and does not emit a guessed amount
+- [ ] every `chat` span reports timing availability and source, even when both are unknown
+- [ ] each present timing value is named in `ddx.timing.available_fields`; unavailable values are omitted rather than written as zero
 - [ ] failed spans use standard OTel error semantics
 - [ ] throughput is derived only from the formulas in this contract
 - [ ] content is not captured by default, and opt-in capture uses standard OTel payload fields

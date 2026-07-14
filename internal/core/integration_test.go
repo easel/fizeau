@@ -222,6 +222,7 @@ func TestIntegration_OpenAICompatibleProviderIdentity(t *testing.T) {
 	assert.Equal(t, model, start.Model)
 }
 
+// @covers US-002-AC1
 func TestIntegration_NavigationAndPatchToolSurface(t *testing.T) {
 	url := lmStudioURL(t)
 	model := lmStudioModel(t)
@@ -271,6 +272,7 @@ Return a short completion summary.`,
 		called[tc.Tool]++
 	}
 	assert.Greater(t, called["patch"], 0, "expected patch tool call")
+	assert.Greater(t, called["read"], 0, "expected read tool call to verify the patch")
 	assert.True(t, called["find"] > 0 || called["grep"] > 0 || called["ls"] > 0,
 		"expected at least one navigation tool call (find/grep/ls)")
 
@@ -278,6 +280,9 @@ Return a short completion summary.`,
 	require.NoError(t, readErr)
 	assert.Contains(t, string(updated), "STATUS=NEW")
 	assert.NotContains(t, string(updated), "STATUS=OLD")
+	notes, notesErr := os.ReadFile(filepath.Join(workDir, "docs", "notes.md"))
+	require.NoError(t, notesErr)
+	assert.Equal(t, "integration fixture\n", string(notes), "unrelated workspace file must remain unchanged")
 }
 
 func TestIntegration_AnthropicProviderIdentity(t *testing.T) {

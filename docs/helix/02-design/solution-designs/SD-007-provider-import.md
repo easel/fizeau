@@ -3,6 +3,11 @@ ddx:
   id: SD-007
   depends_on:
     - SD-005
+  review:
+    self_hash: b4a35fa5d448338a7a6a60c0d4185d67c0ce5a9f95dedd5dcac69a70cc8a4e65
+    deps:
+      SD-005: f7fcaedf895c1336816b1d71229989746acc3364aed4cf958465ab8a98c2485e
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-007 — Provider Import from Pi and OpenCode
 

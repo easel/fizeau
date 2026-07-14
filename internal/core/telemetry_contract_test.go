@@ -282,6 +282,7 @@ func TestRun_ReasoningTelemetryFields(t *testing.T) {
 	assert.Equal(t, "high", attrString(t, chatSpan.Attributes(), telemetry.KeyReasoningEmitted))
 }
 
+// @covers US-005-AC2
 func TestRun_CONTRACT001CostPrecedence(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
@@ -344,6 +345,8 @@ func TestRun_CONTRACT001CostPrecedence(t *testing.T) {
 	chatSpans := spansWithOperation(t, ended, "chat")
 	require.Len(t, chatSpans, 1)
 	assert.Equal(t, "openai", attrString(t, chatSpans[0].Attributes(), telemetry.KeyProviderSystem))
+	assert.Equal(t, string(CostSourceProviderReported), attrString(t, chatSpans[0].Attributes(), telemetry.KeyCostSource))
+	assert.InDelta(t, reportedCost, attrFloat(t, chatSpans[0].Attributes(), telemetry.KeyCostAmount), 1e-9)
 }
 
 func TestRun_CONTRACT001MixedKnownCostProvenance(t *testing.T) {

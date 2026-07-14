@@ -1,3 +1,11 @@
+---
+ddx:
+  id: helix.product-vision
+  review:
+    self_hash: eb5af3663734d35e7b42963ce12e39adc19147aa2df25fe9bd3887793217836c
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
+---
 # Product Vision
 
 ## Mission Statement
@@ -46,9 +54,11 @@ holding the model constant while varying the harness so callers can isolate
 
 Tools that need an agent loop embed `fizeau.New(...)` instead of re-implementing
 the loop, sampling controls, retry policy, compaction, session logging, cost
-attribution, and subscription accounting. Every turn produces structured
-timing — prefill, decode, TTFT, tool latency — as a first-class output, so
-prompts, agents, and providers can be improved against real data. Local models
+attribution, and subscription accounting. Every turn reports timing
+availability and source; observable prefill, decode, TTFT, and tool-latency
+windows are first-class values, while unavailable windows are explicitly
+unknown. Prompts, agents, and providers can therefore be improved against real
+data without invented measurements. Local models
 sit on the same provider surface as cloud frontier models, so picking
 self-hosted vs. cloud is a per-workload data question, not a religious one.
 
@@ -110,7 +120,7 @@ logs without bolting on a separate observability layer.
 | Metric | Target |
 |--------|--------|
 | Embeddable adoption | At least one external tool (e.g., DDx, the benchmark runner) consumes Fizeau as a library through `CONTRACT-003` |
-| Measurement coverage | Every `llm.request → llm.response` chain emits TTFT, prefill, decode, and known-or-unknown cost; no silent gaps |
+| Measurement coverage | Every `llm.request → llm.response` chain reports timing availability/source, emits supported TTFT/prefill/decode windows, and preserves known-or-unknown cost; no silent gaps |
 | Local-vs-cloud parity | Local serving runtimes (vLLM, MLX, LM Studio, Ollama) and cloud frontier providers expose the same provider-shaped surface so benchmark deltas are honest |
 | Loop overhead | <10ms beyond model inference time (no process spawn) |
 

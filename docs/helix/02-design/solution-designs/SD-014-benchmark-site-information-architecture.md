@@ -3,12 +3,22 @@ ddx:
   id: SD-014
   created: 2026-05-12
   depends_on:
-    - FEAT-006   # standalone CLI (fiz) — provides the snapshot data via fiz-bench
-    - SD-009     # benchmark-mode runtime + preset
-    - SD-010     # harness matrix benchmark (data shape this site consumes)
-    - SD-012     # benchmark evidence ledger (validity story)
-    - ADR-010    # reasoning wire form (drives provenance pillar)
-    - website/DESIGN.md   # visual design system this spec consumes
+    - FEAT-006 # standalone CLI (fiz) — provides the snapshot data via fiz-bench
+    - SD-009 # benchmark-mode runtime + preset
+    - SD-010 # harness matrix benchmark (data shape this site consumes)
+    - SD-012 # benchmark evidence ledger (validity story)
+    - ADR-010 # reasoning wire form (drives provenance pillar)
+    - website/DESIGN.md # visual design system this spec consumes
+  review:
+    self_hash: 65cd79f7118efef8d5f05ed4a5dd067de2925394eff229f0af3f6aa73c7faff7
+    deps:
+      ADR-010: be383d4b64de9629cd84f094cbbfa902607dfff5343c643977d12899de12e553
+      FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+      SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+      SD-010: 12f0b391c23a5a2b7e2abbbc6fec88ec6c7a57a7ff0a20e39c3a065a6c818e7a
+      SD-012: bf30b7ba2939970dc4b6f94343403b37d72bc5626314a689682abcdd93d3acb2
+      website/DESIGN.md: 920c3b6fb2b3daed4a4b409de13f57f3c07f7c5732e4a32bc1ad42f389aa842b
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # Solution Design: SD-014 — Benchmark Site Information Architecture

@@ -1,56 +1,34 @@
 ---
-dun:
-  id: test-coverage
-  description: Go test coverage measurement per package
-  unit: percent
+ddx:
+  id: METRIC-test-coverage
+  depends_on:
+    - TP-001
+  review:
+    self_hash: 1fb6d9e219544807b04f1853bc4d6a4874f17479716da941429e4909555e29ce
+    deps:
+      TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
-
-# Metric: Test Coverage
-
-Measures line coverage percentage for Go packages using `go test -cover`.
-
-## Measurement Command
-
-```bash
-go test -coverprofile=coverage.out ./... 2>/dev/null
-go tool cover -func=coverage.out | grep -E '^github.com/DocumentDrivenDX/agent'
-```
-
-## Output Format
-
-Per-package coverage lines:
-```
-github.com/DocumentDrivenDX/agent    82.1%
-github.com/DocumentDrivenDX/agent/compaction    93.5%
-...
-```
-
-## Thresholds
-
-| Package Pattern | Floor | Tolerance | Auto-bump Threshold |
-|-----------------|-------|-----------|---------------------|
-| `fizeau` (root) | 75% | 2% | 85% |
-| `*/compaction` | 80% | 2% | 90% |
-| `*/prompt` | 80% | 2% | 90% |
-| `*/tool` | 75% | 2% | 85% |
-| `*/config` | 70% | 2% | 80% |
-| `*/session` | 50% | 5% | 70% |
-| `*/provider/*` | 30% | 5% | 50% |
-| `*/picompat` | 60% | 5% | 75% |
-| `*/occompat` | 60% | 5% | 75% |
-
-Packages not matching any pattern default to 50% floor with 5% tolerance.
-
-## Enforcement
-
-Run via: `make coverage-ratchet`
-
-Exit codes:
-- 0: All packages above floor (or within tolerance)
-- 1: One or more packages below floor + tolerance (FAIL)
-- 2: Error in measurement
-
-## Notes
-
-Provider packages have lower floors because they wrap SDKs with limited unit test surface.
-CLI integration tests are deferred to e2e coverage.
+name: test-coverage
+description: >-
+  Numeric Go statement-coverage packages that meet their committed package
+  floors after the complete default test suite succeeds.
+unit: package-ratio
+direction: higher
+command: go run scripts/coverage-ratchet.go
+output_pattern: '^Packages: ([0-9]+)/([0-9]+) passing$'
+baseline: 92/92 packages passing
+target: all measured packages passing
+tolerance: >-
+  Per-package floor tolerance from .helix-ratchets/coverage-floor.json;
+  default 2 percentage points.
+last_verified: 2026-07-14
+interpretation: >-
+  A package passes when statement coverage is at least its exact or explicit
+  wildcard floor minus tolerance. Any go test failure, parse failure, or
+  zero-package measurement is an instrument error and returns exit code 2.
+labels:
+  language: go
+  scope: github.com/easel/fizeau
+  floor_source: .helix-ratchets/coverage-floor.json
+  enforcement: make coverage-ratchet

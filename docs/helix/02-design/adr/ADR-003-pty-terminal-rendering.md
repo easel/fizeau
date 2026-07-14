@@ -4,6 +4,12 @@ ddx:
   depends_on:
     - ADR-002
     - CONTRACT-003
+  review:
+    self_hash: d86a3efe43809bfb4aa55f830affa8621d10496744266f9e1fbc245d4b429749
+    deps:
+      ADR-002: 7a80ca994cb24da542de11303157ae4d9fd3ef4e4d673dd948901f873e72a580
+      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-003: PTY Terminal Rendering and Screen Model
 

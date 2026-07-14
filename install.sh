@@ -193,11 +193,9 @@ verify_installation() {
 
     # Test binary execution
     if ! "${INSTALL_DIR}/${BINARY_NAME}" --version &>/dev/null; then
-        warn "Fizeau binary installed but '${BINARY_NAME} --version' command failed."
-        warn "This may be normal if PATH is not yet configured."
-    else
-        success "Installation verification passed"
+        error "Installation failed: '${INSTALL_DIR}/${BINARY_NAME} --version' did not run successfully."
     fi
+    success "Installation verification passed"
 }
 
 # Show getting started information

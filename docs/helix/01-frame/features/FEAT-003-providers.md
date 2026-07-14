@@ -3,14 +3,23 @@ ddx:
   id: FEAT-003
   depends_on:
     - helix.prd
-    - ADR-009
+  review:
+    self_hash: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+    deps:
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-003 — LLM Providers
 
 **Feature ID**: FEAT-003
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Provider Parity
+**Covered PRD Requirements**: FR-3
+**Cross-Subsystem Rationale**: Normalizes local, cloud, and harness inference
+behind the contracts used by execution, routing, and measurement.
+**User Stories**: [US-003 — Switch Provider Systems Without Changing the Embedder](../user-stories/US-003-provider-parity.md)
 
 ## Overview
 
@@ -133,21 +142,14 @@ providers:
 
 ### Runtime Identity
 
-20. Attempt metadata and public inventory distinguish:
-
-```go
-type AttemptMetadata struct {
-    Provider string
-    ProviderType string
-    ProviderEndpoint string
-    Model string
-    CostUSD float64
-}
-```
-
-21. `Provider` is the configured provider name. `ProviderType` is the provider
-    system. `ProviderEndpoint` is the endpoint name or normalized host identity
-    when applicable.
+20. Internal attempt metadata and public inventory distinguish the configured
+    provider name, provider system/type, endpoint or server identity,
+    requested/resolved/response model identity, and structured cost
+    attribution. Exact field names and optionality are owned by CONTRACT-001
+    and the internal provider contract, not duplicated in this feature.
+21. The configured provider name identifies the operator's provider entry. The
+    provider system identifies the adapter protocol/runtime. Endpoint or server
+    identity distinguishes multiple instances of that provider system.
 22. No code emits the shared protocol name as a provider identity.
 
 ### Limits and Discovery

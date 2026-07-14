@@ -78,6 +78,7 @@ func TestCLIServiceContractUsesTypedEventDecoder(t *testing.T) {
 	}
 }
 
+// @covers US-006-AC3
 func TestCLIMainDoesNotImportOrCallInternalCoreRun(t *testing.T) {
 	root := repoRootForBoundaryTest(t)
 	data, err := os.ReadFile(filepath.Join(root, "cmd", "fiz", "main.go"))

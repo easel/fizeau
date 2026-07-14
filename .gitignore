@@ -27,6 +27,7 @@ website/resources/
 .ddx/agent-logs/
 .ddx/config.yaml
 .ddx/plugins/
+.ddx/skills/
 .agents/skills/
 .claude/skills/
 

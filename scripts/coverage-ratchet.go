@@ -215,22 +215,25 @@ func measureCoverage(projectRoot string) ([]PackageCoverage, error) {
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Might still have output
-		fmt.Fprintf(os.Stderr, "go test: %s\n", string(output))
+		return nil, fmt.Errorf("go test -cover ./... failed: %w\n%s", err, strings.TrimSpace(string(output)))
 	}
 
 	var results []PackageCoverage
 	lines := strings.Split(string(output), "\n")
 
-	// Parse lines like: ok  	github.com/easel/fizeau	0.002s	coverage: 82.1% of statements
-	// Or: 	github.com/easel/fizeau/cmd/fiz		coverage: 0.0% of statements
-	re := regexp.MustCompile(`(?:ok|FAIL|\?)\s+([^\s]+).*?coverage:\s*([0-9.]+)%`)
+	// Parse both tested packages and Go's zero-statement package form:
+	//   ok  github.com/easel/fizeau  0.002s  coverage: 82.1% of statements
+	//       github.com/easel/fizeau/cmd/fiz  coverage: 0.0% of statements
+	re := regexp.MustCompile(`^\s*(?:(?:ok|FAIL|\?)\s+)?([^\s]+).*?coverage:\s*([0-9.]+)%`)
 
 	for _, line := range lines {
 		matches := re.FindStringSubmatch(line)
 		if len(matches) >= 3 {
 			pkg := matches[1]
-			cov, _ := strconv.ParseFloat(matches[2], 64)
+			cov, err := strconv.ParseFloat(matches[2], 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse coverage for %s: %w", pkg, err)
+			}
 
 			// Skip internal scripts package
 			if strings.Contains(pkg, "/scripts") {
@@ -243,6 +246,9 @@ func measureCoverage(projectRoot string) ([]PackageCoverage, error) {
 			})
 		}
 	}
+	if len(results) == 0 {
+		return nil, fmt.Errorf("go test -cover ./... measured zero packages")
+	}
 
 	return results, nil
 }
@@ -253,13 +259,22 @@ func getFloor(cfg *FloorConfig, pkg string) float64 {
 		return floor
 	}
 
-	// Check partial matches (longest prefix wins)
-	parts := strings.Split(pkg, "/")
-	for i := len(parts); i > 0; i-- {
-		prefix := strings.Join(parts[:i], "/")
-		if floor, ok := cfg.Floors[prefix]; ok {
-			return floor
+	// Prefix floors must be explicit wildcards. A module-root exact floor must
+	// not silently become the floor for every future subpackage.
+	longestPrefix := ""
+	prefixFloor := 0.0
+	for pattern, floor := range cfg.Floors {
+		if !strings.HasSuffix(pattern, "/*") {
+			continue
 		}
+		prefix := strings.TrimSuffix(pattern, "/*")
+		if strings.HasPrefix(pkg, prefix+"/") && len(prefix) > len(longestPrefix) {
+			longestPrefix = prefix
+			prefixFloor = floor
+		}
+	}
+	if longestPrefix != "" {
+		return prefixFloor
 	}
 
 	// Default floor for packages not in config

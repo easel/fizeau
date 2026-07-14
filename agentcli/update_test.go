@@ -302,6 +302,7 @@ func TestGetLatestRelease_NetworkError(t *testing.T) {
 	t.Skip("Skipping network-dependent test")
 }
 
+// @covers US-007-AC4
 func TestCmdVersion_CheckOnlySkipsUpdateLookup(t *testing.T) {
 	oldVersion := Version
 	oldRepo := githubRepo
@@ -314,6 +315,8 @@ func TestCmdVersion_CheckOnlySkipsUpdateLookup(t *testing.T) {
 
 	Version = "v0.0.8"
 	githubRepo = "test/repo"
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,11 +326,16 @@ func TestCmdVersion_CheckOnlySkipsUpdateLookup(t *testing.T) {
 	defer srv.Close()
 	githubAPIBase = srv.URL
 
-	_, _, code := captureStdIO(t, func() int {
+	stdout, stderr, code := captureStdIO(t, func() int {
 		return cmdVersion([]string{"--check-only"})
 	})
 	assert.Equal(t, 0, code)
+	assert.Contains(t, stdout, "fiz v0.0.8")
+	assert.Empty(t, stderr)
 	assert.Equal(t, 0, calls, "check-only version path should not query release API")
+	entries, err := os.ReadDir(home)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "check-only version path must not mutate the installation or home directory")
 }
 
 func TestCmdVersion_ShowsUpdateAvailability(t *testing.T) {
@@ -430,6 +438,7 @@ func TestCmdUpdate_CheckOnly_UpToDateReturnsZero(t *testing.T) {
 	assert.Contains(t, stdout, "You are up to date")
 }
 
+// @covers US-007-AC2
 func TestReplaceBinary_PreservesOriginalPermissions(t *testing.T) {
 	dir := t.TempDir()
 	oldPath := filepath.Join(dir, "fiz")
@@ -455,6 +464,7 @@ func TestReplaceBinary_PreservesOriginalPermissions(t *testing.T) {
 	assert.Contains(t, out.String(), "Successfully updated fiz")
 }
 
+// @covers US-007-AC3
 func TestDownloadBinary_RemovesTempFileOnSmallDownload(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)

@@ -15,6 +15,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 )
 
+// @covers US-003-AC1
 func TestExecuteHTTPProviderHarnessResolvesByType(t *testing.T) {
 	cases := []struct {
 		name         string

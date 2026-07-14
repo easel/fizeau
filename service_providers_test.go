@@ -322,6 +322,7 @@ func TestListProviders_NoServiceConfig(t *testing.T) {
 	}
 }
 
+// @covers US-003-AC2
 func TestListProviders_Connected(t *testing.T) {
 	// Spin up a fake /v1/models server.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -379,6 +380,11 @@ func TestListProviders_Connected(t *testing.T) {
 	}
 	if !info.IncludeByDefault {
 		t.Error("IncludeByDefault should be true for fixed-billing providers")
+	}
+	for _, capability := range []string{"tool_use", "streaming", "json_mode"} {
+		if !slices.Contains(info.Capabilities, capability) {
+			t.Errorf("Capabilities should contain %q: %#v", capability, info.Capabilities)
+		}
 	}
 	if slices.Contains(info.Capabilities, "reasoning_control") {
 		t.Fatalf("lmstudio capabilities must not claim reasoning_control: %#v", info.Capabilities)

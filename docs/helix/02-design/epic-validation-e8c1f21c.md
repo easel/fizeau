@@ -4,6 +4,10 @@ ddx:
   bead: agent-b2fbf76f
   validated: "2026-04-09"
   commit: dcc2f45
+  review:
+    self_hash: f110e2738dfce057c654ac31215c2d751c5e91fdfba6c35ca0f1fb89a79f096e
+    deps: {}
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # Epic Validation: agent-e8c1f21c — Benchmark Fizeau on Terminal-Bench

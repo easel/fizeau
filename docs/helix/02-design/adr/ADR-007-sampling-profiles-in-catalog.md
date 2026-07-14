@@ -4,6 +4,12 @@ ddx:
   depends_on:
     - ADR-005
     - ADR-006
+  review:
+    self_hash: 8a70a46a9efdc916ea7e3146dce7050a12d054c1c9d56c006bb4c3245b4d4300
+    deps:
+      ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
+      ADR-006: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # ADR-007: Sampling Profiles Belong in the Model Catalog
 

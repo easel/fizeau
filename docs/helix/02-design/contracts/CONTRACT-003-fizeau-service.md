@@ -3,7 +3,15 @@ ddx:
   id: CONTRACT-003
   depends_on:
     - helix.prd
+    - ADR-008
     - ADR-009
+  review:
+    self_hash: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+    deps:
+      ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
+      ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -28,7 +36,7 @@ ADR-009 owns the v0.11 routing vocabulary: callers express routing intent with
 `Harness`, `Provider`, and `Model`.
 
 The routing entrypoint is conceptually `route(client_inputs, fiz_models_snapshot)`.
-Client inputs include policy/profile, pins, `no_remote`, metered opt-in, tools,
+Client inputs include policy and numeric power intent, hard pins, `no_remote`, metered opt-in, tools,
 context, reasoning needs, and other explicit constraints. The `fiz models`
 snapshot is the only source of routing facts. Fizeau does not require a daemon
 for correctness. Its freshness contract is synchronous, lock-coordinated
@@ -221,6 +229,40 @@ process solely because one configured local provider is unreachable. Known
 fresh failed health evidence can still make that provider ineligible with a
 typed dispatchability reason; unknown local health is a score penalty, not a
 hard gate when alternatives exist.
+
+## Final Measurement Projection
+
+The result returned by compatibility drains and the terminal service event
+preserve cost provenance on the public facade. The normative fields are:
+
+```go
+type CostSource string
+
+const (
+    CostSourceReported   CostSource = "reported"
+    CostSourceConfigured CostSource = "configured"
+    CostSourceUnknown    CostSource = "unknown"
+)
+
+type DrainExecuteResult struct {
+    // Other public result fields omitted.
+    CostUSD    float64
+    CostSource CostSource
+}
+
+type ServiceFinalData struct {
+    // Other public final-event fields omitted.
+    CostUSD    float64    `json:"cost_usd"`
+    CostSource CostSource `json:"cost_source"`
+}
+```
+
+Provider- or gateway-reported billing wins and uses `reported`. Exact
+runtime/provider/model pricing supplied by the caller uses `configured` only
+when no reported amount exists. If neither source exists, `CostSource` is
+`unknown` and `CostUSD` is `-1`. A reported or configured zero is a known zero,
+not an unknown value. Terminal service events always emit `cost_source`; callers
+must not infer provenance from amount or JSON field presence.
 
 ## Routing Types
 

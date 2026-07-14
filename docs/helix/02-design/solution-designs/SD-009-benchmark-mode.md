@@ -4,8 +4,14 @@ ddx:
   bead: agent-82042311
   created: 2026-04-08
   depends_on:
-    - SD-008   # Terminal-Bench/Harbor integration audit
+    - SD-008 # Terminal-Bench/Harbor integration audit
     - benchmark-baseline-2026-04-08
+  review:
+    self_hash: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+    deps:
+      SD-008: 38357271f3c5c7c3da364497f94615698ec68c53a43e407c71ddf14c01b90b1a
+      benchmark-baseline-2026-04-08: 3d28ddc0759f2a3ff403ba888b2377b60e3efa8e91d702fce86db25ee849f827
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 > **⚠️ IMPORTANT (2026-05-16)**: The benchmark runner architecture changed on 2026-05-16. 
@@ -516,7 +522,8 @@ Every adapter MUST emit the following JSON object as part of its
   "reward": 0,
   "turns": 0, "tool_calls": 0, "tool_call_errors": 0,
   "input_tokens": 0, "output_tokens": 0,
-  "cached_input_tokens": 0, "retried_input_tokens": 0,
+  "cache_read_tokens": 0, "cache_write_tokens": 0,
+  "retry_accounting": {"retried_input_tokens": 0},
   "wall_seconds": 0.0
 }
 ```
@@ -566,8 +573,9 @@ if**:
 2. Non-`graded_*` runs are itemized in the memo with cause.
 3. SD per cell is **reported, not gated** — high SD is discussed, not
    used to reject results.
-4. Cost is reconciled to the observed token streams (input, output,
-   cached-input, retried-input) per FEAT-005.
+4. Cost is reconciled to the observed runtime token streams (input, output,
+   cache-read, cache-write) per FEAT-005. Retried-input accounting, when
+   present, remains a separate derived benchmark metric.
 5. The cross-harness caveat block from SD-010 §7 is included whenever
    more than one harness appears in the result set.
 

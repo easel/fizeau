@@ -152,8 +152,8 @@ codex plugin add helix@helix
 ddx install ddx --global
 ```
 
-The repository ignores `.agents/skills/`, `.claude/skills/`, and
-`.ddx/plugins/` so runtime updates cannot dirty the worktree or shadow the
+The repository ignores `.agents/skills/`, `.claude/skills/`, `.ddx/skills/`,
+and `.ddx/plugins/` so runtime updates cannot dirty the worktree or shadow the
 marketplace versions.
 
 ## Default Interactive Mode

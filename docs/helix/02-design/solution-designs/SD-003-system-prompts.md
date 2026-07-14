@@ -4,6 +4,12 @@ ddx:
   depends_on:
     - FEAT-001
     - helix.prd
+  review:
+    self_hash: 57b1bee7185a4399e1b4f87cbbaa1f21604c9bc4b1e12a105699b38a1b32dc4a
+    deps:
+      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Solution Design: SD-003 — System Prompt Management
 

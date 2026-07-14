@@ -1401,6 +1401,7 @@ func TestRun_EmitsRetryIndexedChatSpans(t *testing.T) {
 	assert.True(t, attempts[3])
 }
 
+// @covers US-005-AC1
 func TestRun_StreamingChatSpanIncludesServerUsageAndTiming(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))

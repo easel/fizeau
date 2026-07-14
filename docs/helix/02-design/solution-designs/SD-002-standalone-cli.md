@@ -4,173 +4,172 @@ ddx:
   depends_on:
     - FEAT-006
     - SD-001
+    - CONTRACT-003
+    - ADR-008
+  review:
+    self_hash: 9ceebbc1c312b61ed17dc4b827c626212291a3cbf801bbf2e4232c19df4e790d
+    deps:
+      ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
+      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
+      SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
-# Solution Design: SD-002 — Standalone CLI
+# Solution Design: SD-002 — Mountable CLI and Standalone Binary
 
 **Feature**: FEAT-006 (Standalone CLI)
 
 ## Scope
 
-Feature-level design for the `fiz` CLI binary — the thin porcelain that
-proves the Fizeau library works end-to-end. The CLI is not the product; the
-library is. This design covers the binary, config loading, and session
-subcommands.
+This design defines the thin command surface that demonstrates and embeds the
+Fizeau library. `agentcli` is a reusable Cobra command tree. `cmd/fiz` is the
+standalone process wrapper. Neither is an independent execution engine; the
+root `fizeau` service facade remains the product and the only public execution
+boundary.
 
 ## Requirements Mapping
 
-### Functional Requirements
+| Requirement | Technical capability | Component |
+|---|---|---|
+| Prompt execution | positional prompt, `-p`, `run`, file, or stdin | `agentcli` |
+| Output and exit behavior | text/JSON rendering, stderr progress, process-style status | `agentcli` + `cmd/fiz` |
+| Embedding | fresh unattached `*cobra.Command`, injected streams and identity | `agentcli.MountCLI` |
+| Configuration | config, environment, and flag inputs projected into service requests | `agentcli` |
+| Inventory and status | models, providers, policies, harnesses, route status | `agentcli` over CONTRACT-003 |
+| Session projections | log, replay, usage | `agentcli` over CONTRACT-003 |
 
-| Requirement | Technical Capability | Component | Priority |
-|-------------|---------------------|-----------|----------|
-| Non-interactive mode (FEAT-006 FR-1..4) | `fiz run "prompt"`, `-p`, stdin | `cmd/fiz` | P0 |
-| Exit codes (FEAT-006 FR-4) | 0/1/2 mapping | `cmd/fiz` | P0 |
-| Output modes (FEAT-006 FR-5..6) | stdout text, --json, stderr progress | `cmd/fiz` | P0 |
-| Config file (FEAT-006 FR-7..10) | YAML config + env + flags | `cmd/fiz` | P0 |
-| Session commands (FEAT-006 FR-11..14) | log, replay, usage subcommands | `cmd/fiz` | P1 |
-| Harness mode (FEAT-006 FR-15..16) | stdin prompt, JSON output | `cmd/fiz` | P0 |
+## Public CLI Integration Surface
 
-### NFR Impact
+```go
+package agentcli
 
-| NFR | Requirement | Design Decision |
-|-----|-------------|-----------------|
-| Startup time | <50ms to first LLM request | No heavy init; parse config, build one service request, dispatch |
-| Binary size | <20MB static binary | Minimal deps, no TUI libraries |
-| Zero config | Works with LM Studio defaults | Sensible defaults for localhost:1234 |
-
-## Solution Approach
-
-The CLI is a single `cmd/fiz/main.go` entry point using Go's `flag` stdlib
-package (per project concern override — no Cobra). Subcommands are dispatched
-by the first positional argument. `run` is the preferred explicit execution
-verb; the existing bare `-p` path remains as a compatibility shim.
-
-The CLI is porcelain over the `FizeauService` service contract from
-CONTRACT-003. It parses flags, resolves prompt input, constructs a public
-`ServiceExecuteRequest`, calls `FizeauService.Execute`, and renders the typed event
-stream. It does not construct providers, call `agent.Run()`, own failover, or
-write session lifecycle records itself.
-
-### Command Structure
-
-```
-fiz run "prompt"             # preferred run path
-fiz run @file.md             # prompt from file
-echo "prompt" | fiz run      # prompt from stdin
-fiz --json run "prompt"      # JSON output
-fiz -p "prompt"              # legacy compatibility
-
-fiz log                      # list recent sessions
-fiz log <session-id>         # show session detail
-fiz replay <session-id>      # human-readable replay
-fiz usage                    # cost/token summary
-fiz usage --since=7d         # with time window
+func MountCLI(opts ...MountOption) *cobra.Command
+func Run(opts Options) int
+func ExitCode(err error) (int, bool)
 ```
 
-### Config Resolution Order
+`MountCLI` returns a fresh, unattached Cobra root on every call. Mount options
+inject command identity, descriptions, streams, and version metadata. The
+returned tree does not call `os.Exit`, so another Cobra application can attach
+it safely. `ExitCode` lets a host translate command errors without parsing
+text. `Run` remains the direct runner compatibility surface.
 
-1. Built-in defaults (localhost:1234, openai-compat, 20 iterations)
-2. Global config: `~/.config/fizeau/config.yaml`
-3. Project config: `.fizeau/config.yaml`
-4. Environment variables: `FIZEAU_PROVIDER`, `FIZEAU_BASE_URL`, `FIZEAU_API_KEY`,
-   `FIZEAU_MODEL`
-5. CLI flags: `--provider`, `--model`, `--policy`, `--max-iter`,
-   `--work-dir`
+The command tree includes execution plus inventory, health, catalog,
+route-status, session-log, and maintenance commands. Execution is service
+backed. A narrow static allowlist currently permits non-execution catalog,
+discovery, and config commands to consume internals that lack public
+projections; that is transitional implementation reference and is not a model
+for new commands. Legacy root flags may remain as explicit compatibility paths,
+but new command behavior is native Cobra behavior in `agentcli`.
 
-Later sources override earlier ones.
+## Standalone Process
 
-### Config File Format
+`cmd/fiz/main.go` mounts the same command tree, supplies build metadata and
+standard streams, executes it, and is the only layer that terminates the
+process. It contains no provider construction, routing algorithm, core loop,
+harness parser, or session-log implementation.
 
-```yaml
-provider: openai-compat
-base_url: http://localhost:1234/v1
-api_key: ""
-model: qwen3.5-7b
-max_iterations: 20
-session_log_dir: .fizeau/sessions
+```text
+fiz run "prompt"
+echo "prompt" | fiz run
+fiz --json run "prompt"
+fiz -p "prompt"                 # compatibility path
+
+fiz models
+fiz providers
+fiz policies
+fiz harnesses
+fiz route-status
+fiz log [session-id]
+fiz replay <session-id>
+fiz usage [--since=7d]
 ```
 
-### Exit Codes
+## Service Boundary
+
+Execution commands construct `ServiceExecuteRequest` values and call
+`FizeauService.Execute`. Inventory, status, and session commands use the
+corresponding public methods and projections from CONTRACT-003 where those
+surfaces exist; remaining non-execution direct imports are constrained by
+`agentcli/service_boundary_test.go` and are migration targets. Event rendering
+uses `ServiceEvent`, `DecodeServiceEvent`, or `DrainExecute` rather than
+harness-native output or private session-log records.
+
+Routing intent uses the current ADR-009 vocabulary:
+
+- `Policy`, `MinPower`, and `MaxPower` express automatic-routing intent;
+- `Harness`, `Provider`, and `Model` are hard pins and override signals;
+- reasoning, tool, context, and token inputs constrain or score candidates.
+
+There is no normative `Profile`, `ModelRef`, or `PreResolved` CLI flow. The CLI
+does not resolve a route and inject a private decision back into execution.
+Route resolution and dispatch are service-owned.
+
+## Configuration
+
+The CLI accepts project/global Fizeau configuration, environment variables,
+and flags, then projects those values into service construction and public
+request fields. Canonical paths use the `fizeau` namespace:
+
+```text
+$XDG_CONFIG_HOME/fizeau/config.yaml
+./.fizeau/config.yaml
+```
+
+Later request-local inputs override broader defaults. Loading configuration in
+the first-party CLI does not transfer provider construction or routing
+ownership out of the service.
+
+## Exit Semantics
 
 | Code | Meaning |
-|------|---------|
-| 0 | Agent completed successfully |
-| 1 | Agent failed (error, iteration limit, provider error) |
-| 2 | CLI usage error (bad flags, missing config) |
+|---|---|
+| 0 | command or execution completed successfully |
+| 1 | execution or operational failure |
+| 2 | invalid CLI usage where the command path defines a usage error |
 
-## System Decomposition
+Mounted callers receive errors, including `ExitError`, rather than process
+termination. Only `cmd/fiz` maps them to `os.Exit`.
 
-### `cmd/fiz/main.go`
+## Boundary Rules
 
-- Parse flags and subcommand
-- Load config (file → env → flags)
-- Resolve prompt input and CLI defaults into a public `ServiceExecuteRequest`
-- Call `FizeauService.Execute` / `TailSessionLog` / `List*` methods
-- Decode events with `DecodeServiceEvent` or `DrainExecute`
-- Print result, set exit code
+1. `agentcli` consumes the root `fizeau` facade for all execution behavior;
+   its temporary non-execution internal allowlist is explicit and
+   test-enforced.
+2. `cmd/fiz` is process wiring around `agentcli.MountCLI`.
+3. Neither layer imports or invokes `internal/core` or provider adapters.
+4. Fizeau owns provider/harness dispatch, transport retry and
+   routing-infeasibility handling within a request, event normalization, and
+   session-log persistence. It does not perform semantic cross-route failover.
+5. Per ADR-017, a semantic retry or stronger-route escalation is initiated by
+   the embedding caller as a new request, not hidden inside the CLI or service.
+6. Static boundary tests prevent the CLI from bypassing the public facade.
 
-### Config loader (internal to cmd)
+## Test Strategy
 
-- YAML parsing with `gopkg.in/yaml.v3`
-- Env var overlay
-- Flag overlay
-- Produce service-owned routing/config inputs; provider construction stays in the service
-
-### Session subcommands (internal to cmd)
-
-- `log`: List session files from log directory, show summary
-- `replay`: Render stored service session logs
-- `usage`: Aggregate stored session logs with time filtering
-
-### Boundary Rules
-
-- `cmd/fiz` is a consumer of `FizeauService`, not a peer of the core loop.
-- Routing intent belongs in public request fields (`Provider`, `Model`,
-  `ModelRef`, `Profile`, `Harness`) or an explicit `ResolveRoute` ->
-  `PreResolved` flow.
-- Native provider construction, route failover, and session-log persistence are
-  service responsibilities.
-- Boundary tests must prevent `cmd/fiz` from importing or invoking core
-  execution internals directly.
+- Mount two command trees in one process and prove their streams, identity, and
+  flags do not leak across instances.
+- Exercise standalone and mounted execution through the public service seam.
+- Verify native Cobra inventory/status/session commands render public
+  projections without importing internal execution packages.
+- Verify `cmd/fiz` maps `ExitError` to process status and owns all `os.Exit`
+  calls.
+- Preserve explicit regression tests for supported compatibility flags.
 
 ## Technology Rationale
 
-| Layer | Choice | Why |
-|-------|--------|-----|
-| CLI framework | `flag` stdlib | Minimal, no dependency, sufficient for this scope |
-| Config format | YAML | Human-readable, consistent with project conventions |
-| YAML parser | `gopkg.in/yaml.v3` | De facto standard Go YAML library |
+| Layer | Choice | Rationale |
+|---|---|---|
+| Command framework | Cobra | mountable command composition and native subcommands |
+| Public execution API | CONTRACT-003 root facade | one boundary for embedders and first-party CLI |
+| Standalone wrapper | `cmd/fiz` | minimal process and build-metadata ownership |
 
 ## Traceability
 
-| Requirement | Component | Test Strategy |
-|-------------|-----------|---------------|
-| FEAT-006 FR-1..4 | main.go prompt handling | Functional: run binary with `run`, `-p`, and stdin |
-| FEAT-006 FR-4 | main.go exit codes | Functional: check exit codes for success/failure/usage |
-| FEAT-006 FR-5..6 | main.go output | Functional: text vs `--json` output |
-| FEAT-006 FR-7..10 | config loader | Unit: config merging from file/env/flags |
-| FEAT-006 FR-11..14 | session subcommands | Functional: run against test session logs |
-| FEAT-006 FR-15..16 | main.go harness mode | Integration: harness invocation via CONTRACT-003 |
-| CONTRACT-003 CLI boundary | boundary tests | Static/import tests proving CLI stays behind the service layer |
-
-## Concern Alignment
-
-- **Concerns used**: go-std (areas: all)
-- **Project override applied**: `flag` stdlib instead of Cobra
-- **Constraints honored**: `gofmt`, `go vet`, version metadata via `-ldflags`
-
-## Risks
-
-| Risk | Prob | Impact | Mitigation |
-|------|------|--------|------------|
-| `flag` stdlib too limited for subcommands | L | L | Subcommand dispatch is trivial; upgrade to Cobra later if needed |
-| Config file format drift | L | L | Follow same YAML conventions |
-
-## Review Checklist
-
-- [x] Requirements mapping covers all FEAT-006 functional requirements
-- [x] Command structure is clear and documented
-- [x] Config resolution order is explicit
-- [x] Exit codes defined
-- [x] Technology choices justified
-- [x] Traceability complete
-- [x] Concern alignment verified
+| Authority | Design element |
+|---|---|
+| FEAT-006 | prompt, output, config, inventory, session, and process behavior |
+| ADR-008 | public facade and service/transcript boundaries |
+| ADR-009 | policy/power/pin routing vocabulary |
+| ADR-017 | caller-owned semantic escalation |
+| CONTRACT-003 | service methods, events, projections, and mountable CLI surface |

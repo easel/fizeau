@@ -4,14 +4,24 @@ ddx:
   depends_on:
     - helix.prd
     - FEAT-003
-    - ADR-009
+  review:
+    self_hash: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
+    deps:
+      FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
+      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 # Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing
 
 **Feature ID**: FEAT-004
-**Status**: Draft
+**Status**: Approved
 **Priority**: P0 (provider sources/endpoints), P1 (catalog), P1 (routing)
 **Owner**: Fizeau Team
+**Covered PRD Subsystem(s)**: Routing & Catalog
+**Covered PRD Requirements**: FR-4
+**Cross-Subsystem Rationale**: Joins provider facts, model policy, and request
+constraints to choose one attributable route without taking over caller retry.
+**User Stories**: [US-004 — Resolve an Explainable Route](../user-stories/US-004-routing-catalog.md)
 
 ## Overview
 
@@ -308,11 +318,19 @@ formula, and routing trace construction.
 - Automatic learning from routing-quality metrics.
 - Network manifest refresh during ordinary execution.
 
-## Addendum: tiered, quota-aware routing for cost-efficient consistent progress (2026-05-31)
+## Historical Implementation Proposal (2026-05-31; Non-Normative)
 
-Goal: drain queues with **consistent progress** (beads complete at a predictable
-rate without exhausting subscription quota before reset), preferring **subscription
-throughput** over wasted attempts, with **local compute as a non-blocking mixin**.
+> This dated DDx queue-drain proposal is retained only as decision history. It
+> is not a Fizeau requirement, acceptance surface, or implementation plan. The
+> approved design above supersedes it: Fizeau applies provider-neutral
+> eligibility and scoring to local and cloud provider systems, dispatches one
+> selected route, and returns typed evidence. The caller owns bead outcomes,
+> semantic retry, and cross-harness escalation. The tier names, model examples,
+> retry actions, thresholds, and phases below MUST NOT be treated as current
+> product behavior.
+
+The proposal's historical goal was to drain queues with consistent progress
+without exhausting subscription quota before reset.
 
 ### Subscription tiers (per harness)
 Each flat-rate subscription harness exposes three tiers:
@@ -355,7 +373,7 @@ escalate tier. Escalation is a single hop, fired ONLY on a typed **genuine
 implementation/capability failure** classification. A per-pool in-flight max-attempt
 cap prevents multi-worker stampede onto the max tier.
 
-### Failure-classification table (normative)
+### Historical failure-classification table (rejected as Fizeau authority)
 Every attempt outcome maps to exactly one action. ddx and fizeau MUST classify
 identically against this table:
 

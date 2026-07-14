@@ -4,9 +4,14 @@ ddx:
   bead: agent-fab7feae
   created: 2026-04-29
   depends_on:
-    - SD-008   # Terminal-Bench / Harbor integration audit
-    - SD-009   # fiz Benchmark Mode
-    - harness-matrix-plan-2026-04-29   # plan v7 (codex peer review v6)
+    - SD-008 # Terminal-Bench / Harbor integration audit
+    - SD-009 # fiz Benchmark Mode
+  review:
+    self_hash: 12f0b391c23a5a2b7e2abbbc6fec88ec6c7a57a7ff0a20e39c3a065a6c818e7a
+    deps:
+      SD-008: 38357271f3c5c7c3da364497f94615698ec68c53a43e407c71ddf14c01b90b1a
+      SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 > **⚠️ IMPORTANT (2026-05-16)**: The benchmark runner architecture changed on 2026-05-16. 
@@ -67,10 +72,12 @@ This document remains normative for reusable mechanics only:
   ± SD over reps (minimum 3 reps per cell)** and are not gated by those
   thresholds. SD-009 §7.1 cross-references SD-010 for the multi-harness
   publication policy and §9 lifts the resumability / failure taxonomy normatively.
-- **FEAT-005** (Logging and Cost) is amended to acknowledge the four token
-  streams (input, output, cached-input, retried-input) tracked under SD-010,
-  and to source $-per-Mtok numbers from the SD-010 profile schema rather than
-  an ad-hoc per-runner constant.
+- **FEAT-005** (Logging and Cost) governs the four runtime token streams
+  (input, output, cache-read, cache-write). SD-010 records those streams and
+  may additionally derive retried-input as cell-level retry accounting; the
+  derived counter is not a fifth runtime stream. Benchmark profiles may supply
+  the exact runtime pricing map for a benchmark run, but they are not a
+  universal Fizeau pricing authority.
 
 The ground truth for the architecture and decisions in this spec is the planning
 artifact `docs/research/harness-matrix-plan-2026-04-29.md` (v7, codex peer
@@ -161,7 +168,8 @@ Telemetry schema each adapter MUST emit as part of its `report.json`:
   "reward": 0,
   "turns": 0, "tool_calls": 0, "tool_call_errors": 0,
   "input_tokens": 0, "output_tokens": 0,
-  "cached_input_tokens": 0, "retried_input_tokens": 0,
+  "cache_read_tokens": 0, "cache_write_tokens": 0,
+  "retry_accounting": {"retried_input_tokens": 0},
   "wall_seconds": 0.0
 }
 ```
@@ -213,7 +221,8 @@ provider:
 pricing:
   input_usd_per_mtok: 0.60
   output_usd_per_mtok: 2.00
-  cached_input_usd_per_mtok: 0.30
+  cache_read_usd_per_mtok: 0.30
+  cache_write_usd_per_mtok: 0.60
 limits:
   max_output_tokens: 8192
   context_tokens: 200000
@@ -448,8 +457,9 @@ Per-cell breakdown:
       "profile_id": "gpt-5-mini",
       "input_tokens": 1234567,
       "output_tokens": 456789,
-      "cached_input_tokens": 345678,
-      "retried_input_tokens": 12345,
+      "cache_read_tokens": 345678,
+      "cache_write_tokens": 12345,
+      "retry_accounting": {"retried_input_tokens": 12345},
       "cost_usd": 1.42,
       "pricing_source": "scripts/benchmark/profiles/gpt-5-mini.yaml#sha256=..."
     }
@@ -513,8 +523,9 @@ A memo is acceptance-grade only if:
 2. Non-`graded_*` runs are itemized in the memo with cause.
 3. SD per cell is reported, not gated — high SD is discussed, not used to
    reject results.
-4. Cost is reconciled to the observed token streams (input, output,
-   cached-input, retried-input) per FEAT-005.
+4. Cost is reconciled to the observed runtime token streams (input, output,
+   cache-read, cache-write) per FEAT-005. Retried-input accounting, when
+   present, is reported separately and is not priced as a fifth stream.
 5. The §7.1 caveat block appears verbatim.
 
 ---

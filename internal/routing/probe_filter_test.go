@@ -82,6 +82,37 @@ func TestRouter_FiltersUnreachableEndpointsWhenAlternatesExist(t *testing.T) {
 	}
 }
 
+func TestRouter_ProbeUnreachableTakesPrecedenceOverSnapshotDialFailure(t *testing.T) {
+	in := newTestRoutingEngine()
+	in.CooldownDuration = 30 * time.Second
+	in.ProbeUnreachable = map[string]time.Time{
+		"vidar-omlx": in.Now.Add(-5 * time.Second),
+	}
+	in.ProviderUnreachable = map[string]time.Time{
+		"vidar-omlx": in.Now.Add(-5 * time.Second),
+	}
+
+	dec, err := Resolve(Request{Policy: "cheap", Harness: "fiz", Model: "qwen/qwen3.6"}, in)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	for i := range dec.Candidates {
+		candidate := &dec.Candidates[i]
+		if candidate.Provider != "vidar-omlx" {
+			continue
+		}
+		if candidate.Eligible {
+			t.Fatal("vidar-omlx should be ineligible when both unreachable signals exist")
+		}
+		if candidate.FilterReason != FilterReasonEndpointUnreachable {
+			t.Fatalf("FilterReason = %q, want %q", candidate.FilterReason, FilterReasonEndpointUnreachable)
+		}
+		return
+	}
+	t.Fatal("vidar-omlx candidate row missing from decision")
+}
+
 // TestRouter_RejectsUnreachableEndpointWhenSoleAutomaticCandidate asserts that
 // a known-dead endpoint is not re-admitted just because no alternative exists.
 func TestRouter_RejectsUnreachableEndpointWhenSoleAutomaticCandidate(t *testing.T) {

@@ -1,3 +1,14 @@
+---
+ddx:
+  id: website/DESIGN.md
+  depends_on:
+    - helix.product-vision
+  review:
+    self_hash: 920c3b6fb2b3daed4a4b409de13f57f3c07f7c5732e4a32bc1ad42f389aa842b
+    deps:
+      helix.product-vision: eb5af3663734d35e7b42963ce12e39adc19147aa2df25fe9bd3887793217836c
+    reviewed_at: "2026-07-14T05:16:22Z"
+---
 # Fizeau — Design System
 
 The visual language for the Fizeau microsite and any first-party Fizeau surface (CLI banners, generated reports, embedded widgets). The aesthetic is **scientific instrument**, not developer-tool landing page.

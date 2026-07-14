@@ -4,6 +4,12 @@
 **Status**: CONVERGED
 **Refinement Rounds**: 4
 
+> **Historical, non-normative plan.** The publication and refresh rationale is
+> retained, but its target/alias/effort-tier schema predates ADR-009. Current
+> catalog authority is schema v5 in ADR-009 and SD-005; current routing intent
+> is policy, numeric power bounds, and exact pins rather than catalog targets
+> or routing profiles.
+
 > **Worked example of additive schema evolution**:
 > [ADR-007: Sampling Profiles in the Model Catalog](adr/ADR-007-sampling-profiles-in-catalog.md)
 > extends the schema with `sampling_profiles` (top-level) and

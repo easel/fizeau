@@ -5,6 +5,12 @@ ddx:
   depends_on:
     - SD-009
     - benchmark-baseline-2026-04-08
+  review:
+    self_hash: 3daf472c4b4ebd1ee45788173b031121e1947a9eb368c1d1a58bc81889e13684
+    deps:
+      SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
+      benchmark-baseline-2026-04-08: 3d28ddc0759f2a3ff403ba888b2377b60e3efa8e91d702fce86db25ee849f827
+    reviewed_at: "2026-07-14T05:16:22Z"
 ---
 
 # Plan: Evidence-Grade Terminal-Bench Comparison

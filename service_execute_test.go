@@ -613,6 +613,7 @@ func TestExecute_NativeSupervisedPermissionRejected(t *testing.T) {
 	}
 }
 
+// @covers US-002-AC2
 func TestExecute_NativeReadToolEmitsToolEvents(t *testing.T) {
 	workDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workDir, "hello.txt"), []byte("hello from service tools\n"), 0o600); err != nil {
@@ -1088,6 +1089,7 @@ func TestExecute_NativeSessionLogPreservesFullTrace(t *testing.T) {
 // TestExecute_OSCancelDuringStreaming verifies that ctx.Done() while
 // the loop is mid-flight terminates the stream cleanly with a
 // cancelled-status final.
+// @covers US-001-AC2
 func TestExecute_OSCancelDuringStreaming(t *testing.T) {
 	fp := &fizeau.FakeProvider{
 		Dynamic: func(req fizeau.FakeRequest) (fizeau.FakeResponse, error) {

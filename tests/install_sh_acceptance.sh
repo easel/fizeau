@@ -110,6 +110,7 @@ EOF
   chmod +x "${path}"
 }
 
+# @covers US-007-AC1
 run_shell_case() {
   local shell_name="$1"
   local rc_rel="$2"
@@ -143,6 +144,10 @@ run_shell_case() {
 
   assert_file_exists "${install_dir}/fiz"
   assert_executable "${install_dir}/fiz"
+  assert_contains "${out}" "Installation verification passed"
+  local installed_version
+  installed_version="$("${install_dir}/fiz" --version)"
+  [[ "${installed_version}" == "fiz test-binary" ]] || fail "unexpected installed version output: ${installed_version}"
   local expected_rc_line
   if [[ "${rc_mode}" == "fish" ]]; then
     expected_rc_line="fish_add_path ${install_dir}"

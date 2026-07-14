@@ -2,8 +2,13 @@
 
 **Date**: 2026-05-27  
 **Scope**: Fizeau project (all areas)  
-**Baseline**: `.ddx/plugins/helix/workflows/concerns/go-std/practices.md` § Quality Gates (lines 36–42)  
+**Baseline**: HELIX marketplace plugin, `go-std` concern § Quality Gates
 **Current state**: `.golangci.yml`, `Makefile`, practices.md local override in `docs/helix/01-frame/concerns.md`
+
+> This is a dated audit of the 2026-05-27 gate state. HELIX is now installed
+> from its marketplace; a repository-local `.ddx/plugins/helix` copy is neither
+> required nor authoritative. Version-specific plugin text should be consulted
+> from the active installation when refreshing this audit.
 
 ---
 
@@ -15,7 +20,7 @@ This audit maps the seven linters declared in the go-std concern baseline agains
 
 ## Declared Linter Baseline
 
-Source: `.ddx/plugins/helix/workflows/concerns/go-std/practices.md` (lines 36–42)
+Source at audit time: HELIX `go-std` concern, Quality Gates section.
 
 The Quality Gates section declares the following linters as required gates:
 
@@ -109,7 +114,7 @@ ci: ci-checks adapter-pytest
 
 ## References
 
-- Declared baseline: `.ddx/plugins/helix/workflows/concerns/go-std/practices.md`, lines 36–42
+- Declared baseline: active marketplace HELIX `go-std` concern, Quality Gates
 - Local project override: `docs/helix/01-frame/concerns.md`, § go-std (lines 22–30)
 - Current linter config: `.golangci.yml`, lines 6–9
 - Current pre-push/CI targets: `Makefile`, lines 138, 146

@@ -4,6 +4,13 @@
 **Status**: CONVERGED
 **Refinement Rounds**: 5
 
+> **Historical, non-normative plan.** This document records the pre-v0.11
+> catalog design with targets, aliases, routing profiles, and `ModelRef`.
+> ADR-009 and SD-005 supersede those surfaces: Fizeau owns a schema-v5 catalog
+> of concrete models, policies, and provider metadata, while public routing
+> uses `Policy`, power bounds, and exact pins. Distribution rationale remains
+> useful history; the schemas and API examples below are not current authority.
+
 ## Problem Statement
 
 Fizeau now owns prompt presets, but model policy is still duplicated outside the
