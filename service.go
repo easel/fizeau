@@ -1097,12 +1097,19 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		startupCtx = context.Background()
 	}
 	svc.reapStaleHarnessSessions()
-	svc.ensurePrimaryQuotaRefresh(startupCtx, quotaRefreshStartup)
-	svc.startPrimaryQuotaRefreshWorker()
+	primaryRefreshPolicy := routehealth.DefaultPrimaryQuotaRefreshPolicy()
+	if opts.QuotaRefreshDebounce > 0 {
+		primaryRefreshPolicy.Debounce = opts.QuotaRefreshDebounce
+	}
+	if opts.QuotaRefreshStartupWait > 0 {
+		primaryRefreshPolicy.StartupWait = opts.QuotaRefreshStartupWait
+	}
+	primaryRefreshPolicy.Interval = opts.QuotaRefreshInterval
+	svc.refreshScheduler = routehealth.NewRefreshScheduler(svc.harnessByName, svc.registry.Names())
+	svc.refreshScheduler.ConfigurePrimaryQuotaRefresh(primaryRefreshPolicy)
+	svc.refreshScheduler.Start(startupCtx)
 	svc.startQuotaRecoveryProbeLoop()
 	svc.startAlivenessProbeLoop()
-	svc.refreshScheduler = routehealth.NewRefreshScheduler(svc.harnessByName, svc.registry.Names())
-	svc.refreshScheduler.Start(startupCtx)
 	return svc, nil
 }
 
@@ -1390,7 +1397,9 @@ func unavailableQuotaState(source, detail string) *QuotaState {
 
 // ListHarnesses returns metadata for every registered harness.
 func (s *service) ListHarnesses(ctx context.Context) ([]HarnessInfo, error) {
-	s.ensurePrimaryQuotaRefresh(ctx, quotaRefreshAsync)
+	if s.refreshScheduler != nil {
+		s.refreshScheduler.RequestPrimaryQuotaRefresh(ctx)
+	}
 	statuses := s.registry.Discover()
 
 	// Index statuses by name for O(1) lookup.

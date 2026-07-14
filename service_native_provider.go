@@ -6,25 +6,8 @@ import (
 	"time"
 
 	agentcore "github.com/easel/fizeau/internal/core"
-	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/provider/quotaheaders"
-	// Provider packages are imported for their init() side-effects so
-	// they self-register into the registry. The factory below uses
-	// registry.Lookup; the per-package import paths used to live in
-	// the case branches and stayed even after agent-8e4eb44c collapsed
-	// them — they're load-bearing for the init() registration.
-	_ "github.com/easel/fizeau/internal/provider/anthropic"
-	_ "github.com/easel/fizeau/internal/provider/ds4"
-	_ "github.com/easel/fizeau/internal/provider/llamaserver"
-	_ "github.com/easel/fizeau/internal/provider/lmstudio"
-	_ "github.com/easel/fizeau/internal/provider/lucebox"
-	_ "github.com/easel/fizeau/internal/provider/ollama"
-	_ "github.com/easel/fizeau/internal/provider/omlx"
-	_ "github.com/easel/fizeau/internal/provider/openai"
-	_ "github.com/easel/fizeau/internal/provider/openrouter"
-	_ "github.com/easel/fizeau/internal/provider/rapidmlx"
-	"github.com/easel/fizeau/internal/provider/registry"
-	_ "github.com/easel/fizeau/internal/provider/vllm"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 type nativeProviderResolution struct {
@@ -46,7 +29,11 @@ func (s *service) resolveConfiguredNativeProvider(req ServiceExecuteRequest) nat
 	if req.Model != "" {
 		entry.Model = req.Model
 	}
-	provider := s.buildNativeProvider(name, entry)
+	provider := serviceimpl.BuildNativeProvider(serviceimpl.NativeProviderBuildInput{
+		Name:                name,
+		Entry:               serviceImplProviderEntry(entry),
+		QuotaSignalObserver: s.quotaSignalObserver(name),
+	})
 	if provider == nil {
 		return nativeProviderResolution{Name: name, Entry: entry}
 	}
@@ -181,29 +168,6 @@ func (s *service) availableProviderTypes() string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// buildNativeProvider is the service-time factory. Per agent-8e4eb44c
-// the per-type switch is gone; both this and internal/config's
-// BuildProvider go through registry.Lookup. Adding a new provider type
-// is one Register() call in the new package; no edits to this file
-// or internal/config/config.go's factory.
-func (s *service) buildNativeProvider(name string, entry ServiceProviderEntry) agentcore.Provider {
-	if entry.ConfigError != "" {
-		return nil
-	}
-	typ := normalizeServiceProviderType(entry.Type)
-	if d, ok := registry.Lookup(typ); ok {
-		return d.Factory(registry.Inputs{
-			ProviderName:        name,
-			BaseURL:             entry.BaseURL,
-			APIKey:              entry.APIKey,
-			Model:               entry.Model,
-			ModelReasoningWire:  nativeModelReasoningWireMap(),
-			QuotaSignalObserver: s.quotaSignalObserver(name),
-		})
-	}
-	return nil
-}
-
 // quotaSignalObserver returns a callback that updates the provider quota
 // state machine when a parsed rate-limit signal indicates the provider's
 // subscription/daily cap has been hit (or imminently will be). Returns nil
@@ -228,28 +192,6 @@ func (s *service) quotaSignalObserver(providerName string) func(quotaheaders.Sig
 		}
 		store.MarkQuotaExhausted(providerName, retryAt)
 	}
-}
-
-// nativeModelReasoningWireMap returns the catalog reasoning_wire map for use
-// by the native (service-side) provider builder. Models without an explicit
-// reasoning_wire are omitted; the provider treats absence as the "provider"
-// default.
-func nativeModelReasoningWireMap() map[string]string {
-	cat, err := modelcatalog.Default()
-	if err != nil {
-		return nil
-	}
-	all := cat.AllModels()
-	if len(all) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(all))
-	for id, entry := range all {
-		if entry.ReasoningWire != "" {
-			out[id] = entry.ReasoningWire
-		}
-	}
-	return out
 }
 
 func (s *service) getUnreachableProvidersForNativeResolution() map[string]bool {

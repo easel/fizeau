@@ -15,7 +15,9 @@ import (
 // It is the operator dashboard view: cooldowns, recent decisions, and
 // per-candidate health. Distinct from per-request ResolveRoute.
 func (s *service) RouteStatus(ctx context.Context) (*RouteStatusReport, error) {
-	s.ensurePrimaryQuotaRefresh(ctx, quotaRefreshAsync)
+	if s.refreshScheduler != nil {
+		s.refreshScheduler.RequestPrimaryQuotaRefresh(ctx)
+	}
 	report := &RouteStatusReport{
 		GeneratedAt: time.Now(),
 	}

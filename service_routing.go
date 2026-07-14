@@ -18,6 +18,7 @@ import (
 	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serverinstance"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 var loadRoutingCatalog = modelcatalog.Default
@@ -1294,14 +1295,14 @@ func (s *service) quotaRecoveryProber() QuotaRecoveryProber {
 		}
 		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		probe := probeProviderStatus(probeCtx, entry, time.Now().UTC())
-		if probe.status == "connected" {
+		probe := serviceimpl.ProbeProviderStatus(probeCtx, serviceImplProviderEntry(entry), time.Now().UTC(), nil)
+		if probe.Status == "connected" {
 			return nil
 		}
-		if probe.detail != "" {
-			return fmt.Errorf("%s", probe.detail)
+		if probe.Detail != "" {
+			return fmt.Errorf("%s", probe.Detail)
 		}
-		return fmt.Errorf("%s", probe.status)
+		return fmt.Errorf("%s", probe.Status)
 	}
 }
 

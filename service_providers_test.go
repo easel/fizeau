@@ -16,7 +16,10 @@ import (
 
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/routehealth"
 )
+
+const defaultQuotaRefreshDebounce = 15 * time.Minute
 
 // fakeServiceConfig implements ServiceConfig for tests.
 type fakeServiceConfig struct {
@@ -771,6 +774,7 @@ func TestHealthCheck_ClaudeRefreshesQuotaWhenStale(t *testing.T) {
 	setFakeClaudeHarness(t, fakeClaude)
 
 	svc := newTestService(t, ServiceOptions{})
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
 	// HealthCheck for "claude" requires the binary to be discoverable.
 	// If claude is not in PATH, the harness is unavailable → the quota refresh
 	// is never reached. To keep the test self-contained we call the helper
@@ -820,6 +824,7 @@ func TestHealthCheck_ClaudeSkipsRefreshWhenFresh(t *testing.T) {
 	setFakeClaudeHarness(t, fakeClaude)
 
 	svc := newTestService(t, ServiceOptions{})
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
 	svc.healthCheckRefreshClaudeQuota(context.Background())
 
 	if got := fakeClaude.refreshCalls.Load(); got != 0 {
@@ -855,8 +860,8 @@ func TestHealthCheck_GeminiDoesNotInvokeQuotaProbe(t *testing.T) {
 	}
 }
 
-// TestHealthCheck_CodexCallsRefreshQuota verifies that requestPrimaryQuotaRefresh
-// for "codex" delegates to QuotaHarness.RefreshQuota rather than calling
+// TestHealthCheck_CodexCallsRefreshQuota verifies that the scheduler's explicit
+// refresh for "codex" delegates to QuotaHarness.RefreshQuota rather than calling
 // codex-package PTY helpers directly (CONTRACT-004 migration).
 func TestHealthCheck_CodexCallsRefreshQuota(t *testing.T) {
 	resetPrimaryQuotaRefreshForTest(t)
@@ -871,20 +876,11 @@ func TestHealthCheck_CodexCallsRefreshQuota(t *testing.T) {
 			RoutingPreference: harnesses.RoutingPreferenceAvailable,
 		}, nil
 	}
+	setFakeCodexHarness(t, fake)
 
-	done := requestPrimaryQuotaRefresh(context.Background(), "codex", quotaRefreshPolicy{
-		debounce:     time.Hour,
-		probeTimeout: time.Second,
-	}, func(name string) harnesses.Harness {
-		if name == "codex" {
-			return fake
-		}
-		return nil
-	})
-	if done == nil {
-		t.Fatal("expected non-nil done channel from requestPrimaryQuotaRefresh")
-	}
-	<-done
+	svc := newTestService(t, ServiceOptions{})
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
+	svc.refreshScheduler.RefreshPrimaryQuotaForHealthCheck(context.Background(), "codex")
 	if !refreshCalled {
 		t.Error("expected QuotaHarness.RefreshQuota to be called for codex")
 	}
@@ -920,6 +916,7 @@ func TestPrimaryQuotaRefresh_AutomaticAndThrottled(t *testing.T) {
 	setFakeCodexHarness(t, fake)
 
 	svc := newTestService(t, ServiceOptions{})
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc, true)
 	if _, err := svc.ListHarnesses(context.Background()); err != nil {
 		t.Fatalf("ListHarnesses: %v", err)
 	}
@@ -1029,7 +1026,6 @@ func TestNewStartupQuotaRefreshContinuesAfterTimeout(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
-	waitForPrimaryQuotaRefreshIdle(t, "claude", "codex")
 	concreteSvc.refreshScheduler.Stop()
 }
 
@@ -1059,15 +1055,18 @@ func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if _, err := New(ServiceOptions{
+	svc, err := New(ServiceOptions{
 		ServiceConfig:           &fakeServiceConfig{},
 		QuotaRefreshContext:     ctx,
 		QuotaRefreshDebounce:    time.Millisecond,
 		QuotaRefreshStartupWait: time.Second,
 		QuotaRefreshInterval:    5 * time.Millisecond,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	concreteSvc := svc.(*service)
+	t.Cleanup(concreteSvc.refreshScheduler.Stop)
 
 	deadline := time.After(time.Second)
 	for claudeCalls.Load() < 2 || codexCalls.Load() < 2 {
@@ -1084,7 +1083,44 @@ func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
 	// Cancellation alone is not a join: a fake refresh may have passed its
 	// initial context check and still be finishing an atomic cache write.
 	cancel()
-	waitForPrimaryQuotaRefreshIdle(t, "claude", "codex")
+	concreteSvc.refreshScheduler.Stop()
+}
+
+func TestPrimaryQuotaRefreshCancelledWorkerContextAllowsActivityRefresh(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", filepath.Join(dir, "claude-quota.json"))
+	resetPrimaryQuotaRefreshForTest(t)
+
+	fakeClaude := newFakeClaudeQuotaHarness()
+	setFakeClaudeHarness(t, fakeClaude)
+	setFakeCodexHarness(t, newFakeCodexQuotaHarness())
+
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	cancelWorker()
+	svc, err := New(ServiceOptions{
+		ServiceConfig:        &fakeServiceConfig{},
+		QuotaRefreshContext:  workerCtx,
+		QuotaRefreshInterval: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	concreteSvc := svc.(*service)
+	t.Cleanup(concreteSvc.refreshScheduler.Stop)
+	if got := fakeClaude.refreshCalls.Load(); got != 0 {
+		t.Fatalf("cancelled worker context unexpectedly refreshed Claude at startup: %d", got)
+	}
+
+	if _, err := concreteSvc.ListHarnesses(context.Background()); err != nil {
+		t.Fatalf("ListHarnesses: %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for fakeClaude.refreshCalls.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("activity refresh was disabled by cancelled QuotaRefreshContext")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
@@ -1146,40 +1182,26 @@ func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
 
 func resetPrimaryQuotaRefreshForTest(t *testing.T) {
 	t.Helper()
-	primaryQuotaRefresh.mu.Lock()
-	oldLast := primaryQuotaRefresh.lastAttempt
-	oldInFlight := primaryQuotaRefresh.inFlight
-	primaryQuotaRefresh.lastAttempt = make(map[string]time.Time)
-	primaryQuotaRefresh.inFlight = make(map[string]bool)
-	primaryQuotaRefresh.mu.Unlock()
-	t.Cleanup(func() {
-		primaryQuotaRefresh.mu.Lock()
-		primaryQuotaRefresh.lastAttempt = oldLast
-		primaryQuotaRefresh.inFlight = oldInFlight
-		primaryQuotaRefresh.mu.Unlock()
-	})
+	t.Cleanup(routehealth.ResetPrimaryQuotaRefreshForTest())
 }
 
-func waitForPrimaryQuotaRefreshIdle(t *testing.T, harnessNames ...string) {
+func installPrimaryQuotaRefreshSchedulerForTest(t *testing.T, svc *service, start bool) {
 	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for {
-		idle := true
-		primaryQuotaRefresh.mu.Lock()
-		for _, name := range harnessNames {
-			if primaryQuotaRefresh.inFlight[name] {
-				idle = false
-				break
-			}
-		}
-		primaryQuotaRefresh.mu.Unlock()
-		if idle {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for primary quota refreshes to become idle: %v", harnessNames)
-		}
-		time.Sleep(time.Millisecond)
+	// These tests exercise the primary compatibility path in isolation. The
+	// generic freshness-derived cadence has its own routehealth tests.
+	svc.refreshScheduler = routehealth.NewRefreshScheduler(svc.harnessByName, nil)
+	policy := routehealth.DefaultPrimaryQuotaRefreshPolicy()
+	if svc.opts.QuotaRefreshDebounce > 0 {
+		policy.Debounce = svc.opts.QuotaRefreshDebounce
+	}
+	if svc.opts.QuotaRefreshStartupWait > 0 {
+		policy.StartupWait = svc.opts.QuotaRefreshStartupWait
+	}
+	policy.Interval = svc.opts.QuotaRefreshInterval
+	svc.refreshScheduler.ConfigurePrimaryQuotaRefresh(policy)
+	if start {
+		svc.refreshScheduler.Start(context.Background())
+		t.Cleanup(svc.refreshScheduler.Stop)
 	}
 }
 

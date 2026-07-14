@@ -11,9 +11,10 @@ import (
 // RefreshScheduler owns the single service-wide async refresh cadence across
 // registered QuotaHarness and AccountHarness implementations.
 type RefreshScheduler struct {
-	lookup func(name string) harnesses.Harness
-	names  []string
-	clock  schedulerClock
+	lookup  func(name string) harnesses.Harness
+	names   []string
+	clock   schedulerClock
+	primary *primaryQuotaRefreshCoordinator
 
 	// tickNotify, when non-nil, receives the harness name after each tick is
 	// fully processed. Tests use this to synchronize on tick completion.
@@ -62,15 +63,20 @@ func newRefreshScheduler(lookup func(string) harnesses.Harness, names []string, 
 	if clock == nil {
 		clock = realClock{}
 	}
-	return &RefreshScheduler{
+	scheduler := &RefreshScheduler{
 		lookup: lookup,
 		names:  append([]string(nil), names...),
 		clock:  clock,
 	}
+	scheduler.primary = newPrimaryQuotaRefreshCoordinator(lookup, clock, processPrimaryQuotaRefreshState)
+	return scheduler
 }
 
 // Start launches the scheduler. It panics if called twice without Stop.
 func (s *RefreshScheduler) Start(parent context.Context) {
+	if parent == nil {
+		parent = context.Background()
+	}
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.mu.Unlock()
@@ -78,6 +84,13 @@ func (s *RefreshScheduler) Start(parent context.Context) {
 	}
 	s.ctx, s.cancel = context.WithCancel(parent)
 	s.mu.Unlock()
+
+	// The primary coordinator owns the bounded startup check and optional
+	// operator-configured timer. Its work is deliberately separate from the
+	// freshness-derived quota/account cadence below: both paths call the same
+	// harness contract, whose RefreshQuota/RefreshAccount methods own
+	// single-flight.
+	s.primary.start(s.ctx)
 
 	now := s.clock.Now()
 	for _, name := range s.names {
@@ -106,9 +119,11 @@ func (s *RefreshScheduler) Stop() {
 	s.cancel = nil
 	s.mu.Unlock()
 	if cancel == nil {
+		s.primary.stop()
 		return
 	}
 	cancel()
+	s.primary.stop()
 	s.wg.Wait()
 }
 
