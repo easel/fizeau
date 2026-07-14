@@ -3,6 +3,7 @@
 package harnesses_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -63,7 +64,7 @@ func TestUnixBatchLifecycleAppliesToEveryBatchRunner(t *testing.T) {
 				cancel()
 				t.Fatalf("Execute: %v", err)
 			}
-			waitForPath(t, filepath.Join(dir, targetPIDFile), 2*time.Second)
+			targetPID := waitForPIDFile(t, filepath.Join(dir, targetPIDFile), 2*time.Second)
 			record := waitForLifecycleRecord(t, dir, name, 2*time.Second)
 			if record.SchemaID != processlifecycle.RecordSchemaID || record.BoundaryType != processlifecycle.BoundaryTypeUnixProcessGroup {
 				t.Fatalf("unexpected lifecycle record: %#v", record)
@@ -73,7 +74,7 @@ func TestUnixBatchLifecycleAppliesToEveryBatchRunner(t *testing.T) {
 			}
 			pgid := lifecyclePGID(t, record)
 			assertSafeBoundary(t, pgid)
-			if targetPID := readPIDFile(t, filepath.Join(dir, targetPIDFile)); targetPID != record.DirectChildIdentity.PID {
+			if targetPID != record.DirectChildIdentity.PID {
 				t.Fatalf("target pid = %d, want recorded direct child %d", targetPID, record.DirectChildIdentity.PID)
 			}
 			cancel()
@@ -100,12 +101,11 @@ func TestUnixBatchCancellationReapsGrandchild(t *testing.T) {
 	// Process startup can be delayed while the full repository test suite and
 	// pre-push hooks run concurrently. Keep evidence discovery tolerant without
 	// relaxing the cleanup deadlines asserted after cancellation.
-	waitForPath(t, filepath.Join(dir, grandchildPIDFile), 10*time.Second)
+	grandchildPID := waitForPIDFile(t, filepath.Join(dir, grandchildPIDFile), 10*time.Second)
 	record := waitForLifecycleRecord(t, dir, "codex", 10*time.Second)
-	grandchildPID := readPIDFile(t, filepath.Join(dir, grandchildPIDFile))
 	pgid := lifecyclePGID(t, record)
 	assertSafeBoundary(t, pgid)
-	if targetPID := readPIDFile(t, filepath.Join(dir, targetPIDFile)); targetPID != record.DirectChildIdentity.PID {
+	if targetPID := waitForPIDFile(t, filepath.Join(dir, targetPIDFile), time.Second); targetPID != record.DirectChildIdentity.PID {
 		t.Fatalf("target pid = %d, want recorded direct child %d", targetPID, record.DirectChildIdentity.PID)
 	}
 	observedPGID, err := syscall.Getpgid(grandchildPID)
@@ -158,16 +158,15 @@ func TestSubprocessHarnessDiesWithEmbeddingCaller(t *testing.T) {
 		}
 	})
 
-	waitForPath(t, filepath.Join(dir, grandchildPIDFile), 3*time.Second)
+	grandchildPID := waitForPIDFile(t, filepath.Join(dir, grandchildPIDFile), 3*time.Second)
 	record := waitForLifecycleRecord(t, dir, "codex", 3*time.Second)
 	candidatePGID := lifecyclePGID(t, record)
 	assertSafeBoundary(t, candidatePGID)
 	pgid = candidatePGID
-	targetPID := readPIDFile(t, filepath.Join(dir, targetPIDFile))
+	targetPID := waitForPIDFile(t, filepath.Join(dir, targetPIDFile), time.Second)
 	if targetPID != record.DirectChildIdentity.PID {
 		t.Fatalf("target pid = %d, want recorded direct child %d", targetPID, record.DirectChildIdentity.PID)
 	}
-	grandchildPID := readPIDFile(t, filepath.Join(dir, grandchildPIDFile))
 	if observed, err := syscall.Getpgid(grandchildPID); err != nil || observed != pgid {
 		t.Fatalf("grandchild containment before helper death = (%d, %v), want pgid %d", observed, err, pgid)
 	}
@@ -216,10 +215,10 @@ func writeBatchFixture(t *testing.T, dir string) string {
 	path := filepath.Join(dir, "batch-fixture")
 	content := `#!/bin/sh
 trap '' TERM
-printf '%s' "$$" > lifecycle-target.pid
+printf '%s\n' "$$" > lifecycle-target.pid
 sh -c 'trap "" TERM; exec sleep 300' &
 child=$!
-printf '%s' "$child" > lifecycle-grandchild.pid
+printf '%s\n' "$child" > lifecycle-grandchild.pid
 wait "$child"
 `
 	if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
@@ -288,28 +287,26 @@ func assertSafeBoundary(t *testing.T, pgid int) {
 	}
 }
 
-func readPIDFile(t *testing.T, path string) int {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read pid file: %v", err)
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid <= 0 {
-		t.Fatalf("parse pid file %q: %v", data, err)
-	}
-	return pid
-}
-
-func waitForPath(t *testing.T, path string, timeout time.Duration) {
+func waitForPIDFile(t *testing.T, path string, timeout time.Duration) int {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	var lastData []byte
+	var lastErr error
 	for {
-		if _, err := os.Stat(path); err == nil {
-			return
+		data, err := os.ReadFile(path)
+		lastData, lastErr = data, err
+		// The fixture writes a trailing newline in the same printf operation.
+		// Seeing it proves the reader did not race the shell's open-before-write
+		// window or consume a partial PID.
+		if err == nil && bytes.HasSuffix(data, []byte{'\n'}) {
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if parseErr == nil && pid > 0 {
+				return pid
+			}
+			lastErr = parseErr
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", path)
+			t.Fatalf("timed out waiting for complete pid file %s (data %q): %v", path, lastData, lastErr)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
