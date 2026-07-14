@@ -167,9 +167,10 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 		session.WithLifecycleOptions(processlifecycle.BatchOptions{Harness: cfg.HarnessName}),
 	)
 	if err != nil {
+		ctxErr := ctx.Err()
 		closeDiscard(rec)
 		cleanupRecordDir(recordDir, commitDir)
-		return Result{}, classifyFailure(cfg.HarnessName, "", err)
+		return Result{}, preserveContextFailure(classifyFailure(cfg.HarnessName, "", err), ctxErr)
 	}
 
 	run := &runState{
@@ -185,6 +186,7 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	result, err := run.drive(ctx, cfg)
 	status := session.ExitStatus{}
 	if err != nil {
+		ctxErr := ctx.Err()
 		_ = s.Kill()
 		status = s.Wait()
 		select {
@@ -194,7 +196,7 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 		}
 		closeDiscard(rec)
 		cleanupRecordDir(recordDir, commitDir)
-		return Result{}, classifyFailure(cfg.HarnessName, run.screen(), err)
+		return Result{}, preserveContextFailure(classifyFailure(cfg.HarnessName, run.screen(), err), ctxErr)
 	}
 	status = stopSession(s, 5*time.Second)
 	finishErr := run.finish(status, cfg)
@@ -816,6 +818,17 @@ func classifyFailure(harness, text string, err error) error {
 		return &ProbeError{Status: StatusError, Reason: harness + " quota probe timed out", Err: err}
 	}
 	return &ProbeError{Status: StatusError, Reason: harness + " quota probe failed", Err: err}
+}
+
+// preserveContextFailure keeps the PTY/session diagnostic while ensuring a
+// caller cancellation or deadline remains observable when teardown races with
+// the context. Session closure can otherwise win the probe's select and hide
+// the context error that caused it.
+func preserveContextFailure(err, ctxErr error) error {
+	if err == nil || ctxErr == nil || errors.Is(err, ctxErr) {
+		return err
+	}
+	return errors.Join(err, ctxErr)
 }
 
 func authFailureText(text string) bool {

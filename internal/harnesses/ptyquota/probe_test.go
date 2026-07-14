@@ -21,6 +21,20 @@ func TestErrorStatus(t *testing.T) {
 	require.Equal(t, StatusError, ErrorStatus(errors.New("plain error")))
 }
 
+func TestPreserveContextFailureKeepsCancellationAndSessionDiagnostic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sessionErr := errors.New("pty session closed")
+	probeErr := &ProbeError{Status: StatusError, Reason: "fake quota probe failed", Err: sessionErr}
+
+	err := preserveContextFailure(probeErr, ctx.Err())
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorIs(t, err, sessionErr)
+	require.Equal(t, StatusError, ErrorStatus(err))
+	require.ErrorContains(t, err, "fake quota probe failed: pty session closed")
+}
+
 func TestRunMissingBinaryIsUnavailable(t *testing.T) {
 	_, err := Run(context.Background(), Config{
 		HarnessName: "missing",
