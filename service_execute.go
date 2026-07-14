@@ -488,7 +488,7 @@ func (s *service) runExecute(ctx context.Context, req ServiceExecuteRequest, dec
 	}
 	defer func() {
 		if !sl.endWritten() {
-			sl.writeEnd(req, meta, harnesses.FinalData{
+			final := serviceimpl.ClassifyTerminalFinal(harnesses.FinalData{
 				Status:     "cancelled",
 				Error:      "session ended without final event",
 				DurationMS: time.Since(start).Milliseconds(),
@@ -497,7 +497,8 @@ func (s *service) runExecute(ctx context.Context, req ServiceExecuteRequest, dec
 					Provider: decision.Provider,
 					Model:    decision.Model,
 				},
-			})
+			}, terminalOriginForDecision(decision), ctx.Err())
+			sl.writeEnd(req, meta, final)
 		}
 		sl.close()
 	}()
@@ -531,6 +532,13 @@ func (s *service) runExecute(ctx context.Context, req ServiceExecuteRequest, dec
 	})
 }
 
+func terminalOriginForDecision(decision RouteDecision) serviceimpl.TerminalOrigin {
+	if decision.Harness == "fiz" || decision.Harness == "" {
+		return serviceimpl.TerminalOriginProvider
+	}
+	return serviceimpl.TerminalOriginHarness
+}
+
 func (s *service) runVirtual(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string) {
 	progress := newSubprocessProgressState(req)
 	emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
@@ -543,7 +551,7 @@ func (s *service) runVirtual(ctx context.Context, req ServiceExecuteRequest, dec
 		emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
 	}
 	s.recordRouteAttemptFromFinal(final)
-	finalizeAndEmit(out, seq, meta, req, sl, final)
+	finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginHarness, ctx.Err())
 }
 
 func (s *service) runScript(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string) {
@@ -558,7 +566,7 @@ func (s *service) runScript(ctx context.Context, req ServiceExecuteRequest, deci
 		emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
 	}
 	s.recordRouteAttemptFromFinal(final)
-	finalizeAndEmit(out, seq, meta, req, sl, final)
+	finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginHarness, ctx.Err())
 }
 
 func executeRunnerRequest(req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, start time.Time) serviceimpl.ExecuteRunnerRequest {
@@ -706,9 +714,9 @@ func (s *service) runNative(ctx context.Context, req ServiceExecuteRequest, deci
 				emitProgress(out, seq, sl, sessionID, meta, *progressFinal)
 			}
 		},
-		Finalize: func(final harnesses.FinalData) {
+		Finalize: func(final harnesses.FinalData, origin serviceimpl.TerminalOrigin) {
 			s.recordRouteAttemptFromFinal(final)
-			finalizeAndEmit(out, seq, meta, req, sl, final)
+			finalizeAndEmit(out, seq, meta, req, sl, final, origin, ctx.Err())
 		},
 		ToolWiringHook:          s.toolWiringHook(),
 		PromptAssertionHook:     s.promptAssertionHook(),
@@ -803,8 +811,6 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 		BeforeExecute: func() {
 			emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
 		},
-		BeforeFinal: func(final harnesses.FinalData) {
-		},
 		ObserveEvent: func(ev harnesses.Event) harnesses.Event {
 			ev = progress.annotateToolResultDuration(ev)
 			if payload, ok := progress.noteEvent(ev); ok && ev.Type != harnesses.EventTypeProgress {
@@ -828,7 +834,7 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 		},
 		Finalize: func(final harnesses.FinalData) {
 			s.recordRouteAttemptFromFinal(final)
-			finalizeAndEmit(out, seq, meta, req, sl, final)
+			finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginSpawn, ctx.Err())
 		},
 		WriteEnd: func(finalMeta map[string]string, final harnesses.FinalData) {
 			sl.writeEnd(req, finalMeta, final)
@@ -870,7 +876,7 @@ func emitFinal(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]strin
 // contract.
 func emitFatalFinal(out chan<- ServiceEvent, meta map[string]string, status, errMsg string) {
 	defer close(out)
-	final := harnesses.FinalData{Status: status, Error: errMsg}
+	final := serviceimpl.ClassifyTerminalFinal(harnesses.FinalData{Status: status, Error: errMsg}, serviceimpl.TerminalOriginRouting, nil)
 	raw, _ := json.Marshal(final)
 	ev := harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
@@ -922,7 +928,8 @@ func emitJSONRaw(out chan<- ServiceEvent, seq *atomic.Int64, t harnesses.EventTy
 // actually-dispatched Model. When the caller set both top-level
 // Role/CorrelationID and the same reserved Metadata key, a
 // MetadataKeyCollision warning is appended to final.Warnings.
-func finalizeAndEmit(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]string, req ServiceExecuteRequest, sl *serviceSessionLog, final harnesses.FinalData) {
+func finalizeAndEmit(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]string, req ServiceExecuteRequest, sl *serviceSessionLog, final harnesses.FinalData, origin serviceimpl.TerminalOrigin, ctxErr error) {
+	final = serviceimpl.ClassifyTerminalFinal(final, origin, ctxErr)
 	if sl != nil && sl.path != "" {
 		final.SessionLogPath = sl.path
 	}

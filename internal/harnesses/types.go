@@ -97,9 +97,61 @@ type ToolResultData struct {
 	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
+// SessionOutcome is the stable coarse result of one accepted Fizeau session.
+// It is distinct from FinalData.Status, which remains a compatibility/detail
+// field for older consumers.
+type SessionOutcome string
+
+const (
+	SessionOutcomeSuccess   SessionOutcome = "success"
+	SessionOutcomeFailed    SessionOutcome = "failed"
+	SessionOutcomeCancelled SessionOutcome = "cancelled"
+	SessionOutcomeTimedOut  SessionOutcome = "timed_out"
+)
+
+// TerminalCause is the stable, machine-readable reason a session ended.
+type TerminalCause string
+
+const (
+	TerminalCauseCompleted        TerminalCause = "completed"
+	TerminalCauseRouteUnavailable TerminalCause = "route_unavailable"
+	TerminalCauseSpawnFailed      TerminalCause = "spawn_failed"
+	TerminalCauseHarnessFailed    TerminalCause = "harness_failed"
+	TerminalCauseProviderFailed   TerminalCause = "provider_failed"
+	TerminalCauseToolLoopFailed   TerminalCause = "tool_loop_failed"
+	TerminalCauseIterationLimit   TerminalCause = "iteration_limit"
+	TerminalCauseBudgetHalted     TerminalCause = "budget_halted"
+	TerminalCauseDeadlineExceeded TerminalCause = "deadline_exceeded"
+	TerminalCauseContextCancelled TerminalCause = "context_cancelled"
+	TerminalCauseCallerDied       TerminalCause = "caller_died"
+	TerminalCauseCleanupFailed    TerminalCause = "cleanup_failed"
+	TerminalCauseInternalError    TerminalCause = "internal_error"
+)
+
+// SessionStage identifies the Fizeau-owned lifecycle stage that determined a
+// terminal result. It intentionally contains no outer workflow stages.
+type SessionStage string
+
+const (
+	SessionStageRouting      SessionStage = "routing"
+	SessionStageSpawn        SessionStage = "spawn"
+	SessionStageHarness      SessionStage = "harness"
+	SessionStageProvider     SessionStage = "provider"
+	SessionStageToolLoop     SessionStage = "tool_loop"
+	SessionStageTimeout      SessionStage = "timeout"
+	SessionStageCancellation SessionStage = "cancellation"
+	SessionStageCleanup      SessionStage = "cleanup"
+)
+
 // FinalData is the payload for type=final events.
 type FinalData struct {
 	Status         string            `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
+	Outcome        SessionOutcome    `json:"outcome"`
+	Cause          TerminalCause     `json:"cause"`
+	Stage          SessionStage      `json:"stage"`
+	PrimaryOutcome SessionOutcome    `json:"primary_outcome,omitempty"`
+	PrimaryCause   TerminalCause     `json:"primary_cause,omitempty"`
+	PrimaryStage   SessionStage      `json:"primary_stage,omitempty"`
 	ExitCode       int               `json:"exit_code"`
 	Error          string            `json:"error,omitempty"`
 	FinalText      string            `json:"final_text,omitempty"`

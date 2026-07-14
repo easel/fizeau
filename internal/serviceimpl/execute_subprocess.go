@@ -3,6 +3,7 @@ package serviceimpl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
@@ -32,7 +33,6 @@ type SubprocessRequest struct {
 // without importing root public service types.
 type SubprocessCallbacks struct {
 	BeforeExecute func()
-	BeforeFinal   func(harnesses.FinalData)
 	ObserveEvent  func(harnesses.Event) harnesses.Event
 	EmitEvent     func(harnesses.Event) bool
 	Finalize      func(harnesses.FinalData)
@@ -80,14 +80,12 @@ func RunSubprocess(ctx context.Context, req SubprocessRequest, runner harnesses.
 		}
 		if ev.Type == harnesses.EventTypeFinal {
 			var final harnesses.FinalData
-			if err := json.Unmarshal(ev.Data, &final); err == nil && cb.BeforeFinal != nil {
-				cb.BeforeFinal(final)
+			if err := json.Unmarshal(ev.Data, &final); err != nil {
+				emitSubprocessProtocolFinal(ctx, req, cb, fmt.Sprintf("malformed harness final event: %v", err))
+				return
 			}
-			ev = stampSubprocessFinalRouting(ev, req.Decision)
-			ev = stampSubprocessFinalSessionLog(ev, req.SessionLogPath)
-			if err := json.Unmarshal(ev.Data, &final); err == nil && cb.WriteEnd != nil {
-				cb.WriteEnd(req.Metadata, final)
-			}
+			emitSubprocessFinal(ctx, req, cb, ev, final)
+			return
 		}
 		if cb.ObserveEvent != nil {
 			ev = cb.ObserveEvent(ev)
@@ -95,6 +93,53 @@ func RunSubprocess(ctx context.Context, req SubprocessRequest, runner harnesses.
 		if cb.EmitEvent != nil && !cb.EmitEvent(ev) {
 			return
 		}
+	}
+	emitSubprocessProtocolFinal(ctx, req, cb, "harness event stream closed without a final event")
+}
+
+func replaceSubprocessFinal(ev harnesses.Event, final harnesses.FinalData) harnesses.Event {
+	raw, err := json.Marshal(final)
+	if err == nil {
+		ev.Data = raw
+	}
+	return ev
+}
+
+func emitSubprocessProtocolFinal(ctx context.Context, req SubprocessRequest, cb SubprocessCallbacks, diagnostic string) {
+	status := "internal_error"
+	if ctx.Err() != nil {
+		status = "cancelled"
+	}
+	durationMS := int64(0)
+	if !req.Started.IsZero() {
+		durationMS = time.Since(req.Started).Milliseconds()
+	}
+	final := harnesses.FinalData{
+		Status:     status,
+		Error:      diagnostic,
+		DurationMS: durationMS,
+	}
+	ev := harnesses.Event{
+		Type:     harnesses.EventTypeFinal,
+		Time:     time.Now().UTC(),
+		Metadata: req.Metadata,
+	}
+	emitSubprocessFinal(ctx, req, cb, ev, final)
+}
+
+func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb SubprocessCallbacks, ev harnesses.Event, final harnesses.FinalData) {
+	final = ClassifyTerminalFinal(final, TerminalOriginHarness, ctx.Err())
+	ev = replaceSubprocessFinal(ev, final)
+	ev = stampSubprocessFinalRouting(ev, req.Decision)
+	ev = stampSubprocessFinalSessionLog(ev, req.SessionLogPath)
+	if err := json.Unmarshal(ev.Data, &final); err == nil && cb.WriteEnd != nil {
+		cb.WriteEnd(req.Metadata, final)
+	}
+	if cb.ObserveEvent != nil {
+		ev = cb.ObserveEvent(ev)
+	}
+	if cb.EmitEvent != nil {
+		cb.EmitEvent(ev)
 	}
 }
 

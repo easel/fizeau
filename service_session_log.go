@@ -89,6 +89,12 @@ func (sl *serviceSessionLog) writeEnd(req ServiceExecuteRequest, meta map[string
 	}
 	end := session.SessionEndData{
 		Status:           harnessStatusToCoreStatus(final.Status),
+		Outcome:          final.Outcome,
+		Cause:            final.Cause,
+		Stage:            final.Stage,
+		PrimaryOutcome:   final.PrimaryOutcome,
+		PrimaryCause:     final.PrimaryCause,
+		PrimaryStage:     final.PrimaryStage,
 		ProcessOutcome:   processOutcomeForFinal(final.Status),
 		Output:           final.FinalText,
 		Tokens:           finalUsageToCoreTokens(final.Usage),

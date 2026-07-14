@@ -113,7 +113,7 @@ type NativeCallbacks struct {
 	ObserveAgentEvent          func(agentcore.Event)
 	EmitEvent                  func(harnesses.EventType, any)
 	BeforeFinal                func(harnesses.FinalData)
-	Finalize                   func(harnesses.FinalData)
+	Finalize                   func(harnesses.FinalData, TerminalOrigin)
 	ToolWiringHook             func(harness string, toolNames []string)
 	PromptAssertionHook        func(systemPrompt, prompt string, contextFiles []string)
 	CompactionAssertionHook    func(messagesBefore, messagesAfter, tokensFreed int)
@@ -148,7 +148,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 				ServerInstance: req.Decision.ServerInstance,
 				Model:          actualModel,
 			},
-		})
+		}, TerminalOriginRouting)
 		return
 	}
 	permission, permissionErr := nativePermissionMode(req.Permissions)
@@ -163,7 +163,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 				ServerInstance: req.Decision.ServerInstance,
 				Model:          actualModel,
 			},
-		})
+		}, TerminalOriginToolLoop)
 		return
 	}
 
@@ -332,6 +332,9 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		final.Error = "wall-clock timeout"
 	case ctx.Err() == context.Canceled:
 		final.Status = "cancelled"
+	case errors.Is(runErr, errProviderRequestTimeout):
+		final.Status = "timed_out"
+		final.Error = runErr.Error()
 	case runErr != nil:
 		final.Status = "failed"
 		final.Error = runErr.Error()
@@ -359,7 +362,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	if final.RoutingActual != nil && final.Usage != nil && cb.ObserveTokenUsage != nil {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
 	}
-	finalize(cb, final)
+	finalize(cb, final, nativeTerminalOrigin(runErr))
 }
 
 func nativeExecutionProvider(req NativeRequest, resolver func(NativeProviderRequest) NativeProviderResolution) agentcore.Provider {
@@ -666,9 +669,22 @@ func endpointProviderRef(providerName, endpointName string) string {
 	return providerName + "@" + endpointName
 }
 
-func finalize(cb NativeCallbacks, final harnesses.FinalData) {
+func finalize(cb NativeCallbacks, final harnesses.FinalData, origin TerminalOrigin) {
 	if cb.Finalize != nil {
-		cb.Finalize(final)
+		cb.Finalize(final, origin)
+	}
+}
+
+func nativeTerminalOrigin(runErr error) TerminalOrigin {
+	switch {
+	case errors.Is(runErr, agentcore.ErrToolCallLoop),
+		errors.Is(runErr, agentcore.ErrCompactionNoFit),
+		errors.Is(runErr, agentcore.ErrCompactionStuck),
+		errors.Is(runErr, agentcore.ErrReasoningOverflow),
+		errors.Is(runErr, agentcore.ErrReasoningStall):
+		return TerminalOriginToolLoop
+	default:
+		return TerminalOriginProvider
 	}
 }
 

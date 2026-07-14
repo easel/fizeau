@@ -381,8 +381,61 @@ type ServiceStallData struct {
 	Count  int64  `json:"count"`
 }
 
+// SessionOutcome is the stable coarse result of one accepted Fizeau session.
+// Status remains available on ServiceFinalData only as a compatibility field.
+type SessionOutcome string
+
+const (
+	SessionOutcomeSuccess   SessionOutcome = "success"
+	SessionOutcomeFailed    SessionOutcome = "failed"
+	SessionOutcomeCancelled SessionOutcome = "cancelled"
+	SessionOutcomeTimedOut  SessionOutcome = "timed_out"
+)
+
+// TerminalCause is the stable reason a session terminalized. Consumers must
+// preserve unfamiliar additive values and must not derive this value from the
+// diagnostic Error string.
+type TerminalCause string
+
+const (
+	TerminalCauseCompleted        TerminalCause = "completed"
+	TerminalCauseRouteUnavailable TerminalCause = "route_unavailable"
+	TerminalCauseSpawnFailed      TerminalCause = "spawn_failed"
+	TerminalCauseHarnessFailed    TerminalCause = "harness_failed"
+	TerminalCauseProviderFailed   TerminalCause = "provider_failed"
+	TerminalCauseToolLoopFailed   TerminalCause = "tool_loop_failed"
+	TerminalCauseIterationLimit   TerminalCause = "iteration_limit"
+	TerminalCauseBudgetHalted     TerminalCause = "budget_halted"
+	TerminalCauseDeadlineExceeded TerminalCause = "deadline_exceeded"
+	TerminalCauseContextCancelled TerminalCause = "context_cancelled"
+	TerminalCauseCallerDied       TerminalCause = "caller_died"
+	TerminalCauseCleanupFailed    TerminalCause = "cleanup_failed"
+	TerminalCauseInternalError    TerminalCause = "internal_error"
+)
+
+// SessionStage is the Fizeau-owned lifecycle stage that determined a terminal
+// result. Outer workflow stages such as review or landing are not valid here.
+type SessionStage string
+
+const (
+	SessionStageRouting      SessionStage = "routing"
+	SessionStageSpawn        SessionStage = "spawn"
+	SessionStageHarness      SessionStage = "harness"
+	SessionStageProvider     SessionStage = "provider"
+	SessionStageToolLoop     SessionStage = "tool_loop"
+	SessionStageTimeout      SessionStage = "timeout"
+	SessionStageCancellation SessionStage = "cancellation"
+	SessionStageCleanup      SessionStage = "cleanup"
+)
+
 type ServiceFinalData struct {
 	Status         string                `json:"status"`
+	Outcome        SessionOutcome        `json:"outcome"`
+	Cause          TerminalCause         `json:"cause"`
+	Stage          SessionStage          `json:"stage"`
+	PrimaryOutcome SessionOutcome        `json:"primary_outcome,omitempty"`
+	PrimaryCause   TerminalCause         `json:"primary_cause,omitempty"`
+	PrimaryStage   SessionStage          `json:"primary_stage,omitempty"`
 	ExitCode       int                   `json:"exit_code"`
 	Error          string                `json:"error,omitempty"`
 	FinalText      string                `json:"final_text,omitempty"`
@@ -578,6 +631,12 @@ type DrainExecuteResult struct {
 	Final            *ServiceFinalData
 
 	FinalStatus    string
+	Outcome        SessionOutcome
+	Cause          TerminalCause
+	Stage          SessionStage
+	PrimaryOutcome SessionOutcome
+	PrimaryCause   TerminalCause
+	PrimaryStage   SessionStage
 	FinalText      string
 	Usage          *ServiceFinalUsage
 	Warnings       []ServiceFinalWarning
@@ -633,6 +692,12 @@ func (r *DrainExecuteResult) append(ev ServiceDecodedEvent) {
 	case ev.Final != nil:
 		r.Final = ev.Final
 		r.FinalStatus = ev.Final.Status
+		r.Outcome = ev.Final.Outcome
+		r.Cause = ev.Final.Cause
+		r.Stage = ev.Final.Stage
+		r.PrimaryOutcome = ev.Final.PrimaryOutcome
+		r.PrimaryCause = ev.Final.PrimaryCause
+		r.PrimaryStage = ev.Final.PrimaryStage
 		r.FinalText = ev.Final.FinalText
 		r.Usage = ev.Final.Usage
 		r.Warnings = ev.Final.Warnings

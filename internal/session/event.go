@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agent "github.com/easel/fizeau/internal/core"
+	"github.com/easel/fizeau/internal/harnesses"
 )
 
 // SessionStartData is the data payload for a session.start event.
@@ -83,32 +84,38 @@ type ToolCallData struct {
 
 // SessionEndData is the data payload for a session.end event.
 type SessionEndData struct {
-	Status                 agent.Status            `json:"status"`
-	Output                 string                  `json:"output"`
-	Tokens                 agent.TokenUsage        `json:"tokens"`
-	CostUSD                *float64                `json:"cost_usd,omitempty"`
-	DurationMs             int64                   `json:"duration_ms"`
-	Model                  string                  `json:"model,omitempty"`
-	SelectedProvider       string                  `json:"selected_provider,omitempty"`
-	SelectedEndpoint       string                  `json:"selected_endpoint,omitempty"`
-	SelectedServerInstance string                  `json:"selected_server_instance,omitempty"`
-	SelectedRoute          string                  `json:"selected_route,omitempty"`
-	Sticky                 RoutingStickyState      `json:"sticky,omitempty"`
-	Utilization            RoutingUtilizationState `json:"utilization,omitempty"`
-	RequestedHarness       string                  `json:"requested_harness,omitempty"`
-	ResolvedHarness        string                  `json:"resolved_harness,omitempty"`
-	HarnessSource          string                  `json:"harness_source,omitempty"`
-	RequestedModel         string                  `json:"requested_model,omitempty"`
-	ResolvedModel          string                  `json:"resolved_model,omitempty"`
-	Reasoning              agent.Reasoning         `json:"reasoning,omitempty"`
-	ReasoningIntent        agent.Reasoning         `json:"reasoning_intent,omitempty"`
-	ReasoningEmitted       agent.Reasoning         `json:"reasoning_emitted,omitempty"`
-	ResolvedReasoning      agent.Reasoning         `json:"resolved_reasoning,omitempty"`
-	ReasoningSource        string                  `json:"reasoning_source,omitempty"`
-	AttemptedProviders     []string                `json:"attempted_providers,omitempty"`
-	FailoverCount          int                     `json:"failover_count,omitempty"`
-	Metadata               map[string]string       `json:"metadata,omitempty"`
-	Error                  string                  `json:"error,omitempty"`
+	Status                 agent.Status             `json:"status"`
+	Outcome                harnesses.SessionOutcome `json:"outcome,omitempty"`
+	Cause                  harnesses.TerminalCause  `json:"cause,omitempty"`
+	Stage                  harnesses.SessionStage   `json:"stage,omitempty"`
+	PrimaryOutcome         harnesses.SessionOutcome `json:"primary_outcome,omitempty"`
+	PrimaryCause           harnesses.TerminalCause  `json:"primary_cause,omitempty"`
+	PrimaryStage           harnesses.SessionStage   `json:"primary_stage,omitempty"`
+	Output                 string                   `json:"output"`
+	Tokens                 agent.TokenUsage         `json:"tokens"`
+	CostUSD                *float64                 `json:"cost_usd,omitempty"`
+	DurationMs             int64                    `json:"duration_ms"`
+	Model                  string                   `json:"model,omitempty"`
+	SelectedProvider       string                   `json:"selected_provider,omitempty"`
+	SelectedEndpoint       string                   `json:"selected_endpoint,omitempty"`
+	SelectedServerInstance string                   `json:"selected_server_instance,omitempty"`
+	SelectedRoute          string                   `json:"selected_route,omitempty"`
+	Sticky                 RoutingStickyState       `json:"sticky,omitempty"`
+	Utilization            RoutingUtilizationState  `json:"utilization,omitempty"`
+	RequestedHarness       string                   `json:"requested_harness,omitempty"`
+	ResolvedHarness        string                   `json:"resolved_harness,omitempty"`
+	HarnessSource          string                   `json:"harness_source,omitempty"`
+	RequestedModel         string                   `json:"requested_model,omitempty"`
+	ResolvedModel          string                   `json:"resolved_model,omitempty"`
+	Reasoning              agent.Reasoning          `json:"reasoning,omitempty"`
+	ReasoningIntent        agent.Reasoning          `json:"reasoning_intent,omitempty"`
+	ReasoningEmitted       agent.Reasoning          `json:"reasoning_emitted,omitempty"`
+	ResolvedReasoning      agent.Reasoning          `json:"resolved_reasoning,omitempty"`
+	ReasoningSource        string                   `json:"reasoning_source,omitempty"`
+	AttemptedProviders     []string                 `json:"attempted_providers,omitempty"`
+	FailoverCount          int                      `json:"failover_count,omitempty"`
+	Metadata               map[string]string        `json:"metadata,omitempty"`
+	Error                  string                   `json:"error,omitempty"`
 	// ProcessOutcome surfaces the FEAT-005 §27 / SD-010 failure-taxonomy
 	// label for terminal events that map to a first-class outcome
 	// distinct from Status (e.g. "budget_halted"). Empty when no outcome

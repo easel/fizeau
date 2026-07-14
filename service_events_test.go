@@ -34,7 +34,13 @@ func TestDrainExecute_DecodesTypedResult(t *testing.T) {
 		"reason": "read_only_tools_exceeded", "count": 25,
 	})
 	ch <- serviceEvent(t, fizeau.ServiceEventTypeFinal, 6, map[string]any{
-		"status":      "success",
+		"status":  "success",
+		"outcome": "success",
+		"cause":   "completed",
+		"stage":   "tool_loop",
+		// Deliberately contradictory diagnostic text proves DrainExecute does
+		// not infer the typed terminal result from TerminalError.
+		"error":       "diagnostic text containing timeout and cancellation words",
 		"exit_code":   0,
 		"final_text":  "APPROVE\nLooks good.",
 		"duration_ms": 123,
@@ -58,6 +64,9 @@ func TestDrainExecute_DecodesTypedResult(t *testing.T) {
 	}
 	if result.FinalStatus != "success" {
 		t.Fatalf("FinalStatus: got %q", result.FinalStatus)
+	}
+	if result.Outcome != fizeau.SessionOutcomeSuccess || result.Cause != fizeau.TerminalCauseCompleted || result.Stage != fizeau.SessionStageToolLoop {
+		t.Fatalf("typed terminal projection: got %q/%q/%q", result.Outcome, result.Cause, result.Stage)
 	}
 	if result.FinalText != "APPROVE\nLooks good." {
 		t.Fatalf("FinalText: got %q", result.FinalText)

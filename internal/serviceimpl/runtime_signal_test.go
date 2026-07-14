@@ -88,7 +88,7 @@ func TestRunNative_RuntimeSignalWritesCache(t *testing.T) {
 				Model:    "gpt-4o",
 			}
 		},
-		Finalize: func(fd harnesses.FinalData) {
+		Finalize: func(fd harnesses.FinalData, _ TerminalOrigin) {
 			final = fd
 		},
 	})

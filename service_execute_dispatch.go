@@ -83,7 +83,7 @@ func (s *service) dispatchExecuteRun(ctx context.Context, run executeRunContext)
 		},
 		Finalize: func(final harnesses.FinalData) {
 			s.recordRouteAttemptFromFinal(final)
-			finalizeAndEmit(run.out, run.seq, run.meta, run.req, run.sl, final)
+			finalizeAndEmit(run.out, run.seq, run.meta, run.req, run.sl, final, serviceimpl.TerminalOriginSpawn, ctx.Err())
 		},
 	})
 }
