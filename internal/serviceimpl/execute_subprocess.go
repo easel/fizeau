@@ -4,14 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/reasoning"
 )
 
-const defaultSubprocessCleanupTimeout = 10 * time.Second
+const (
+	defaultSubprocessCleanupTimeout             = 10 * time.Second
+	subprocessRouteObservationWarningMaxBytes   = 2048
+	subprocessRouteObservationWarningTruncation = "...(truncated)"
+	subprocessRouteObservationFailedWarningCode = "route_observation_failed"
+)
 
 // SubprocessRequest is the API-neutral request data needed by subprocess
 // harness runner implementations.
@@ -39,6 +46,7 @@ type SubprocessRequest struct {
 // without importing root public service types.
 type SubprocessCallbacks struct {
 	BeforeExecute func()
+	ObserveFinal  func(harnesses.FinalData) error
 	ObserveEvent  func(harnesses.Event) harnesses.Event
 	EmitEvent     func(harnesses.Event) bool
 	Finalize      func(harnesses.FinalData)
@@ -176,8 +184,23 @@ func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb Subproce
 	ev = replaceSubprocessFinal(ev, final)
 	ev = stampSubprocessFinalRouting(ev, req.Decision)
 	ev = stampSubprocessFinalSessionLog(ev, req.SessionLogPath)
-	if err := json.Unmarshal(ev.Data, &final); err == nil && cb.WriteEnd != nil {
-		cb.WriteEnd(req.Metadata, final)
+	if err := json.Unmarshal(ev.Data, &final); err == nil {
+		if cb.ObserveFinal != nil {
+			var observed harnesses.FinalData
+			_ = json.Unmarshal(ev.Data, &observed)
+			if err := cb.ObserveFinal(observed); err != nil {
+				final.Warnings = append(final.Warnings, harnesses.FinalWarning{
+					Code:    subprocessRouteObservationFailedWarningCode,
+					Message: boundedSubprocessRouteObservationWarning(err),
+				})
+				ev = replaceSubprocessFinal(ev, final)
+			}
+		}
+		if cb.WriteEnd != nil {
+			var written harnesses.FinalData
+			_ = json.Unmarshal(ev.Data, &written)
+			cb.WriteEnd(req.Metadata, written)
+		}
 	}
 	if cb.ObserveEvent != nil {
 		ev = cb.ObserveEvent(ev)
@@ -187,6 +210,18 @@ func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb Subproce
 	} else if cb.Finalize != nil {
 		cb.Finalize(final)
 	}
+}
+
+func boundedSubprocessRouteObservationWarning(err error) string {
+	message := strings.ToValidUTF8("route final observation failed: "+err.Error(), "\uFFFD")
+	if len(message) <= subprocessRouteObservationWarningMaxBytes {
+		return message
+	}
+	limit := subprocessRouteObservationWarningMaxBytes - len(subprocessRouteObservationWarningTruncation)
+	for limit > 0 && !utf8.RuneStart(message[limit]) {
+		limit--
+	}
+	return message[:limit] + subprocessRouteObservationWarningTruncation
 }
 
 // waitForSubprocessCleanup is the service-owned terminal gate. Harness finals
