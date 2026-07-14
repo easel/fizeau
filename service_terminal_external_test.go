@@ -5,9 +5,17 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	fizeau "github.com/easel/fizeau"
 )
+
+func TestHarnessCleanupTimeoutExternalCompatibility(t *testing.T) {
+	opts := fizeau.ServiceOptions{HarnessCleanupTimeout: time.Second}
+	if opts.HarnessCleanupTimeout != time.Second {
+		t.Fatalf("external HarnessCleanupTimeout = %s", opts.HarnessCleanupTimeout)
+	}
+}
 
 func TestServiceFinalTypedClassificationRoundTrip(t *testing.T) {
 	want := fizeau.ServiceFinalData{

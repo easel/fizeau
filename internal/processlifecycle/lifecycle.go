@@ -84,6 +84,21 @@ func (l *Lease) BeginCleanup(ctx context.Context) error {
 	})
 }
 
+// retainRecoveryBlock records a typed recovery failure without
+// re-observing the platform boundary. Recovery uses this after an exact
+// pre-signal observation has already detected identity mismatch or
+// indeterminacy; a later disappearance must not erase that safety evidence.
+func (l *Lease) retainRecoveryBlock(ctx context.Context, evidence EscapeEvidence) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.clock.Now().UTC()
+	return l.updateDetached(ctx, func(record *Record) {
+		record.State = StateRecoveryBlocked
+		record.Timestamps.UpdatedAt = now
+		record.EscapeEvidence = append(record.EscapeEvidence, evidence)
+	})
+}
+
 // CompleteCleanup removes durable ownership only after a typed platform
 // observation proves the recorded boundary empty. All safety-state writes are
 // detached from the request deadline so cancellation cannot erase evidence.
@@ -128,8 +143,9 @@ func (l *Lease) CompleteCleanup(ctx context.Context, evidence ...EscapeEvidence)
 
 // Recover loads a record and asks the platform to identify the exact recorded
 // containment boundary. A live matching original owner is not adopted; a gone
-// owner is the normal crash-recovery case. Cross-process adoption claims are a
-// required follow-up before startup recovery is wired concurrently.
+// owner is the normal crash-recovery case. Recover itself does not acquire a
+// cross-process adoption claim; startup callers use ReapStaleRecords, which
+// holds the per-record OS-backed claim around Recover and every mutation.
 func Recover(ctx context.Context, recordID string, registry Registry, platform PlatformBackend, clock Clock) (*Lease, error) {
 	if registry == nil || platform == nil {
 		return nil, fmt.Errorf("%w: registry and platform backend are required", ErrInvalidRecord)
@@ -208,6 +224,19 @@ func validateObservation(record Record, observation BoundaryObservation, recover
 		if observation.BoundaryIdentity != record.BoundaryIdentity {
 			return BoundaryMismatch, ErrIdentityMismatch
 		}
+		if recovery {
+			switch observation.OwnerStatus {
+			case OwnerMatching:
+				return BoundaryMatching, ErrBoundaryOwned
+			case OwnerMismatch:
+				return BoundaryMismatch, ErrIdentityMismatch
+			case OwnerIndeterminate:
+				return BoundaryIndeterminate, ErrBoundaryIndeterminate
+			case OwnerGone:
+			default:
+				return BoundaryIndeterminate, ErrBoundaryIndeterminate
+			}
+		}
 		return BoundaryEmpty, nil
 	case BoundaryMismatch:
 		return BoundaryMismatch, ErrIdentityMismatch
@@ -215,10 +244,25 @@ func validateObservation(record Record, observation BoundaryObservation, recover
 		return BoundaryIndeterminate, ErrBoundaryIndeterminate
 	case BoundaryMatching:
 		if observation.BoundaryIdentity != record.BoundaryIdentity ||
-			!record.SupervisorIdentity.matches(observation.SupervisorIdentity) ||
 			!record.DirectChildIdentity.matches(observation.DirectChildIdentity) ||
 			!record.BoundaryProcessIdentity.matches(observation.BoundaryProcessIdentity) {
 			return BoundaryMismatch, ErrIdentityMismatch
+		}
+		switch observation.SupervisorStatus {
+		case OwnerGone:
+			if !recovery {
+				return BoundaryMismatch, ErrIdentityMismatch
+			}
+		case OwnerIndeterminate:
+			return BoundaryIndeterminate, ErrBoundaryIndeterminate
+		case OwnerMismatch:
+			return BoundaryMismatch, ErrIdentityMismatch
+		case OwnerMatching, "":
+			if !record.SupervisorIdentity.matches(observation.SupervisorIdentity) {
+				return BoundaryMismatch, ErrIdentityMismatch
+			}
+		default:
+			return BoundaryIndeterminate, ErrBoundaryIndeterminate
 		}
 		switch observation.OwnerStatus {
 		case OwnerMatching:

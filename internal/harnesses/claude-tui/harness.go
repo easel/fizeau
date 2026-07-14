@@ -191,6 +191,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		ctx, claudePath, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
 		session.WithLifecycleOptions(processlifecycle.BatchOptions{
 			Harness: "claude-tui", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+			LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
 		}),
 	)
 	if err != nil {

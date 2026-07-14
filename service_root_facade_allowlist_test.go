@@ -70,8 +70,6 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 		"service_session_projection.go",
 		"service_snapshot.go",
 		"service_stale_harness_reaper.go",
-		"service_stale_harness_reaper_unix.go",
-		"service_stale_harness_reaper_windows.go",
 		"service_status.go",
 		"service_subscription_quota.go",
 		"service_taillog.go",

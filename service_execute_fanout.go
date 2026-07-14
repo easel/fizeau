@@ -21,16 +21,20 @@ func wrapExecuteWithHub(fanout executeEventFanout, sessionID string, outer chan 
 					if payload.Outcome != nil {
 						routingquality.StampOutcome(ovr.record, &routingquality.Outcome{Status: payload.Outcome.Status})
 					}
-					select {
-					case outer <- overrideEv:
-					case <-time.After(5 * time.Second):
-					}
+					outer <- overrideEv
 					fanout.BroadcastEvent(sessionID, overrideEv)
 				}
 			}
-			select {
-			case outer <- ev:
-			case <-time.After(5 * time.Second):
+			if ev.Type == harnesses.EventTypeFinal {
+				// A terminal fact is never best-effort. Backpressure may delay
+				// delivery, but it must not let the public stream close without
+				// the same final event already committed to the session log.
+				outer <- ev
+			} else {
+				select {
+				case outer <- ev:
+				case <-time.After(5 * time.Second):
+				}
 			}
 			fanout.BroadcastEvent(sessionID, ev)
 			if ev.Type == harnesses.EventTypeFinal {

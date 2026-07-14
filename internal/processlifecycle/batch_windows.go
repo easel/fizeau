@@ -188,9 +188,13 @@ func StartBatch(ctx context.Context, target *exec.Cmd, opts BatchOptions) (*Batc
 		}
 	}
 	if opts.Registry == nil {
-		registryDir, err := batchRegistryDir(opts.SessionLogDir)
-		if err != nil {
-			return nil, err
+		registryDir := opts.LifecycleStateDir
+		if registryDir == "" {
+			var err error
+			registryDir, err = batchRegistryDir(opts.SessionLogDir)
+			if err != nil {
+				return nil, err
+			}
 		}
 		opts.Registry = NewFileRegistry(registryDir)
 	}

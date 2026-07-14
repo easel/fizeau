@@ -13,6 +13,7 @@ import (
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
+	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/reasoning"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serviceimpl"
@@ -789,17 +790,20 @@ func newServiceCompactor(req ServiceExecuteRequest, model string) agentcore.Comp
 func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, decision RouteDecision, meta map[string]string, out chan<- ServiceEvent, seq *atomic.Int64, start time.Time, sl *serviceSessionLog, sessionID string, runner harnesses.Harness) {
 	progress := newSubprocessProgressState(req)
 	serviceimpl.RunSubprocess(ctx, serviceimpl.SubprocessRequest{
-		Prompt:        req.Prompt,
-		SystemPrompt:  req.SystemPrompt,
-		WorkDir:       req.WorkDir,
-		Permissions:   req.Permissions,
-		Temperature:   req.Temperature,
-		Seed:          req.Seed,
-		Reasoning:     effectiveReasoning(req.Reasoning),
-		Timeout:       req.Timeout,
-		IdleTimeout:   req.IdleTimeout,
-		SessionLogDir: req.SessionLogDir,
-		Metadata:      meta,
+		Prompt:            req.Prompt,
+		SystemPrompt:      req.SystemPrompt,
+		WorkDir:           req.WorkDir,
+		Permissions:       req.Permissions,
+		Temperature:       req.Temperature,
+		Seed:              req.Seed,
+		Reasoning:         effectiveReasoning(req.Reasoning),
+		Timeout:           req.Timeout,
+		IdleTimeout:       req.IdleTimeout,
+		SessionLogDir:     req.SessionLogDir,
+		SessionID:         sessionID,
+		LifecycleStateDir: s.harnessLifecycleStateDir(),
+		CleanupTimeout:    s.opts.harnessCleanupTimeout(),
+		Metadata:          meta,
 		Decision: serviceimpl.ExecuteRunnerDecision{
 			Harness:  decision.Harness,
 			Provider: decision.Provider,
@@ -825,6 +829,13 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 		},
 		EmitEvent: func(ev harnesses.Event) bool {
 			ev.Sequence = seq.Add(1) - 1
+			if ev.Type == harnesses.EventTypeFinal {
+				// The request context initiates subprocess cleanup; it must not
+				// also suppress the terminal fact after service-owned cleanup has
+				// finished or reached its independent deadline.
+				out <- ev
+				return true
+			}
 			select {
 			case out <- ev:
 				return true
@@ -840,6 +851,16 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 			sl.writeEnd(req, finalMeta, final)
 		},
 	})
+}
+
+func (s *service) harnessLifecycleStateDir() string {
+	// Lifecycle evidence belongs to the service, not to a per-request
+	// transcript override. Startup recovery scans this same stable directory.
+	dir, err := processlifecycle.StateDirectory(s.serviceSessionLogDir())
+	if err != nil {
+		return ""
+	}
+	return dir
 }
 
 func sessionLogPath(sl *serviceSessionLog) string {
@@ -864,10 +885,7 @@ func emitFinal(out chan<- ServiceEvent, seq *atomic.Int64, meta map[string]strin
 		Metadata: meta,
 		Data:     raw,
 	}
-	select {
-	case out <- ev:
-	case <-time.After(time.Second):
-	}
+	out <- ev
 }
 
 // emitFatalFinal is used when Execute itself can't construct a route. It
@@ -885,10 +903,7 @@ func emitFatalFinal(out chan<- ServiceEvent, meta map[string]string, status, err
 		Metadata: meta,
 		Data:     raw,
 	}
-	select {
-	case out <- ev:
-	case <-time.After(time.Second):
-	}
+	out <- ev
 }
 
 // emitJSON marshals payload and writes a typed event to out.

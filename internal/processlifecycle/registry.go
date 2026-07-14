@@ -114,9 +114,108 @@ func (r *FileRegistry) List(ctx context.Context) ([]Record, error) {
 	return records, nil
 }
 
-// Update uses optimistic revision checking. FileRegistry serializes operations
-// through one registry instance; a later recovery bead must add an OS-backed
-// cross-process adoption claim before concurrent startup recovery is wired.
+// RecordsForOperation returns valid v1 records for one invocation while
+// preserving unrelated legacy, future, and malformed evidence. A malformed
+// v1 record that names this operation is an error: terminalization must treat
+// its cleanup state as indeterminate rather than silently claiming success.
+func (r *FileRegistry) RecordsForOperation(ctx context.Context, operationID string) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(r.dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return []Record{}, nil
+		}
+		return nil, err
+	}
+	records := make([]Record, 0, 1)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(filepath.Join(r.dir, entry.Name())) // #nosec G304 -- entry comes from the private registry directory
+		if err != nil {
+			return nil, err
+		}
+		var header struct {
+			SchemaID    string `json:"schema_id"`
+			OperationID string `json:"operation_id"`
+		}
+		if err := json.Unmarshal(data, &header); err != nil {
+			// The operation cannot be attributed safely. Preserve it for
+			// diagnosis, but do not let unrelated corrupt evidence poison all
+			// current invocations.
+			continue
+		}
+		if header.SchemaID != RecordSchemaID || header.OperationID != operationID {
+			continue
+		}
+		var record Record
+		if err := json.Unmarshal(data, &record); err != nil {
+			return nil, fmt.Errorf("decode lifecycle record %s: %w", entry.Name(), err)
+		}
+		if err := record.Validate(); err != nil {
+			return nil, fmt.Errorf("validate lifecycle record %s: %w", entry.Name(), err)
+		}
+		records = append(records, cloneRecord(record))
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].RecordID < records[j].RecordID })
+	return records, nil
+}
+
+// recoverableRecords lists valid v1 records without deleting or rejecting
+// evidence that belongs to a legacy, future, or malformed schema.
+func (r *FileRegistry) recoverableRecords(ctx context.Context) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(r.dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return []Record{}, nil
+		}
+		return nil, err
+	}
+	records := make([]Record, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(r.dir, entry.Name())) // #nosec G304 -- entry comes from the private registry directory
+		if err != nil {
+			return nil, err
+		}
+		var header struct {
+			SchemaID string `json:"schema_id"`
+		}
+		if json.Unmarshal(data, &header) != nil || header.SchemaID != RecordSchemaID {
+			continue
+		}
+		var record Record
+		if json.Unmarshal(data, &record) != nil || record.Validate() != nil {
+			continue
+		}
+		records = append(records, cloneRecord(record))
+	}
+	sort.Slice(records, func(i, j int) bool { return records[i].RecordID < records[j].RecordID })
+	return records, nil
+}
+
+func (r *FileRegistry) claimRecovery(recordID string) (func(), error) {
+	path, err := r.path(recordID)
+	if err != nil {
+		return nil, err
+	}
+	return claimRecoveryFile(path + ".recovery.lock")
+}
+
+// Update uses optimistic revision checking. FileRegistry serializes ordinary
+// operations through one registry instance; startup recovery additionally
+// holds the per-record OS-backed adoption claim before mutating a stale lease.
 func (r *FileRegistry) Update(ctx context.Context, record Record, expectedRevision uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err

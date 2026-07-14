@@ -25,6 +25,7 @@ var (
 	ErrIdentityMismatch      = errors.New("process lifecycle identity does not match durable record")
 	ErrInvalidRecord         = errors.New("invalid process lifecycle record")
 	ErrRecordExists          = errors.New("process lifecycle record already exists")
+	ErrRecoveryClaimed       = errors.New("process lifecycle recovery record is already claimed")
 	ErrRevisionConflict      = errors.New("process lifecycle record revision conflict")
 	ErrPlatformUnsupported   = errors.New("process lifecycle platform is unsupported")
 )
@@ -88,11 +89,14 @@ const (
 
 // BoundaryObservation carries enough observed identity to prevent a backend
 // from labelling a reused PID or a different boundary as matching. Matching
-// observations permit OwnerMatching or OwnerGone; owner mismatch and
-// indeterminate states are retained as unresolved recovery evidence.
+// observations permit OwnerMatching or OwnerGone. Recovery observations may
+// also report a gone trusted supervisor when the exact child/boundary births
+// and process-group membership remain observable; ordinary cleanup may not.
+// Mismatch and indeterminate states are retained as unresolved evidence.
 type BoundaryObservation struct {
 	Status                  BoundaryObservationStatus
 	BoundaryIdentity        string
+	SupervisorStatus        OwnerObservation
 	SupervisorIdentity      ProcessIdentity
 	DirectChildIdentity     ProcessIdentity
 	BoundaryProcessIdentity ProcessIdentity
@@ -266,12 +270,13 @@ type Options struct {
 // BatchOptions configures one subprocess batch invocation. Registry is a test
 // seam; production callers leave it nil so lifecycle state is crash-durable.
 type BatchOptions struct {
-	Harness        string
-	OperationID    string
-	SessionLogDir  string
-	CleanupTimeout time.Duration
-	GracePeriod    time.Duration
-	Registry       Registry
+	Harness           string
+	OperationID       string
+	SessionLogDir     string
+	LifecycleStateDir string
+	CleanupTimeout    time.Duration
+	GracePeriod       time.Duration
+	Registry          Registry
 }
 
 // PTYSize is the initial terminal size for a supervised PTY target.

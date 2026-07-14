@@ -7,26 +7,32 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/reasoning"
 )
+
+const defaultSubprocessCleanupTimeout = 10 * time.Second
 
 // SubprocessRequest is the API-neutral request data needed by subprocess
 // harness runner implementations.
 type SubprocessRequest struct {
-	Prompt         string
-	SystemPrompt   string
-	WorkDir        string
-	Permissions    string
-	Temperature    *float32
-	Seed           *int64
-	Reasoning      reasoning.Reasoning
-	Timeout        time.Duration
-	IdleTimeout    time.Duration
-	SessionLogDir  string
-	Metadata       map[string]string
-	Decision       ExecuteRunnerDecision
-	Started        time.Time
-	SessionLogPath string
+	Prompt            string
+	SystemPrompt      string
+	WorkDir           string
+	Permissions       string
+	Temperature       *float32
+	Seed              *int64
+	Reasoning         reasoning.Reasoning
+	Timeout           time.Duration
+	IdleTimeout       time.Duration
+	SessionLogDir     string
+	SessionID         string
+	LifecycleStateDir string
+	CleanupTimeout    time.Duration
+	Metadata          map[string]string
+	Decision          ExecuteRunnerDecision
+	Started           time.Time
+	SessionLogPath    string
 }
 
 // SubprocessCallbacks bridge service-owned event/progress/session-log behavior
@@ -42,39 +48,72 @@ type SubprocessCallbacks struct {
 // RunSubprocess executes a subprocess harness and forwards its event stream.
 func RunSubprocess(ctx context.Context, req SubprocessRequest, runner harnesses.Harness, cb SubprocessCallbacks) {
 	hReq := harnesses.ExecuteRequest{
-		Prompt:        req.Prompt,
-		SystemPrompt:  req.SystemPrompt,
-		Provider:      req.Decision.Provider,
-		Model:         req.Decision.Model,
-		WorkDir:       req.WorkDir,
-		Permissions:   req.Permissions,
-		Temperature:   subprocessTemperature(req.Temperature),
-		Seed:          subprocessSeed(req.Seed),
-		Reasoning:     adapterReasoning(req.Reasoning),
-		Timeout:       req.Timeout,
-		IdleTimeout:   req.IdleTimeout,
-		SessionLogDir: req.SessionLogDir,
-		Metadata:      req.Metadata,
+		Prompt:            req.Prompt,
+		SystemPrompt:      req.SystemPrompt,
+		Provider:          req.Decision.Provider,
+		Model:             req.Decision.Model,
+		WorkDir:           req.WorkDir,
+		Permissions:       req.Permissions,
+		Temperature:       subprocessTemperature(req.Temperature),
+		Seed:              subprocessSeed(req.Seed),
+		Reasoning:         adapterReasoning(req.Reasoning),
+		Timeout:           req.Timeout,
+		IdleTimeout:       req.IdleTimeout,
+		SessionLogDir:     req.SessionLogDir,
+		SessionID:         req.SessionID,
+		LifecycleStateDir: req.LifecycleStateDir,
+		CleanupTimeout:    req.CleanupTimeout,
+		Metadata:          req.Metadata,
 	}
 	if cb.BeforeExecute != nil {
 		cb.BeforeExecute()
 	}
 	in, err := runner.Execute(ctx, hReq)
 	if err != nil {
-		finalizeSubprocess(cb, harnesses.FinalData{
+		durationMS := int64(0)
+		if !req.Started.IsZero() {
+			durationMS = time.Since(req.Started).Milliseconds()
+		}
+		final := harnesses.FinalData{
 			Status:     "failed",
 			Error:      err.Error(),
-			DurationMS: time.Since(req.Started).Milliseconds(),
+			DurationMS: durationMS,
 			RoutingActual: &harnesses.RoutingActual{
 				Harness:        req.Decision.Harness,
 				Provider:       req.Decision.Provider,
 				ServerInstance: req.Decision.ServerInstance,
 				Model:          req.Decision.Model,
 			},
-		})
+		}
+		emitSubprocessFinal(ctx, req, cb, harnesses.Event{
+			Type:     harnesses.EventTypeFinal,
+			Time:     time.Now().UTC(),
+			Metadata: req.Metadata,
+		}, final, TerminalOriginSpawn)
 		return
 	}
-	for ev := range in {
+	for {
+		var (
+			ev harnesses.Event
+			ok bool
+		)
+		select {
+		case ev, ok = <-in:
+		case <-ctx.Done():
+			// Prefer a final that is already ready, but do not let an adapter
+			// that stalls or forgets to close its stream defeat the independent
+			// service-owned cleanup deadline.
+			select {
+			case ev, ok = <-in:
+			default:
+				emitSubprocessProtocolFinal(ctx, req, cb, "harness did not emit a final event before request cancellation")
+				return
+			}
+		}
+		if !ok {
+			emitSubprocessProtocolFinal(ctx, req, cb, "harness event stream closed without a final event")
+			return
+		}
 		if ev.Metadata == nil {
 			ev.Metadata = req.Metadata
 		}
@@ -84,17 +123,19 @@ func RunSubprocess(ctx context.Context, req SubprocessRequest, runner harnesses.
 				emitSubprocessProtocolFinal(ctx, req, cb, fmt.Sprintf("malformed harness final event: %v", err))
 				return
 			}
-			emitSubprocessFinal(ctx, req, cb, ev, final)
+			emitSubprocessFinal(ctx, req, cb, ev, final, TerminalOriginHarness)
 			return
 		}
 		if cb.ObserveEvent != nil {
 			ev = cb.ObserveEvent(ev)
 		}
-		if cb.EmitEvent != nil && !cb.EmitEvent(ev) {
-			return
+		if cb.EmitEvent != nil {
+			// Delivery backpressure or request cancellation may suppress a
+			// non-terminal event, but must not stop us draining the harness to
+			// its cleanup-backed final fact.
+			_ = cb.EmitEvent(ev)
 		}
 	}
-	emitSubprocessProtocolFinal(ctx, req, cb, "harness event stream closed without a final event")
 }
 
 func replaceSubprocessFinal(ev harnesses.Event, final harnesses.FinalData) harnesses.Event {
@@ -124,11 +165,14 @@ func emitSubprocessProtocolFinal(ctx context.Context, req SubprocessRequest, cb 
 		Time:     time.Now().UTC(),
 		Metadata: req.Metadata,
 	}
-	emitSubprocessFinal(ctx, req, cb, ev, final)
+	emitSubprocessFinal(ctx, req, cb, ev, final, TerminalOriginHarness)
 }
 
-func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb SubprocessCallbacks, ev harnesses.Event, final harnesses.FinalData) {
-	final = ClassifyTerminalFinal(final, TerminalOriginHarness, ctx.Err())
+func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb SubprocessCallbacks, ev harnesses.Event, final harnesses.FinalData, origin TerminalOrigin) {
+	final = ClassifyTerminalFinal(final, origin, ctx.Err())
+	if failed, diagnostic := waitForSubprocessCleanup(ctx, req); failed {
+		final = SupersedeWithCleanupFailure(final, diagnostic)
+	}
 	ev = replaceSubprocessFinal(ev, final)
 	ev = stampSubprocessFinalRouting(ev, req.Decision)
 	ev = stampSubprocessFinalSessionLog(ev, req.SessionLogPath)
@@ -140,7 +184,85 @@ func emitSubprocessFinal(ctx context.Context, req SubprocessRequest, cb Subproce
 	}
 	if cb.EmitEvent != nil {
 		cb.EmitEvent(ev)
+	} else if cb.Finalize != nil {
+		cb.Finalize(final)
 	}
+}
+
+// waitForSubprocessCleanup is the service-owned terminal gate. Harness finals
+// are primary execution evidence; the lifecycle registry decides whether the
+// corresponding containment boundary is empty, still cleaning, or retained as
+// failed/escaped evidence. The detached timeout keeps cancellation from
+// publishing a terminal fact ahead of cleanup.
+func waitForSubprocessCleanup(ctx context.Context, req SubprocessRequest) (bool, string) {
+	if req.SessionID == "" || req.LifecycleStateDir == "" {
+		return false, ""
+	}
+	timeout := req.CleanupTimeout
+	if timeout <= 0 {
+		timeout = defaultSubprocessCleanupTimeout
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+
+	registry := processlifecycle.NewFileRegistry(req.LifecycleStateDir)
+	var lastDiagnostic string
+	for {
+		records, err := registry.RecordsForOperation(cleanupCtx, req.SessionID)
+		if err == nil {
+			switch len(records) {
+			case 0:
+				return false, ""
+			case 1:
+				record := records[0]
+				if record.State == processlifecycle.StateCompleted {
+					// Successful cleanup deletes its durable lease. A completed
+					// record that is still present means the deletion/persistence
+					// step failed and is therefore a cleanup failure, even though
+					// the containment boundary was observed empty. Keep polling to
+					// allow the ordinary update-then-delete transition to finish;
+					// only the cleanup deadline makes retention terminal.
+					lastDiagnostic = fmt.Sprintf("lifecycle record %s remains after completed cleanup", record.RecordID)
+					break
+				}
+				if record.State == processlifecycle.StateCleanupFailed ||
+					record.State == processlifecycle.StateRecoveryBlocked || len(record.EscapeEvidence) > 0 {
+					return true, cleanupRecordDiagnostic(record)
+				}
+				lastDiagnostic = fmt.Sprintf("lifecycle record %s remains %s", record.RecordID, record.State)
+			default:
+				return true, fmt.Sprintf("multiple lifecycle records found for session %s", req.SessionID)
+			}
+		} else {
+			lastDiagnostic = fmt.Sprintf("inspect lifecycle registry: %v", err)
+		}
+
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-cleanupCtx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			if lastDiagnostic == "" {
+				lastDiagnostic = cleanupCtx.Err().Error()
+			}
+			return true, fmt.Sprintf("harness cleanup deadline reached: %s", lastDiagnostic)
+		case <-timer.C:
+		}
+	}
+}
+
+func cleanupRecordDiagnostic(record processlifecycle.Record) string {
+	detail := fmt.Sprintf("lifecycle record %s retained in state %s", record.RecordID, record.State)
+	if n := len(record.EscapeEvidence); n > 0 {
+		evidence := record.EscapeEvidence[n-1]
+		if evidence.Detail != "" {
+			detail += ": " + evidence.Detail
+		} else if evidence.Kind != "" {
+			detail += ": " + evidence.Kind
+		}
+	}
+	return detail
 }
 
 func subprocessTemperature(v *float32) float32 {
@@ -213,10 +335,4 @@ func stampSubprocessFinalRouting(ev harnesses.Event, decision ExecuteRunnerDecis
 	}
 	ev.Data = raw
 	return ev
-}
-
-func finalizeSubprocess(cb SubprocessCallbacks, final harnesses.FinalData) {
-	if cb.Finalize != nil {
-		cb.Finalize(final)
-	}
 }

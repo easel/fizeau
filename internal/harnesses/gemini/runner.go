@@ -229,6 +229,7 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	defer outputPipes.Close()
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "gemini", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"

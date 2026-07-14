@@ -16,3 +16,10 @@ func batchRegistryDir(sessionLogDir string) (string, error) {
 	}
 	return filepath.Join(cacheDir, "fizeau", "harness-sessions"), nil
 }
+
+// StateDirectory resolves the durable lifecycle registry used by a wrapped
+// invocation. Service orchestration resolves this once and forwards the exact
+// directory to both the selected adapter and terminalization logic.
+func StateDirectory(sessionLogDir string) (string, error) {
+	return batchRegistryDir(sessionLogDir)
+}

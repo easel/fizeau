@@ -341,6 +341,7 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	defer outputPipes.Close()
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -496,6 +497,7 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"

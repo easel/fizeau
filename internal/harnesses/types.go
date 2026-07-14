@@ -324,6 +324,14 @@ type ExecuteRequest struct {
 	// filenames and event metadata. Empty means the harness generates one.
 	SessionID string
 
+	// LifecycleStateDir is the service-selected directory for durable process
+	// ownership records. It is separate from the human-readable session log.
+	LifecycleStateDir string
+
+	// CleanupTimeout is the service-owned deadline for stopping and proving the
+	// per-invocation containment boundary empty.
+	CleanupTimeout time.Duration
+
 	// Metadata is echoed back into Event.Metadata (e.g. bead_id, attempt_id).
 	Metadata map[string]string
 }

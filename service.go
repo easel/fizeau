@@ -153,6 +153,11 @@ type ServiceOptions struct {
 	// ServiceExecuteRequest.SessionLogDir.
 	SessionLogDir string
 
+	// HarnessCleanupTimeout bounds stopping and reaping one wrapped harness
+	// containment boundary. Zero uses the service default of 10 seconds.
+	// Negative values are invalid.
+	HarnessCleanupTimeout time.Duration
+
 	// StaleHarnessReaperGrace is the minimum age before a startup reaper may
 	// terminate an owned subprocess record. Zero uses the default grace window.
 	StaleHarnessReaperGrace time.Duration
@@ -978,8 +983,9 @@ type service struct {
 }
 
 const (
-	defaultCatalogProbeTimeout  = 2 * time.Second
-	defaultCatalogReloadTimeout = 30 * time.Second
+	defaultCatalogProbeTimeout   = 2 * time.Second
+	defaultCatalogReloadTimeout  = 30 * time.Second
+	defaultHarnessCleanupTimeout = 10 * time.Second
 )
 
 func (o ServiceOptions) catalogProbeTimeout() time.Duration {
@@ -994,6 +1000,13 @@ func (o ServiceOptions) catalogRefreshTimeout() time.Duration {
 		return o.CatalogReloadTimeout
 	}
 	return defaultCatalogReloadTimeout
+}
+
+func (o ServiceOptions) harnessCleanupTimeout() time.Duration {
+	if o.HarnessCleanupTimeout > 0 {
+		return o.HarnessCleanupTimeout
+	}
+	return defaultHarnessCleanupTimeout
 }
 
 func (s *service) now() time.Time {
@@ -1021,6 +1034,9 @@ func RegisterConfigLoader(fn func(dir string) (ServiceConfig, error)) {
 // imported and ServiceConfig is nil, the service starts without provider config
 // (ListProviders/HealthCheck will return errors until config is injected).
 func New(opts ServiceOptions) (FizeauService, error) {
+	if opts.HarnessCleanupTimeout < 0 {
+		return nil, fmt.Errorf("agent.New: HarnessCleanupTimeout must not be negative")
+	}
 	if opts.ServiceConfig == nil && loadServiceConfig != nil && shouldAutoLoadServiceConfig(opts) {
 		dir := ""
 		if opts.ConfigPath != "" {

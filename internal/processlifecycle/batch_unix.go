@@ -98,9 +98,13 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 		}
 	}
 	if opts.Registry == nil {
-		registryDir, err := batchRegistryDir(opts.SessionLogDir)
-		if err != nil {
-			return nil, err
+		registryDir := opts.LifecycleStateDir
+		if registryDir == "" {
+			var err error
+			registryDir, err = batchRegistryDir(opts.SessionLogDir)
+			if err != nil {
+				return nil, err
+			}
 		}
 		opts.Registry = NewFileRegistry(registryDir)
 	}
@@ -378,9 +382,13 @@ func abortStart(ctx context.Context, prepared *unixPreparedBoundary, cause error
 	return errors.Join(cause, abortErr, abortStatusError(result))
 }
 
-type unixBackend struct{}
+type unixBackend struct {
+	// recovery permits a gone trusted supervisor only while the exact recorded
+	// child and boundary-anchor births remain in the exact recorded PGID.
+	recovery bool
+}
 
-func (*unixBackend) ObserveBoundary(ctx context.Context, record Record) (BoundaryObservation, error) {
+func (b *unixBackend) ObserveBoundary(ctx context.Context, record Record) (BoundaryObservation, error) {
 	if err := ctx.Err(); err != nil {
 		return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity}, err
 	}
@@ -395,21 +403,82 @@ func (*unixBackend) ObserveBoundary(ctx context.Context, record Record) (Boundar
 		return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity, Detail: err.Error()}, err
 	}
 	if !alive {
+		for _, candidate := range []struct {
+			name     string
+			identity ProcessIdentity
+		}{
+			{name: "direct child", identity: record.DirectChildIdentity},
+			{name: "boundary anchor", identity: record.BoundaryProcessIdentity},
+		} {
+			observed, identityErr := readUnixProcessIdentity(candidate.identity.PID)
+			switch {
+			case errors.Is(identityErr, fs.ErrNotExist):
+				continue
+			case identityErr != nil:
+				return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity, Detail: fmt.Sprintf("observe recorded %s outside empty group: %v", candidate.name, identityErr)}, identityErr
+			case !candidate.identity.matches(observed):
+				return BoundaryObservation{Status: BoundaryMismatch, BoundaryIdentity: record.BoundaryIdentity, Detail: fmt.Sprintf("recorded %s PID %d was reused outside process group %d", candidate.name, candidate.identity.PID, pgid)}, nil
+			default:
+				observedPGID, pgidErr := syscall.Getpgid(observed.PID)
+				if pgidErr != nil {
+					return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity, Detail: fmt.Sprintf("recheck recorded %s process group: %v", candidate.name, pgidErr)}, pgidErr
+				}
+				if observedPGID != pgid {
+					return BoundaryObservation{Status: BoundaryMismatch, BoundaryIdentity: record.BoundaryIdentity, Detail: fmt.Sprintf("recorded %s PID %d remains live in process group %d, outside recorded group %d", candidate.name, observed.PID, observedPGID, pgid)}, nil
+				}
+				return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity, Detail: fmt.Sprintf("recorded %s still occupies process group %d after empty observation", candidate.name, pgid)}, nil
+			}
+		}
 		if supervisorMatches {
 			return BoundaryObservation{Status: BoundaryIndeterminate, BoundaryIdentity: record.BoundaryIdentity, SupervisorIdentity: supervisor, Detail: "target group is empty but matching supervisor has not exited"}, nil
 		}
 		if supervisorErr == nil || (supervisorErr != nil && !errors.Is(supervisorErr, fs.ErrNotExist)) {
 			return BoundaryObservation{Status: BoundaryMismatch, BoundaryIdentity: record.BoundaryIdentity, SupervisorIdentity: supervisor, Detail: "supervisor identity changed before lifecycle completion"}, nil
 		}
-		return BoundaryObservation{Status: BoundaryEmpty, BoundaryIdentity: record.BoundaryIdentity}, nil
+		observation := BoundaryObservation{Status: BoundaryEmpty, BoundaryIdentity: record.BoundaryIdentity}
+		owner, ownerErr := readUnixProcessIdentity(record.OwnerIdentity.PID)
+		switch {
+		case ownerErr == nil && record.OwnerIdentity.matches(owner):
+			observation.OwnerStatus = OwnerMatching
+			observation.OwnerIdentity = owner
+		case errors.Is(ownerErr, fs.ErrNotExist):
+			observation.OwnerStatus = OwnerGone
+		case ownerErr == nil:
+			observation.Status = BoundaryMismatch
+			observation.OwnerStatus = OwnerMismatch
+			observation.OwnerIdentity = owner
+			observation.Detail = "recorded lifecycle owner PID was reused before empty-boundary recovery"
+		case ownerErr != nil:
+			observation.Status = BoundaryIndeterminate
+			observation.OwnerStatus = OwnerIndeterminate
+			observation.Detail = "recorded lifecycle owner identity is indeterminate before empty-boundary recovery"
+			return observation, ownerErr
+		}
+		return observation, nil
 	}
 
 	observation := BoundaryObservation{Status: BoundaryMatching, BoundaryIdentity: record.BoundaryIdentity}
-	observation.SupervisorIdentity = supervisor
-	if !supervisorMatches {
+	switch {
+	case supervisorMatches:
+		observation.SupervisorStatus = OwnerMatching
+		observation.SupervisorIdentity = supervisor
+	case errors.Is(supervisorErr, fs.ErrNotExist) && b.recovery:
+		observation.SupervisorStatus = OwnerGone
+	case errors.Is(supervisorErr, fs.ErrNotExist):
 		observation.Status = BoundaryMismatch
-		observation.Detail = "saved supervisor identity is no longer observable while target group exists"
+		observation.Detail = "saved supervisor disappeared during current-invocation cleanup"
 		return observation, nil
+	case supervisorErr == nil:
+		observation.Status = BoundaryMismatch
+		observation.SupervisorStatus = OwnerMismatch
+		observation.SupervisorIdentity = supervisor
+		observation.Detail = "saved supervisor PID was reused while target group exists"
+		return observation, nil
+	default:
+		observation.Status = BoundaryIndeterminate
+		observation.SupervisorStatus = OwnerIndeterminate
+		observation.Detail = "saved supervisor identity is indeterminate while target group exists"
+		return observation, supervisorErr
 	}
 	observation.DirectChildIdentity, err = readUnixProcessIdentity(record.DirectChildIdentity.PID)
 	if err != nil {
@@ -422,6 +491,14 @@ func (*unixBackend) ObserveBoundary(ctx context.Context, record Record) (Boundar
 		observation.Status = BoundaryMismatch
 		observation.Detail = "saved boundary-anchor identity is no longer observable while target group exists"
 		return observation, nil
+	}
+	for _, identity := range []ProcessIdentity{observation.DirectChildIdentity, observation.BoundaryProcessIdentity} {
+		observedPGID, pgidErr := syscall.Getpgid(identity.PID)
+		if pgidErr != nil || observedPGID != pgid {
+			observation.Status = BoundaryMismatch
+			observation.Detail = fmt.Sprintf("process %d is not a member of recorded process group %d", identity.PID, pgid)
+			return observation, pgidErr
+		}
 	}
 	owner, ownerErr := readUnixProcessIdentity(record.OwnerIdentity.PID)
 	switch {
@@ -440,10 +517,10 @@ func (*unixBackend) ObserveBoundary(ctx context.Context, record Record) (Boundar
 	return observation, nil
 }
 
-func waitForBoundaryEmpty(ctx context.Context, backend *unixBackend, record Record) BoundaryObservation {
+func waitForBoundaryEmpty(ctx context.Context, backend PlatformBackend, record Record) BoundaryObservation {
 	for {
 		observation, err := backend.ObserveBoundary(ctx, record)
-		if err != nil || observation.Status == BoundaryEmpty {
+		if err != nil || observation.Status == BoundaryEmpty || observation.Status == BoundaryMismatch {
 			return observation
 		}
 		select {
