@@ -101,10 +101,12 @@ than the old home of the implementation bulk:
   `service_harness_instances.go`, `service_model_resolution.go`,
   `service_native_provider.go`, `service_override.go`,
   `service_projection.go`, `service_reasoning.go`.
-- Routing, status, and quota adapters:
-  `service_probe.go`, `service_routing.go`, `service_status.go`,
-  `service_subscription_quota.go`. `service_status.go` retains only the public
-  route-status projection; row assembly lives in `internal/routehealth`.
+- Routing and status adapters:
+  `service_probe.go`, `service_routing.go`, `service_status.go`.
+  `service_status.go` retains only the public route-status projection; row
+  assembly lives in `internal/routehealth`. The root routing and execute-route
+  seams call the API-neutral `internal/quota.SubscriptionForHarness` projection
+  directly; the former `service_subscription_quota.go` adapter is gone.
 
 `RecordRouteAttempt` and final-attempt feedback now enter through the narrow
 adapter in `service_dispatch_feedback.go`; classification and exact-success
@@ -231,7 +233,10 @@ the historical extraction inventory and ordered implementation slice.
 #### Owner: `internal/quota`
 
 These files own provider quota state, recovery probing, and subscription
-quota math beyond the thin public wrappers kept at the root.
+quota math. The extraction is now complete: root routing and execute-route
+seams call `internal/quota.SubscriptionForHarness` directly, and no root quota
+wrapper remains. The source and test lists below are retained only as the
+historical extraction inventory and ordered implementation slice.
 
 - Source files:
   `service_subscription_quota.go`.

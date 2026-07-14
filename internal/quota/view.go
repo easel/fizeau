@@ -15,10 +15,10 @@ type SubscriptionView struct {
 	OK      bool
 	Present bool
 	Fresh   bool
-	// Exhausted is true ONLY when the harness reports a PROVEN quota block
-	// (QuotaBlocked, or — for gemini — all windows blocked). It is the single
-	// fail-closed signal: a missing/stale/unavailable/unknown snapshot is NOT
-	// exhausted (Exhausted stays false) so routing fails OPEN on unconfirmed
+	// Exhausted is true ONLY when the harness reports a FRESH, PROVEN quota
+	// block (QuotaBlocked, or — for gemini — all windows blocked). It is the
+	// single fail-closed signal: a missing/stale/unavailable/unknown snapshot is
+	// NOT exhausted (Exhausted stays false) so routing fails OPEN on unconfirmed
 	// state rather than fabricating "no viable provider". See FEAT-004 fail-open
 	// contract: report failure only with positive proof.
 	Exhausted   bool
@@ -44,19 +44,27 @@ func SubscriptionForHarness(name string, now time.Time) (SubscriptionView, bool)
 
 // viewFromStatus is the pure projection of a QuotaStatus into a routing
 // SubscriptionView. It is the fail-open contract's single decision point for
-// quota: Exhausted is set ONLY on proven QuotaBlocked (or, for gemini, all
-// windows blocked) — unavailable/unknown/stale snapshots leave Exhausted false
-// so routing stays eligible (demoted via QuotaOK), never fabricated-rejected.
+// quota: Exhausted is set ONLY on fresh, proven QuotaBlocked evidence (or, for
+// gemini, fresh evidence that every reported window is blocked) — unavailable,
+// unknown, incomplete, or stale snapshots leave Exhausted false so routing
+// stays eligible (demoted via QuotaOK), never fabricated-rejected.
 // Extracted as a pure function (no builtin.New / no I/O) so the fail-open
 // behavior is deterministically unit-testable from constructed QuotaStatus.
 func viewFromStatus(name string, status harnesses.QuotaStatus) SubscriptionView {
 	present := status.State != harnesses.QuotaUnavailable
+	exhausted := status.Fresh && status.State == harnesses.QuotaBlocked
+	if name == "gemini" {
+		// Gemini's top-level state also represents incomplete or otherwise
+		// unusable window evidence. Only its per-window proof can exhaust it.
+		exhausted = geminiAllWindowsBlocked(status.Fresh, status.Windows)
+	}
 	view := SubscriptionView{
 		OK:      status.RoutingPreference == harnesses.RoutingPreferenceAvailable,
 		Present: present,
 		Fresh:   status.Fresh,
-		// Proven exhaustion only. Unavailable/unknown/stale are NOT exhausted.
-		Exhausted: status.State == harnesses.QuotaBlocked,
+		// Proven exhaustion only. Unavailable/unknown/stale are NOT exhausted,
+		// even when a stale snapshot retains a formerly blocked state.
+		Exhausted: exhausted,
 		Reason:    status.Reason,
 		Trend:     routing.QuotaTrendUnknown,
 	}
@@ -65,25 +73,24 @@ func viewFromStatus(name string, status harnesses.QuotaStatus) SubscriptionView 
 	}
 	view.Windows = append([]harnesses.QuotaWindow(nil), status.Windows...)
 	view.PercentUsed = int(MaxQuotaWindowUsedPercent(status.Windows))
-	if name == "gemini" {
-		exhausted, available := 0, 0
-		for _, w := range status.Windows {
-			switch w.State {
-			case "blocked":
-				exhausted++
-			case "ok":
-				available++
-			}
-		}
-		if exhausted > 0 && available == 0 {
-			view.Trend = routing.QuotaTrendExhausting
-			// All gemini windows blocked = proven exhaustion (fail-closed).
-			view.Exhausted = true
-			return view
-		}
+	if name == "gemini" && view.Exhausted {
+		view.Trend = routing.QuotaTrendExhausting
+		return view
 	}
 	view.Trend = TrendFromUsage(view.PercentUsed, status.Fresh)
 	return view
+}
+
+func geminiAllWindowsBlocked(fresh bool, windows []harnesses.QuotaWindow) bool {
+	if !fresh || len(windows) == 0 {
+		return false
+	}
+	for _, window := range windows {
+		if window.State != "blocked" && window.State != "exhausted" {
+			return false
+		}
+	}
+	return true
 }
 
 // MaxQuotaWindowUsedPercent returns the most-constrained usage percentage

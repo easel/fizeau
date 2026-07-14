@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	quotaimpl "github.com/easel/fizeau/internal/quota"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -45,7 +46,7 @@ func (s *service) resolveExecuteRouteInternal(ctx context.Context, req ServiceEx
 			return resolveSubprocessModelAliasWithCatalog(harness, model, catalog)
 		},
 		QuotaForHarness: func(name string, now time.Time) (serviceimpl.ExecuteRouteQuota, bool) {
-			quota, ok := subscriptionQuotaForHarness(name, now)
+			quota, ok := quotaimpl.SubscriptionForHarness(name, now)
 			return serviceimpl.ExecuteRouteQuota{
 				OK:      quota.OK,
 				Present: quota.Present,

@@ -12,6 +12,7 @@ import (
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/provider/utilization"
+	quotaimpl "github.com/easel/fizeau/internal/quota"
 	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serverinstance"
@@ -708,7 +709,7 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 		st := statusByName[name]
 		entry := routingHarnessEntryFromMetadata(name, cfg, st)
 
-		if qs, ok := subscriptionQuotaForHarness(name, time.Now()); ok {
+		if qs, ok := quotaimpl.SubscriptionForHarness(name, time.Now()); ok {
 			entry.QuotaOK = qs.OK
 			entry.QuotaStale = qs.Present && !qs.Fresh
 			// Fail-open contract: a subscription harness is hard-gated ONLY on

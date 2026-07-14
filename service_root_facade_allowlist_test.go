@@ -1,6 +1,7 @@
 package fizeau
 
 import (
+	"go/ast"
 	"os"
 	"slices"
 	"strings"
@@ -67,12 +68,59 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 		"service_snapshot.go",
 		"service_stale_harness_reaper.go",
 		"service_status.go",
-		"service_subscription_quota.go",
 		"testseam_types.go",
 	}
 
 	if !slices.Equal(got, want) {
 		t.Fatalf("root source allowlist mismatch\nwant: %v\ngot:  %v", want, got)
+	}
+}
+
+// TestRootSubscriptionQuotaOwnershipBoundary prevents the deleted quota
+// adapter from returning under another filename. Root routing seams consume
+// the API-neutral internal/quota projection directly; subscription quota math
+// and projection helpers remain internal implementation details.
+func TestRootSubscriptionQuotaOwnershipBoundary(t *testing.T) {
+	if _, err := os.Stat("service_subscription_quota.go"); err == nil {
+		t.Fatal("obsolete root implementation file service_subscription_quota.go still exists")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat service_subscription_quota.go: %v", err)
+	}
+
+	forbidden := map[string]bool{
+		"subscriptionQuotaView":       true,
+		"subscriptionQuotaForHarness": true,
+		"maxQuotaWindowUsedPercent":   true,
+		"quotaTrend":                  true,
+	}
+	directCalls := make(map[string]int)
+	for path, file := range parseRootProductionFiles(t) {
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch current := node.(type) {
+			case *ast.Ident:
+				if forbidden[current.Name] {
+					t.Errorf("root %s contains %s; subscription quota mechanics belong to internal/quota", path, current.Name)
+				}
+			case *ast.CallExpr:
+				if selectorMatches(current.Fun, "quotaimpl", "SubscriptionForHarness") {
+					directCalls[path]++
+				}
+			}
+			return true
+		})
+	}
+
+	wantCalls := map[string]int{
+		"service_execute_route.go": 1,
+		"service_routing.go":       1,
+	}
+	if len(directCalls) != len(wantCalls) {
+		t.Fatalf("direct internal/quota SubscriptionForHarness calls = %v, want %v", directCalls, wantCalls)
+	}
+	for path, want := range wantCalls {
+		if got := directCalls[path]; got != want {
+			t.Errorf("%s direct internal/quota SubscriptionForHarness calls = %d, want %d", path, got, want)
+		}
 	}
 }
 
