@@ -97,12 +97,19 @@ func TestWindowsJobReapsGrandchild(t *testing.T) {
 }
 
 func TestWindowsCleanupWaitsForZeroActiveProcesses(t *testing.T) {
-	batch, registry, processHandles := startWindowsLifecycleFixture(t, "target-exit")
+	batch, registry, _ := startWindowsLifecycleFixture(t, "target-exit")
+	jobHandle := duplicateWindowsJobHandle(t, batch.backend.job)
 	recordID := batch.Record().RecordID
 	if err := batch.Wait(); err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	assertWindowsHandlesSignaled(t, processHandles)
+	active, err := queryWindowsJobActiveProcesses(jobHandle)
+	if err != nil {
+		t.Fatalf("query retained Job Object after Wait: %v", err)
+	}
+	if active != 0 {
+		t.Fatalf("cleanup returned with %d active Job Object processes", active)
+	}
 	if _, err := registry.Get(context.Background(), recordID); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("cleanup returned before deleting empty-boundary record: %v", err)
 	}
@@ -305,6 +312,40 @@ func assertLiveWindowsJobPolicy(t *testing.T, job *windowsJob) {
 	if err != nil {
 		t.Fatalf("live Job Object policy: %v", err)
 	}
+}
+
+func duplicateWindowsJobHandle(t *testing.T, job *windowsJob) windows.Handle {
+	t.Helper()
+	var duplicate windows.Handle
+	currentProcess := windows.CurrentProcess()
+	err := job.withHandle(func(source windows.Handle) error {
+		return windows.DuplicateHandle(
+			currentProcess,
+			source,
+			currentProcess,
+			&duplicate,
+			0,
+			false,
+			windows.DUPLICATE_SAME_ACCESS,
+		)
+	})
+	if err != nil {
+		t.Fatalf("duplicate Job Object handle: %v", err)
+	}
+	t.Cleanup(func() { _ = windows.CloseHandle(duplicate) })
+	return duplicate
+}
+
+func queryWindowsJobActiveProcesses(handle windows.Handle) (uint32, error) {
+	var accounting windowsJobBasicAccountingInformation
+	err := windows.QueryInformationJobObject(
+		handle,
+		windows.JobObjectBasicAccountingInformation,
+		uintptr(unsafe.Pointer(&accounting)),
+		uint32(unsafe.Sizeof(accounting)),
+		nil,
+	)
+	return accounting.ActiveProcesses, err
 }
 
 func replaceWindowsTestEnv(base []string, replacements map[string]string) []string {
