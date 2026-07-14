@@ -98,11 +98,20 @@ func TestEmpiricalClearCommand(t *testing.T) {
 		}
 	}
 
-	// Verify session is still responsive after /clear
+	// Verify the recovered prompt accepts input after /clear. Waiting for an
+	// unsolicited chunk makes the result depend on how the PTY happened to
+	// split the /clear redraw, so type a unique marker without submitting it.
+	// This exercises the live TUI without making a model request.
+	const livenessMarker = "fizeau-clear-liveness-probe"
+	if err := s.SendBytes([]byte(livenessMarker)); err != nil {
+		t.Fatalf("failed to type liveness probe after /clear: %v", err)
+	}
+
 	testTimeout := time.NewTimer(5 * time.Second)
 	defer testTimeout.Stop()
 
 	sessionAlive := false
+	var probeOutput strings.Builder
 	for !sessionAlive {
 		select {
 		case chunk, ok := <-s.Output():
@@ -112,10 +121,15 @@ func TestEmpiricalClearCommand(t *testing.T) {
 			if chunk.ReadError != nil {
 				continue
 			}
-			sessionAlive = true
+			probeOutput.Write(chunk.Bytes)
+			sessionAlive = strings.Contains(probeOutput.String(), livenessMarker)
 		case <-testTimeout.C:
-			t.Fatalf("session not responding after /clear")
+			t.Fatalf("session did not echo liveness probe after /clear")
 		}
+	}
+	// Clear the unsubmitted marker before closing the session.
+	if err := s.SendBytes([]byte{0x15}); err != nil { // Ctrl-U
+		t.Fatalf("failed to clear liveness probe input: %v", err)
 	}
 
 	// Log empirical findings
@@ -123,7 +137,7 @@ func TestEmpiricalClearCommand(t *testing.T) {
 	t.Logf("Claude version: %s", getClaudeVersion())
 	t.Logf("✓ /clear command exists and responds")
 	t.Logf("✓ Session remains alive after /clear")
-	t.Logf("✓ Can send commands after /clear")
+	t.Logf("✓ Prompt accepts input after /clear")
 	t.Logf("\nFull semantic validation requires manual testing:")
 	t.Logf("  - History reset: expected per Claude documentation")
 	t.Logf("  - Model selection persists: expected (not reset by /clear)")
