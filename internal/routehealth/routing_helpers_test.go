@@ -72,9 +72,121 @@ func TestApplyAttemptCooldownsPromotesDispatchabilityFailures(t *testing.T) {
 	if in.CooldownDuration != 45*time.Second {
 		t.Fatalf("CooldownDuration=%v, want 45s", in.CooldownDuration)
 	}
-	if !in.Harnesses[0].InCooldown {
-		t.Fatal("expected codex harness cooldown to be applied")
+	if in.Harnesses[0].InCooldown {
+		t.Fatal("harness-wide cooldown was applied, want exact route cooldown")
 	}
+	key := routing.RouteCooldownKey{Harness: "codex"}
+	if got := in.ExactRouteCooldowns[key]; !got.Equal(recordedAt) {
+		t.Fatalf("ExactRouteCooldowns[%#v]=%v, want %v", key, got, recordedAt)
+	}
+}
+
+func TestApplyAttemptCooldownsPreservesExactRouteTuple(t *testing.T) {
+	newer := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	older := newer.Add(-time.Second)
+	in := &routing.Inputs{
+		Harnesses: []routing.HarnessEntry{{Name: "fiz"}},
+	}
+	record := Record{
+		Key: Key{
+			Harness:        "fiz",
+			Provider:       "local",
+			Endpoint:       "primary",
+			ServerInstance: "desk-a",
+			Model:          "model-a",
+		},
+		Error: `dial tcp 192.0.2.1:8000: connection refused`,
+	}
+	olderRecord := record
+	olderRecord.RecordedAt = older
+	newerRecord := record
+	newerRecord.RecordedAt = newer
+
+	ApplyAttemptCooldowns(in, []Record{newerRecord, olderRecord}, 45*time.Second)
+
+	key := routing.RouteCooldownKey{
+		Harness:        "fiz",
+		Provider:       "local",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "model-a",
+	}
+	if len(in.ExactRouteCooldowns) != 1 {
+		t.Fatalf("ExactRouteCooldowns=%#v, want one exact route", in.ExactRouteCooldowns)
+	}
+	if got := in.ExactRouteCooldowns[key]; !got.Equal(newer) {
+		t.Fatalf("ExactRouteCooldowns[%#v]=%v, want newest %v", key, got, newer)
+	}
+	if len(in.ProviderCooldowns) != 0 {
+		t.Fatalf("ProviderCooldowns=%#v, want no provider-wide state", in.ProviderCooldowns)
+	}
+	if len(in.ProviderUnreachable) != 0 {
+		t.Fatalf("ProviderUnreachable=%#v, want no provider-wide dispatchability state", in.ProviderUnreachable)
+	}
+	if in.Harnesses[0].InCooldown {
+		t.Fatal("fiz harness was poisoned by an exact route failure")
+	}
+}
+
+func TestLegacyProviderOnlyCooldownRemainsCompatible(t *testing.T) {
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	in := &routing.Inputs{
+		Harnesses: []routing.HarnessEntry{{
+			Name:                "fiz",
+			Surface:             "embedded-openai",
+			CostClass:           "local",
+			IsLocal:             true,
+			AutoRoutingEligible: true,
+			ExactPinSupport:     true,
+			Available:           true,
+			QuotaOK:             true,
+			SubscriptionOK:      true,
+			SupportsTools:       true,
+			Providers: []routing.ProviderEntry{
+				{Name: "failed", DefaultModel: "model-a", SupportsTools: true},
+				{Name: "sibling", DefaultModel: "model-a", SupportsTools: true},
+			},
+		}},
+		Now: now,
+	}
+	baseline, err := routing.Resolve(routing.Request{Harness: "fiz"}, *in)
+	if err != nil {
+		t.Fatalf("baseline Resolve: %v", err)
+	}
+
+	failedAt := now.Add(-5 * time.Second)
+	ApplyAttemptCooldowns(in, []Record{{
+		Key:        Key{Provider: "failed"},
+		RecordedAt: failedAt,
+	}}, 30*time.Second)
+
+	if got := in.ProviderCooldowns["failed"]; !got.Equal(failedAt) {
+		t.Fatalf("ProviderCooldowns[failed]=%v, want %v", got, failedAt)
+	}
+	if len(in.ExactRouteCooldowns) != 0 {
+		t.Fatalf("ExactRouteCooldowns=%#v, legacy provider-only record must stay provider-wide", in.ExactRouteCooldowns)
+	}
+	decision, err := routing.Resolve(routing.Request{Harness: "fiz"}, *in)
+	if err != nil {
+		t.Fatalf("Resolve with provider cooldown: %v", err)
+	}
+	if got, want := routeCandidateScore(t, decision, "failed"), routeCandidateScore(t, baseline, "failed")-50; got != want {
+		t.Fatalf("failed score=%v, want one soft cooldown demotion to %v", got, want)
+	}
+	if got, want := routeCandidateScore(t, decision, "sibling"), routeCandidateScore(t, baseline, "sibling"); got != want {
+		t.Fatalf("sibling score=%v, want unchanged %v", got, want)
+	}
+}
+
+func routeCandidateScore(t *testing.T, decision *routing.Decision, provider string) float64 {
+	t.Helper()
+	for _, candidate := range decision.Candidates {
+		if candidate.Provider == provider {
+			return candidate.Score
+		}
+	}
+	t.Fatalf("candidate for provider %q not found: %#v", provider, decision.Candidates)
+	return 0
 }
 
 func TestCandidateCooldownMatchesEndpointProviderRefs(t *testing.T) {

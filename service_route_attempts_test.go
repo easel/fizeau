@@ -17,7 +17,7 @@ import (
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
-func TestExecuteDispatchFailureRecordsRouteAttemptForNextRoute(t *testing.T) {
+func TestExecuteDispatchFailureRecordsExactRouteCooldownForNextRoute(t *testing.T) {
 	svc := routeAttemptTestService(t, 30*time.Second)
 
 	before, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: "qwen"})
@@ -27,6 +27,7 @@ func TestExecuteDispatchFailureRecordsRouteAttemptForNextRoute(t *testing.T) {
 	if before.Provider != "bragi" {
 		t.Fatalf("before Execute Provider: got %q, want bragi", before.Provider)
 	}
+	beforeBragi := findCandidate(t, before, "fiz", "bragi")
 
 	ch, err := svc.Execute(context.Background(), ServiceExecuteRequest{
 		Prompt:          "try once",
@@ -56,24 +57,32 @@ func TestExecuteDispatchFailureRecordsRouteAttemptForNextRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveRoute after Execute: %v", err)
 	}
-	if after.Provider == "bragi" {
-		t.Fatalf("after Execute Provider: got bragi, want route health to reject failed provider")
+	afterBragi := findCandidate(t, after, "fiz", "bragi")
+	if !afterBragi.Eligible {
+		t.Fatalf("bragi should remain eligible under an exact soft cooldown: %#v", afterBragi)
 	}
-	var bragiCand *RouteCandidate
-	for i := range after.Candidates {
-		if after.Candidates[i].Provider == "bragi" {
-			bragiCand = &after.Candidates[i]
+	if afterBragi.Score >= beforeBragi.Score {
+		t.Fatalf("bragi score after failure=%v, want below baseline %v", afterBragi.Score, beforeBragi.Score)
+	}
+	openrouter := findCandidate(t, after, "fiz", "openrouter")
+	if !openrouter.Eligible {
+		t.Fatalf("sibling openrouter route should remain available: %#v", openrouter)
+	}
+
+	in := svc.buildRoutingInputs(context.Background())
+	svc.applyRouteAttemptCooldowns(&in)
+	if _, ok := in.ProviderUnreachable["bragi"]; ok {
+		t.Fatalf("ProviderUnreachable=%#v, harness-bearing failure must not hard-gate bragi", in.ProviderUnreachable)
+	}
+	foundExact := false
+	for key := range in.ExactRouteCooldowns {
+		if key.Harness == "fiz" && key.Provider == "bragi" && key.Model == "qwen" {
+			foundExact = true
 			break
 		}
 	}
-	if bragiCand == nil {
-		t.Fatal("bragi candidate row missing after Execute failure")
-	}
-	if bragiCand.Eligible {
-		t.Fatal("bragi should be ineligible after Execute dispatch failure")
-	}
-	if !strings.Contains(bragiCand.Reason, "known unreachable") {
-		t.Fatalf("bragi candidate reason = %q, want known unreachable", bragiCand.Reason)
+	if !foundExact {
+		t.Fatalf("ExactRouteCooldowns=%#v, want attempted fiz/bragi/qwen route", in.ExactRouteCooldowns)
 	}
 }
 
@@ -123,14 +132,11 @@ func TestRecordRouteAttempt_DemotesFailedProviderForAutomaticRouting(t *testing.
 	}
 }
 
-// TestRecordRouteAttempt_DialFailureHardGatesProvider verifies FEAT-004 AC-28
-// path: a route-attempt record whose Error matches a dispatchability-failure
-// pattern (dial tcp / connection refused / i/o timeout / 5xx gateway) gets
-// promoted into ProviderUnreachable so the next ResolveRoute hard-gates the
-// provider — distinct from the soft-demotion path (context deadline,
-// validation error) which leaves the candidate eligible but down-scored.
-// This is the v0.13.1 follow-up to v0.13.0's snapshot-only hard-gate.
-func TestRecordRouteAttempt_DialFailureHardGatesProvider(t *testing.T) {
+// TestRecordRouteAttempt_DialFailureDemotesExactRouteWithoutHardGate verifies
+// that caller feedback carrying a harness stays scoped to that exact route.
+// Discovery failures may still hard-gate a known-down provider, but one routed
+// attempt is only a soft score demotion and cannot poison sibling routes.
+func TestRecordRouteAttempt_DialFailureDemotesExactRouteWithoutHardGate(t *testing.T) {
 	cases := []struct {
 		name string
 		err  string
@@ -151,6 +157,7 @@ func TestRecordRouteAttempt_DialFailureHardGatesProvider(t *testing.T) {
 			if before.Provider != "bragi" {
 				t.Fatalf("baseline provider: got %q, want bragi", before.Provider)
 			}
+			beforeBragi := findCandidate(t, before, "fiz", "bragi")
 
 			if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
 				Harness:  "fiz",
@@ -162,33 +169,44 @@ func TestRecordRouteAttempt_DialFailureHardGatesProvider(t *testing.T) {
 				t.Fatalf("RecordRouteAttempt: %v", err)
 			}
 
-			// After a dial-class failure, bragi must be hard-gated — its
-			// candidate row should be Eligible=false with FilterReasonUnhealthy.
+			// A harness-bearing dial-class failure demotes only the exact
+			// candidate. It remains eligible, while the sibling route can win.
 			after, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: "qwen"})
 			if err != nil {
 				t.Fatalf("ResolveRoute after failure: %v", err)
 			}
 			if after.Provider == "bragi" {
-				t.Fatalf("after dial failure provider: got bragi, want hard-gated to alternative")
+				t.Fatalf("after dial failure provider: got bragi, want soft demotion to select the available sibling")
 			}
-			var bragiCand *RouteCandidate
-			for i := range after.Candidates {
-				if after.Candidates[i].Provider == "bragi" {
-					bragiCand = &after.Candidates[i]
-					break
-				}
+			bragiCand := findCandidate(t, after, "fiz", "bragi")
+			if !bragiCand.Eligible {
+				t.Errorf("bragi should remain eligible after exact-route dial failure: %#v", bragiCand)
 			}
-			if bragiCand == nil {
-				t.Fatal("bragi candidate row missing from decision")
+			if bragiCand.FilterReason != "" {
+				t.Errorf("bragi.FilterReason = %q, want no hard-gate reason", bragiCand.FilterReason)
 			}
-			if bragiCand.Eligible {
-				t.Errorf("bragi should be Eligible=false after dial failure; got Eligible=true")
+			if bragiCand.Score >= beforeBragi.Score {
+				t.Errorf("bragi score after failure=%v, want below baseline %v", bragiCand.Score, beforeBragi.Score)
 			}
-			if !strings.Contains(bragiCand.Reason, "known unreachable") {
-				t.Errorf("bragi.Reason = %q, want it to contain 'known unreachable'", bragiCand.Reason)
+			openrouter := findCandidate(t, after, "fiz", "openrouter")
+			if !openrouter.Eligible {
+				t.Errorf("sibling openrouter route should remain eligible: %#v", openrouter)
 			}
 
-			// Explicit provider pin still selects bragi (operator bypass).
+			in := svc.buildRoutingInputs(context.Background())
+			svc.applyRouteAttemptCooldowns(&in)
+			key := routing.RouteCooldownKey{Harness: "fiz", Provider: "bragi", Model: "qwen"}
+			if _, ok := in.ExactRouteCooldowns[key]; !ok {
+				t.Errorf("ExactRouteCooldowns=%#v, want %#v", in.ExactRouteCooldowns, key)
+			}
+			if _, ok := in.ProviderCooldowns["bragi"]; ok {
+				t.Errorf("ProviderCooldowns=%#v, harness-bearing route must not populate provider-wide cooldown", in.ProviderCooldowns)
+			}
+			if _, ok := in.ProviderUnreachable["bragi"]; ok {
+				t.Errorf("ProviderUnreachable=%#v, harness-bearing route must not populate provider-wide hard gate", in.ProviderUnreachable)
+			}
+
+			// Explicit provider pin still selects bragi because cooldown is soft.
 			pinned, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: "qwen", Provider: "bragi"})
 			if err != nil {
 				t.Fatalf("ResolveRoute with provider pin: %v", err)

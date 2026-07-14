@@ -494,8 +494,9 @@ type Inputs struct {
 	EndpointLoads                map[string]EndpointLoad
 	EndpointLoadResolver         func(provider, endpoint, model string) (EndpointLoad, bool)
 	StickyServerInstanceResolver func(stickyKey string) (string, bool)
-	ProviderCooldowns            map[string]time.Time // by provider name; soft demotion only
-	CooldownDuration             time.Duration        // 0 = no cooldown enforcement
+	ExactRouteCooldowns          map[RouteCooldownKey]time.Time // exact route failures; soft demotion only
+	ProviderCooldowns            map[string]time.Time           // by provider name; soft demotion only
+	CooldownDuration             time.Duration                  // 0 = no cooldown enforcement
 
 	// ProviderUnreachable maps provider name → time of last dial-class
 	// discovery failure. Hard gate per FEAT-004 AC-28: known-down endpoints
@@ -591,6 +592,18 @@ type Inputs struct {
 	// (e.g. an off-only variant under a policy whose default is
 	// "high") are correctly disqualified instead of slipping through.
 	ReasoningResolver func(policy, surface string) (resolved string, ok bool)
+}
+
+// RouteCooldownKey identifies one routed candidate. A non-empty field narrows
+// matching to that field, so callers can preserve all route identity they have
+// without broadening a failure to sibling harnesses, endpoints, instances, or
+// models.
+type RouteCooldownKey struct {
+	Harness        string
+	Provider       string
+	Endpoint       string
+	ServerInstance string
+	Model          string
 }
 
 // ProviderCreditExhaustedEvidence is the per-provider account-balance reading
@@ -1598,10 +1611,10 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 				}
 			}
 
-			inCooldown := false
+			inCooldown := exactRouteInCooldown(in, h, p, model)
 			if p.Name != "" && p.InCooldown {
 				inCooldown = true
-			} else if p.Name != "" && in.CooldownDuration > 0 {
+			} else if !inCooldown && p.Name != "" && in.CooldownDuration > 0 {
 				if failedAt, ok := in.ProviderCooldowns[p.Name]; ok {
 					if in.Now.Sub(failedAt) < in.CooldownDuration {
 						inCooldown = true
@@ -1882,6 +1895,52 @@ func candidateProviderIdentity(h HarnessEntry, p ProviderEntry) string {
 		return p.Name
 	}
 	return h.Name
+}
+
+func exactRouteInCooldown(in Inputs, h HarnessEntry, p ProviderEntry, model string) bool {
+	if in.CooldownDuration <= 0 || len(in.ExactRouteCooldowns) == 0 {
+		return false
+	}
+	provider, endpoint := cooldownCandidateProviderEndpoint(p)
+	for key, failedAt := range in.ExactRouteCooldowns {
+		if key == (RouteCooldownKey{}) {
+			continue
+		}
+		if in.Now.Sub(failedAt) >= in.CooldownDuration {
+			continue
+		}
+		if key.Harness != "" && key.Harness != h.Name {
+			continue
+		}
+		if key.Provider != "" && key.Provider != provider {
+			continue
+		}
+		if key.Endpoint != "" && key.Endpoint != endpoint {
+			continue
+		}
+		if key.ServerInstance != "" && key.ServerInstance != p.ServerInstance {
+			continue
+		}
+		if key.Model != "" && key.Model != model {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func cooldownCandidateProviderEndpoint(p ProviderEntry) (string, string) {
+	provider := strings.TrimSpace(p.Name)
+	endpoint := strings.TrimSpace(p.EndpointName)
+	base, qualifiedEndpoint, ok := strings.Cut(provider, "@")
+	if !ok || strings.TrimSpace(base) == "" || strings.TrimSpace(qualifiedEndpoint) == "" {
+		return provider, endpoint
+	}
+	provider = strings.TrimSpace(base)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(qualifiedEndpoint)
+	}
+	return provider, endpoint
 }
 
 // lookupCreditExhausted resolves the credit-balance evidence for a routing

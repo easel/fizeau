@@ -215,14 +215,37 @@ func ApplyAttemptCooldowns(in *routing.Inputs, records []Record, ttl time.Durati
 		return
 	}
 	ttl = CooldownTTL(ttl)
-	if in.ProviderCooldowns == nil {
-		in.ProviderCooldowns = make(map[string]time.Time)
-	}
 	if in.CooldownDuration <= 0 {
 		in.CooldownDuration = ttl
 	}
 	for _, record := range records {
+		if record.Key.Harness != "" {
+			if in.ExactRouteCooldowns == nil {
+				in.ExactRouteCooldowns = make(map[routing.RouteCooldownKey]time.Time)
+			}
+			key := routing.RouteCooldownKey{
+				Harness:        strings.TrimSpace(record.Key.Harness),
+				Provider:       strings.TrimSpace(record.Key.Provider),
+				Endpoint:       strings.TrimSpace(record.Key.Endpoint),
+				ServerInstance: strings.TrimSpace(record.Key.ServerInstance),
+				Model:          strings.TrimSpace(record.Key.Model),
+			}
+			if base, endpoint, ok := splitProviderRef(key.Provider); ok {
+				key.Provider = base
+				if key.Endpoint == "" {
+					key.Endpoint = endpoint
+				}
+			}
+			existing, ok := in.ExactRouteCooldowns[key]
+			if !ok || record.RecordedAt.After(existing) {
+				in.ExactRouteCooldowns[key] = record.RecordedAt
+			}
+			continue
+		}
 		if record.Key.Provider != "" {
+			if in.ProviderCooldowns == nil {
+				in.ProviderCooldowns = make(map[string]time.Time)
+			}
 			existing, ok := in.ProviderCooldowns[record.Key.Provider]
 			if !ok || record.RecordedAt.After(existing) {
 				in.ProviderCooldowns[record.Key.Provider] = record.RecordedAt
@@ -234,13 +257,6 @@ func ApplyAttemptCooldowns(in *routing.Inputs, records []Record, ttl time.Durati
 				existing, ok := in.ProviderUnreachable[record.Key.Provider]
 				if !ok || record.RecordedAt.After(existing) {
 					in.ProviderUnreachable[record.Key.Provider] = record.RecordedAt
-				}
-			}
-		}
-		if record.Key.Provider == "" && record.Key.Harness != "" {
-			for i := range in.Harnesses {
-				if in.Harnesses[i].Name == record.Key.Harness {
-					in.Harnesses[i].InCooldown = true
 				}
 			}
 		}
