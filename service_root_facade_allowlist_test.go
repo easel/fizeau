@@ -124,6 +124,99 @@ func TestRootSubscriptionQuotaOwnershipBoundary(t *testing.T) {
 	}
 }
 
+// TestRootQuotaOwnershipBoundary locks recovery scheduling and signal
+// transition mechanics behind internal/quota while preserving the named
+// public facades and the ServiceConfig-backed recovery probe seam at root.
+func TestRootQuotaOwnershipBoundary(t *testing.T) {
+	forbiddenDecls := map[string]bool{
+		"runQuotaRecoveryProbeLoop": true,
+		"runQuotaRecoveryProbePass": true,
+		"nextQuotaRecoveryBackoff":  true,
+		"quotaRecoverySleep":        true,
+	}
+	requiredTypes := map[string]bool{
+		"QuotaRecoveryProber":     false,
+		"ProviderQuotaStateStore": false,
+		"ProviderBurnRateTracker": false,
+	}
+	recoveryCalls := 0
+	observerCalls := 0
+	var observer *ast.FuncDecl
+
+	for path, file := range parseRootProductionFiles(t) {
+		for _, decl := range file.Decls {
+			switch current := decl.(type) {
+			case *ast.FuncDecl:
+				if forbiddenDecls[current.Name.Name] {
+					t.Errorf("root %s declares %s; quota recovery scheduling belongs to internal/quota", path, current.Name.Name)
+				}
+				if current.Name.Name == "quotaSignalObserver" && current.Recv != nil {
+					observer = current
+				}
+			case *ast.GenDecl:
+				for _, spec := range current.Specs {
+					if named, ok := spec.(*ast.TypeSpec); ok {
+						if _, required := requiredTypes[named.Name.Name]; required {
+							requiredTypes[named.Name.Name] = true
+						}
+					}
+				}
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			switch {
+			case selectorMatches(call.Fun, "quotaimpl", "RunRecoveryLoop"):
+				recoveryCalls++
+			case selectorMatches(call.Fun, "quotaimpl", "NewSignalObserver"):
+				observerCalls++
+			case selectorName(call.Fun) == "IsExhausted":
+				t.Errorf("root %s calls Signal.IsExhausted; signal transitions belong to internal/quota", path)
+			}
+			return true
+		})
+	}
+
+	if recoveryCalls != 1 {
+		t.Fatalf("root internal/quota RunRecoveryLoop calls = %d, want exactly 1", recoveryCalls)
+	}
+	if observerCalls != 1 {
+		t.Fatalf("root internal/quota NewSignalObserver calls = %d, want exactly 1", observerCalls)
+	}
+	for name, found := range requiredTypes {
+		if !found {
+			t.Errorf("root public facade type %s is missing", name)
+		}
+	}
+	if observer == nil || observer.Body == nil {
+		t.Fatal("missing (*service).quotaSignalObserver adapter")
+	}
+	ast.Inspect(observer.Body, func(node ast.Node) bool {
+		switch current := node.(type) {
+		case *ast.SelectorExpr:
+			if ident, ok := current.X.(*ast.Ident); ok && ident.Name == "time" {
+				t.Errorf("root quotaSignalObserver contains time arithmetic %s; defaults belong to internal/quota", current.Sel.Name)
+			}
+		case *ast.CallExpr:
+			switch selectorName(current.Fun) {
+			case "MarkQuotaExhausted", "MarkAvailable", "State", "AllExhausted":
+				t.Errorf("root quotaSignalObserver calls %s; StateStore transitions belong to internal/quota", selectorName(current.Fun))
+			}
+		}
+		return true
+	})
+}
+
+func selectorName(expr ast.Expr) string {
+	if selector, ok := expr.(*ast.SelectorExpr); ok {
+		return selector.Sel.Name
+	}
+	return ""
+}
+
 // TestRootStickyStateOwnershipBoundary prevents the deleted sticky adapter
 // from returning under a different filename or through direct concrete-store
 // access. Root production may retain the service-owned StickyState and narrow

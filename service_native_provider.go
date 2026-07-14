@@ -7,6 +7,7 @@ import (
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/provider/quotaheaders"
+	quotaimpl "github.com/easel/fizeau/internal/quota"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -168,30 +169,13 @@ func (s *service) availableProviderTypes() string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// quotaSignalObserver returns a callback that updates the provider quota
-// state machine when a parsed rate-limit signal indicates the provider's
-// subscription/daily cap has been hit (or imminently will be). Returns nil
-// when the service has no quota store, which makes the provider middleware
-// a no-op.
+// quotaSignalObserver adapts the internal quota signal observer to the exact
+// callback signature consumed by provider middleware.
 func (s *service) quotaSignalObserver(providerName string) func(quotaheaders.Signal) {
 	if s == nil || s.providerQuota == nil || providerName == "" {
 		return nil
 	}
-	store := s.providerQuota
-	return func(signal quotaheaders.Signal) {
-		now := time.Now()
-		exhausted, retryAt := signal.IsExhausted(now)
-		if !exhausted {
-			return
-		}
-		if retryAt.IsZero() {
-			// Provider said "exhausted" but gave us no reset window. Fall
-			// back to a short cooldown so we don't peg the provider in the
-			// excluded set forever; the next response will refresh us.
-			retryAt = now.Add(time.Minute)
-		}
-		store.MarkQuotaExhausted(providerName, retryAt)
-	}
+	return quotaimpl.NewSignalObserver(s.providerQuota.innerStore(), providerName, nil)
 }
 
 func (s *service) getUnreachableProvidersForNativeResolution() map[string]bool {

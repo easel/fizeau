@@ -958,11 +958,10 @@ func (s *service) providerQuotaExhaustedUntil(now time.Time) map[string]time.Tim
 	return s.providerQuota.ExhaustedAt(now)
 }
 
-// startQuotaRecoveryProbeLoop spawns the goroutine that periodically probes
-// quota_exhausted providers and either restores them to available or extends
-// their retry_after with bounded backoff. The goroutine is tied to
-// QuotaRefreshContext (or context.Background()) so server callers can cancel
-// it on shutdown.
+// startQuotaRecoveryProbeLoop delegates recovery scheduling to internal/quota.
+// Root retains only the ServiceConfig-backed probe construction. The goroutine
+// is tied to QuotaRefreshContext (or context.Background()) so server callers
+// can cancel it on shutdown.
 func (s *service) startQuotaRecoveryProbeLoop() {
 	if s == nil || s.providerQuota == nil {
 		return
@@ -975,7 +974,7 @@ func (s *service) startQuotaRecoveryProbeLoop() {
 	if probe == nil {
 		return
 	}
-	go runQuotaRecoveryProbeLoop(ctx, s.providerQuota, probe, defaultQuotaRecoveryFallbackInterval, nil, nil)
+	go quotaimpl.RunRecoveryLoop(ctx, s.providerQuota.innerStore(), probe, quotaimpl.RecoveryOptions{})
 }
 
 // quotaRecoveryProber returns the QuotaRecoveryProber used by the recovery

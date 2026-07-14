@@ -7,75 +7,55 @@ import (
 	"github.com/easel/fizeau/internal/provider/quotaheaders"
 )
 
-func TestQuotaSignalObserver_MarksProviderExhaustedOnZeroRemaining(t *testing.T) {
+func TestSignalObserverSharesRoutingVisibleState(t *testing.T) {
 	svc := &service{providerQuota: NewProviderQuotaStateStore()}
 	observer := svc.quotaSignalObserver("openai")
 	if observer == nil {
 		t.Fatal("expected non-nil observer when service has a quota store")
 	}
+	var _ func(quotaheaders.Signal) = observer
 
-	now := time.Now()
-	signal := quotaheaders.Signal{
+	now := time.Now().UTC()
+	retryAt := now.Add(15 * time.Minute)
+	observer(quotaheaders.Signal{
 		Present:           true,
 		RemainingRequests: 0,
 		RemainingTokens:   1000,
-		ResetTime:         now.Add(15 * time.Minute),
-	}
-	observer(signal)
+		ResetTime:         retryAt,
+	})
 
-	state, retryAt := svc.providerQuota.State("openai", now)
-	if state != ProviderQuotaStateQuotaExhausted {
-		t.Fatalf("provider state = %q, want quota_exhausted", state)
+	exhausted := svc.providerQuotaExhaustedUntil(now)
+	if got, ok := exhausted["openai"]; !ok || !got.Equal(retryAt) {
+		t.Fatalf("routing-visible exhaustion = %v, want openai=%v", exhausted, retryAt)
 	}
-	if !retryAt.Equal(signal.ResetTime) {
-		t.Errorf("retryAt = %v, want %v", retryAt, signal.ResetTime)
-	}
-}
 
-func TestQuotaSignalObserver_RetryAfterDrivesExhaustion(t *testing.T) {
-	svc := &service{providerQuota: NewProviderQuotaStateStore()}
-	observer := svc.quotaSignalObserver("anthropic")
-
-	signal := quotaheaders.Signal{
+	// The same delegated observer also writes recovery evidence into the same
+	// store read by routing; transition details are owned by internal/quota.
+	observer(quotaheaders.Signal{
 		Present:           true,
-		RemainingRequests: 50,
-		RemainingTokens:   50000,
-		RetryAfter:        90 * time.Second,
-	}
-	observer(signal)
-
-	now := time.Now()
-	state, retryAt := svc.providerQuota.State("anthropic", now)
-	if state != ProviderQuotaStateQuotaExhausted {
-		t.Fatalf("state = %q, want quota_exhausted (Retry-After should override remaining)", state)
-	}
-	// retryAt should be roughly now + 90s; allow generous slack to avoid flakes.
-	if retryAt.Before(now.Add(60*time.Second)) || retryAt.After(now.Add(120*time.Second)) {
-		t.Errorf("retryAt = %v, expected ~now+90s", retryAt)
+		RemainingRequests: 10,
+		RemainingTokens:   1000,
+	})
+	if got := svc.providerQuotaExhaustedUntil(time.Now().UTC()); got != nil {
+		t.Fatalf("routing-visible exhaustion after recovery = %v, want nil", got)
 	}
 }
 
-func TestQuotaSignalObserver_PlentyRemainingNoOp(t *testing.T) {
-	svc := &service{providerQuota: NewProviderQuotaStateStore()}
-	observer := svc.quotaSignalObserver("openrouter")
-
-	signal := quotaheaders.Signal{
-		Present:           true,
-		RemainingRequests: 800,
-		RemainingTokens:   -1,
-		ResetTime:         time.Now().Add(time.Hour),
+func TestQuotaSignalObserverWrapperDelegation(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      *service
+		provider string
+	}{
+		{name: "nil service", svc: nil, provider: "openai"},
+		{name: "nil store", svc: &service{}, provider: "openai"},
+		{name: "blank provider", svc: &service{providerQuota: NewProviderQuotaStateStore()}},
 	}
-	observer(signal)
-
-	state, _ := svc.providerQuota.State("openrouter", time.Now())
-	if state != ProviderQuotaStateAvailable {
-		t.Errorf("plenty-remaining response should leave state available, got %q", state)
-	}
-}
-
-func TestQuotaSignalObserver_NilStoreReturnsNil(t *testing.T) {
-	svc := &service{}
-	if svc.quotaSignalObserver("openai") != nil {
-		t.Error("observer must be nil when service has no quota store")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.quotaSignalObserver(tt.provider); got != nil {
+				t.Fatalf("quotaSignalObserver(%q) = non-nil, want nil", tt.provider)
+			}
+		})
 	}
 }

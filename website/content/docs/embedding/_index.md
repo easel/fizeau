@@ -784,7 +784,6 @@ parameter types, and field-level documentation, follow the
 | `defaultHarnessInstances` | func (func defaultHarnessInstances() map[string]harnesses.Harness) | defaultHarnessInstances returns the production map of registered |
 | `defaultHealthProbeInterval` | const |  |
 | `defaultHealthSignalTTL` | const |  |
-| `defaultQuotaRecoveryFallbackInterval` | const |  |
 | `defaultStaleHarnessReaperGrace` | const |  |
 | `discoveryUnsupportedError` | type (struct) |  |
 | `dispatchFailureFromAttempt` | func (func dispatchFailureFromAttempt(attempt routehealth.Attempt) (string, string, error)) | dispatchFailureFromAttempt performs the class-level half of the two-stage |
@@ -842,7 +841,6 @@ parameter types, and field-level documentation, follow the
 | `modelSupportedForHarness` | func (func modelSupportedForHarness(name string, cfg harnesses.HarnessConfig, model, provider string) bool) |  |
 | `nativeProviderResolution` | type (struct) |  |
 | `nativeRouteCandidates` | func (func nativeRouteCandidates(in []RouteCandidate) []serviceimpl.NativeRouteCandidate) |  |
-| `nextQuotaRecoveryBackoff` | func (func nextQuotaRecoveryBackoff(prev time.Duration) time.Duration) | nextQuotaRecoveryBackoff returns the next bounded backoff value: doubles the |
 | `normalizeServiceProviderType` | func (func normalizeServiceProviderType(t string) string) |  |
 | `openrouterAPIKeyWellFormed` | func (func openrouterAPIKeyWellFormed(s string) bool) | openrouterAPIKeyWellFormed reports whether s plausibly resembles a real |
 | `openrouterCreditFailureMode` | type | openrouterCreditFailureMode classifies why a credit probe attempt did not |
@@ -877,9 +875,6 @@ parameter types, and field-level documentation, follow the
 | `publicFilterReason` | func (func publicFilterReason(c routing.Candidate) string) | publicFilterReason maps the typed FilterReason emitted by the internal |
 | `publicRoutingError` | func (func publicRoutingError(err error, candidates []RouteCandidate, requestedPolicy ...string) error) |  |
 | `publicToRoutingExcludedRoutes` | func (func publicToRoutingExcludedRoutes(in []ExcludedRoute) []routing.ExcludedRoute) |  |
-| `quotaRecoveryBackoffInitial` | const |  |
-| `quotaRecoveryBackoffMax` | const |  |
-| `quotaRecoverySleep` | func (func quotaRecoverySleep(ctx context.Context, d time.Duration) bool) | quotaRecoverySleep blocks for d or until ctx is cancelled |
 | `quotaStatus` | func (func quotaStatus(fresh bool, windows []harnesses.QuotaWindow) string) |  |
 | `reapStaleHarnessRecords` | func (func reapStaleHarnessRecords(dir string, grace time.Duration, now time.Time) error) |  |
 | `recordExecuteOverrideOutcome` | func (func recordExecuteOverrideOutcome(ovr *overrideContext, status string)) |  |
@@ -900,8 +895,6 @@ parameter types, and field-level documentation, follow the
 | `routingPolicyForName` | func (func routingPolicyForName(cat *modelcatalog.Catalog, name string) string) |  |
 | `routingSurfacePreference` | func (func routingSurfacePreference() map[string]string) | routingSurfacePreference returns the surface→harness preference that makes |
 | `runAlivenessProbeLoop` | func (func runAlivenessProbeLoop( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, interval time.Duration, now func() time.Time, sleep func(ctx context.Context, d time.Duration) bool, persistPath string, )) | runAlivenessProbeLoop periodically re-probes each endpoint whose last probe |
-| `runQuotaRecoveryProbeLoop` | func (func runQuotaRecoveryProbeLoop( ctx context.Context, store *ProviderQuotaStateStore, probe QuotaRecoveryProber, fallback time.Duration, now func() time.Time, sleep func(ctx context.Context, d time.Duration) bool, )) | runQuotaRecoveryProbeLoop periodically probes providers that the store |
-| `runQuotaRecoveryProbePass` | func (func runQuotaRecoveryProbePass( ctx context.Context, store *ProviderQuotaStateStore, probe QuotaRecoveryProber, fallback time.Duration, now func() time.Time, backoffs map[string]time.Duration, ) time.Duration) | runQuotaRecoveryProbePass executes a single sweep over the quota_exhausted |
 | `runRouteTimeAlivenessProbes` | func (func runRouteTimeAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, perProbeTimeout time.Duration, )) |  |
 | `runStartupAlivenessProbes` | func (func runStartupAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, totalTimeout time.Duration, )) | runStartupAlivenessProbes probes each endpoint sequentially within totalTimeout |
 | `scorePowerHintFit` | func (func scorePowerHintFit(candidate routing.Candidate, policy RoutePowerPolicy) float64) |  |

@@ -10,6 +10,28 @@ import (
 	fizeau "github.com/easel/fizeau"
 )
 
+type publicQuotaStateStoreContract interface {
+	MarkQuotaExhausted(string, time.Time)
+	MarkAvailable(string)
+	State(string, time.Time) (fizeau.ProviderQuotaState, time.Time)
+	AllExhausted() map[string]time.Time
+	ExhaustedAt(time.Time) map[string]time.Time
+}
+
+type publicBurnRateTrackerContract interface {
+	SetBudget(string, int)
+	Budget(string) int
+	Used(string, time.Time) int
+	Record(string, int, time.Time) (bool, time.Time)
+	Reset()
+}
+
+var (
+	_ fizeau.QuotaRecoveryProber    = func(context.Context, string) error { return nil }
+	_ publicQuotaStateStoreContract = fizeau.NewProviderQuotaStateStore()
+	_ publicBurnRateTrackerContract = fizeau.NewProviderBurnRateTracker()
+)
+
 func TestPublicServiceAPISmoke(t *testing.T) {
 	fakeHome := t.TempDir()
 	t.Setenv("HOME", fakeHome)
