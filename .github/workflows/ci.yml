@@ -52,6 +52,21 @@ jobs:
         run: make test-race
         if: runner.os == 'Linux'
 
+  lifecycle-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Windows Job Object lifecycle
+        run: go test ./internal/processlifecycle -run '^(TestWindowsJobKillOnOwnerHandleClose|TestWindowsJobReapsGrandchild|TestWindowsCleanupWaitsForZeroActiveProcesses)$' -count=1 -timeout=2m
+
+      - name: Windows lifecycle package
+        run: go test ./internal/processlifecycle -count=1 -timeout=2m
+
   website-smoke:
     runs-on: ubuntu-latest
     env:

@@ -1,18 +1,22 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package processlifecycle
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 )
 
 // Batch is unavailable until the platform has a strong containment adapter.
 type Batch struct{}
 
-func StartBatch(context.Context, *exec.Cmd, BatchOptions) (*Batch, error) {
-	return nil, fmt.Errorf("%w: no strong batch containment adapter", ErrPlatformUnsupported)
+func StartBatch(_ context.Context, target *exec.Cmd, _ BatchOptions) (*Batch, error) {
+	return nil, rejectUnsupportedPlatform(func() error {
+		if target == nil {
+			return nil
+		}
+		return target.Start()
+	})
 }
 
 func (*Batch) Record() Record { return Record{} }

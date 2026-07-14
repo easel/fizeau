@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -483,17 +482,6 @@ func readSupervisorReport(ctx context.Context, report *os.File) (supervisorStart
 		_ = report.Close()
 		return supervisorStartReport{}, ctx.Err()
 	}
-}
-
-func batchRegistryDir(sessionLogDir string) (string, error) {
-	if sessionLogDir != "" {
-		return filepath.Join(filepath.Dir(sessionLogDir), "harness-sessions"), nil
-	}
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve lifecycle state directory: %w", err)
-	}
-	return filepath.Join(cacheDir, "fizeau", "harness-sessions"), nil
 }
 
 func lifecycleEnvironment(base []string, values map[string]string) []string {

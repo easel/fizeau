@@ -148,11 +148,12 @@ type Record struct {
 	Revision    uint64 `json:"revision"`
 	OperationID string `json:"operation_id"`
 	Harness     string `json:"harness"`
-	// OwnerIdentity is the embedding Fizeau process. SupervisorIdentity is
-	// its trusted direct child and survives owner death long enough to clean.
-	// DirectChildIdentity is the gated harness shim. BoundaryProcessIdentity
-	// identifies the exact process anchoring containment; on Unix it is the
-	// independently observed direct child because that shim leads the PGID.
+	// OwnerIdentity is the embedding Fizeau process. On Unix,
+	// SupervisorIdentity is its trusted direct child and DirectChildIdentity is
+	// the gated harness shim. On Windows the kernel Job Object is the supervisor,
+	// so SupervisorIdentity repeats the owner that holds its non-inheritable
+	// handle and DirectChildIdentity is the suspended target. In both cases,
+	// BoundaryProcessIdentity identifies the process anchoring containment.
 	OwnerIdentity           ProcessIdentity  `json:"owner_identity"`
 	SupervisorIdentity      ProcessIdentity  `json:"supervisor_identity"`
 	DirectChildIdentity     ProcessIdentity  `json:"direct_child_identity"`

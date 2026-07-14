@@ -235,20 +235,11 @@ func writeAtomic(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := replaceFileAtomic(tmpName, path); err != nil {
 		return err
 	}
 	removeTemp = false
 	return syncDirectory(dir)
-}
-
-func syncDirectory(dir string) error {
-	f, err := os.Open(dir) // #nosec G304 -- directory is selected by the caller for lifecycle state
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	return f.Sync()
 }
 
 // MemoryRegistry is a concurrency-safe test backend. It does not satisfy the
