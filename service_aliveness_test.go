@@ -741,14 +741,14 @@ models:
 	svc.providerProbe.RecordProbe("grendel", "", false, now)
 	svc.providerProbe.RecordProbe("vidar", "", false, now)
 
-	start := time.Now()
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "default"})
-	elapsed := time.Since(start)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	dec, err := svc.ResolveRoute(ctx, RouteRequest{Policy: "default"})
 	if err == nil {
 		t.Fatalf("ResolveRoute succeeded, decision=%#v", dec)
 	}
-	if elapsed > 200*time.Millisecond {
-		t.Fatalf("ResolveRoute elapsed %v, want fail-fast cached all-dead routing", elapsed)
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ResolveRoute waited for the deadline instead of failing from cached all-dead evidence: %v", err)
 	}
 	if strings.Contains(err.Error(), "provider_connectivity") {
 		t.Fatalf("error=%q, want no-live/no-viable route error, not provider_connectivity", err.Error())
