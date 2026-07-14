@@ -172,30 +172,18 @@ func CooldownFromRecord(record Record, ttl time.Duration) Cooldown {
 	}
 }
 
-// CandidateCooldown finds the newest active failure matching the candidate
-// scope and returns its cooldown evidence.
-func CandidateCooldown(records []Record, providerName, endpointName, model string, ttl time.Duration) *Cooldown {
+// CandidateCooldown finds the newest active failure matching a full fiz route
+// identity or a legacy provider-wide record. Harness-qualified failures are
+// exact; incomplete harness-qualified and non-fiz records never attach.
+func CandidateCooldown(records []Record, candidate Key, ttl time.Duration) *Cooldown {
+	candidate = normalizeCooldownKey(candidate)
+	if candidate.Harness != "fiz" || candidate.Provider == "" {
+		return nil
+	}
 	var newest *Record
 	for i := range records {
 		record := &records[i]
-		if record.Key.Provider == "" {
-			continue
-		}
-		recordProvider := record.Key.Provider
-		recordEndpoint := record.Key.Endpoint
-		if base, endpoint, ok := splitProviderRef(recordProvider); ok {
-			recordProvider = base
-			if recordEndpoint == "" {
-				recordEndpoint = endpoint
-			}
-		}
-		if providerName != "" && recordProvider != providerName {
-			continue
-		}
-		if endpointName != "" && recordEndpoint != "" && recordEndpoint != endpointName {
-			continue
-		}
-		if record.Key.Model != "" && model != "" && record.Key.Model != model {
+		if !candidateCooldownMatches(record.Key, candidate) {
 			continue
 		}
 		if newest == nil || record.RecordedAt.After(newest.RecordedAt) {
@@ -207,6 +195,35 @@ func CandidateCooldown(records []Record, providerName, endpointName, model strin
 	}
 	cooldown := CooldownFromRecord(*newest, ttl)
 	return &cooldown
+}
+
+func candidateCooldownMatches(recordKey, candidate Key) bool {
+	recordKey = normalizeCooldownKey(recordKey)
+	if recordKey.Provider == "" || recordKey.Provider != candidate.Provider {
+		return false
+	}
+	if recordKey.Harness == "" {
+		return recordKey.Endpoint == "" && recordKey.ServerInstance == "" && recordKey.Model == ""
+	}
+	if recordKey.Harness != "fiz" {
+		return false
+	}
+	return recordKey == candidate
+}
+
+func normalizeCooldownKey(key Key) Key {
+	key.Harness = strings.TrimSpace(key.Harness)
+	key.Provider = strings.TrimSpace(key.Provider)
+	key.Endpoint = strings.TrimSpace(key.Endpoint)
+	key.ServerInstance = strings.TrimSpace(key.ServerInstance)
+	key.Model = strings.TrimSpace(key.Model)
+	if base, endpoint, ok := splitProviderRef(key.Provider); ok {
+		key.Provider = base
+		if key.Endpoint == "" {
+			key.Endpoint = endpoint
+		}
+	}
+	return key
 }
 
 // ApplyAttemptCooldowns projects active attempt failures into routing inputs.

@@ -102,8 +102,9 @@ than the old home of the implementation bulk:
   `service_native_provider.go`, `service_override.go`,
   `service_projection.go`, `service_reasoning.go`.
 - Routing, status, and quota adapters:
-  `service_probe.go`, `service_routestatus.go`, `service_routing.go`,
-  `service_subscription_quota.go`.
+  `service_probe.go`, `service_routing.go`, `service_status.go`,
+  `service_subscription_quota.go`. `service_status.go` retains only the public
+  route-status projection; row assembly lives in `internal/routehealth`.
 
 `RecordRouteAttempt` and final-attempt feedback now enter through the narrow
 adapter in `service_dispatch_feedback.go`; classification and exact-success
@@ -211,9 +212,12 @@ session-log persistence, and replay/tail rendering.
 #### Owner: `internal/routehealth`
 
 These files own sticky-lease state, route-attempt feedback, cooldowns, and
-route-status assembly. `service_routing.go` stays listed under
-`internal/serviceimpl` because it is the public entrypoint, but its health and
-cooldown helpers should drain into this package during the split.
+route-status assembly. The extraction is now complete for route-status:
+`internal/routehealth.BuildStatusRows` owns filtering, ordering, cooldown
+matching, metric fallback, and neutral status rows, while the public
+`RouteStatus` receiver in `service_status.go` only gathers inputs and projects
+those rows onto the root API. The source and test lists below are retained as
+the historical extraction inventory and ordered implementation slice.
 
 - Source files:
   `service_route_attempts.go`, `service_route_leases.go`,

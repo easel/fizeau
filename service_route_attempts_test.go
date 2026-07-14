@@ -498,9 +498,7 @@ func TestRouteStatus_RouteAttemptCooldownSurfaces(t *testing.T) {
 	svc := routeAttemptTestService(t, 30*time.Second)
 	recordedAt := time.Now().Add(-time.Second).UTC()
 	if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
-		Harness:   "fiz",
 		Provider:  "bragi",
-		Model:     "qwen",
 		Status:    "failed",
 		Reason:    "rate_limit",
 		Error:     "429 too many requests",

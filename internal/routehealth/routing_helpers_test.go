@@ -189,19 +189,27 @@ func routeCandidateScore(t *testing.T, decision *routing.Decision, provider stri
 	return 0
 }
 
-func TestCandidateCooldownMatchesEndpointProviderRefs(t *testing.T) {
+func TestCandidateCooldownMatchesExactFizProviderRefs(t *testing.T) {
 	recordedAt := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
 	cooldown := CandidateCooldown([]Record{
 		{
 			Key: Key{
-				Provider: "bragi@primary",
-				Model:    "qwen",
+				Harness:        "fiz",
+				Provider:       "bragi@primary",
+				ServerInstance: "desk-a",
+				Model:          "qwen",
 			},
 			Reason:     "timeout",
 			Error:      "context deadline exceeded",
 			RecordedAt: recordedAt,
 		},
-	}, "bragi", "primary", "qwen", 30*time.Second)
+	}, Key{
+		Harness:        "fiz",
+		Provider:       "bragi",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "qwen",
+	}, 30*time.Second)
 
 	if cooldown == nil {
 		t.Fatal("expected cooldown for bragi@primary")
@@ -211,6 +219,33 @@ func TestCandidateCooldownMatchesEndpointProviderRefs(t *testing.T) {
 	}
 	if !cooldown.LastAttempt.Equal(recordedAt) {
 		t.Fatalf("LastAttempt=%v, want %v", cooldown.LastAttempt, recordedAt)
+	}
+}
+
+func TestCandidateCooldownRejectsPartialAndNonFizRecords(t *testing.T) {
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	candidate := Key{
+		Harness:        "fiz",
+		Provider:       "bragi",
+		Endpoint:       "primary",
+		ServerInstance: "desk-a",
+		Model:          "qwen",
+	}
+	records := []Record{
+		{Key: Key{Harness: "codex", Provider: "bragi", Endpoint: "primary", ServerInstance: "desk-a", Model: "qwen"}, RecordedAt: now},
+		{Key: Key{Harness: "fiz", Provider: "bragi", Endpoint: "primary", Model: "qwen"}, RecordedAt: now},
+		{Key: Key{Provider: "bragi", Model: "qwen"}, RecordedAt: now},
+		{Key: Key{Provider: "bragi@primary"}, RecordedAt: now},
+	}
+	if cooldown := CandidateCooldown(records, candidate, 30*time.Second); cooldown != nil {
+		t.Fatalf("partial/non-fiz cooldown=%+v, want nil", cooldown)
+	}
+
+	legacyAt := now.Add(time.Second)
+	records = append(records, Record{Key: Key{Provider: "bragi"}, Reason: "legacy", RecordedAt: legacyAt})
+	cooldown := CandidateCooldown(records, candidate, 30*time.Second)
+	if cooldown == nil || cooldown.Reason != "legacy" || !cooldown.LastAttempt.Equal(legacyAt) {
+		t.Fatalf("legacy cooldown=%+v, want provider-wide match at %v", cooldown, legacyAt)
 	}
 }
 

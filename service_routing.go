@@ -387,31 +387,6 @@ func applyRouteSnapshotEvidence(candidate *RouteCandidate, row modelsnapshot.Kno
 	candidate.QuotaFreshnessSource = row.QuotaFreshnessSource
 }
 
-func applyRouteSnapshotEvidenceToStatus(candidate *RouteCandidateStatus, row modelsnapshot.KnownModel) {
-	if candidate == nil {
-		return
-	}
-	candidate.SourceStatus = string(row.Status)
-	candidate.AutoRoutable = row.AutoRoutable
-	candidate.ExactPinOnly = row.ExactPinOnly
-	candidate.ExclusionReason = row.ExclusionReason
-	candidate.Power = row.Power
-	candidate.ContextLength = row.ContextWindow
-	candidate.CostInputPerMTok = row.CostInputPerM
-	candidate.CostOutputPerMTok = row.CostOutputPerM
-	candidate.RecentLatencyMS = float64(row.RecentP50Latency.Milliseconds())
-	candidate.QuotaRemaining = row.QuotaRemaining
-	candidate.ActualCashSpend = row.ActualCashSpend
-	candidate.EffectiveCost = row.EffectiveCost
-	candidate.EffectiveCostSource = row.EffectiveCostSource
-	candidate.HealthFreshnessAt = row.HealthFreshnessAt.UTC()
-	candidate.HealthFreshnessSource = row.HealthFreshnessSource
-	candidate.QuotaFreshnessAt = row.QuotaFreshnessAt.UTC()
-	candidate.QuotaFreshnessSource = row.QuotaFreshnessSource
-	candidate.ModelDiscoveryFreshnessAt = row.DiscoveredAt.UTC()
-	candidate.ModelDiscoveryFreshnessSource = string(row.DiscoveredVia)
-}
-
 func (s *service) annotateRouteDecisionSnapshotEvidence(decision *RouteDecision, snapshot modelsnapshot.ModelSnapshot) {
 	if s == nil || decision == nil {
 		return

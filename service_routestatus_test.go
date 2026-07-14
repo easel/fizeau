@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/routing"
 )
@@ -22,8 +23,16 @@ func isolateRouteStatusTestEnv(t *testing.T) {
 // when no ServiceConfig is provided.
 func TestRouteStatus_emptyConfig(t *testing.T) {
 	isolateRouteStatusTestEnv(t)
-	svc := newTestService(t, ServiceOptions{})
-	report, err := svc.RouteStatus(context.Background())
+	previousLoader := loadServiceConfig
+	loadServiceConfig = nil
+	t.Cleanup(func() { loadServiceConfig = previousLoader })
+	publicService, err := New(ServiceOptions{QuotaRefreshContext: canceledRefreshContext()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	svc := publicService.(*service)
+	svc.routingQuality.RecordRequest(time.Now().UTC(), nil)
+	report, err := publicService.RouteStatus(context.Background())
 	if err != nil {
 		t.Fatalf("RouteStatus: unexpected error: %v", err)
 	}
@@ -35,6 +44,9 @@ func TestRouteStatus_emptyConfig(t *testing.T) {
 	}
 	if report.GeneratedAt.IsZero() {
 		t.Error("GeneratedAt should be set")
+	}
+	if report.RoutingQuality.TotalRequests != 1 || report.RoutingQuality.AutoAcceptanceRate != 1 {
+		t.Fatalf("RoutingQuality = %#v, want one accepted request with nil ServiceConfig", report.RoutingQuality)
 	}
 }
 
@@ -90,18 +102,27 @@ func TestRouteStatusSnapshotRowsMatchMultiEndpointFixture(t *testing.T) {
 		t.Fatalf("ListModels fiz rows = %d, want 2 (all rows=%#v)", len(fizModels), models)
 	}
 	wantRows := make(map[string]ModelInfo, len(fizModels))
+	primaryServerInstance := ""
 	for _, model := range fizModels {
 		key := model.Provider + "\x00" + model.ID + "\x00" + model.EndpointName + "\x00" + model.ServerInstance
 		wantRows[key] = model
+		if model.Provider == "bragi" && model.EndpointName == "primary" {
+			primaryServerInstance = model.ServerInstance
+		}
+	}
+	if primaryServerInstance == "" {
+		t.Fatal("primary ListModels row is missing normalized server identity")
 	}
 
 	if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
-		Provider:  "bragi@primary",
-		Endpoint:  "primary",
-		Model:     "qwen3.5-27b",
-		Status:    "failed",
-		Reason:    "route_attempt_failure",
-		Timestamp: time.Now().Add(-time.Second),
+		Harness:        "fiz",
+		Provider:       "bragi",
+		Endpoint:       "primary",
+		ServerInstance: primaryServerInstance,
+		Model:          "qwen3.5-27b",
+		Status:         "failed",
+		Reason:         "route_attempt_failure",
+		Timestamp:      time.Now().Add(-time.Second),
 	}); err != nil {
 		t.Fatalf("RecordRouteAttempt: %v", err)
 	}
@@ -229,48 +250,111 @@ func TestRouteStatusLastDecisionCached(t *testing.T) {
 	}
 }
 
-// TestRouteStatusLastDecisionCachedViaResolveRoute verifies the full path:
-// ResolveRoute → cache write → RouteStatus reads cache.
+// TestRouteStatusLastDecisionCachedViaResolveRoute verifies the full public
+// path with a service created by New. The discovery cache and HTTP endpoint
+// make ResolveRoute deterministic, so this proof must never skip.
 func TestRouteStatusLastDecisionCachedViaResolveRoute(t *testing.T) {
-	isolateRouteStatusTestEnv(t)
-	// We need the routing engine to actually resolve. The engine picks
-	// harnesses from the registry. "fiz" is always in the registry.
-	// We give it a provider so the engine can build a candidate.
+	t.Setenv("PATH", "")
+	cacheDir := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+	model := "mymodel"
+	modelsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]string{{"id": model}},
+		})
+	})
+	server := httptest.NewServer(modelsHandler)
+	t.Cleanup(server.Close)
+	baseURL := server.URL + "/v1"
+	serverInstance := "bragi-instance"
+	endpoint := "primary"
+	capturedAt := time.Now().UTC().Add(-time.Second)
+	cache := &discoverycache.Cache{Root: cacheDir}
+	writeSnapshotDiscoveryFixture(t, cache,
+		testDiscoverySourceName("bragi", endpoint, baseURL, serverInstance),
+		capturedAt, []string{model})
+
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-14T00:00:00Z
+catalog_version: route-status-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+  air-gapped:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+    require: [no_remote]
+models:
+  mymodel:
+    family: test
+    status: active
+    provider_system: openai
+    power: 5
+    context_window: 32768
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+
 	sc := &fakeServiceConfig{
 		providers: map[string]ServiceProviderEntry{
-			"bragi": {Type: "lmstudio", BaseURL: "http://127.0.0.1:9999/v1", ServerInstance: "bragi-instance", Model: "mymodel"},
+			"bragi": {
+				Type:           "lmstudio",
+				BaseURL:        baseURL,
+				ServerInstance: serverInstance,
+				Endpoints: []ServiceProviderEndpoint{{
+					Name: endpoint, BaseURL: baseURL, ServerInstance: serverInstance,
+				}},
+				Model: model,
+			},
 		},
 		names:       []string{"bragi"},
 		defaultName: "bragi",
 	}
 
-	svc := &service{
-		opts:     ServiceOptions{ServiceConfig: sc},
-		registry: harnesses.NewRegistry(),
-	}
-
-	// ResolveRoute with model="mymodel". The engine resolves against the
-	// "fiz" harness + bragi provider.
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Model:    "mymodel",
-		Provider: "bragi",
+	publicService, err := New(ServiceOptions{
+		ServiceConfig:       sc,
+		QuotaRefreshContext: canceledRefreshContext(),
 	})
 	if err != nil {
-		// Routing may return an error if the engine can't fully resolve;
-		// skip in that case — the direct-cache test covers the cache logic.
-		t.Skipf("ResolveRoute returned error (provider not live): %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	if dec == nil {
-		t.Fatal("RouteDecision: nil")
+	svc := publicService.(*service)
+	svc.routingQuality.RecordRequest(time.Now().UTC(), nil)
+	req := RouteRequest{
+		Policy:        "air-gapped",
+		Model:         model,
+		Provider:      "bragi",
+		CorrelationID: "route-status-cache-proof",
+	}
+	first, err := publicService.ResolveRoute(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first ResolveRoute: %v", err)
+	}
+	if first == nil || first.Sticky.Assignment != "acquired" {
+		t.Fatalf("first decision = %#v, want acquired sticky assignment", first)
+	}
+	decision, err := publicService.ResolveRoute(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second ResolveRoute: %v", err)
+	}
+	if decision == nil || decision.Sticky.Assignment != "reused" {
+		t.Fatalf("second decision = %#v, want reused sticky assignment", decision)
 	}
 
-	report, err := svc.RouteStatus(context.Background())
+	report, err := publicService.RouteStatus(context.Background())
 	if err != nil {
 		t.Fatalf("RouteStatus: %v", err)
 	}
 	var found *RouteStatusEntry
 	for i := range report.Routes {
-		if report.Routes[i].Model == "mymodel" {
+		if report.Routes[i].Model == model {
 			found = &report.Routes[i]
 			break
 		}
@@ -278,14 +362,32 @@ func TestRouteStatusLastDecisionCachedViaResolveRoute(t *testing.T) {
 	if found == nil {
 		t.Fatal("route 'mymodel' not found in report")
 	}
-	if found.LastDecision == nil {
-		t.Fatal("LastDecision: expected non-nil after successful ResolveRoute")
+	if found.LastDecision != decision {
+		t.Fatalf("LastDecision = %p, want cached second decision %p", found.LastDecision, decision)
 	}
-	if dec.Endpoint != "" && found.SelectedEndpoint != dec.Endpoint {
-		t.Fatalf("SelectedEndpoint = %q, want %q", found.SelectedEndpoint, dec.Endpoint)
+	if found.LastDecisionAt.IsZero() {
+		t.Fatal("LastDecisionAt should be populated")
 	}
-	if dec.ServerInstance != "" && found.SelectedServerInstance != dec.ServerInstance {
-		t.Fatalf("SelectedServerInstance = %q, want %q", found.SelectedServerInstance, dec.ServerInstance)
+	if found.SelectedEndpoint != decision.Endpoint || found.SelectedEndpoint != endpoint {
+		t.Fatalf("SelectedEndpoint = %q, want decision endpoint %q", found.SelectedEndpoint, decision.Endpoint)
+	}
+	if found.SelectedServerInstance != decision.ServerInstance || found.SelectedServerInstance != serverInstance {
+		t.Fatalf("SelectedServerInstance = %q, want decision server %q", found.SelectedServerInstance, decision.ServerInstance)
+	}
+	if found.Sticky != decision.Sticky || found.Sticky.Assignment != "reused" {
+		t.Fatalf("Sticky = %#v, want cached reused evidence %#v", found.Sticky, decision.Sticky)
+	}
+	if report.SnapshotCapturedAt.IsZero() || len(found.Candidates) != 1 {
+		t.Fatalf("snapshot/candidates = %v/%d, want captured snapshot and one candidate", report.SnapshotCapturedAt, len(found.Candidates))
+	}
+	if !found.Candidates[0].SnapshotCapturedAt.Equal(report.SnapshotCapturedAt) {
+		t.Fatalf("candidate snapshot = %v, want report snapshot %v", found.Candidates[0].SnapshotCapturedAt, report.SnapshotCapturedAt)
+	}
+	if report.RoutingQuality.TotalRequests != 1 || report.RoutingQuality.AutoAcceptanceRate != 1 {
+		t.Fatalf("RoutingQuality = %#v, want constructor store projection", report.RoutingQuality)
+	}
+	if report.GlobalCooldowns != nil {
+		t.Fatalf("GlobalCooldowns = %#v, want preserved nil zero value", report.GlobalCooldowns)
 	}
 }
 
@@ -302,9 +404,7 @@ func TestRouteStatusCooldownStateSurfaces(t *testing.T) {
 	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
 	recordedAt := time.Now().Add(-time.Second).UTC()
 	if err := svc.RecordRouteAttempt(context.Background(), RouteAttempt{
-		Harness:   "fiz",
 		Provider:  "bragi",
-		Model:     "qwen3-27b",
 		Status:    "failed",
 		Reason:    "rate_limit",
 		Timestamp: recordedAt,
