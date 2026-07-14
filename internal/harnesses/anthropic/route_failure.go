@@ -10,6 +10,7 @@ import (
 // evidence from the Claude surface that executed; they do not describe host
 // login state or the health of a sibling Claude surface.
 const (
+	// #nosec G101 -- stable failure-class vocabulary, not a credential.
 	FailureClassCredentialInvalid = "credential_invalid"
 	FailureClassQuotaExhausted    = "quota_exhausted"
 	FailureClassTransport         = "transport"
