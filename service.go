@@ -980,6 +980,13 @@ type service struct {
 	openrouterCredit *openrouterCreditStore
 
 	runtime serviceimpl.Runtime
+
+	// subprocessDispatchObserver is a package-private observation seam for
+	// composition tests. Production leaves it nil. When set before Execute it
+	// observes the concrete runner selected by serviceimpl.DispatchExecuteRun;
+	// it cannot replace or suppress the runner and therefore does not change
+	// dispatch behavior.
+	subprocessDispatchObserver func(harnesses.Harness)
 }
 
 const (

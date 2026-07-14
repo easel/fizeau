@@ -69,6 +69,9 @@ func (s *service) dispatchExecuteRun(ctx context.Context, run executeRunContext)
 			s.runNative(ctx, run.req, run.decision, run.meta, run.out, run.seq, run.start, run.sl, run.session)
 		},
 		RunSubprocess: func(ctx context.Context, runner harnesses.Harness) {
+			if s.subprocessDispatchObserver != nil {
+				s.subprocessDispatchObserver(runner)
+			}
 			s.runSubprocess(ctx, run.req, run.decision, run.meta, run.out, run.seq, run.start, run.sl, run.session, runner)
 		},
 		RunVirtual: func(ctx context.Context) {
