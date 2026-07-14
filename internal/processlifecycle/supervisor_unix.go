@@ -5,6 +5,7 @@ package processlifecycle
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"syscall"
 	"time"
 )
+
+const maxLifecycleInheritedFD = 1 << 20
 
 func init() {
 	switch os.Getenv(lifecycleRoleEnv) {
@@ -30,7 +33,7 @@ func runUnixBatchSupervisor() int {
 		return 126
 	}
 	extraCount, ok := environmentInt(lifecycleExtraCountEnv)
-	if !ok || extraCount < 0 || fdBase != 3+extraCount {
+	if !ok || extraCount < 0 || extraCount > maxLifecycleInheritedFD-7 || fdBase != 3+extraCount {
 		return 126
 	}
 	expectedPPID, ok := environmentInt(lifecycleExpectedPPIDEnv)
@@ -38,11 +41,20 @@ func runUnixBatchSupervisor() int {
 		return 126
 	}
 
-	configFile := os.NewFile(uintptr(fdBase), "lifecycle-config")
-	gateFile := os.NewFile(uintptr(fdBase+1), "lifecycle-gate")
-	controlFile := os.NewFile(uintptr(fdBase+2), "lifecycle-control")
-	reportFile := os.NewFile(uintptr(fdBase+3), "lifecycle-report")
-	if configFile == nil || gateFile == nil || controlFile == nil || reportFile == nil {
+	configFile, err := inheritedFile(fdBase, "lifecycle-config")
+	if err != nil {
+		return 126
+	}
+	gateFile, err := inheritedFile(fdBase+1, "lifecycle-gate")
+	if err != nil {
+		return 126
+	}
+	controlFile, err := inheritedFile(fdBase+2, "lifecycle-control")
+	if err != nil {
+		return 126
+	}
+	reportFile, err := inheritedFile(fdBase+3, "lifecycle-report")
+	if err != nil {
 		return 126
 	}
 	for fd := fdBase; fd <= fdBase+3; fd++ {
@@ -112,11 +124,17 @@ func runUnixBatchSupervisor() int {
 		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
 		return 126
 	}
-	targetExtras := inheritedFiles(3, extraCount, "target-extra")
+	targetExtras, err := inheritedFiles(3, extraCount, "target-extra")
+	if err != nil {
+		closeFiles(childConfigR, childConfigW)
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
 	for fd := 3; fd < 3+extraCount; fd++ {
 		syscall.CloseOnExec(fd)
 	}
 	childFDBase := 3 + extraCount
+	// #nosec G204 -- executable is the current trusted Fizeau binary returned by os.Executable; target config remains pipe-only.
 	child := exec.Command(executable)
 	child.Env = lifecycleEnvironment(os.Environ(), map[string]string{
 		lifecycleRoleEnv:       lifecycleRoleChild,
@@ -189,12 +207,15 @@ func runUnixBatchChild() int {
 		return 126
 	}
 	extraCount, ok := environmentInt(lifecycleExtraCountEnv)
-	if !ok || extraCount < 0 || fdBase != 3+extraCount {
+	if !ok || extraCount < 0 || extraCount > maxLifecycleInheritedFD-5 || fdBase != 3+extraCount {
 		return 126
 	}
-	configFile := os.NewFile(uintptr(fdBase), "target-config")
-	gateFile := os.NewFile(uintptr(fdBase+1), "target-gate")
-	if configFile == nil || gateFile == nil {
+	configFile, err := inheritedFile(fdBase, "target-config")
+	if err != nil {
+		return 126
+	}
+	gateFile, err := inheritedFile(fdBase+1, "target-gate")
+	if err != nil {
 		return 126
 	}
 	syscall.CloseOnExec(fdBase)
@@ -264,12 +285,34 @@ func reapAdoptedChildren() {
 	}
 }
 
-func inheritedFiles(start, count int, prefix string) []*os.File {
+func inheritedFiles(start, count int, prefix string) ([]*os.File, error) {
+	if start < 0 || count < 0 || start > maxLifecycleInheritedFD || count > maxLifecycleInheritedFD-start {
+		return nil, fmt.Errorf("unsafe inherited file descriptor range: start=%d count=%d", start, count)
+	}
 	files := make([]*os.File, 0, count)
 	for index := 0; index < count; index++ {
-		files = append(files, os.NewFile(uintptr(start+index), prefix+"-"+strconv.Itoa(index)))
+		file, err := inheritedFile(start+index, prefix+"-"+strconv.Itoa(index))
+		if err != nil {
+			for _, opened := range files {
+				_ = opened.Close()
+			}
+			return nil, err
+		}
+		files = append(files, file)
 	}
-	return files
+	return files, nil
+}
+
+func inheritedFile(fd int, name string) (*os.File, error) {
+	if fd < 0 || fd > maxLifecycleInheritedFD {
+		return nil, fmt.Errorf("unsafe inherited file descriptor %d", fd)
+	}
+	// #nosec G115 -- fd is checked nonnegative and capped well below uintptr limits before conversion.
+	file := os.NewFile(uintptr(fd), name)
+	if file == nil {
+		return nil, fmt.Errorf("inherited file descriptor %d is unavailable", fd)
+	}
+	return file, nil
 }
 
 func writeSupervisorReport(file *os.File, report supervisorStartReport) {

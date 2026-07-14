@@ -97,8 +97,11 @@ func TestUnixBatchCancellationReapsGrandchild(t *testing.T) {
 		cancel()
 		t.Fatalf("Execute: %v", err)
 	}
-	waitForPath(t, filepath.Join(dir, grandchildPIDFile), 2*time.Second)
-	record := waitForLifecycleRecord(t, dir, "codex", 2*time.Second)
+	// Process startup can be delayed while the full repository test suite and
+	// pre-push hooks run concurrently. Keep evidence discovery tolerant without
+	// relaxing the cleanup deadlines asserted after cancellation.
+	waitForPath(t, filepath.Join(dir, grandchildPIDFile), 10*time.Second)
+	record := waitForLifecycleRecord(t, dir, "codex", 10*time.Second)
 	grandchildPID := readPIDFile(t, filepath.Join(dir, grandchildPIDFile))
 	pgid := lifecyclePGID(t, record)
 	assertSafeBoundary(t, pgid)

@@ -36,6 +36,7 @@ func readUnixProcessIdentity(pid int) (ProcessIdentity, error) {
 	if bootToken == "" {
 		return ProcessIdentity{}, fmt.Errorf("read Linux boot identity: empty boot ID")
 	}
+	// #nosec G101 -- BirthToken is non-secret OS process identity evidence, not a credential.
 	return ProcessIdentity{
 		PID: pid, BirthTokenScheme: "linux-boot-id+proc-starttime-ticks/v1",
 		BirthToken: bootToken + ":" + fields[startTimeIndexAfterState],

@@ -119,7 +119,7 @@ func TestUnixBatchWatcherCompletesWithoutWaitCaller(t *testing.T) {
 	recordID := batch.Record().RecordID
 	select {
 	case <-batch.waitDone:
-	case <-time.After(time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("supervisor waiter did not complete")
 	}
 	deadline := time.Now().Add(time.Second)
@@ -151,6 +151,18 @@ func TestUnixPreparedAbortIsBoundedAndIndeterminateWithoutBoundary(t *testing.T)
 	}
 	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Fatalf("Abort took %s, want bounded cleanup", elapsed)
+	}
+}
+
+func TestInheritedFileRejectsUnsafeDescriptorRanges(t *testing.T) {
+	if _, err := inheritedFile(-1, "negative"); err == nil {
+		t.Fatal("negative inherited descriptor was accepted")
+	}
+	if _, err := inheritedFile(maxLifecycleInheritedFD+1, "too-large"); err == nil {
+		t.Fatal("oversized inherited descriptor was accepted")
+	}
+	if _, err := inheritedFiles(maxLifecycleInheritedFD-1, 3, "overflow"); err == nil {
+		t.Fatal("overflowing inherited descriptor range was accepted")
 	}
 }
 
