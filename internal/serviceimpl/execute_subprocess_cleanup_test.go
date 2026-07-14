@@ -16,6 +16,12 @@ type cleanupTestHarness struct {
 	execute func(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error)
 }
 
+// cleanupCoordinationTimeout is deliberately much longer than the assertion
+// window below. These tests leave a lifecycle record owned until the test
+// goroutine completes the simulated cleanup; under repository-wide -race load
+// that goroutine may not be scheduled within a sub-second production deadline.
+const cleanupCoordinationTimeout = 10 * time.Second
+
 func (h cleanupTestHarness) Info() harnesses.HarnessInfo {
 	return harnesses.HarnessInfo{Name: "cleanup-test"}
 }
@@ -33,7 +39,7 @@ func TestTerminalWaitsForHarnessCleanup(t *testing.T) {
 	}
 	emitted := make(chan harnesses.FinalData, 1)
 	harness := cleanupTestHarness{execute: func(_ context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
-		if req.SessionID != "session-wait" || req.LifecycleStateDir != dir || req.CleanupTimeout != 500*time.Millisecond {
+		if req.SessionID != "session-wait" || req.LifecycleStateDir != dir || req.CleanupTimeout != cleanupCoordinationTimeout {
 			t.Errorf("forwarded lifecycle request = session %q dir %q timeout %s", req.SessionID, req.LifecycleStateDir, req.CleanupTimeout)
 		}
 		ch := make(chan harnesses.Event, 1)
@@ -45,7 +51,7 @@ func TestTerminalWaitsForHarnessCleanup(t *testing.T) {
 	go func() {
 		defer close(done)
 		RunSubprocess(context.Background(), SubprocessRequest{
-			SessionID: "session-wait", LifecycleStateDir: dir, CleanupTimeout: 500 * time.Millisecond,
+			SessionID: "session-wait", LifecycleStateDir: dir, CleanupTimeout: cleanupCoordinationTimeout,
 		}, harness, SubprocessCallbacks{EmitEvent: captureCleanupFinal(t, emitted)})
 	}()
 	select {
@@ -68,7 +74,7 @@ func TestTerminalWaitsForHarnessCleanup(t *testing.T) {
 		if final.Outcome != harnesses.SessionOutcomeSuccess || final.Cause != harnesses.TerminalCauseCompleted || final.Stage != harnesses.SessionStageHarness {
 			t.Fatalf("terminal after cleanup = %+v", final)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(cleanupCoordinationTimeout):
 		t.Fatal("terminal did not follow cleanup success")
 	}
 	<-done
@@ -95,7 +101,7 @@ func TestCancelledSubprocessStillDeliversTerminalAfterDetachedCleanup(t *testing
 	go func() {
 		defer close(done)
 		RunSubprocess(ctx, SubprocessRequest{
-			SessionID: "session-cancelled", LifecycleStateDir: dir, CleanupTimeout: 500 * time.Millisecond,
+			SessionID: "session-cancelled", LifecycleStateDir: dir, CleanupTimeout: cleanupCoordinationTimeout,
 		}, harness, SubprocessCallbacks{EmitEvent: func(event harnesses.Event) bool {
 			if event.Type != harnesses.EventTypeFinal {
 				return false
@@ -123,7 +129,7 @@ func TestCancelledSubprocessStillDeliversTerminalAfterDetachedCleanup(t *testing
 		if final.Outcome != harnesses.SessionOutcomeCancelled || final.Cause != harnesses.TerminalCauseContextCancelled || final.Stage != harnesses.SessionStageCancellation {
 			t.Fatalf("cancelled terminal = %+v", final)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(cleanupCoordinationTimeout):
 		t.Fatal("cancelled terminal was dropped")
 	}
 	<-done
@@ -174,7 +180,7 @@ func TestExecuteErrorWaitsForHarnessCleanup(t *testing.T) {
 	go func() {
 		defer close(done)
 		RunSubprocess(context.Background(), SubprocessRequest{
-			SessionID: "session-execute-error", LifecycleStateDir: dir, CleanupTimeout: 500 * time.Millisecond,
+			SessionID: "session-execute-error", LifecycleStateDir: dir, CleanupTimeout: cleanupCoordinationTimeout,
 		}, harness, SubprocessCallbacks{EmitEvent: captureCleanupFinal(t, emitted)})
 	}()
 	select {
@@ -197,7 +203,7 @@ func TestExecuteErrorWaitsForHarnessCleanup(t *testing.T) {
 		if final.Cause != harnesses.TerminalCauseSpawnFailed || final.Stage != harnesses.SessionStageSpawn {
 			t.Fatalf("execute error terminal = %+v", final)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(cleanupCoordinationTimeout):
 		t.Fatal("execute error terminal did not follow cleanup")
 	}
 	<-done
