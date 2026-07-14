@@ -37,6 +37,58 @@ func TestStoreRecordAttemptSuccessClearsMatchingFailure(t *testing.T) {
 	}
 }
 
+func TestStoreExactSuccessClearPreservesEndpointSiblings(t *testing.T) {
+	store := NewStore()
+	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	for _, endpoint := range []string{"desk-a", "desk-b"} {
+		if err := store.RecordAttempt(Attempt{
+			Harness: "fiz", Provider: "local", Endpoint: endpoint, Model: "qwen",
+			Status: "failed", Timestamp: now,
+		}); err != nil {
+			t.Fatalf("RecordAttempt(%s): %v", endpoint, err)
+		}
+	}
+	if err := store.RecordAttemptWithOptions(Attempt{
+		Harness: "fiz", Provider: "local", Endpoint: "desk-a", Model: "qwen",
+		Status: "success", Timestamp: now.Add(time.Second),
+	}, RecordOptions{ExactSuccessClear: true}); err != nil {
+		t.Fatalf("RecordAttemptWithOptions: %v", err)
+	}
+	records := store.ActiveAttempts(now.Add(time.Second), time.Minute)
+	if len(records) != 1 || records[0].Key.Endpoint != "desk-b" {
+		t.Fatalf("active failures = %+v, want only desk-b sibling", records)
+	}
+}
+
+func TestStoreExactSuccessClearTreatsEmptyEndpointAndServerAsIdentity(t *testing.T) {
+	store := NewStore()
+	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+	for _, route := range []Attempt{
+		{Harness: "fiz", Provider: "local", Model: "qwen"},
+		{Harness: "fiz", Provider: "local", Endpoint: "desk-a", ServerInstance: "server-a", Model: "qwen"},
+	} {
+		route.Status = "failed"
+		route.Timestamp = now
+		if err := store.RecordAttempt(route); err != nil {
+			t.Fatalf("RecordAttempt(%+v): %v", route, err)
+		}
+	}
+	if err := store.RecordAttemptWithOptions(Attempt{
+		Harness: "fiz", Provider: "local", Model: "qwen",
+		Status: "success", Timestamp: now.Add(time.Second),
+	}, RecordOptions{ExactSuccessClear: true}); err != nil {
+		t.Fatalf("RecordAttemptWithOptions: %v", err)
+	}
+	records := store.ActiveAttempts(now.Add(time.Second), time.Minute)
+	if len(records) != 1 {
+		t.Fatalf("active failures = %+v, want one qualified sibling", records)
+	}
+	want := (Key{Harness: "fiz", Provider: "local", Model: "qwen", Endpoint: "desk-a", ServerInstance: "server-a"})
+	if records[0].Key != want {
+		t.Fatalf("remaining key = %+v, want %+v", records[0].Key, want)
+	}
+}
+
 func TestStoreActiveAttemptsExpiresFailures(t *testing.T) {
 	store := NewStore()
 	now := time.Date(2026, 5, 2, 10, 0, 0, 0, time.UTC)

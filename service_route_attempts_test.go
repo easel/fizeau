@@ -302,18 +302,6 @@ func TestRouteAttemptPreservesServerInstance(t *testing.T) {
 		t.Fatalf("success should clear only desk-a; active routes = %+v", records)
 	}
 
-	attempt, ok := routeAttemptFromFinal(harnesses.FinalData{
-		Status: "success",
-		RoutingActual: &harnesses.RoutingActual{
-			Harness:        "fiz",
-			Provider:       "local@primary",
-			ServerInstance: " desk-c ",
-			Model:          "qwen",
-		},
-	})
-	if !ok || attempt.ServerInstance != "desk-c" {
-		t.Fatalf("routeAttemptFromFinal ServerInstance = %q, ok=%v; want desk-c, true", attempt.ServerInstance, ok)
-	}
 }
 
 func TestRecordRouteAttemptReturnsPersistenceFailureAfterMemoryUpdate(t *testing.T) {
@@ -378,47 +366,6 @@ func TestRecordRouteAttempt_TTLExpiryRemovesDemotion(t *testing.T) {
 	}
 	if dec.Provider != "bragi" {
 		t.Fatalf("Provider after TTL expiry: got %q, want bragi", dec.Provider)
-	}
-}
-
-func TestRecordRouteAttempt_FromFinalSplitsEndpointProviderRef(t *testing.T) {
-	attempt, ok := routeAttemptFromFinal(harnesses.FinalData{
-		Status:     "failed",
-		Error:      "502 bad gateway",
-		DurationMS: 125,
-		RoutingActual: &harnesses.RoutingActual{
-			Harness:      "fiz",
-			Provider:     "bragi@rack-a",
-			Model:        "qwen",
-			FailureClass: "protocol",
-		},
-	})
-	if !ok {
-		t.Fatal("routeAttemptFromFinal should record endpoint-qualified dispatch failures")
-	}
-	if attempt.Provider != "bragi" || attempt.Endpoint != "rack-a" {
-		t.Fatalf("attempt provider split = %q/%q, want bragi/rack-a", attempt.Provider, attempt.Endpoint)
-	}
-	if attempt.Reason != "protocol" {
-		t.Fatalf("attempt.Reason = %q, want protocol", attempt.Reason)
-	}
-	if attempt.Duration != 125*time.Millisecond {
-		t.Fatalf("attempt.Duration = %s, want 125ms", attempt.Duration)
-	}
-}
-
-func TestRecordRouteAttempt_FromFinalIgnoresSemanticFailures(t *testing.T) {
-	if _, ok := routeAttemptFromFinal(harnesses.FinalData{
-		Status: "failed",
-		Error:  "validator rejected malformed tool payload",
-		RoutingActual: &harnesses.RoutingActual{
-			Harness:      "fiz",
-			Provider:     "bragi",
-			Model:        "qwen",
-			FailureClass: "unknown",
-		},
-	}); ok {
-		t.Fatal("routeAttemptFromFinal should ignore non-dispatch failures")
 	}
 }
 

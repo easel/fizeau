@@ -27,6 +27,15 @@ type Attempt struct {
 	Timestamp      time.Time
 }
 
+// RecordOptions controls how a successful attempt clears active failures.
+// Failure recording and metric aggregation are identical for every option.
+type RecordOptions struct {
+	// ExactSuccessClear makes a success clear only the identical normalized
+	// route key. Empty endpoint and server-instance fields are intentional
+	// identity values, not wildcards, when this option is set.
+	ExactSuccessClear bool
+}
+
 // Key is the normalized route-attempt identity.
 type Key struct {
 	Harness        string
@@ -72,6 +81,14 @@ func NewStore() *Store {
 // RecordAttempt records availability feedback. Success clears matching active
 // failures; non-success records an active failure and updates metrics.
 func (s *Store) RecordAttempt(attempt Attempt) error {
+	return s.RecordAttemptWithOptions(attempt, RecordOptions{})
+}
+
+// RecordAttemptWithOptions records availability feedback with explicit
+// success-clearing semantics. ExactSuccessClear is appropriate when the
+// caller has authoritative evidence for one dispatched route; the default
+// RecordAttempt behavior remains compatible with partial success keys.
+func (s *Store) RecordAttemptWithOptions(attempt Attempt, opts RecordOptions) error {
 	key := NormalizeKey(attempt)
 	if key.Harness == "" && key.Provider == "" {
 		return fmt.Errorf("route attempt requires harness or provider")
@@ -97,7 +114,11 @@ func (s *Store) RecordAttempt(attempt Attempt) error {
 	s.recordMetricLocked(key, Succeeded(status), attempt.Duration, recordedAt)
 
 	if Succeeded(status) {
-		s.clearFailuresLocked(key)
+		if opts.ExactSuccessClear {
+			delete(s.failures, key)
+		} else {
+			s.clearFailuresLocked(key)
+		}
 		return nil
 	}
 

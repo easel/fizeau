@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/routehealth"
 )
@@ -235,20 +236,21 @@ exit 1
 	}
 }
 
-func TestWrappedFailureObservationAdmitsStableClasses(t *testing.T) {
+func TestWrappedFailureObservationUsesTwoStageReachabilityGate(t *testing.T) {
 	for _, tc := range []struct {
-		class string
-		error string
-		want  bool
+		name     string
+		class    string
+		error    string
+		wantGate bool
 	}{
-		{class: "availability", error: "binary not found", want: true},
-		{class: "protocol", error: "bad response framing", want: true},
-		{class: "transport", error: "transport adapter rejected the request", want: true},
-		{class: "credential_invalid", error: "credential refresh failed after connection reset", want: true},
-		{class: "quota_exhausted", error: "HTTP 503 while reading quota exhaustion evidence", want: true},
-		{class: "unknown", error: "typed route diagnostic", want: false},
+		{name: "availability without reachability diagnostic stays soft", class: "availability", error: "binary not found"},
+		{name: "protocol without reachability diagnostic stays soft", class: "protocol", error: "bad response framing"},
+		{name: "transport without reachability diagnostic stays soft", class: "transport", error: "transport adapter rejected the request"},
+		{name: "credential network-looking diagnostic stays soft", class: "credential_invalid", error: "credential refresh failed after connection reset"},
+		{name: "quota HTTP-looking diagnostic stays soft", class: "quota_exhausted", error: "HTTP 503 while reading quota exhaustion evidence"},
+		{name: "dispatch class plus reachability diagnostic hard gates", class: "transport", error: "dial tcp 192.0.2.1:443: i/o timeout", wantGate: true},
 	} {
-		t.Run(tc.class, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			svc := &service{providerProbe: routehealth.NewProbeStore()}
 			err := svc.observeRouteAttemptFromFinal(harnesses.FinalData{
 				Status: "failed",
@@ -265,72 +267,160 @@ func TestWrappedFailureObservationAdmitsStableClasses(t *testing.T) {
 				t.Fatalf("observeRouteAttemptFromFinal: %v", err)
 			}
 			records := svc.activeRouteAttempts(time.Now().UTC(), time.Minute)
-			if got := len(records) == 1; got != tc.want {
-				t.Fatalf("class %q recorded=%v, want %v; records=%+v", tc.class, got, tc.want, records)
-			}
-			if !tc.want {
-				if _, probed := svc.providerProbe.LastProbe("vendor", "primary"); probed {
-					t.Fatal("excluded failure class produced reachability feedback")
-				}
-				return
+			if len(records) != 1 {
+				t.Fatalf("typed class %q recorded attempts = %+v, want one", tc.class, records)
 			}
 			wantKey := (routehealth.Key{Harness: "claude", Provider: "vendor", Endpoint: "primary", ServerInstance: "server-a", Model: "model-a"})
 			if records[0].Key != wantKey || records[0].Reason != tc.class {
 				t.Fatalf("record = %+v, want exact key %+v and class %q", records[0], wantKey, tc.class)
 			}
-			if _, probed := svc.providerProbe.LastProbe("vendor", "primary"); probed {
-				t.Fatalf("stable class %q with a non-reachability diagnostic hard-gated the provider", tc.class)
+			probe, probed := svc.providerProbe.LastProbe("vendor", "primary")
+			if probed != tc.wantGate {
+				t.Fatalf("probe hard gate present = %v, want %v; probe=%+v", probed, tc.wantGate, probe)
+			}
+			if probed && probe.LastProbeSuccess {
+				t.Fatalf("hard-gate probe unexpectedly successful: %+v", probe)
 			}
 		})
 	}
+}
 
-	t.Run("classless semantic failure", func(t *testing.T) {
-		svc := &service{}
-		if err := svc.observeRouteAttemptFromFinal(harnesses.FinalData{
-			Status: "failed",
-			Error:  "requested task is unsupported by this validator",
-			RoutingActual: &harnesses.RoutingActual{
-				Harness:  "claude",
-				Provider: "vendor@primary",
-				Model:    "model-a",
+func TestWrappedHTTP5xxObservationGatesOnlyExactEndpoint(t *testing.T) {
+	cacheRoot := tempDiscoveryCacheDir(t)
+	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
+	cache := &discoverycache.Cache{Root: cacheRoot}
+	const modelID = "shared-model"
+	primaryURL := "http://127.0.0.1:18011/v1"
+	siblingURL := "http://127.0.0.1:18012/v1"
+	capturedAt := time.Now().UTC().Add(-30 * time.Second)
+	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("local", "primary", primaryURL, "server-a"), capturedAt, []string{modelID})
+	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("local", "sibling", siblingURL, "server-b"), capturedAt, []string{modelID})
+
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-14T00:00:00Z
+catalog_version: test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  shared-model:
+    family: shared
+    status: active
+    power: 6
+    context_window: 16384
+    surfaces:
+      embedded-openai: shared-model
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+
+	svc := newResolveRouteProbeTestService(t, &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"local": {
+				Type: "lmstudio",
+				Endpoints: []ServiceProviderEndpoint{
+					{Name: "primary", BaseURL: primaryURL, ServerInstance: "server-a"},
+					{Name: "sibling", BaseURL: siblingURL, ServerInstance: "server-b"},
+				},
+				Model:               modelID,
+				Billing:             BillingModelFixed,
+				IncludeByDefault:    true,
+				IncludeByDefaultSet: true,
 			},
-		}); err != nil {
-			t.Fatalf("observe classless final: %v", err)
-		}
-		if records := svc.activeRouteAttempts(time.Now().UTC(), time.Minute); len(records) != 0 {
-			t.Fatalf("classless semantic failure was recorded: %+v", records)
-		}
+		},
+		names:       []string{"local"},
+		defaultName: "local",
+	}, func(_ context.Context, provider, _ string) bool {
+		t.Fatalf("route hot path invoked aliveness prober for %s", provider)
+		return false
 	})
+	before := time.Now().UTC().Add(-time.Second)
+	svc.providerProbe.RecordProbe("local", "primary", true, before)
+	svc.providerProbe.RecordProbe("local", "sibling", true, before)
 
-	if provider, endpoint, err := dispatchFailureFromFinal(RouteAttempt{
-		Provider: "vendor",
-		Endpoint: "primary",
-		Status:   "success",
-		Reason:   "transport",
-		Error:    "502 stale diagnostic",
-	}); provider != "" || endpoint != "" || err != nil {
-		t.Fatalf("successful final produced reachability feedback: provider=%q endpoint=%q err=%v", provider, endpoint, err)
+	if err := svc.observeRouteAttemptFromFinal(harnesses.FinalData{
+		Status: "failed",
+		Error:  "HTTP 502 Bad Gateway",
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:        "fiz",
+			Provider:       "local@primary",
+			ServerInstance: "server-a",
+			Model:          modelID,
+			FailureClass:   "protocol",
+		},
+	}); err != nil {
+		t.Fatalf("observeRouteAttemptFromFinal: %v", err)
 	}
 
-	t.Run("actual reachability diagnostic hard gates", func(t *testing.T) {
-		svc := &service{providerProbe: routehealth.NewProbeStore()}
-		if err := svc.observeRouteAttemptFromFinal(harnesses.FinalData{
-			Status: "failed",
-			Error:  "dial tcp 192.0.2.1:443: i/o timeout",
-			RoutingActual: &harnesses.RoutingActual{
-				Harness:      "fiz",
-				Provider:     "vendor@primary",
-				Model:        "model-a",
-				FailureClass: "transport",
-			},
-		}); err != nil {
-			t.Fatalf("observe reachability failure: %v", err)
+	primaryProbe, ok := svc.providerProbe.LastProbe("local", "primary")
+	if !ok || primaryProbe.LastProbeSuccess {
+		t.Fatalf("primary probe = %+v, ok=%v; want failed 5xx reachability evidence", primaryProbe, ok)
+	}
+	siblingProbe, ok := svc.providerProbe.LastProbe("local", "sibling")
+	if !ok || !siblingProbe.LastProbeSuccess {
+		t.Fatalf("sibling probe = %+v, ok=%v; exact feedback must preserve sibling health", siblingProbe, ok)
+	}
+
+	decision, err := svc.ResolveRoute(context.Background(), RouteRequest{Model: modelID})
+	if err != nil {
+		t.Fatalf("ResolveRoute: %v", err)
+	}
+	if decision == nil || decision.Provider != "local@sibling" {
+		t.Fatalf("decision = %#v, want healthy sibling local@sibling", decision)
+	}
+	var sawPrimary, sawSibling bool
+	for _, candidate := range decision.Candidates {
+		switch candidate.Provider {
+		case "local@primary":
+			sawPrimary = true
+			if candidate.Eligible || candidate.FilterReason != FilterReasonEndpointUnreachable {
+				t.Fatalf("failed primary candidate = %#v, want exact endpoint_unreachable gate", candidate)
+			}
+		case "local@sibling":
+			sawSibling = true
+			if !candidate.Eligible {
+				t.Fatalf("healthy sibling candidate = %#v, want eligible", candidate)
+			}
 		}
-		probe, ok := svc.providerProbe.LastProbe("vendor", "primary")
-		if !ok || probe.LastProbeSuccess {
-			t.Fatalf("reachability diagnostic did not hard-gate the exact endpoint: %+v, ok=%v", probe, ok)
-		}
+	}
+	if !sawPrimary || !sawSibling {
+		t.Fatalf("endpoint candidates missing: primary=%v sibling=%v candidates=%#v", sawPrimary, sawSibling, decision.Candidates)
+	}
+}
+
+func TestWrappedPersistenceErrorStillAppliesReachabilityFeedback(t *testing.T) {
+	blockingFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockingFile, []byte("block snapshot parent"), 0o600); err != nil {
+		t.Fatalf("write blocking file: %v", err)
+	}
+	svc := &service{
+		opts:          ServiceOptions{PersistRouteHealth: filepath.Join(blockingFile, "routehealth.json")},
+		providerProbe: routehealth.NewProbeStore(),
+	}
+	err := svc.observeRouteAttemptFromFinal(harnesses.FinalData{
+		Status: "failed",
+		Error:  "dial tcp 192.0.2.1:443: i/o timeout",
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:        "fiz",
+			Provider:       "vendor@primary",
+			ServerInstance: "server-a",
+			Model:          "model-a",
+			FailureClass:   "transport",
+		},
 	})
+	if err == nil || !strings.Contains(err.Error(), "route health snapshot") {
+		t.Fatalf("observation error = %v, want route health snapshot failure", err)
+	}
+	records := svc.activeRouteAttempts(time.Now().UTC(), time.Minute)
+	if len(records) != 1 || records[0].Key.ServerInstance != "server-a" {
+		t.Fatalf("persistence failure lost in-memory exact attempt: %+v", records)
+	}
+	probe, ok := svc.providerProbe.LastProbe("vendor", "primary")
+	if !ok || probe.LastProbeSuccess {
+		t.Fatalf("persistence failure suppressed reachability hard gate: %+v, ok=%v", probe, ok)
+	}
 }
 
 func TestProductionRouteObservationFailureDoesNotSuppressTerminal(t *testing.T) {

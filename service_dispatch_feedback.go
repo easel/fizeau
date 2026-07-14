@@ -1,11 +1,114 @@
 package fizeau
 
 import (
+	"context"
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/routehealth"
 )
+
+// RecordRouteAttempt preserves the public service facade while the internal
+// route-health store owns normalization, matching, and reliability state.
+func (s *service) RecordRouteAttempt(_ context.Context, attempt RouteAttempt) error {
+	if s == nil {
+		s = &service{}
+	}
+	if err := s.routeHealthStore().RecordAttemptWithOptions(
+		internalRouteAttempt(attempt),
+		routehealth.RecordOptions{ExactSuccessClear: true},
+	); err != nil {
+		return err
+	}
+	return s.persistRouteHealthSnapshot()
+}
+
+// recordRouteAttemptFromFinal admits legacy/native final evidence. Older
+// native paths may lack an explicit failure class, so the internal converter
+// retains its bounded diagnostic-text fallback for this mode only.
+func (s *service) recordRouteAttemptFromFinal(final harnesses.FinalData) {
+	_ = s.observeFinalAttempt(final, routehealth.FinalEvidenceAllowLegacyText)
+}
+
+// observeRouteAttemptFromFinal admits wrapped-harness evidence only when the
+// adapter supplied an authoritative typed failure class. Persistence errors
+// are returned to the subprocess finalizer as bounded terminal warnings.
+func (s *service) observeRouteAttemptFromFinal(final harnesses.FinalData) error {
+	return s.observeFinalAttempt(final, routehealth.FinalEvidenceTypedOnly)
+}
+
+// observeFinalAttempt preserves the observable update order:
+//
+//  1. update in-memory route health;
+//  2. capture any persistence error;
+//  3. feed independently-confirmed reachability failures to catalog/probes;
+//  4. return the captured persistence error.
+//
+// The last two stages deliberately do not short-circuit one another. A broken
+// persistence path must not make the next request replay a known endpoint
+// failure, and a feedback failure must not erase the durable-write result.
+func (s *service) observeFinalAttempt(final harnesses.FinalData, mode routehealth.FinalEvidenceMode) error {
+	attempt, ok := routehealth.AttemptFromFinal(final, mode)
+	if !ok {
+		return nil
+	}
+	if err := s.routeHealthStore().RecordAttemptWithOptions(
+		attempt,
+		routehealth.RecordOptions{ExactSuccessClear: true},
+	); err != nil {
+		return err
+	}
+	persistErr := s.persistRouteHealthSnapshot()
+	if provider, endpoint, dispatchErr := dispatchFailureFromAttempt(attempt); dispatchErr != nil {
+		s.recordDispatchFailure(provider, endpoint, dispatchErr)
+	}
+	return persistErr
+}
+
+func internalRouteAttempt(attempt RouteAttempt) routehealth.Attempt {
+	return routehealth.Attempt{
+		Harness:        attempt.Harness,
+		Provider:       attempt.Provider,
+		Model:          attempt.Model,
+		Endpoint:       attempt.Endpoint,
+		ServerInstance: attempt.ServerInstance,
+		Status:         attempt.Status,
+		Reason:         attempt.Reason,
+		Error:          attempt.Error,
+		Duration:       attempt.Duration,
+		Timestamp:      attempt.Timestamp,
+	}
+}
+
+func (s *service) routeHealthStore() *routehealth.Store {
+	if s.routeHealth == nil {
+		s.routeHealth = routehealth.NewStore()
+	}
+	return s.routeHealth
+}
+
+func (s *service) activeRouteAttempts(now time.Time, ttl time.Duration) []routehealth.Record {
+	if s == nil || s.routeHealth == nil {
+		return nil
+	}
+	return s.routeHealth.ActiveAttempts(now, ttl)
+}
+
+func (s *service) routeMetricSignals(now time.Time, ttl time.Duration) (map[string]float64, map[string]float64) {
+	if s == nil || s.routeHealth == nil {
+		return nil, nil
+	}
+	return s.routeHealth.MetricSignals(now, ttl)
+}
+
+func (s *service) persistRouteHealthSnapshot() error {
+	if s == nil || s.opts.PersistRouteHealth == "" {
+		return nil
+	}
+	return routehealth.SavePersistedState(s.opts.PersistRouteHealth, s.routeHealth, s.providerProbe)
+}
 
 // recordDispatchFailure feeds a chat-completions dispatch failure back into
 // both the catalog cache and the routehealth probe store so the next routing
@@ -101,18 +204,17 @@ func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []s
 	return out
 }
 
-// dispatchFailureFromFinal builds the (provider, endpoint, err) tuple from a
-// finalize callback so the existing route-attempt finalize site can also feed
-// the dispatch-feedback path. Returns (_, _, nil) when the final event does
-// not describe a dispatch reachability failure.
-func dispatchFailureFromFinal(attempt RouteAttempt) (string, string, error) {
+// dispatchFailureFromAttempt performs the class-level half of the two-stage
+// reachability gate. recordDispatchFailure independently checks the diagnostic
+// text before mutating catalog/probe state.
+func dispatchFailureFromAttempt(attempt routehealth.Attempt) (string, string, error) {
 	if attempt.Status == "" || attempt.Provider == "" {
 		return "", "", nil
 	}
 	if routehealth.Succeeded(strings.ToLower(strings.TrimSpace(attempt.Status))) {
 		return "", "", nil
 	}
-	if !isRouteAttemptDispatchFailure(attempt.Reason) {
+	if !routehealth.IsDispatchFailureClass(attempt.Reason) {
 		return "", "", nil
 	}
 	msg := strings.TrimSpace(attempt.Error)

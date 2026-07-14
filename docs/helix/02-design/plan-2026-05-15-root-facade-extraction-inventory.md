@@ -102,9 +102,12 @@ than the old home of the implementation bulk:
   `service_native_provider.go`, `service_override.go`,
   `service_projection.go`, `service_reasoning.go`.
 - Routing, status, and quota adapters:
-  `service_probe.go`, `service_route_attempts.go`,
-  `service_route_leases.go`, `service_routestatus.go`,
+  `service_probe.go`, `service_route_leases.go`, `service_routestatus.go`,
   `service_routing.go`, `service_subscription_quota.go`.
+
+`RecordRouteAttempt` and final-attempt feedback now enter through the narrow
+adapter in `service_dispatch_feedback.go`; classification and exact-success
+clearing are owned by `internal/routehealth`.
 - Platform-specific lifecycle adapters:
   `service_stale_harness_reaper.go`,
   `service_stale_harness_reaper_unix.go`,
