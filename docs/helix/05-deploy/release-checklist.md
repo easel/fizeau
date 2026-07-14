@@ -8,16 +8,18 @@ ddx:
     - CONTRACT-004
     - ADR-002
     - ADR-013
+    - ADR-014
   review:
-    self_hash: 11e4b8d6b0656f55e37d0f084cfe6778c61991060b7876670044f9d0070ce2b0
+    self_hash: 9daaf8bf68741cbb19fc8550eeedaf4215d155649bd39ce6dbdc9381137c1c4d
     deps:
       ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
-      ADR-013: 28e0bf2781e3419d4672215b3604af7ea6f830b1e46bb48a2eaa0074597852c4
-      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
-      CONTRACT-004: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
+      ADR-013: 0ebb6fbea7a9486f5d32c2c4ff795e3d917ee65d8b2d89a2906421177929c858
+      ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       implementation-plan: 584580a6064b8866a3b72fd9bea7702d6fb2a99b035e101cdf40b163f712fc7d
-    reviewed_at: "2026-07-14T08:00:37Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Release Checklist — Fizeau
 
@@ -28,8 +30,8 @@ ddx:
 - Release owner: tag creator
 - Rollback owner: repository maintainer on duty
 - Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `ADR-002`, `ADR-013`,
-  `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `install.sh`,
-  and `tests/install_sh_acceptance.sh`
+  `ADR-014`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
+  `install.sh`, and `tests/install_sh_acceptance.sh`
 
 ## Pre-Deploy Checks
 
@@ -41,6 +43,11 @@ ddx:
 | PTY containment | PTY caller-death and grandchild cleanup passes on Linux and macOS | `lifecycle-unix` CI jobs; `TestPTYLifecycleDiesWithEmbeddingCaller`; `TestPTYLifecycleReapsGrandchildOnClose` | [ ] |
 | Windows containment | Real Job Object kill-on-close and grandchild tests pass | `lifecycle-windows` CI job; `TestWindowsJobKillOnOwnerHandleClose`; `TestWindowsJobReapsGrandchild` | [ ] |
 | Cleanup terminalization | `HarnessCleanupTimeout` bounds current-invocation cleanup and terminal ordering; `StaleHarnessReaperGrace` governs only later startup adoption | `TestHarnessCleanupTimeoutDefaultAndValidation`; `TestStaleHarnessReaperGraceDoesNotDelayCleanup`; `TestTerminalWaitsForHarnessCleanup`; `TestCleanupFailureSupersedesPrimaryTuple` | [ ] |
+| Continuation capability | The public `FizeauService.Continue(context.Context, ServiceContinuationRequest)` surface resolves a completed parent's exact endpoint-aware terminal route, uses the authoritative registered route instance, and creates no session or process when preparation reports unavailable evidence | public contract compile test; `TestCompletedSessionRouteResolutionRequiresTerminalRoute`; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart`; `TestContinuationUsesRegisteredRouteInstance`; `TestContinuationEvidenceUnavailableBeforeSpawn` | [ ] |
+| Continuation prepare/start ordering | Preparation creates no child, lease, process, or event; Start runs exactly once only after child creation and fresh-lease acquisition; a Start failure cannot trigger a fresh fallback | `TestContinuationPrepareOrdersChildAndSpawn` | [ ] |
+| Continuation opacity | Public continuation and serialized events carry only Fizeau session lineage; service- or harness-derived route-native evidence never crosses the public or session-log boundary, while caller metadata remains opaque | `TestContinuationHarnessReceivesOnlyFizeauSessionRef`; `TestContinuationNativeReferenceIsNotSerialized`; public-field and JSON-tag structural searches | [ ] |
+| Continuation durability | The service-private locator uses the configured effective service session-log root; private evidence, terminal log, locator completion, and public success follow the contract order; pending recovery uses only the exact recorded path and full route key | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal`; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` | [ ] |
+| Continuation containment | Every resumed, `prefer_resume` fallback, and `fresh_session` continuation creates a new child session and acquires a fresh lifecycle lease | `TestContinuationDispatchAcquiresFreshLifecycleLease`; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease`; ADR-013 and ADR-014 conformance | [ ] |
 | Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
 | Governed documents | Lifecycle contracts and decisions are current | `ddx doc stale --json` omits `CONTRACT-003`, `CONTRACT-004`, `ADR-002`, `ADR-004`, `ADR-013`, and `ADR-014` | [ ] |
 | Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
@@ -77,6 +84,7 @@ and arm64 until a separate artifact decision expands it.
 | Claude-TUI | Successful execution leaves no live PTY or Claude process | `TestClaudeTUIExecuteLeavesNoLiveSession` | [ ] |
 | Cleanup failure | `cleanup_failed` retains lifecycle ownership evidence for recovery | `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
 | Identity safety | Startup recovery never signals an identity-mismatched or reused process | `TestRecoveryRefusesReusedIdentity` | [ ] |
+| Continuation | Resumed, prefer-fallback, and explicitly fresh outcomes each create a new child Fizeau session with a fresh lease; implementation-derived native evidence is absent from public projections and logs | continuation conformance suite; public-field and serialized-tag structural searches | [ ] |
 
 ## Rollback Triggers
 
@@ -91,6 +99,9 @@ and arm64 until a separate artifact decision expands it.
 | Unsafe stale recovery | Recovery signals a reused or unowned process identity | Hold release; disable recovery path until identity validation is fixed | Maintainer |
 | Unsafe Windows resume | A Windows child resumes before Job Object assignment | Hold release; reject wrapped execution until assignment ordering is fixed | Maintainer |
 | Indeterminate record deletion | A lifecycle record is removed before boundary emptiness is confirmed | Hold release; retain the record and fix forward | Maintainer |
+| Continuation evidence leak | Any service- or harness-derived native session reference appears in a public type, event, projection, metadata field, or service-owned session log | Hold release; disable continuation for the route and remove the leaked evidence before a corrective release | Maintainer |
+| Continuation lease reuse | A resumed or fresh continuation reuses a live process, PTY, containment boundary, or lifecycle lease from its parent | Hold release; disable continuation and restore one-fresh-lease-per-invocation semantics | Maintainer |
+| Continuation durability/order failure | Successful continuation evidence is not durable before public success, locator recovery scans outside its recorded exact path, or Start can run before child lease acquisition | Hold release; disable continuation and restore prepare/persist/start ordering before a corrective release | Maintainer |
 
 Published tags and DDx audit commits are immutable. Rollback means stopping use
 of the bad release and publishing a new corrective tag; it never means moving

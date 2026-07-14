@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
+    self_hash: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
     deps:
       ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T07:51:22Z"
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -162,6 +162,16 @@ type ServiceProviderEntry struct {
 }
 ```
 
+The effective service session-log directory is resolved once from
+`ServiceOptions.SessionLogDir`, then `ServiceConfig.SessionLogDir()`. It is also
+the stable base for service-private continuation locator state; per-request
+`ServiceExecuteRequest.SessionLogDir` overrides never change that base. When
+the effective service directory is empty, ordinary execution remains valid but
+completed-session lookup across hub eviction or restart is unavailable. When
+it is non-empty, service construction MUST create or validate the private state
+subdirectory with owner-only permissions and fail if that durable location
+cannot be made usable. CONTRACT-004 defines its layout and crash recovery.
+
 The service may auto-load configuration when `ServiceConfig` is nil and the
 config package registered a loader. Embedders that need deterministic behavior
 should pass `ServiceConfig` explicitly.
@@ -281,8 +291,11 @@ by `HarnessCleanupTimeout`, not under the cancelled request context.
 
 Callers request continuation without naming a concrete harness, provider-native
 conversation token, subprocess flag, or adapter type. Fizeau resolves the prior
-session's continuation capability and owns translation to the selected native
-provider or subprocess harness.
+session's continuation capability and owns translation to a supported
+subprocess harness. In this contract version, native-provider routes do not
+implement the CONTRACT-004 harness capability and therefore follow the
+unsupported-route policy behavior; they MUST NOT be wrapped in a subprocess
+`Harness` merely to appear resumable.
 
 ```go
 type ContinuationPolicy string
@@ -332,15 +345,15 @@ are recorded on the new session.
 Each accepted `Continue` call creates a new Fizeau session ID. Its terminal
 projection and service-owned session-start log record MUST carry the parent
 `SessionID` and actual `ContinuationDisposition`. A resumed session reuses
-provider- or harness-owned conversation state behind the public boundary. A
+harness-owned conversation state behind the public boundary. A
 fresh session starts an ordinary `Execute` using `FreshRequest`; it preserves
 lineage but MUST NOT claim that provider or harness conversation state was
 resumed.
 
 Policy behavior is normative:
 
-| Policy | Supported prior route | Unsupported or unavailable prior route |
-|--------|-----------------------|----------------------------------------|
+| Policy | Supported completed parent route | Valid completed parent whose actual route cannot resume |
+|--------|------------------------------------|--------------------------------------------------------|
 | `require_resume` | Resume and report `resumed`. | Return `ErrContinuationUnsupported`; do not start a session or spawn a process. |
 | `prefer_resume` | Resume and report `resumed`. | Start `FreshRequest` as a new session and report `fresh`. |
 | `fresh_session` | Do not probe or invoke resume capability; start `FreshRequest` and report `fresh`. | Same behavior; support is irrelevant. |
@@ -350,7 +363,20 @@ session starts. A missing, unreadable, or incomplete prior session returns
 `ErrContinuationSessionUnavailable`; `prefer_resume` does not convert missing
 lineage into a fresh session because the caller supplied an invalid parent.
 Continuation capability is route-specific and MUST be reported as unsupported
-rather than inferred from a harness name.
+rather than inferred from a harness name. The table applies only after Fizeau
+has resolved a valid, completed parent and its actual terminal route; an
+unresolved lineage is unavailable for every policy and never falls back to a
+fresh session.
+
+For a resume attempt, the service first asks the exact registered route to
+prepare continuation. Preparation may validate and bind private durable
+evidence but MUST NOT create a child session, acquire a child lifecycle lease,
+spawn, or emit events. Only after preparation succeeds does the service create
+the child Fizeau session and fresh lifecycle lease and allow the prepared
+operation to start. If evidence becomes unusable after successful preparation,
+the already-created child fails normally; `prefer_resume` MUST NOT start a
+second fresh attempt. CONTRACT-004 owns the internal two-phase interface and
+crash ordering.
 
 ## Session Lifecycle and Terminal Facts
 

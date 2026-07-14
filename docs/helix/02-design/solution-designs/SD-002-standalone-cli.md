@@ -10,10 +10,10 @@ ddx:
     self_hash: 9ceebbc1c312b61ed17dc4b827c626212291a3cbf801bbf2e4232c19df4e790d
     deps:
       ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Solution Design: SD-002 — Mountable CLI and Standalone Binary
 

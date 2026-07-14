@@ -2,9 +2,9 @@
 ddx:
   id: helix.prd
   review:
-    self_hash: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
+    self_hash: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
     deps: {}
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Product Requirements Document — Fizeau
 
@@ -203,8 +203,11 @@ session logs, or measurement as first-class outputs.
 
 1. **System prompt composition** — base system prompt + caller-provided
    additions (persona, project context, conventions)
-2. **Session continuity** — option to carry conversation history across
-   multiple public `Execute` calls within a session
+2. **Session continuity** — a dedicated public continuation operation keyed
+   only by a completed Fizeau session ID. Each continuation creates a new child
+   Fizeau session. `Execute` does not accept continuation or provider-native
+   session identifiers; route-native evidence remains private behind the
+   service boundary.
 3. **Streaming callbacks** — caller can receive tool call events and partial
    responses in real time
 4. **Timeout management** — per-invocation and per-tool-call timeouts

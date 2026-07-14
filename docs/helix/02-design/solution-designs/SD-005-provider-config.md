@@ -13,7 +13,7 @@ ddx:
       FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Solution Design: SD-005 — Provider Sources, Model Catalog, and Power Routing
 

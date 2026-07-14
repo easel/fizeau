@@ -8,8 +8,8 @@ ddx:
     self_hash: e92a82cb3130952d3800c39674112f0ddeda09ede3c1f3a191580ce9d9f85b64
     deps:
       ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
-      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
-    reviewed_at: "2026-07-14T08:00:37Z"
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # ADR-003: PTY Terminal Rendering and Screen Model
 

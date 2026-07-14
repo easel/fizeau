@@ -7,7 +7,7 @@ ddx:
     self_hash: f204f2e58a405ef53c8a3bab96afcf242e755ec10bbe85b1d7985e81b95abe81
     deps:
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # User Story: US-003 — Switch Provider Systems Without Changing the Embedder
 

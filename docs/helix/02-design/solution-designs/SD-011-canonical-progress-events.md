@@ -9,9 +9,9 @@ ddx:
     self_hash: be2debae8cab7ad3d66b0123c6ef7f240abaf9b4e99129288d4c203b96d1ebd2
     deps:
       ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
-      CONTRACT-003: 45761dfe250b161440de53f0809964d89ce41eb4a7a970d0332456bc71ea1e5c
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
       FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Solution Design: SD-011 — Canonical Progress Events
 

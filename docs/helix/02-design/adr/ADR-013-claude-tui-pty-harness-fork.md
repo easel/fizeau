@@ -12,15 +12,15 @@ ddx:
     - CONTRACT-004
   child_of: fizeau-67f2d585
   review:
-    self_hash: 28e0bf2781e3419d4672215b3604af7ea6f830b1e46bb48a2eaa0074597852c4
+    self_hash: 0ebb6fbea7a9486f5d32c2c4ff795e3d917ee65d8b2d89a2906421177929c858
     deps:
       ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
-      ADR-014: df628e6bb4c8918ee13cc858720f600b6585678b0d9b441a2f18ff5ba25cd709
-      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
-      CONTRACT-004: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
-    reviewed_at: "2026-07-14T08:00:37Z"
+      ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 
@@ -708,3 +708,108 @@ without TUI-driven traffic, this ADR is open to revision.
 - [x] Validation section defines review triggers
 - [x] Concern impact is complete
 - [x] ADR is consistent with governing feature spec and PRD requirements
+
+## Amendment — 2026-07-14: Opaque Route-Owned Continuation
+
+This amendment clarifies how CONTRACT-003 continuation applies to the accepted
+`claude-tui` identity. It does not change the PTY transport decision or relax
+the per-invocation lifecycle amendment above.
+
+The public continuation reference is the completed parent Fizeau `SessionID`.
+Claude-native conversation IDs, resume tokens, transcript identifiers, and
+equivalent adapter evidence never cross the public service boundary. They are
+not fields in a public request, response, event, terminal projection, or
+service-owned session log, and they are never serialized there under a native
+or generic metadata key. Only the `claude-tui` route may encode that evidence
+inside its private durable evidence store. Fizeau treats the stored value as
+opaque and cannot inspect, log, copy into public metadata, or translate it.
+
+This version of continuation is harness-backed. `claude-tui` can opt in through
+CONTRACT-004's `ContinuationHarness`; a native-provider route cannot. The
+service reports a native-provider parent route as continuation-unsupported and
+must not wrap, adapt, or force that provider through `Harness` to make resume
+appear available. A provider-native continuation seam requires a later public
+contract decision.
+
+The service owns completed-parent lookup and actual-route resolution. It finds
+the completed session even when the parent used a per-request session-log
+directory, verifies the actual route recorded for that invocation, and asks
+the registry for that route's runner. Resume support is determined by asserting
+CONTRACT-004's optional `ContinuationHarness` on that registered runner
+instance. It is not inferred from the `claude-tui` name, discovered on an
+ad-hoc newly constructed runner, or redirected by a child request's routing
+preferences.
+
+Within one service process, the runner instance that owns the selected route
+also owns access to its continuation evidence. After a service restart, the
+same route identity is reconstructed from the completed parent record and is
+registered against the same route-private durable evidence store. A different
+route, another runner with the same display name, or a runner configured with
+a different evidence store cannot resume the parent. The canonical route key
+includes the normalized endpoint as well as the harness, provider, model, and
+other route discriminators; two `claude-tui` endpoints never share continuation
+authority merely because their harness and model names match.
+
+Continuation is two-phase. `ContinuationHarness` first prepares an opaque,
+route-bound continuation. Prepare validates the committed private evidence but
+creates no child Fizeau session, event stream, lifecycle lease, containment, or
+process. If prepare reports unavailable, `require_resume` returns unsupported
+and `prefer_resume` may create an ordinary fresh child. Only after successful
+prepare does the service create the child and acquire its fresh lifecycle
+lease; the prepared continuation's `Start` operation may then spawn Claude
+inside the new containment boundary. Evidence rejection or any other failure
+after prepare is that child's terminal failure. It never changes disposition
+to fresh and never starts a second fallback invocation.
+
+Continuation evidence is durable, never an in-memory-only runner field. A
+continuation-capable parent stores evidence atomically under its Fizeau session
+ID and canonical route key before acknowledging evidence capture. The service
+creates a durable pending completed-session locator before execution and
+promotes it only after the terminal log and actual route are durable. Recovery
+of a pending locator validates the exact terminal log and route, then consults
+the same route-private store; it does not reconstruct evidence from transcript
+text. A crash after evidence commit but before locator promotion leaves private
+orphan evidence or a recoverable pending locator, never a public native ID. A
+crash before evidence commit makes prepare unavailable after recovery.
+
+Every accepted child is a fresh Fizeau session with its own session ID, service
+event sequence, lifecycle lease, and containment boundary. This rule applies
+to resumed children, `prefer_resume` fresh fallbacks, and `fresh_session`
+children. A resumed Claude conversation may use durable native evidence, but
+it never reuses the parent's Claude process, PTY, supervisor, process group,
+Job Object, or containment lease. Parent cleanup completes before its terminal
+fact; child startup establishes a new containment boundary before Claude
+receives the continuation request.
+
+The opacity rule is provenance-based, not a value redaction rule. It forbids
+service- or harness-derived native evidence from being projected across the
+boundary. Caller-supplied prompts or metadata that coincidentally contain the
+same bytes retain their ordinary CONTRACT-003 behavior and are not silently
+removed.
+
+### Continuation validation additions
+
+- Public-shape and serialization tests tag service- or harness-derived Claude
+  IDs and tokens in the route-private store, continue by parent Fizeau
+  `SessionID`, and prove that derived evidence is absent from public JSON,
+  service events, terminal projections, metadata, and session-log JSONL. A
+  control case proves equal caller-supplied metadata is preserved.
+- A registry conformance test registers two distinct runner instances with
+  the same names but different endpoint-bearing route keys and separate
+  evidence stores. Only the runner for the parent's recorded actual route is
+  asserted as `ContinuationHarness`; no replacement runner is constructed and
+  the other store is never read.
+- A restart test completes a parent using a per-request session-log directory,
+  exercises crashes on both sides of evidence commit and locator promotion,
+  rebuilds the service and route registry, and proves pending-locator recovery
+  uses the same route-private durable store. No success path depends on an
+  in-memory runner field.
+- A two-phase test proves prepare starts no session, lease, containment, event
+  stream, or process. It then proves the service creates the child and lease
+  before `Start`, and that a post-prepare evidence failure produces one failed
+  resumed child with no fresh fallback.
+- A lifecycle conformance test continues the same parent twice and proves the
+  children have distinct Fizeau session IDs, lifecycle leases, containment
+  identities, supervisors, and PTYs. Fresh fallback and `fresh_session` cases
+  prove the same new-lease rule; parent process handles cannot appear in any
+  child.

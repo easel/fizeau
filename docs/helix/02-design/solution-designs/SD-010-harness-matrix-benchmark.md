@@ -11,7 +11,7 @@ ddx:
     deps:
       SD-008: 38357271f3c5c7c3da364497f94615698ec68c53a43e407c71ddf14c01b90b1a
       SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 
 > **⚠️ IMPORTANT (2026-05-16)**: The benchmark runner architecture changed on 2026-05-16. 

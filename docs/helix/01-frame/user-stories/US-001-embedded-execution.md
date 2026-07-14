@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 83ee6bdfd89336cf77cb0dd2a1f6d8250baf1de494605112a56ef21b835c9b83
     deps:
-      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
-    reviewed_at: "2026-07-14T05:16:22Z"
+      FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # User Story: US-001 — Execute an Embedded Agent Run
 

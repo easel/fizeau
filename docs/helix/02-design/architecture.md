@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - helix.prd
   review:
-    self_hash: 344acca10c549dbb281ccdc7de6edcf67f61f12f530f74f7654ec67ccafb0a9b
+    self_hash: ddade7651e73970cac4b3f7ef2094ff2a23fc155f5929515ea3adb26763ac6f4
     deps:
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Architecture — Fizeau
 
@@ -27,7 +27,8 @@ showcase of that public contract, not a second product or execution engine.
                              │ public root package
                     ┌────────▼─────────┐
                     │ FizeauService    │
-                    │ Execute/List/*   │
+                    │ Execute/Continue │
+                    │ List/*           │
                     │ typed events     │
                     └────────┬─────────┘
                              │
@@ -157,6 +158,31 @@ caller / agentcli
 Both paths end at the same public event and session-log contract. Downstream
 consumers never need harness-native stream parsing or private JSONL schemas.
 
+### Session continuation
+
+```text
+caller / agentcli
+  -> FizeauService.Continue(parent Fizeau SessionID)
+  -> stable completed-session locator and exact endpoint-aware route key
+  -> authoritative registered route instance
+  -> optional CONTRACT-004 continuation preparation (no child or spawn)
+  -> new child Fizeau SessionID and fresh lifecycle lease
+  -> prepared continuation start
+  -> normalized events and public lineage without native references
+```
+
+Continuation never changes the public identifier boundary: callers supply a
+completed Fizeau session ID, while a supporting harness privately resolves any
+route-native conversation evidence. A resumed continuation stays on the
+parent's exact terminal route and uses that route's registered instance. After
+restart, the canonical replacement for the same route may resume from durable
+private evidence. A fresh-policy fallback uses ordinary routing. Both outcomes
+are new invocations with new containment and lifecycle leases; live processes,
+PTYs, and leases never cross an invocation boundary. This contract version
+supports resume only through subprocess routes implementing CONTRACT-004;
+native-provider routes report resume unsupported and are not forced through the
+harness abstraction.
+
 ## Escalation Ownership
 
 Fizeau dispatches exactly one selected route per `Execute` call and reports the
@@ -187,6 +213,9 @@ with the component that understands the task, as required by ADR-017.
    route attempt.
 8. New consumer-visible execution or status behavior is specified in
    CONTRACT-003 before a consumer reaches into an internal package.
+9. Public continuation carries only a completed Fizeau session ID. Native
+   conversation references remain owned and stored by the implementing route,
+   and every child continuation acquires a fresh lifecycle lease.
 
 ## Caching
 
@@ -216,6 +245,7 @@ cache accounting.
 | Product surface | embeddable root `fizeau` service facade | Product vision, ADR-008, CONTRACT-003 |
 | Native execution | service-owned dispatch into `internal/core` | ADR-008, CONTRACT-003 |
 | Harness execution | service-owned CONTRACT-004 adapters | ADR-014, CONTRACT-004 |
+| Session continuation | exact terminal route, optional private capability, new child session and lease | CONTRACT-003, CONTRACT-004, ADR-013, ADR-014 |
 | Event/transcript ownership | Fizeau normalization for every execution path | ADR-008, CONTRACT-003 |
 | Escalation | caller-owned semantic retry, one Fizeau route per request | ADR-017 |
 | CLI | mountable Cobra tree in `agentcli`; thin `cmd/fiz` wrapper | SD-002, CONTRACT-003 |

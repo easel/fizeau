@@ -11,9 +11,9 @@ ddx:
     deps:
       FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-      helix.arch: 344acca10c549dbb281ccdc7de6edcf67f61f12f530f74f7654ec67ccafb0a9b
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+      helix.arch: ddade7651e73970cac4b3f7ef2094ff2a23fc155f5929515ea3adb26763ac6f4
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # ADR-001: Observability Surfaces and Cost Attribution
 

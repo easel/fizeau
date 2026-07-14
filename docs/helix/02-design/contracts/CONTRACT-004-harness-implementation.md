@@ -5,10 +5,10 @@ ddx:
     - CONTRACT-003
   child_of: fizeau-67f2d585
   review:
-    self_hash: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
+    self_hash: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
     deps:
-      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
-    reviewed_at: "2026-07-14T08:00:37Z"
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -43,6 +43,9 @@ In scope:
   implements.
 - The universal types those interfaces return.
 - Cache and refresh ownership.
+- Optional harness-native conversation continuation behind a Fizeau-session-ID
+  boundary, including completed-session resolution and private evidence
+  ownership.
 - Live subprocess containment, cleanup, and recovery obligations shared by
   normal execution, PTY sessions, and auxiliary probes.
 - Conformance evidence requirements.
@@ -56,6 +59,9 @@ Out of scope:
   primary-harness-capability-baseline.md and per-harness specs).
 - The cassette/replay transport contract (ADR-002).
 - The public service contract (CONTRACT-003).
+- Public continuation policy selection, fallback, child-lineage projection,
+  and validation. CONTRACT-003 owns those service behaviors; this contract
+  owns only the optional route capability and its private evidence boundary.
 
 ## Interface Set
 
@@ -64,7 +70,9 @@ All six built-in subprocess harness implementations (`claude`, `claude-tui`,
 MAY additionally
 implement any of `QuotaHarness`, `AccountHarness`, and
 `ModelDiscoveryHarness`; a cancellation-aware discovery implementation MAY
-also implement `ContextModelDiscoveryHarness`. The service uses Go interface
+also implement `ContextModelDiscoveryHarness`. A route that can resume
+harness-native conversation state MAY implement `ContinuationHarness`. The
+service uses Go interface
 assertions to discover which optional contracts a harness satisfies and
 consumes them through the interface only.
 
@@ -226,6 +234,37 @@ type ContextModelDiscoveryHarness interface {
     // service-owned cleanup deadline is reached.
     DefaultModelSnapshotWithContext(ctx context.Context) (ModelDiscoverySnapshot, error)
 }
+
+// ContinuationRequest asks the selected route-owned runner to resume the
+// completed Fizeau session identified by ParentSessionID. ParentSessionID is
+// the sole conversation identifier on this boundary. Request is the fully
+// normalized execution request for the new child invocation; it carries no
+// public ContinuationPolicy and MUST NOT carry a provider- or harness-native
+// conversation ID, resume token, or opaque continuation evidence.
+type ContinuationRequest struct {
+    ParentSessionID string
+    Request ExecuteRequest
+}
+
+// PreparedContinuation is a single-use, route-private prepared resume. Start
+// follows the event-channel and setup-error rules of Harness.Execute. The
+// service calls Start only after it has created the child Fizeau session and
+// acquired that child's fresh lifecycle lease.
+type PreparedContinuation interface {
+    Start(context.Context) (<-chan Event, error)
+}
+
+// ContinuationHarness is the optional route-specific continuation capability.
+// PrepareContinuation resolves and binds ParentSessionID through durable
+// evidence privately owned by this registered runner. It MUST return
+// ErrContinuationEvidenceUnavailable without creating a child session,
+// acquiring a child lease, spawning, or returning an event channel when usable
+// evidence is absent.
+type ContinuationHarness interface {
+    Harness
+
+    PrepareContinuation(context.Context, ContinuationRequest) (PreparedContinuation, error)
+}
 ```
 
 ## Universal Types
@@ -340,12 +379,28 @@ type AccountSnapshot struct {
 var (
     ErrAliasNotResolvable = errors.New("model alias not resolvable from snapshot")
     ErrModelDiscoveryEvidenceMissing = errors.New("model discovery evidence missing")
+    ErrContinuationRequestInvalid = errors.New("invalid continuation request")
+    ErrContinuationEvidenceUnavailable = errors.New("continuation evidence unavailable")
 )
 ```
 
+`ErrContinuationRequestInvalid` covers an empty `ParentSessionID` or a
+non-normalized child `Request`; service orchestration MUST prevent this error
+by validating before capability invocation. `ErrContinuationEvidenceUnavailable`
+means the route implements `ContinuationHarness` but its private evidence for
+the parent is absent, unreadable, stale, or no longer accepted.
+`PrepareContinuation` MUST detect this condition without session creation,
+lease acquisition, spawn, or events. The service maps it to CONTRACT-003's
+unsupported-capability policy behavior: `require_resume` returns
+`ErrContinuationUnsupported`, while `prefer_resume` may take the fresh path.
+After preparation succeeds, native rejection, evidence invalidation, or any
+other `PreparedContinuation.Start` failure belongs to the already-created child
+and MUST NOT trigger a second fresh attempt.
+
 `QuotaWindow`, `ModelDiscoverySnapshot`, `Event`, `ExecuteRequest`,
-`HarnessInfo`, and `EventType` retain their existing definitions in
-`internal/harnesses/types.go`. CONTRACT-004 does not redefine them.
+`ContinuationRequest`, `PreparedContinuation`, `HarnessInfo`, and `EventType`
+retain or receive their definitions in `internal/harnesses/types.go` as
+specified here.
 
 ## Cache and Refresh Ownership
 
@@ -365,6 +420,129 @@ service-level diagnostic surface (e.g. `Service.DiagnosticPaths()`) that
 calls back into each harness via a documented method, rather than the
 service importing per-harness path functions.
 
+## Continuation Evidence and Completed-Session Resolution
+
+CONTRACT-003 owns continuation policy and exposes only a completed Fizeau
+`SessionID`. CONTRACT-004 translates that identifier into a route capability
+without exposing provider-native identity.
+
+### Service-owned completed-session locator
+
+The service MUST maintain a stable, durable completed-session locator under
+`<effective-service-session-log-dir>/.fizeau-state/continuation/`, where the
+effective service directory is resolved once by CONTRACT-003 from
+`ServiceOptions.SessionLogDir` and then `ServiceConfig.SessionLogDir()`. A
+per-request session-log override never changes this root. The service creates
+the private directories with mode `0700` and locator files with mode `0600`;
+construction fails when a non-empty configured root cannot be created,
+permission-checked, or written. When the effective service directory is empty,
+ordinary execution remains available but no durable locator is written and
+parents are unavailable after hub eviction or restart. A locator entry
+contains only:
+
+| Field | Required rule |
+|-------|---------------|
+| Fizeau session ID | Exact key supplied by CONTRACT-003 callers. |
+| Canonical session-log path | Clean absolute path actually opened for the parent, including a per-request `ServiceExecuteRequest.SessionLogDir` override. |
+| Completion state | Not complete until exactly one valid service-owned terminal record has been written. |
+| Terminal route key | Exact normalized `{harness, provider, endpoint, server_instance, model}` values from the winning `RouteDecision`. Together these five fields are the canonical route-registry key; no display name or partial tuple may substitute. Empty members are allowed only when that route type does not use them. |
+
+The locator MUST NOT contain a native conversation ID, resume token, opaque
+evidence bytes, harness argv, or a public continuation policy. The in-memory
+`SessionHub` MAY cache active and completed sessions, but it is not the
+continuation source of truth and may forget completed entries.
+
+Before route execution the service atomically writes a pending locator entry
+with the canonical path and selected canonical route key. After the
+service-owned `session.end` is durably written, it atomically records completion
+in the locator. `Continue` resolves the parent by Fizeau session ID,
+reads that exact path, and verifies that the log is readable, its session ID
+matches, it contains one terminal record, and its terminal route agrees with
+the locator. Endpoint is part of that comparison. An absent locator, unreadable
+log, non-terminal parent, duplicate terminal, session-ID mismatch, or incomplete
+terminal route key returns
+CONTRACT-003 `ErrContinuationSessionUnavailable` before a child session is
+created or a process is spawned.
+
+This locator is the restart mechanism. After service restart, lookup MUST work
+without the old `SessionHub` and without scanning arbitrary directories. In
+particular, a parent written through a per-request `SessionLogDir` override is
+found through its persisted canonical path; callers do not resupply that
+directory. Pre-locator sessions and sessions whose logging was disabled are
+not guessed or reconstructed and are unavailable for continuation.
+
+A crash may leave a pending locator whose exact log already contains one
+durable, valid terminal record. On startup or parent lookup, the service MAY
+complete that locator only after validating the recorded session ID and full
+route key against that exact log. A pending locator without such a record stays
+unavailable; it is never repaired by scanning another directory. This is the
+only completion-recovery path.
+
+### Route-owned runner and opaque native evidence
+
+The terminal route key resolves to the canonical runner stored in the
+service's route registry. Execute dispatch and continuation capability lookup
+MUST use that same registered runner instance within a service process. A
+dispatcher MUST NOT construct one runner for Execute and consult a separate
+instance map or a fresh runner for `ContinuationHarness`. After restart the
+registry may reconstruct its canonical instance for the same route key; that
+instance reopens any harness-owned durable evidence store.
+
+A `ContinuationHarness` implementation owns all harness-native conversation
+evidence. Its Execute/protocol parser records that evidence under the parent
+Fizeau session ID and canonical route key in a harness-owned durable store;
+in-memory-only evidence does not satisfy this capability. The service passes
+only `ParentSessionID`; it does not read, compare, copy, or deserialize the
+evidence. The normalized child `ExecuteRequest` MUST NOT acquire a
+native-evidence field.
+
+Service- or harness-derived native conversation IDs, resume tokens, and opaque
+evidence MUST NOT serialize
+into public `ServiceEvent` data, public final projections, service-owned
+`session.start` or `session.end` JSONL, locator entries, event metadata,
+`FinalData.Extra`, diagnostic `Detail`, or error text. Harness-private durable
+storage is permitted only behind the runner boundary and MUST NOT be projected
+or exposed through service diagnostics. Missing private evidence after restart
+is `ErrContinuationEvidenceUnavailable`; the service does not scrape native
+IDs from logs or reconstruct them from text.
+
+Caller-supplied metadata remains opaque caller data: Fizeau does not scan or
+filter arbitrary values merely because they resemble a native identifier. The
+opacity invariant forbids implementations from adding, deriving, or copying
+route-native evidence into metadata or another public/service-owned surface.
+
+`ContinuationHarness` never receives `ContinuationPolicy` and never decides
+between resume and fresh execution. The service validates lineage and policy,
+selects resume or fresh behavior, and invokes the capability only for a resume
+attempt. `fresh_session` does not probe, assert, or invoke the optional
+interface.
+
+### Prepare, persistence, and start ordering
+
+Resume dispatch is two-phase:
+
+1. The service validates the public request, resolves the completed parent and
+   exact canonical route key, obtains that registered runner, and calls
+   `PrepareContinuation`. Preparation may read and validate the runner's
+   private durable evidence and return a single-use private handle. It MUST NOT
+   create a child session, acquire a child lease, spawn, or emit an event.
+2. If preparation reports unavailable evidence, CONTRACT-003 policy runs with
+   no child session. Otherwise the service creates the child Fizeau session,
+   writes its pending locator, and acquires a fresh lifecycle lease.
+3. The service makes that lease available through the ordinary registered-runner
+   launch seam and calls `PreparedContinuation.Start` exactly once. Start may
+   spawn. Evidence loss or native rejection at this point is a failure of the
+   child; no `prefer_resume` fresh fallback occurs.
+
+For a continuation-capable route, the runner MUST durably commit private native
+evidence before emitting a successful implementation final. The service then
+durably writes `session.end`, atomically completes the pending locator, and only
+then makes the successful public terminal fact observable. A crash before the
+private commit leaves no successful implementation final; a crash after the
+log commit but before locator completion uses the pending-locator recovery rule
+above. Orphan private evidence for an incomplete parent is never sufficient to
+continue and MAY be garbage-collected by the owning runner.
+
 ## Live Subprocess Lifecycle
 
 CONTRACT-003 v0.15 is authoritative for accepted-session lifecycle and typed
@@ -377,6 +555,7 @@ satisfy it.
 every production path that can start a live child process. This includes:
 
 - `Harness.Execute` for all six built-in subprocess harnesses;
+- every `PreparedContinuation.Start` implementation;
 - PTY-backed normal execution, including `claude-tui`;
 - quota and account refresh probes;
 - model-discovery probes, including the contextual extension;
@@ -401,6 +580,15 @@ process, PTY, supervisor, or containment lease across invocations. Package- or
 service-scoped live session pools are forbidden. Conversation continuation
 uses a new Fizeau invocation and a new containment boundary even when the
 upstream provider resumes logical conversation state.
+
+For `PreparedContinuation.Start`, the registered runner MAY reuse only the
+private durable continuation evidence bound during preparation. The service
+MUST acquire a fresh child lifecycle lease before Start can launch the resumed
+invocation, and the runner MUST bind the new process and all descendants to
+that lease. The parent lease, process, PTY, supervisor, control channel, and
+cleanup context are never reopened or reused. Fresh `prefer_resume` fallback
+and `fresh_session` paths go through ordinary Execute dispatch and acquire
+their own fresh child leases under the same rule.
 
 ### Platform containment before execution
 
@@ -474,6 +662,10 @@ non-terminal record.
 | Containment is non-empty or indeterminate at cleanup deadline | Service classifies `failed / cleanup_failed / cleanup` and retains recovery ownership | Recovery reaper continues after terminalization. |
 | Recorded PID has a different birth identity | Do not signal it; retain unresolved recovery evidence | Require operator diagnosis or a later identity-safe recovery path. |
 | Harness final event is missing, malformed, or duplicated | Service synthesizes or retains one typed terminal fact; raw invalid finals are not forwarded as service terminals | Preserve protocol diagnostics; never emit a second terminal fact. |
+| Completed-session locator is missing, unreadable, non-terminal, or lacks a terminal route | Service returns CONTRACT-003 `ErrContinuationSessionUnavailable` before child-session creation | Restore the completed Fizeau session record; do not guess a native ID or scan arbitrary directories. |
+| Resolved route does not implement `ContinuationHarness`, or preparation reports private evidence unavailable | `require_resume` returns CONTRACT-003 `ErrContinuationUnsupported`; `prefer_resume` may start its normalized fresh request | Service policy decides fallback; the harness never does. |
+| Prepared evidence becomes unusable or native resume is rejected during Start | One failed implementation final event for the created child; no automatic fresh attempt | Caller may submit a later explicit fresh request. |
+| Continuation request carries an empty Fizeau parent ID or a non-normalized child request | `ErrContinuationRequestInvalid`; no spawn | Fix the service-to-harness adapter; this is not a caller-facing policy outcome. |
 
 ## Projection to CONTRACT-003
 
@@ -524,6 +716,11 @@ Every harness implementation MUST carry, at minimum:
 | `AccountHarness` (every implementing harness) | Unit tests for `AccountStatus` returning each documented state (Authenticated, Unauthenticated, no evidence) with correct `Fresh` against a synthetic file fixture. |
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
+| `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
+| Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
+| Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
+| Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
+| Persistence ordering | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal` proves durable private evidence precedes a successful implementation final and public success follows durable log plus completed locator; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` proves crash recovery uses only the pending locator's exact path and full route key. |
 | Live subprocess lifecycle (every spawning path) | Platform subprocess tests cover normal completion, failure, timeout, cancellation, caller-signalled abandonment, and caller death with a grandchild in the containment boundary. Static enforcement proves production child creation routes through `internal/processlifecycle`. |
 | Recovery identity | Tests simulate PID reuse or a changed process-birth token and prove the recovery reaper does not signal the mismatched process. |
 | Projection | Service-level test asserting CONTRACT-003 JSON shape (e.g. `HarnessInfo.Quota`) is identical before and after the harness migration — pinned to a recorded fixture. |
@@ -539,6 +736,8 @@ by `go vet`-shaped tooling:
    used by `internal/serviceimpl/execute_dispatch.go`. All other
    consumption MUST go through the interface methods on `Harness`,
    `QuotaHarness`, `AccountHarness`, or `ModelDiscoveryHarness`.
+   Continuation consumption MUST go through `ContinuationHarness`; service
+   code never calls a concrete runner's resume helper.
 2. **Cache I/O is harness-owned.** No code outside
    `internal/harnesses/<name>/` reads or writes the harness's cache
    files.
@@ -567,9 +766,10 @@ by `go vet`-shaped tooling:
    supervisor, or lifecycle lease across accepted invocations. Two
    `&Runner{}` instances of the same harness MUST observe identical
    `QuotaStatus`/`AccountSnapshot` results for the same cache state.
-   The service MAY hold a single registered instance per harness or
-   construct fresh instances per call; both patterns MUST produce
-   equivalent observable behavior.
+   Routes that can continue MUST use the single route-registry instance for
+   Execute, private evidence ownership, and continuation capability lookup.
+   Routes with no continuation capability MAY construct fresh instances per
+   call only when doing so preserves equivalent observable cache behavior.
 8. **`RefreshQuota` and `RefreshAccount` are single-flight per harness
    instance, mediated by the harness's on-disk cache lock (ADR-012).**
    Concurrent callers block on the lock; once the in-flight refresh
@@ -590,6 +790,35 @@ by `go vet`-shaped tooling:
 11. **Recovery is identity-safe.** Lifecycle records carry containment and
     process-birth identity. No current process is signalled from a stale PID
     alone.
+12. **Continuation carries one conversation identifier.**
+    `ContinuationRequest.ParentSessionID` is a Fizeau session ID and is the
+    only conversation identifier crossing into `ContinuationHarness`.
+    `ContinuationRequest.Request` is a normalized child `ExecuteRequest`; it
+    carries neither service policy nor native evidence.
+13. **Completed-session lookup is durable and exact.** The stable locator
+    records the canonical path actually opened, so per-request log overrides
+    resolve after restart. The hub is a cache, not authority; arbitrary
+    directory scans and reconstruction from text are forbidden.
+14. **Native continuation evidence is durable and opaque.** The route-owned
+    runner alone stores and interprets it. Service- or harness-derived native
+    IDs and tokens never appear in service events, service session JSONL,
+    locator records, metadata, diagnostic maps, public structs, or errors.
+    Caller-authored metadata is not inspected for coincidental values.
+15. **Continuation uses the registered route object.** Execute dispatch,
+    evidence capture, and optional capability lookup resolve through one
+    canonical instance per endpoint-aware route key. A separate capability map
+    or ad hoc runner construction is forbidden.
+16. **Every continued invocation is a new lifecycle owner.** Logical native
+    conversation reuse never reuses the parent's process, PTY, supervisor,
+    control channel, cleanup context, or lease.
+17. **Preparation precedes child ownership.** Evidence availability is decided
+    synchronously before child-session creation. Start is single-use and occurs
+    only after the child and lease exist; a post-prepare failure cannot fall
+    back to a second invocation.
+18. **Successful continuation evidence precedes public success.** Private
+    evidence, the service terminal log, and completed locator become durable in
+    that order. Pending-locator recovery validates the exact path and full
+    route key rather than scanning.
 
 ## Non-Goals
 
@@ -607,17 +836,33 @@ by `go vet`-shaped tooling:
 - Maintaining warm live harness sessions between invocations. Durable caches
   and provider-native continuation evidence may be reused; live processes and
   containment leases may not.
+- Selecting `require_resume`, `prefer_resume`, or `fresh_session`, or exposing
+  those values to harness code. CONTRACT-003 service orchestration owns policy
+  and fallback.
+- Exposing a provider- or harness-native conversation identifier through a
+  public type, event, session log, locator record, diagnostic, or error.
+- Adding native-provider continuation to CONTRACT-004. This version's optional
+  capability is subprocess-harness-backed; native-provider routes report
+  unsupported under CONTRACT-003 and require a separate neutral contract if
+  support is added later.
 
 ## Acceptance Criteria
 
 1. `internal/harnesses/types.go` declares `Harness`, `QuotaHarness`,
    `AccountHarness`, `ModelDiscoveryHarness`, and
    `ContextModelDiscoveryHarness` interfaces with the signatures above;
-   `DefaultModelSnapshot` returns `(ModelDiscoverySnapshot, error)`.
+   `DefaultModelSnapshot` returns `(ModelDiscoverySnapshot, error)`. It also
+   declares optional `ContinuationHarness` with the exact method
+   `PrepareContinuation(context.Context, ContinuationRequest) (PreparedContinuation, error)`
+   and `PreparedContinuation` with exact method
+   `Start(context.Context) (<-chan Event, error)`.
 2. `QuotaStatus`, `AccountSnapshot`, `QuotaStateValue`,
    `RoutingPreference`, `ErrAliasNotResolvable`, and
    `ErrModelDiscoveryEvidenceMissing` are declared in
-   `internal/harnesses/types.go`.
+   `internal/harnesses/types.go`. The same file declares
+   `ContinuationRequest` with exactly `ParentSessionID string` and
+   `Request ExecuteRequest`, plus `ErrContinuationRequestInvalid` and
+   `ErrContinuationEvidenceUnavailable`; it declares no native-session field.
 3. The six built-in subprocess implementations (`claude`, `claude-tui`,
    `codex`, `gemini`, `opencode`, and `pi`) satisfy `Harness` plus their
    documented optional sub-interfaces.
@@ -646,6 +891,38 @@ by `go vet`-shaped tooling:
     channel cleanup, best-effort recovery, and identity-safe signalling.
 13. Structural tests reject any cross-invocation live process or PTY pool,
     including package-scope pools in `claude-tui`.
+14. `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves the optional
+    capability receives the Fizeau parent ID plus normalized child request and
+    no native identifier, token, evidence, or policy.
+15. `TestCompletedSessionRouteResolutionRequiresTerminalRoute` and
+    `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart`
+    prove durable locator validation, terminal-route recovery, exact override
+    paths, and restart behavior without the in-memory hub.
+16. `TestContinuationNativeReferenceIsNotSerialized` proves a recognizable
+    native reference is absent from public final/session JSON, locator bytes,
+    event metadata, diagnostics, and error text.
+17. `TestContinuationUsesRegisteredRouteInstance` proves the runner that
+    captured Execute evidence is the route-registry object asserted for and
+    invoked through `ContinuationHarness`; no separate instance map or ad hoc
+    constructor satisfies the test.
+18. `TestContinuationDispatchAcquiresFreshLifecycleLease` proves the child
+    continuation invocation has a new lease and containment identity and does
+    not retain any live parent resource.
+19. `TestContinuationEvidenceUnavailableBeforeSpawn` proves unusable private
+    evidence returns its sentinel without an event stream or child process.
+    Service-level policy tests prove this becomes CONTRACT-003 unsupported or
+    fresh-fallback behavior without exposing policy to the harness.
+20. `TestContinuationPrepareOrdersChildAndSpawn` proves preparation creates no
+    child, lease, process, or event; the child and fresh lease exist before
+    single-use Start; and a Start-time evidence failure produces one failed
+    child without a fresh fallback.
+21. `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests
+    `prefer_resume` fallback and `fresh_session` and proves each uses a new
+    child Fizeau session, lease, and containment identity.
+22. `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal` and
+    `TestContinuationRecoversPendingLocatorAfterTerminalCommit` prove private
+    evidence -> session log -> locator -> public-success ordering and exact-path,
+    full-route-key recovery after an interrupted completion commit.
 
 ## References
 

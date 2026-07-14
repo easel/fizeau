@@ -18,7 +18,7 @@ ddx:
       SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
       SD-010: 12f0b391c23a5a2b7e2abbbc6fec88ec6c7a57a7ff0a20e39c3a065a6c818e7a
       SD-012: bf30b7ba2939970dc4b6f94343403b37d72bc5626314a689682abcdd93d3acb2
-    reviewed_at: "2026-07-14T05:16:22Z"
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # ADR-016: Cells Are Self-Describing Evidence
 

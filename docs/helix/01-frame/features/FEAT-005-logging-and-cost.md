@@ -8,10 +8,10 @@ ddx:
   review:
     self_hash: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
     deps:
-      FEAT-001: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+      FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Feature Specification: FEAT-005 — Logging, Replay, and Cost Tracking
 

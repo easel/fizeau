@@ -8,8 +8,8 @@ ddx:
     self_hash: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
     deps:
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Feature Specification: FEAT-007 — Self-Update and Installer
 

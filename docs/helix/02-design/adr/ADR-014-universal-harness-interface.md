@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: df628e6bb4c8918ee13cc858720f600b6585678b0d9b441a2f18ff5ba25cd709
+    self_hash: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
     deps:
       ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: 0c3695b0fa948442d8b2e85e4a93e1c37b88b88971062ca7052d9be036ccae32
-      CONTRACT-004: 9d5b9e2470cea4bd8311d63f1f391dac82a8d4f0cdff42d131d3bf5a3bc86e9e
-    reviewed_at: "2026-07-14T08:00:37Z"
+      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -424,3 +424,109 @@ universal contract:
 - Structural tests reject cross-invocation live pools and verify the six
   built-in subprocess harnesses use the corrected discovery signatures and
   CONTRACT-004 lifecycle seam.
+
+## Amendment — 2026-07-14: Optional Route-Owned Continuation Capability
+
+ADR-014's small-interface rule extends to conversation continuation through
+CONTRACT-004's optional `ContinuationHarness`. The base `Harness` interface
+does not gain a sentinel continuation method. The service asserts the optional
+interface on the registered runner instance that owns the completed parent's
+actual route. Harness-name checks, capability inference from static registry
+metadata, and construction of a replacement runner for continuation are not
+valid substitutes for that assertion.
+
+The optional capability in this contract version is harness-backed only.
+Native-provider routes do not implement `ContinuationHarness`, are reported as
+unsupported for resume, and must not be wrapped or forced through `Harness` to
+obtain the capability. A future provider-native continuation interface is a
+separate contract decision. This boundary does not prevent a fresh-policy
+child from selecting a native provider through ordinary `Execute` routing.
+
+The service owns the public lineage and routing facts: locating a completed
+parent Fizeau session, including one written to a per-request session-log
+directory; reading its actual selected route; creating the child Fizeau
+session; and recording parent session ID plus continuation disposition. The
+route-owned runner owns harness-native continuation evidence and its encoding.
+Native conversation IDs, resume tokens, and equivalent derived evidence never
+become public fields or values and are never serialized into public JSON,
+service events, terminal projections, metadata, or session-log JSONL. They may
+be persisted only as opaque data in the owning route's private durable evidence
+store; the service passes no native identifier and does not interpret the
+stored bytes.
+
+Runner-instance ownership is stable across process lifetime, while evidence
+ownership is stable across service restarts. In a running service, continuation
+uses the actual route-owned registered runner instance. After restart, the
+service reconstructs the parent's actual route and the registry binds that
+route to the same private evidence store. A runner for a different route,
+another instance that merely shares a harness name, or a runner bound to a
+different store has no continuation authority over that parent. The canonical
+route key includes the normalized endpoint in addition to harness, provider,
+model, and other routing discriminators. Endpoint-distinct routes never share
+authority or evidence by display-name coincidence.
+
+`ContinuationHarness` is a two-phase capability. Prepare receives the parent
+Fizeau session reference, resolves and validates durable private evidence, and
+returns a route-bound prepared continuation. Prepare must not create a child
+session, event stream, lifecycle lease, containment boundary, or process. A
+prepare-time unavailable result is the only resume failure that
+`prefer_resume` may convert into a fresh fallback; `require_resume` returns
+unsupported without creating a child.
+
+After successful prepare, the service creates the child Fizeau session and
+acquires its fresh lifecycle lease before calling the prepared continuation's
+`Start` operation. `Start` may spawn only inside that lease's containment. A
+native rejection, evidence race, or other error after prepare is a failure of
+the already-created resumed child. The service emits its one terminal fact and
+must not reinterpret the disposition or start a fresh fallback.
+
+Private continuation evidence must be durable; an in-memory-only map or runner
+field cannot satisfy this decision. The service writes a durable pending
+completed-session locator before parent execution. A supporting runner commits
+its private evidence atomically under parent Fizeau session ID plus canonical
+route key before acknowledging capture; the service promotes the locator only
+after the terminal log and actual route are durable. Pending-locator recovery
+validates the exact log and route and asks the reconstructed canonical runner
+to reopen the same store. Evidence committed before a crash may be recovered
+or retained as a private orphan; evidence not committed before a crash is
+unavailable. Recovery never scrapes a native ID from public logs or process
+memory.
+
+Continuation preserves logical conversation state, not live execution state.
+Each accepted resumed child, `prefer_resume` fresh fallback, and
+`fresh_session` child receives a new Fizeau session ID and a fresh lifecycle
+lease. A spawning route also receives a fresh `internal/processlifecycle`
+containment boundary. No child may reuse a parent process, PTY, supervisor,
+process group, Job Object, or lease.
+
+Opacity follows provenance. Service- or harness-derived native evidence must
+not escape the private store. The service does not redact coincidentally equal
+bytes that the caller deliberately supplied in prompts or metadata; those
+remain caller data governed by the normal public contract.
+
+### Continuation conformance additions
+
+- Optional-interface tests prove a runner may implement `Harness` without
+  continuation, while a supporting route is recognized only by asserting
+  `ContinuationHarness` on the parent's actual registered runner instance.
+  Native-provider parents are unsupported, and no adapter or forced harness
+  dispatch is attempted.
+- Route-identity tests use multiple runner instances with the same harness
+  name but distinct endpoint-bearing route keys and private stores. Only the
+  instance recorded on the completed parent is called; no name-based fallback
+  or replacement construction occurs.
+- Restart tests resolve a completed parent from both the default and a
+  per-request session-log directory, crash before and after private evidence
+  commit and locator promotion, rebuild the registry, and prove recovery uses
+  the same durable store rather than process memory.
+- Two-phase tests prove prepare creates no child, lease, containment, stream,
+  or process; service child/lease creation precedes `Start`; and a
+  post-prepare failure creates one failed resumed child with no fresh fallback.
+- Opaque-boundary tests tag harness-derived IDs and tokens and prove they are
+  absent from every public Go shape and serialized service projection, while
+  an equal caller-supplied metadata value is preserved.
+- Lifecycle tests issue resumed children serially and concurrently and prove
+  every child has a distinct Fizeau session, lifecycle lease, and containment
+  identity. Fresh fallbacks and `fresh_session` children also receive new
+  leases. No child inherits a live process or PTY, and cleanup failure on one
+  child cannot transfer ownership to another invocation.

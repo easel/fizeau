@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - helix.prd
   review:
-    self_hash: d6e93cec0678d8fdaf5e489582be2ffe25620885841ef5363c04cbdf86069fa3
+    self_hash: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
     deps:
-      helix.prd: edcba06017764a15c820d236ed64e1d4d55eb24f4e684fd9974dd328153da68a
-    reviewed_at: "2026-07-14T05:16:22Z"
+      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    reviewed_at: "2026-07-14T20:00:14Z"
 ---
 # Feature Specification: FEAT-001 — Agent Loop
 
@@ -137,5 +137,6 @@ File Changes sections).
 ## Out of Scope
 
 - Interactive/streaming output to a terminal (headless only)
-- Conversation persistence across `Execute` calls (P1 session continuity)
+- Continuation orchestration, which is a separate public service operation
+  governed by CONTRACT-003 rather than persistence across `Execute` calls
 - Parallel tool execution (tools execute sequentially)
