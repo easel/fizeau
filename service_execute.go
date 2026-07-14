@@ -219,17 +219,32 @@ func (s *service) resolveExecuteRouteContext(ctx context.Context, req ServiceExe
 
 	resolvedModel := resolveSubprocessModelAliasWithCatalog(canonical, req.Model, serviceRoutingCatalog())
 	decision := &RouteDecision{
-		Harness:  canonical,
-		Provider: req.Provider,
-		Model:    resolvedModel,
-		Reason:   "explicit",
-		Power:    catalogPowerForModel(serviceRoutingCatalog(), resolvedModel),
+		Harness:        canonical,
+		Provider:       req.Provider,
+		ServerInstance: explicitProviderServerInstance(s.opts.ServiceConfig, req.Provider),
+		Model:          resolvedModel,
+		Reason:         "explicit",
+		Power:          catalogPowerForModel(serviceRoutingCatalog(), resolvedModel),
 	}
 	if decision.Endpoint == "" {
 		_, endpoint, _ := splitEndpointProviderRef(decision.Provider)
 		decision.Endpoint = endpoint
 	}
 	return decision, nil
+}
+
+func explicitProviderServerInstance(sc ServiceConfig, provider string) string {
+	if sc == nil || strings.TrimSpace(provider) == "" {
+		return ""
+	}
+	if _, entry, ok := selectConfiguredEndpointProvider(sc, provider); ok {
+		return strings.TrimSpace(entry.ServerInstance)
+	}
+	entry, ok := sc.Provider(strings.TrimSpace(provider))
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(entry.ServerInstance)
 }
 
 func validateExplicitHarnessQuota(name string, cfg harnesses.HarnessConfig) error {
@@ -816,6 +831,7 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 		BeforeExecute: func() {
 			emitProgress(out, seq, sl, sessionID, meta, progress.noteRequestStart())
 		},
+		ObserveFinal: s.observeRouteAttemptFromFinal,
 		ObserveEvent: func(ev harnesses.Event) harnesses.Event {
 			ev = progress.annotateToolResultDuration(ev)
 			if payload, ok := progress.noteEvent(ev); ok && ev.Type != harnesses.EventTypeProgress {
@@ -845,7 +861,6 @@ func (s *service) runSubprocess(ctx context.Context, req ServiceExecuteRequest, 
 			}
 		},
 		Finalize: func(final harnesses.FinalData) {
-			s.recordRouteAttemptFromFinal(final)
 			finalizeAndEmit(out, seq, meta, req, sl, final, serviceimpl.TerminalOriginSpawn, ctx.Err())
 		},
 		WriteEnd: func(finalMeta map[string]string, final harnesses.FinalData) {

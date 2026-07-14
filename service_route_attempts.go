@@ -32,10 +32,24 @@ func (s *service) RecordRouteAttempt(_ context.Context, attempt RouteAttempt) er
 
 func (s *service) recordRouteAttemptFromFinal(final harnesses.FinalData) {
 	attempt, ok := routeAttemptFromFinal(final)
+	_ = s.observeResolvedRouteAttempt(attempt, ok)
+}
+
+// observeRouteAttemptFromFinal records dispatchability feedback before a
+// wrapped harness terminal is delivered. The returned persistence error is
+// intentionally separate from the in-memory update: RecordRouteAttempt keeps
+// the attempt in memory even when its snapshot cannot be saved, while the
+// subprocess finalizer projects the error as bounded terminal evidence.
+func (s *service) observeRouteAttemptFromFinal(final harnesses.FinalData) error {
+	attempt, ok := wrappedRouteAttemptFromFinal(final)
+	return s.observeResolvedRouteAttempt(attempt, ok)
+}
+
+func (s *service) observeResolvedRouteAttempt(attempt RouteAttempt, ok bool) error {
 	if !ok {
-		return
+		return nil
 	}
-	_ = s.RecordRouteAttempt(context.Background(), attempt)
+	persistErr := s.RecordRouteAttempt(context.Background(), attempt)
 	// Dispatch reachability failures (transport-class errors) also feed the
 	// catalog cache and probe store so the next routing pass within the
 	// freshness/cooldown window hard-gates the endpoint with
@@ -43,6 +57,26 @@ func (s *service) recordRouteAttemptFromFinal(final harnesses.FinalData) {
 	if provider, endpoint, dispatchErr := dispatchFailureFromFinal(attempt); dispatchErr != nil {
 		s.recordDispatchFailure(provider, endpoint, dispatchErr)
 	}
+	return persistErr
+}
+
+// wrappedRouteAttemptFromFinal requires explicit adapter-owned failure
+// classification. Text inference remains available to legacy/native
+// finalization through routeAttemptFromFinal, but classless wrapped task
+// failures must not become route-health evidence merely because their prose
+// happens to contain words such as "unsupported" or "not available".
+func wrappedRouteAttemptFromFinal(final harnesses.FinalData) (RouteAttempt, bool) {
+	if final.RoutingActual == nil {
+		return RouteAttempt{}, false
+	}
+	if routehealth.Succeeded(strings.ToLower(strings.TrimSpace(final.Status))) {
+		return routeAttemptFromFinal(final)
+	}
+	class := strings.ToLower(strings.TrimSpace(final.RoutingActual.FailureClass))
+	if !isRouteAttemptFeedbackFailure(class) {
+		return RouteAttempt{}, false
+	}
+	return routeAttemptFromFinal(final)
 }
 
 func routeAttemptFromFinal(final harnesses.FinalData) (RouteAttempt, bool) {
@@ -71,7 +105,7 @@ func routeAttemptFromFinal(final harnesses.FinalData) (RouteAttempt, bool) {
 	if routehealth.Succeeded(strings.ToLower(attempt.Status)) {
 		return attempt, true
 	}
-	if !isRouteAttemptDispatchFailure(attempt.Reason) {
+	if !isRouteAttemptFeedbackFailure(attempt.Reason) {
 		return RouteAttempt{}, false
 	}
 	return attempt, true
@@ -87,6 +121,19 @@ func routeAttemptFailureClass(final harnesses.FinalData) string {
 	return classifyRouteAttemptFailure(final.Error)
 }
 
+func isRouteAttemptFeedbackFailure(class string) bool {
+	switch strings.ToLower(strings.TrimSpace(class)) {
+	case "availability", "protocol", "transport", "credential_invalid", "quota_exhausted":
+		return true
+	default:
+		return false
+	}
+}
+
+// isRouteAttemptDispatchFailure limits endpoint reachability feedback to
+// failure classes that can describe dispatch mechanics. Credential and quota
+// failures are route-selection evidence only, even when their diagnostics
+// happen to contain network- or HTTP-looking words.
 func isRouteAttemptDispatchFailure(class string) bool {
 	switch strings.ToLower(strings.TrimSpace(class)) {
 	case "availability", "protocol", "transport":

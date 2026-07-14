@@ -3,6 +3,8 @@ package fizeau
 import (
 	"errors"
 	"strings"
+
+	"github.com/easel/fizeau/internal/routehealth"
 )
 
 // recordDispatchFailure feeds a chat-completions dispatch failure back into
@@ -105,6 +107,9 @@ func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []s
 // not describe a dispatch reachability failure.
 func dispatchFailureFromFinal(attempt RouteAttempt) (string, string, error) {
 	if attempt.Status == "" || attempt.Provider == "" {
+		return "", "", nil
+	}
+	if routehealth.Succeeded(strings.ToLower(strings.TrimSpace(attempt.Status))) {
 		return "", "", nil
 	}
 	if !isRouteAttemptDispatchFailure(attempt.Reason) {
