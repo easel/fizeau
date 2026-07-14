@@ -415,6 +415,47 @@ type ServiceFinalData struct {
 }
 ```
 
+### Executing-surface route-failure evidence
+
+`ServiceFinalData.RoutingActual.FailureClass` is extensible, typed evidence
+about a failure observed by the surface that actually executed. Claude batch
+and Claude TUI classifiers produce these stable values:
+
+- `credential_invalid` — the executing surface rejected or could not refresh
+  credentials, including HTTP 401 evidence. This is distinct from
+  `credential_missing`, which is pre-dispatch configuration evidence and is not
+  produced by the Claude execution classifier.
+- `quota_exhausted` — the executing surface reported a usage, credit-balance,
+  or billing limit. This class does not itself promise a `Retry-After` value or
+  a reset time.
+- `transport` — connection, name-resolution, timeout, or equivalent transport
+  failure from the executing surface.
+- `protocol` — an infrastructure protocol failure such as a malformed service
+  response or non-authentication HTTP error. Model output quality, task
+  failure, and other semantic failures are never `protocol`.
+- `unknown` — the executing surface failed without evidence sufficient for a
+  more specific class.
+
+The generic native-dispatch class `availability` remains a stable value outside
+the Claude classifier's output set. Future minor releases may add classes;
+consumers preserve unknown values rather than treating this list as a closed
+Go enum.
+
+Failure evidence belongs only to the executing surface. A failed Claude batch
+process does not declare Claude TUI, the host account, or any other route
+failed, and the inverse is also true. The adapter attaches its class before
+terminal delivery. The service-resolved `RouteDecision` is authoritative for
+`Harness`, `Provider`, `ServerInstance`, and `Model`: final projection
+overwrites conflicting adapter identity with those four values while preserving
+the adapter-owned `FailureClass`.
+
+Before emission, adapter diagnostics follow ADR-002 secret and account-data
+scrubbing. Claude diagnostics are bounded to 2048 bytes. A TUI adapter retains
+only matched fatal lines, never the full rendered frame or user prompt.
+`unknown` and semantic failures do not enter route health. Admission of other
+classes is service policy; a class is evidence, not an unconditional hard gate
+or a claim about sibling surfaces.
+
 Terminalization is the creation of one immutable terminal fact for an accepted
 session. `Outcome` is its stable coarse result, `Cause` is its stable reason,
 and `Stage` is the Fizeau-owned stage that determined it. Terminalization is
@@ -916,6 +957,9 @@ Compatibility rules after v0.15 are:
 - `SessionOutcome`, `TerminalCause`, `SessionStage`, `ContinuationPolicy`, and
   `ContinuationDisposition` values MUST NOT be renamed or reused with different
   semantics within v0.x.
+- Stable `FailureClass` values MUST NOT be renamed or reused with different
+  semantics within v0.x. Consumers MUST preserve an unknown failure-class
+  string for diagnostics and MUST NOT admit it to route health by default.
 - New cause or stage values MAY be added in a minor release. Consumers MUST
   preserve unknown strings for diagnostics and MUST NOT interpret an unknown
   outcome as success.

@@ -443,6 +443,60 @@ func TestRunnerExecute_HappyPath(t *testing.T) {
 	require.NotEmpty(t, entries, "session log dir should contain agent-*.jsonl")
 }
 
+func TestClaudeRunnerFinalClassifiesAuthenticationFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake claude binary relies on POSIX shell")
+	}
+	tmp := t.TempDir()
+	binPath := filepath.Join(tmp, "fake-claude-auth-failure")
+	script := `#!/bin/sh
+printf '%s\n' 'Failed to authenticate' 'Could not refresh auth token' >&2
+exit 1
+`
+	require.NoError(t, os.WriteFile(binPath, []byte(script), 0o755))
+
+	runner := &Runner{Binary: binPath}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := runner.Execute(ctx, harnesses.ExecuteRequest{Prompt: "hi"})
+	require.NoError(t, err)
+	events := drainEvents(t, ctx, out)
+
+	var finals []harnesses.FinalData
+	for _, event := range events {
+		if event.Type != harnesses.EventTypeFinal {
+			continue
+		}
+		var final harnesses.FinalData
+		require.NoError(t, json.Unmarshal(event.Data, &final))
+		finals = append(finals, final)
+	}
+	require.Len(t, finals, 1)
+	final := finals[0]
+	assert.Equal(t, "failed", final.Status)
+	assert.Contains(t, final.Error, "exit status 1")
+	assert.Contains(t, final.Error, "Failed to authenticate")
+	assert.Contains(t, final.Error, "Could not refresh auth token")
+	require.NotNil(t, final.RoutingActual)
+	assert.Equal(t, "claude", final.RoutingActual.Harness)
+	assert.Equal(t, "credential_invalid", final.RoutingActual.FailureClass)
+}
+
+func TestClaudeFinalErrorPreservesAndSanitizesNonSuccessStatuses(t *testing.T) {
+	cancelled := claudeFinalError("cancelled", errors.New("context canceled ANTHROPIC_API_KEY=cancel-secret"), "ignored stderr", "")
+	assert.Contains(t, cancelled, "context canceled")
+	assert.NotContains(t, cancelled, "cancel-secret")
+	assert.NotContains(t, cancelled, "ignored stderr", "cancellation preserves legacy process-error precedence")
+
+	failed := claudeFinalError("failed", errors.New("exit status 1"), "Failed to authenticate\nCould not refresh auth token", "")
+	assert.Contains(t, failed, "exit status 1")
+	assert.Contains(t, failed, "Failed to authenticate")
+	assert.LessOrEqual(t, len(failed), 2048)
+
+	quota := claudeFinalError("failed", errors.New("exit status 1"), "stderr detail", "usage limit reached")
+	assert.Equal(t, "claude quota exhausted: usage limit reached", quota, "quota keeps its legacy terminal diagnostic precedence")
+}
+
 func TestRunnerExecute_QuotaMessageMarksCache(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake claude binary relies on POSIX shell")

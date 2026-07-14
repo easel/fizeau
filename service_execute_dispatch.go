@@ -57,9 +57,10 @@ func (s *service) executeRunnerInvoker() executeRunnerInvoker {
 
 func (s *service) dispatchExecuteRun(ctx context.Context, run executeRunContext) {
 	decision := serviceimpl.ExecuteRunnerDecision{
-		Harness:  run.decision.Harness,
-		Provider: run.decision.Provider,
-		Model:    run.decision.Model,
+		Harness:        run.decision.Harness,
+		Provider:       run.decision.Provider,
+		ServerInstance: run.decision.ServerInstance,
+		Model:          run.decision.Model,
 	}
 	serviceimpl.DispatchExecuteRun(ctx, serviceimpl.ExecuteDispatchRequest{
 		Decision: decision,

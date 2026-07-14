@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,5 +45,26 @@ func TestEmitTranscriptAndFinalSynthesizesFinalForIncompleteTranscript(t *testin
 	}
 	if finals[0].Error == "" {
 		t.Fatal("final error must describe the incomplete transcript")
+	}
+}
+
+func TestEmitFinalEventSanitizesDiagnosticWithoutFailureClass(t *testing.T) {
+	events := make(chan harnesses.Event, 1)
+	emitFinalEvent(events, 1, time.Now(), "timed_out",
+		"turn timeout ANTHROPIC_API_KEY=timeout-secret account acct-raw-secret", 124)
+	close(events)
+
+	event := <-events
+	var final harnesses.FinalData
+	if err := json.Unmarshal(event.Data, &final); err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"timeout-secret", "acct-raw-secret"} {
+		if strings.Contains(final.Error, secret) {
+			t.Errorf("generic final retained %q: %q", secret, final.Error)
+		}
+	}
+	if final.RoutingActual != nil {
+		t.Fatalf("generic timeout gained route-failure evidence: %+v", final.RoutingActual)
 	}
 }

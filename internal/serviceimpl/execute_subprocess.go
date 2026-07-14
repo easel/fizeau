@@ -322,13 +322,15 @@ func stampSubprocessFinalRouting(ev harnesses.Event, decision ExecuteRunnerDecis
 		return ev
 	}
 	if final.RoutingActual == nil {
-		final.RoutingActual = &harnesses.RoutingActual{
-			Harness:        decision.Harness,
-			Provider:       decision.Provider,
-			ServerInstance: decision.ServerInstance,
-			Model:          decision.Model,
-		}
+		final.RoutingActual = &harnesses.RoutingActual{}
 	}
+	// The adapter owns executing-surface failure evidence. The service owns the
+	// resolved route identity and overwrites any adapter-supplied tuple so a
+	// final cannot contradict the RouteDecision that actually dispatched it.
+	final.RoutingActual.Harness = decision.Harness
+	final.RoutingActual.Provider = decision.Provider
+	final.RoutingActual.ServerInstance = decision.ServerInstance
+	final.RoutingActual.Model = decision.Model
 	raw, err := json.Marshal(final)
 	if err != nil {
 		return ev

@@ -468,10 +468,10 @@ func (h *Harness) runTurnOver(
 			// surface it as a terminal final instead of waiting for the turn
 			// timeout. The session is evicted so a reused slot never inherits a
 			// broken process.
-			if fs, ok := detectFatalScreen(frame); ok {
+			if fs, diagnostic, ok := detectFatalScreen(frame, req.Prompt); ok {
 				_ = te.conn.Kill()
 				*seq++
-				emitFinalEvent(eventChan, *seq, startTime, fs.status, fs.errMsg, fs.exitCode)
+				emitClaudeFailureFinalEvent(eventChan, *seq, startTime, fs.status, diagnostic, fs.exitCode)
 				return turnEvicted
 			}
 			// 4) dismiss any first-run interstitial (folder-trust, theme/
@@ -543,12 +543,29 @@ func documentedRequestGaps(req harnesses.ExecuteRequest) []string {
 
 // emitFinalEvent is a helper to emit a final event on the channel.
 func emitFinalEvent(eventChan chan<- harnesses.Event, seq int64, startTime time.Time, status, errMsg string, exitCode int) {
-	fd := harnesses.FinalData{
+	emitFinalData(eventChan, seq, harnesses.FinalData{
 		Status:     status,
-		Error:      errMsg,
+		Error:      anthropic.SanitizeClaudeDiagnostic(errMsg),
 		DurationMS: time.Since(startTime).Milliseconds(),
 		ExitCode:   exitCode,
-	}
+	})
+}
+
+func emitClaudeFailureFinalEvent(eventChan chan<- harnesses.Event, seq int64, startTime time.Time, status, evidence string, exitCode int) {
+	failureClass, diagnostic := anthropic.ClassifyClaudeRouteFailure(evidence)
+	emitFinalData(eventChan, seq, harnesses.FinalData{
+		Status:     status,
+		Error:      diagnostic,
+		DurationMS: time.Since(startTime).Milliseconds(),
+		ExitCode:   exitCode,
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:      "claude-tui",
+			FailureClass: failureClass,
+		},
+	})
+}
+
+func emitFinalData(eventChan chan<- harnesses.Event, seq int64, fd harnesses.FinalData) {
 	data, _ := json.Marshal(fd)
 	eventChan <- harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
@@ -1132,8 +1149,6 @@ type fatalScreen struct {
 	status string
 	// markers are matched against the vt10x-rendered frame text.
 	markers []string
-	// errMsg is the human-readable error attached to the final.
-	errMsg string
 	// exitCode is the synthetic exit code for the final.
 	exitCode int
 }
@@ -1146,33 +1161,149 @@ type fatalScreen struct {
 var fatalScreens = []fatalScreen{
 	{
 		status:   "iteration_limit",
-		markers:  []string{"usage limit reached", "Claude usage limit reached", "approaching usage limit", "out of free messages"},
-		errMsg:   "claude usage limit reached mid-turn",
+		markers:  []string{"usage limit reached", "Claude usage limit reached", "approaching usage limit", "out of free messages", "Credit balance is too low"},
 		exitCode: 1,
 	},
 	{
 		status:   "failed",
-		markers:  []string{"Please run /login", "Invalid API key", "authentication_error", "Credit balance is too low", "OAuth token has expired"},
-		errMsg:   "claude session not authenticated mid-turn",
+		markers:  []string{"Please run /login", "Invalid API key", "authentication_error", "OAuth token has expired", "Failed to authenticate", "Could not refresh auth token"},
 		exitCode: 1,
 	},
 	{
 		status:   "failed",
 		markers:  []string{"Connection error", "network error", "fetch failed", "ECONNREFUSED", "service is temporarily unavailable", "Overloaded"},
-		errMsg:   "claude lost connection to the API mid-turn",
 		exitCode: 1,
 	},
 }
 
-// detectFatalScreen returns the first fatal screen visible on the frame, or
-// (fatalScreen{}, false) when none is present.
-func detectFatalScreen(frame terminal.Frame) (fatalScreen, bool) {
+// detectFatalScreen returns the first fatal screen backed by non-prompt frame
+// evidence. Claude renders the submitted prompt in the same terminal frame as
+// failures, so prompt lines must be removed before marker matching; otherwise
+// a user merely discussing an error string could terminate their own turn.
+func detectFatalScreen(frame terminal.Frame, prompt string) (fatalScreen, string, bool) {
 	for _, fs := range fatalScreens {
-		if frameHasAnyMarker(frame, fs.markers) {
-			return fs, true
+		if lines := matchedFatalLines(frame, fs.markers, prompt); len(lines) > 0 {
+			return fs, strings.Join(lines, "\n"), true
 		}
 	}
-	return fatalScreen{}, false
+	return fatalScreen{}, "", false
+}
+
+// matchedFatalLines returns only rendered lines that carry a marker for the
+// selected fatal-screen class. The full frame can include the user's prompt,
+// prior output, or unrelated account information and is never retained.
+func matchedFatalLines(frame terminal.Frame, markers []string, prompt string) []string {
+	var matched []string
+	promptRows := promptEchoLineIndexes(frame, prompt)
+	for index, line := range frame.Text {
+		if _, isPromptRow := promptRows[index]; isPromptRow {
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || renderedLineAppearsInPrompt(trimmed, prompt) {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		for _, marker := range markers {
+			if strings.Contains(lower, strings.ToLower(marker)) && isUIOwnedFatalLine(trimmed, marker) {
+				matched = append(matched, trimmed)
+				break
+			}
+		}
+	}
+	return matched
+}
+
+func isUIOwnedFatalLine(line, marker string) bool {
+	normalizedLine := strings.ToLower(normalizeTerminalText(line))
+	normalizedMarker := strings.ToLower(normalizeTerminalText(marker))
+	for _, prefix := range []string{
+		"api error:", "authentication error:", "oauth error:",
+		"quota error:", "usage error:", "network error:", "connection error:",
+	} {
+		if strings.HasPrefix(normalizedLine, prefix) {
+			return true
+		}
+	}
+	if !strings.HasPrefix(normalizedLine, normalizedMarker) {
+		return false
+	}
+	remainder := strings.TrimSpace(strings.TrimPrefix(normalizedLine, normalizedMarker))
+	if remainder == "" {
+		return true
+	}
+	switch []rune(remainder)[0] {
+	case ':', '.', '!', '-', '—', '·', '(', '[':
+		return true
+	default:
+		return false
+	}
+}
+
+// renderedLineAppearsInPrompt covers clipped or scrolled input frames where
+// Claude's prompt glyph and the first input row are no longer visible. Safety
+// wins over early detection when a rendered line exactly repeats any
+// normalized span of caller input; UI-owned error prefixes distinguish real
+// fatal evidence in otherwise ambiguous frames.
+func renderedLineAppearsInPrompt(line, prompt string) bool {
+	normalizedLine := normalizeTerminalText(line)
+	for _, prefix := range []string{"❯", ">"} {
+		if strings.HasPrefix(normalizedLine, prefix) {
+			normalizedLine = normalizeTerminalText(strings.TrimPrefix(normalizedLine, prefix))
+			break
+		}
+	}
+	return normalizedLine != "" && strings.Contains(normalizeTerminalText(prompt), normalizedLine)
+}
+
+// promptEchoLineIndexes identifies only the contiguous rendered input rows
+// beginning at Claude's prompt glyph. Wrapped continuation rows are excluded
+// while their accumulated text remains a prefix of the submitted prompt. This
+// avoids globally suppressing a real fatal line merely because the same words
+// also appeared somewhere in caller input.
+func promptEchoLineIndexes(frame terminal.Frame, prompt string) map[int]struct{} {
+	rows := make(map[int]struct{})
+	normalizedPrompt := normalizeTerminalText(prompt)
+	if normalizedPrompt == "" {
+		return rows
+	}
+	for start, rawLine := range frame.Text {
+		line := normalizeTerminalText(rawLine)
+		var first string
+		switch {
+		case strings.HasPrefix(line, "❯"):
+			first = normalizeTerminalText(strings.TrimPrefix(line, "❯"))
+		case strings.HasPrefix(line, ">"):
+			first = normalizeTerminalText(strings.TrimPrefix(line, ">"))
+		default:
+			continue
+		}
+		if first == "" || !strings.HasPrefix(normalizedPrompt, first) {
+			continue
+		}
+
+		candidate := first
+		rows[start] = struct{}{}
+		for index := start + 1; index < len(frame.Text) && candidate != normalizedPrompt; index++ {
+			fragment := normalizeTerminalText(frame.Text[index])
+			if fragment == "" {
+				break
+			}
+			next := candidate + " " + fragment
+			if compact := candidate + fragment; strings.HasPrefix(normalizedPrompt, compact) {
+				next = compact
+			} else if !strings.HasPrefix(normalizedPrompt, next) {
+				break
+			}
+			candidate = next
+			rows[index] = struct{}{}
+		}
+	}
+	return rows
+}
+
+func normalizeTerminalText(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
 // RunTurnForTest drives a single turn over an injected ptyConn with explicit

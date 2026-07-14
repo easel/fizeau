@@ -13,6 +13,7 @@ import (
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/processlifecycle"
 )
@@ -248,13 +249,18 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	if quotaMessage != "" {
 		markClaudeQuotaExhaustedFromMessage(quotaMessage, time.Now())
 	}
-	if runErr != nil && status != "success" {
-		final.Error = runErr.Error()
-	} else if stderr != "" && status != "success" {
-		final.Error = trimErrorBlob(stderr)
+	if status != "success" {
+		final.Error = claudeFinalError(status, runErr, stderr, quotaMessage)
 	}
-	if quotaMessage != "" && status != "success" {
-		final.Error = "claude quota exhausted: " + trimErrorBlob(quotaMessage)
+	if status == "failed" || status == "iteration_limit" {
+		failureEvidence := claudeFailureEvidence(runErr, stderr, quotaMessage)
+		if strings.TrimSpace(failureEvidence) != "" {
+			failureClass, _ := anthropic.ClassifyClaudeRouteFailure(failureEvidence)
+			final.RoutingActual = &harnesses.RoutingActual{
+				Harness:      "claude",
+				FailureClass: failureClass,
+			}
+		}
 	}
 	if agg != nil {
 		final.FinalText = agg.FinalText
@@ -281,6 +287,41 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	case <-time.After(time.Second):
 		// Caller has stopped consuming; drop and close.
 	}
+}
+
+func claudeFinalError(status string, runErr error, stderr, quotaMessage string) string {
+	if status == "success" {
+		return ""
+	}
+	if diagnostic := strings.TrimSpace(quotaMessage); diagnostic != "" {
+		return anthropic.SanitizeClaudeDiagnostic("claude quota exhausted: " + diagnostic)
+	}
+	if runErr != nil {
+		diagnostic := runErr.Error()
+		// Failed execution retains the process error for compatibility and adds
+		// sanitized stderr so an opaque exit status does not erase the executing
+		// surface's classification evidence. Cancellation and timeout keep their
+		// legacy process-error text without attaching route-failure evidence.
+		if (status == "failed" || status == "iteration_limit") && strings.TrimSpace(stderr) != "" {
+			diagnostic += "\n" + stderr
+		}
+		return anthropic.SanitizeClaudeDiagnostic(diagnostic)
+	}
+	return anthropic.SanitizeClaudeDiagnostic(stderr)
+}
+
+func claudeFailureEvidence(runErr error, stderr, quotaMessage string) string {
+	parts := make([]string, 0, 3)
+	if diagnostic := strings.TrimSpace(quotaMessage); diagnostic != "" {
+		parts = append(parts, "claude quota exhausted: "+diagnostic)
+	}
+	if runErr != nil {
+		parts = append(parts, runErr.Error())
+	}
+	if diagnostic := strings.TrimSpace(stderr); diagnostic != "" {
+		parts = append(parts, diagnostic)
+	}
+	return strings.Join(parts, "\n")
 }
 
 func claudeQuotaMessage(stderr string, runErr error, agg *streamAggregate) string {
@@ -571,15 +612,4 @@ type stringBuilderWriter struct {
 
 func (w *stringBuilderWriter) Write(p []byte) (int, error) {
 	return w.sb.Write(p)
-}
-
-// trimErrorBlob caps stderr for inclusion in the final event so a runaway
-// error log doesn't bloat the channel payload.
-func trimErrorBlob(s string) string {
-	const max = 2048
-	s = strings.TrimSpace(s)
-	if len(s) > max {
-		return s[:max] + "...(truncated)"
-	}
-	return s
 }

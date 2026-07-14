@@ -831,6 +831,128 @@ func TestRunTurnSurfacesMidTurnDisconnect(t *testing.T) {
 	assertExactlyOneFinal(t, events, "failed")
 }
 
+func TestRunTurnIgnoresFatalMarkersInAssistantProse(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	proseDidNotKill := make(chan bool, 1)
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		f.push([]byte("\x1b[H\x1b[2J" +
+			"\x1b[2;2HOrdinary assistant explanation" +
+			"\x1b[4;2HAn Invalid API key means the supplied credential was rejected."))
+		time.Sleep(100 * time.Millisecond)
+		proseDidNotKill <- !f.wasKilled()
+		writeStopPayload(t, stopPath, "nonce-assistant-prose", transcript)
+	}()
+
+	events := claudetui.RunTurnForTest(ctx, f,
+		harnesses.ExecuteRequest{Prompt: "explain invalid API keys", WorkDir: dir},
+		hookDir, stopPath, "nonce-assistant-prose", 100*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+	if ok := <-proseDidNotKill; !ok {
+		t.Error("ordinary assistant prose containing a fatal marker killed the session")
+	}
+	assertExactlyOneFinal(t, events, "success")
+	if f.wasKilled() {
+		t.Error("successful assistant response was evicted as a fatal screen")
+	}
+}
+
+func TestRunTurnSurfacesAuthenticationFailureWithTypedClass(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	promptLead := "Explain these authentication strings without treating them as runtime evidence:"
+	promptFirstRow := "Please run /login; Invalid API key; authentication_error;"
+	promptSecondRow := "OAuth token has expired; Failed to authenticate; Could not refresh auth token"
+	prompt := promptLead + " " + promptFirstRow + " " + promptSecondRow
+	promptOnlyDidNotKill := make(chan bool, 1)
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Claude echoes caller input in the rendered frame. This snapshot is
+		// deliberately clipped/scrolled so neither the prompt glyph nor the
+		// first input row remains; marker-bearing continuation rows are still
+		// caller input, not execution-failure evidence.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;3H" + promptFirstRow + "\x1b[3;3H" + promptSecondRow))
+		time.Sleep(100 * time.Millisecond)
+		promptOnlyDidNotKill <- !f.wasKilled()
+
+		// A later, separate fatal screen is authoritative executing-surface
+		// evidence and must terminate the turn.
+		f.push([]byte("\x1b[H\x1b[2J" +
+			"\x1b[2;2Hsurrounding frame text must not be retained" +
+			"\x1b[4;2HAPI Error: Failed to authenticate" +
+			"\x1b[5;2HAPI Error: Could not refresh auth token" +
+			"\x1b[7;2Hprompt text must not be retained"))
+	}()
+
+	events := claudetui.RunTurnForTest(ctx, f,
+		harnesses.ExecuteRequest{Prompt: prompt, WorkDir: dir},
+		hookDir, stopPath, "nonce-auth", 100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
+	if ok := <-promptOnlyDidNotKill; !ok {
+		t.Error("prompt-only marker frame killed the session or emitted a terminal failure")
+	}
+
+	var finals []harnesses.FinalData
+	for _, event := range events {
+		if event.Type != harnesses.EventTypeFinal {
+			continue
+		}
+		var final harnesses.FinalData
+		if err := json.Unmarshal(event.Data, &final); err != nil {
+			t.Fatalf("decode final: %v", err)
+		}
+		finals = append(finals, final)
+	}
+	if len(finals) != 1 {
+		t.Fatalf("final events = %d, want exactly 1", len(finals))
+	}
+	final := finals[0]
+	if final.Status != "failed" {
+		t.Errorf("final status = %q, want failed", final.Status)
+	}
+	if final.RoutingActual == nil {
+		t.Fatal("routing actual is nil")
+	}
+	if final.RoutingActual.Harness != "claude-tui" || final.RoutingActual.FailureClass != "credential_invalid" {
+		t.Errorf("routing actual = %+v, want claude-tui credential_invalid", final.RoutingActual)
+	}
+	if final.Error != "API Error: Failed to authenticate\nAPI Error: Could not refresh auth token" {
+		t.Errorf("retained evidence = %q, want only matched fatal lines", final.Error)
+	}
+	for _, excluded := range []string{"surrounding frame text", "Explain:", "prompt text"} {
+		if strings.Contains(final.Error, excluded) {
+			t.Errorf("retained evidence contains excluded frame/prompt text %q", excluded)
+		}
+	}
+	if !f.wasKilled() {
+		t.Error("session was not killed/evicted on authentication failure")
+	}
+}
+
 func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) {
 	t.Helper()
 	finals := 0
