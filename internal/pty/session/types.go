@@ -1,4 +1,5 @@
-// Package session owns direct PTY process lifecycle and timed raw/input events.
+// Package session owns direct PTY descriptors and timed raw/input events while
+// delegating process-tree lifecycle to internal/processlifecycle.
 //
 // See internal/pty/doc.go for the governing ADR/SPIKE citations that authorize
 // this package boundary.
@@ -10,6 +11,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 // Size is a terminal rows/columns pair.
@@ -123,9 +126,19 @@ type Option func(*Config)
 
 // Config controls session startup.
 type Config struct {
-	Clock      Clock
-	Timeout    time.Duration
-	BufferSize int
+	Clock            Clock
+	Timeout          time.Duration
+	BufferSize       int
+	LifecycleOptions processlifecycle.BatchOptions
+}
+
+// WithLifecycleOptions identifies the per-invocation durable lifecycle record.
+// Production callers normally set Harness, OperationID, and SessionLogDir;
+// Registry remains a test seam inherited from processlifecycle.BatchOptions.
+func WithLifecycleOptions(options processlifecycle.BatchOptions) Option {
+	return func(cfg *Config) {
+		cfg.LifecycleOptions = options
+	}
 }
 
 // WithClock injects a deterministic clock.
@@ -293,7 +306,7 @@ func (s *Session) Close() error {
 	return s.impl.close()
 }
 
-// Kill terminates the process group where supported and records a signal event.
+// Kill terminates the managed lifecycle boundary and records a signal event.
 // If the process exits naturally at the same time, the signal event is best
 // effort and may race with the exit event.
 func (s *Session) Kill() error {
@@ -301,13 +314,14 @@ func (s *Session) Kill() error {
 	already := s.closed
 	s.closed = true
 	s.mu.Unlock()
-	if already {
-		return nil
-	}
 	if s.cancel != nil {
 		s.cancel()
 	}
-	s.emit(Event{Kind: EventSignal, Signal: "kill"})
+	if !already {
+		s.emit(Event{Kind: EventSignal, Signal: "kill"})
+	}
+	// close() and kill() share the lifecycle supervisor's idempotent cleanup
+	// path. Never skip termination merely because Close marked I/O closed first.
 	return s.impl.kill()
 }
 

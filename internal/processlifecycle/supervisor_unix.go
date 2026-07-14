@@ -145,7 +145,7 @@ func runUnixBatchSupervisor() int {
 	child.Stdin = os.Stdin
 	child.Stdout = os.Stdout
 	child.Stderr = os.Stderr
-	child.SysProcAttr = lifecycleChildSysProcAttr()
+	child.SysProcAttr = lifecycleChildSysProcAttr(config.PTY)
 	if err := child.Start(); err != nil {
 		closeFiles(childConfigR, childConfigW)
 		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})

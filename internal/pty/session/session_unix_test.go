@@ -238,11 +238,9 @@ func sessionProcessGroupInfo(t *testing.T, s *Session) (shellPID int, sessionPGI
 	selfPGID, err := syscall.Getpgid(os.Getpid())
 	require.NoError(t, err)
 
-	u, ok := s.impl.(*unixImpl)
-	require.True(t, ok, "expected unix session implementation")
-	require.NotNil(t, u.cmd.Process)
-
-	shellPID = u.cmd.Process.Pid
+	shellPID, err = s.Pid()
+	require.NoError(t, err)
+	require.Positive(t, shellPID)
 	sessionPGID, err = syscall.Getpgid(shellPID)
 	require.NoError(t, err)
 	return shellPID, sessionPGID, selfPGID

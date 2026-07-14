@@ -33,6 +33,7 @@ type batchTargetConfig struct {
 	Args           []string      `json:"args"`
 	Env            []string      `json:"env"`
 	Dir            string        `json:"dir,omitempty"`
+	PTY            bool          `json:"pty,omitempty"`
 	GracePeriod    time.Duration `json:"grace_period"`
 	CleanupTimeout time.Duration `json:"cleanup_timeout"`
 }
@@ -65,6 +66,13 @@ type Batch struct {
 // code until Acquire has durably persisted owner, supervisor, direct-child,
 // and boundary-anchor birth identities.
 func StartBatch(ctx context.Context, target *exec.Cmd, opts BatchOptions) (*Batch, error) {
+	return startUnixTarget(ctx, target, opts, false)
+}
+
+// startUnixTarget starts either a pipe-backed batch target or a PTY-backed
+// target. PTY allocation remains in this package so neither harness adapters
+// nor internal/pty/session can bypass the shared containment boundary.
+func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, terminal bool) (*Batch, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -103,6 +111,7 @@ func StartBatch(ctx context.Context, target *exec.Cmd, opts BatchOptions) (*Batc
 		Args:           append([]string(nil), target.Args...),
 		Env:            append([]string(nil), target.Environ()...),
 		Dir:            target.Dir,
+		PTY:            terminal,
 		GracePeriod:    opts.GracePeriod,
 		CleanupTimeout: opts.CleanupTimeout,
 	}

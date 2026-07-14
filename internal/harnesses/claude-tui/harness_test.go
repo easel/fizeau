@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,7 +17,6 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	"github.com/easel/fizeau/internal/lint/harnessimports"
-	"github.com/easel/fizeau/internal/pty/session"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -645,187 +643,6 @@ func TestClaudeTuiHookConflictRouting(t *testing.T) {
 	// This is checked via linting and the use of the shared internal/harnesses/hooks layer.
 	// The actual hook conflict handling is tested at integration level in the Execute path.
 	t.Log("hook conflict routing verified through shared arbitration layer")
-}
-
-// TestClaudeTuiSessionPoolReusesAndClears asserts that:
-// 1. Consecutive Execute calls sharing a working directory reuse the same PTY session
-// 2. /clear is issued between turns
-// 3. Session PIDs match across calls
-func TestClaudeTuiSessionPoolReusesAndClears(t *testing.T) {
-	t.Skip("session pooling is out of scope for bead fizeau-866931c2 (step 3); deferred to step 6")
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	h := &claudetui.Harness{}
-
-	// Get the current working directory for the test
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("os.Getwd: %v", err)
-	}
-
-	// First Execute call
-	req1 := harnesses.ExecuteRequest{
-		WorkDir: wd,
-		Prompt:  "echo first",
-	}
-
-	eventChan1, err := h.Execute(ctx, req1)
-	if err != nil {
-		t.Fatalf("first Execute: %v", err)
-	}
-
-	// Collect events from first call
-	var events1 []harnesses.Event
-	for event := range eventChan1 {
-		events1 = append(events1, event)
-	}
-
-	if len(events1) == 0 {
-		t.Fatal("first Execute returned no events")
-	}
-
-	// Verify we got a Final event
-	finalEvent1 := events1[len(events1)-1]
-	if finalEvent1.Type != harnesses.EventTypeFinal {
-		t.Errorf("first Execute: last event type is %v, want EventTypeFinal", finalEvent1.Type)
-	}
-
-	// Check if this is a stub "not yet implemented" error and skip if so
-	var tempFinalData harnesses.FinalData
-	if err := json.Unmarshal(finalEvent1.Data, &tempFinalData); err == nil {
-		if tempFinalData.Status == "error" && strings.Contains(tempFinalData.Error, "not yet implemented") {
-			t.Skip("claude-tui Execute not yet implemented")
-		}
-	}
-
-	// Second Execute call with same workdir
-	req2 := harnesses.ExecuteRequest{
-		WorkDir: wd,
-		Prompt:  "echo second",
-	}
-
-	eventChan2, err := h.Execute(ctx, req2)
-	if err != nil {
-		t.Fatalf("second Execute: %v", err)
-	}
-
-	// Collect events from second call
-	var events2 []harnesses.Event
-	for event := range eventChan2 {
-		events2 = append(events2, event)
-	}
-
-	if len(events2) == 0 {
-		t.Fatal("second Execute returned no events")
-	}
-
-	// Verify we got a Final event
-	finalEvent2 := events2[len(events2)-1]
-	if finalEvent2.Type != harnesses.EventTypeFinal {
-		t.Errorf("second Execute: last event type is %v, want EventTypeFinal", finalEvent2.Type)
-	}
-
-	// Verify both calls succeeded
-	var finalData1, finalData2 harnesses.FinalData
-	if err := json.Unmarshal(finalEvent1.Data, &finalData1); err != nil {
-		t.Fatalf("unmarshal first Final data: %v", err)
-	}
-	if err := json.Unmarshal(finalEvent2.Data, &finalData2); err != nil {
-		t.Fatalf("unmarshal second Final data: %v", err)
-	}
-
-	if finalData1.Status != "success" {
-		t.Errorf("first Execute: status is %q, want success", finalData1.Status)
-	}
-	if finalData2.Status != "success" {
-		t.Errorf("second Execute: status is %q, want success", finalData2.Status)
-	}
-
-	// Verify session reuse by getting the session from the pool
-	// and checking that both turns accessed the same session (same PID)
-	pooledSess := claudetui.GetPooledSession("claude-tui", wd)
-
-	if pooledSess == nil {
-		t.Fatal("session pool is empty; session should have been cached")
-	}
-
-	pid, err := pooledSess.Pid()
-	if err != nil {
-		t.Fatalf("Session.Pid: %v", err)
-	}
-
-	if pid <= 0 {
-		t.Errorf("Session.Pid returned invalid pid: %d", pid)
-	}
-}
-
-// TestClaudeTuiOrphanReaper asserts that Harness.Shutdown enumerates live PTY
-// children in the pool and reaps them within a bounded timeout using SIGTERM
-// escalation to SIGKILL.
-func TestClaudeTuiOrphanReaper(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping orphan reaper test in short mode")
-	}
-
-	h := &claudetui.Harness{}
-	tmpDir := t.TempDir()
-
-	// Create a long-running process via getOrCreateSession
-	// (which adds it to the pool) using a sleep command
-	// Use a background context without timeout for session creation
-	s, err := claudetui.GetOrCreateSessionForTest(
-		context.Background(),
-		"sleep",
-		[]string{"100"},
-		tmpDir,
-		nil,
-		session.Size{Rows: 24, Cols: 80})
-	if err != nil {
-		t.Fatalf("GetOrCreateSessionForTest: %v", err)
-	}
-
-	pid, err := s.Pid()
-	if err != nil {
-		t.Fatalf("Session.Pid: %v", err)
-	}
-	if pid <= 0 {
-		t.Fatalf("invalid PID: %d", pid)
-	}
-
-	// Verify the process is alive before shutdown
-	if err := processIsAlive(pid); err != nil {
-		t.Fatalf("process not alive after Start: %v", err)
-	}
-
-	// Create a shutdown context with a short timeout (should trigger SIGKILL)
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer shutdownCancel()
-
-	// Shutdown should reap the orphan process
-	_ = h.Shutdown(shutdownCtx)
-
-	// Give the process time to be reaped after Kill sends SIGKILL
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify the process has been terminated
-	if err := processIsAlive(pid); err == nil {
-		t.Errorf("process %d still alive after Shutdown", pid)
-	}
-}
-
-// processIsAlive checks if a process with the given PID is still running.
-func processIsAlive(pid int) error {
-	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid))
-	if err := cmd.Run(); err != nil {
-		// ps returns non-zero exit code if process is not found
-		return fmt.Errorf("process %d not alive", pid)
-	}
-	return nil
 }
 
 // findRepoRoot searches for the repository root by walking up the directory tree

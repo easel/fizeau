@@ -19,6 +19,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
+	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/easel/fizeau/internal/pty/session"
 	"github.com/easel/fizeau/internal/pty/terminal"
@@ -127,28 +128,11 @@ type turnEnv struct {
 	// turnTimeout bounds the whole turn.
 	turnTimeout time.Duration
 	logger      *slog.Logger
-
-	// needsClear is true when this turn runs on a REUSED pooled session whose
-	// prior-turn conversation context must be reset with /clear before the new
-	// prompt is sent (F1). A fresh session leaves it false.
-	needsClear bool
-
-	// transcriptStartOffset is the byte offset to resume the transcript read
-	// from (a reused pooled slot passes the prior turn's nextTranscriptOffset
-	// so it does not replay earlier turns). 0 reads from the start.
-	transcriptStartOffset int64
-	// priorTranscriptPath is the transcript file the prior turn read. When the
-	// Stop hook reports the SAME path, the offset applies; a DIFFERENT path is a
-	// new session file and the read starts at 0.
-	priorTranscriptPath string
-
-	// nextTranscriptOffset and lastTranscriptPath are OUTPUTS written by the
-	// turn loop: the byte position and path the next turn should resume from.
-	nextTranscriptOffset int64
-	lastTranscriptPath   string
 }
 
-// runTurn drives a single turn through a pooled PTY session.
+// runTurn drives a single turn through one request-local PTY session. Adapter
+// progress streams immediately, but the final event is withheld until the PTY
+// containment boundary is empty and all output has drained.
 func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eventChan chan harnesses.Event) {
 	defer close(eventChan)
 
@@ -199,24 +183,21 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	// a default-policy (sonnet-tier) route actually EXECUTES that model rather
 	// than whatever the account default happens to be. The resolved catalog
 	// surface ID (e.g. "sonnet-4.6"/"opus-4.8") is mapped to the CLI-acceptable
-	// model token claude's --model flag accepts (an alias or full ID). The pool
-	// is keyed on this token so a session launched for one model is never reused
-	// to serve a request for a different model.
+	// model token claude's --model flag accepts (an alias or full ID).
 	cliModel := claudeTuiLaunchModel(req.Model)
 	args := buildLaunchArgs(settingsJSON, cliModel)
 
-	ps, err := claimPooledSession(
-		ctx, poolKeyName("claude-tui", cliModel), claudePath, args, req.WorkDir, env,
-		session.Size{Rows: 50, Cols: 220},
+	ptySession, err := session.Start(
+		ctx, claudePath, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
+		session.WithLifecycleOptions(processlifecycle.BatchOptions{
+			Harness: "claude-tui", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+		}),
 	)
 	if err != nil {
 		seq++
-		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to get pooled session: %v", err), 1)
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to start PTY session: %v", err), 1)
 		return
 	}
-	ptySession := ps.session
-	// Symmetric release: every claimed session is released exactly once.
-	defer releasePooledSession(poolKeyName("claude-tui", cliModel), req.WorkDir, ptySession)
 
 	te := turnEnv{
 		conn:            ptySession,
@@ -227,26 +208,45 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		pollInterval:    50 * time.Millisecond,
 		turnTimeout:     effectiveTurnTimeout(req.Timeout),
 		logger:          logger,
-		// Pool reuse correctness (F1): a CACHE HIT returns a live TUI process
-		// whose context still holds the prior turn's conversation. Reset it with
-		// /clear so the new prompt is a FRESH turn, not an append to a stale
-		// multi-turn conversation. A fresh slot (used==false) skips this.
-		needsClear: ps.used,
-		// Resume the transcript read past prior turns on a reused slot so this
-		// turn's final reflects ONLY this turn (F2).
-		transcriptStartOffset: ps.transcriptOffset,
-		priorTranscriptPath:   ps.transcriptPath,
 	}
 
-	status := h.runTurnOver(ctx, &te, req, eventChan, &seq, startTime)
-	// Mark the slot used and persist the per-turn transcript bookmark so the
-	// next reuse resumes correctly.
-	ps.used = true
-	ps.transcriptOffset = te.nextTranscriptOffset
-	ps.transcriptPath = te.lastTranscriptPath
-	if status == turnEvicted {
-		evictPooledSession(poolKeyName("claude-tui", cliModel), req.WorkDir, ptySession)
+	turnEvents := make(chan harnesses.Event, 100)
+	turnDone := make(chan struct{})
+	go func() {
+		defer close(turnDone)
+		defer close(turnEvents)
+		h.runTurnOver(ctx, &te, req, turnEvents, &seq, startTime)
+	}()
+	var final *harnesses.Event
+	for event := range turnEvents {
+		if event.Type == harnesses.EventTypeFinal {
+			copy := event
+			final = &copy
+			continue
+		}
+		eventChan <- event
 	}
+	<-turnDone
+
+	// runTurnOver was the sole output consumer. Once it returns, keep draining
+	// while cleanup closes the terminal so the session read loop cannot block on
+	// a full output channel and leak after the final event.
+	outputDrained := make(chan struct{})
+	go func() {
+		defer close(outputDrained)
+		for range ptySession.Output() {
+		}
+	}()
+	_ = ptySession.Close()
+	_ = ptySession.Wait()
+	<-outputDrained
+
+	if final == nil {
+		seq++
+		emitFinalEvent(eventChan, seq, startTime, "failed", "claude-tui turn ended without a final event", 1)
+		return
+	}
+	eventChan <- *final
 }
 
 func effectiveTurnTimeout(timeout time.Duration) time.Duration {
@@ -295,16 +295,6 @@ func claudeTuiLaunchModel(model string) string {
 	default:
 		return normalized
 	}
-}
-
-// poolKeyName derives the pooled-session harness key. A session launched on a
-// specific --model must never be reused to serve a request for a different
-// model, so the resolved CLI model token is folded into the key.
-func poolKeyName(harness, cliModel string) string {
-	if cliModel == "" {
-		return harness
-	}
-	return harness + ":" + cliModel
 }
 
 type turnOutcome int
@@ -360,19 +350,6 @@ func (h *Harness) runTurnOver(
 	// answeredDialogs tracks which first-run interstitials have already been
 	// dismissed this turn so each is answered with Enter at most once.
 	answeredDialogs := map[string]bool{}
-
-	// F1: reset a reused session's conversation context with /clear before the
-	// prompt so the new turn is a FRESH turn, not an append to a stale
-	// multi-turn conversation. We render through the same emulator so the ready
-	// marker is matched after vt10x layout (raw bytes are space-less garbage).
-	if te.needsClear {
-		if !clearReusedSession(ctx, te.conn, emu, probe, te.readyTimeout) {
-			_ = te.conn.Kill()
-			*seq++
-			emitFinalEvent(eventChan, *seq, startTime, "failed", "reused session /clear did not return a ready prompt", 1)
-			return turnEvicted
-		}
-	}
 
 	hookTailer := NewHookEventTailer(te.hookDir, logger)
 
@@ -514,10 +491,7 @@ func (h *Harness) runTurnOver(
 
 // emitTranscriptAndFinal reads the transcript (which produces its own single
 // final event) and, if the transcript is unreadable, synthesizes a final. It
-// resumes the read at te.transcriptStartOffset when the Stop hook reported the
-// SAME transcript path the prior turn read (a reused pooled slot), so this
-// turn's events and final reflect ONLY this turn (F2). It records the resume
-// bookmark for the next turn on te.nextTranscriptOffset / te.lastTranscriptPath.
+// reads the request-local transcript and emits one final event.
 func (h *Harness) emitTranscriptAndFinal(
 	ctx context.Context,
 	te *turnEnv,
@@ -529,19 +503,12 @@ func (h *Harness) emitTranscriptAndFinal(
 ) {
 	expanded, err := ExpandTranscriptPath(transcriptPath)
 	if err == nil {
-		te.lastTranscriptPath = expanded
 		tailer := NewTranscriptTailer(expanded, "default", logger)
-		// Resume past prior turns only when this is the SAME session transcript
-		// file. A different path is a fresh session file → read from the start.
-		if te.transcriptStartOffset > 0 && te.priorTranscriptPath == expanded {
-			tailer.SetStartOffset(te.transcriptStartOffset)
-		}
 		// Continue the harness sequence counter through the transcript events.
 		tailer.seqCounter = *seq
 		tailer.startTime = startTime
 		if err := tailer.ReadEvents(ctx, eventChan); err == nil {
 			*seq = tailer.seqCounter
-			te.nextTranscriptOffset = tailer.EndOffset()
 			if !tailer.sawAssistant {
 				// Parser-level empty/incomplete transcripts intentionally do
 				// not emit finals; the harness-level stream still must.
@@ -775,45 +742,6 @@ func (h *Harness) ResolveModelAlias(family string, snapshot harnesses.ModelDisco
 		return "", harnesses.ErrAliasNotResolvable
 	}
 	return resolved, nil
-}
-
-// Shutdown enumerates live PTY sessions in the pool and reaps each one
-// within a bounded timeout, sending SIGTERM and escalating to SIGKILL
-// if the process does not exit cleanly.
-func (h *Harness) Shutdown(ctx context.Context) error {
-	const defaultTimeout = 10 * time.Second
-
-	// Extract deadline from context or use a default timeout
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(defaultTimeout)
-	}
-
-	sessions := getLiveSessionsSnapshot()
-	if len(sessions) == 0 {
-		return nil
-	}
-
-	// Distribute remaining time across sessions
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
-		remaining = 100 * time.Millisecond
-	}
-	perSessionTimeout := remaining / time.Duration(len(sessions))
-	if perSessionTimeout < 100*time.Millisecond {
-		perSessionTimeout = 100 * time.Millisecond
-	}
-
-	for _, s := range sessions {
-		if time.Until(deadline) <= 0 {
-			break
-		}
-		sessionCtx, cancel := context.WithTimeout(context.Background(), perSessionTimeout)
-		_ = reapSession(sessionCtx, s)
-		cancel()
-	}
-
-	return nil
 }
 
 // SupportedAliases implements harnesses.ModelDiscoveryHarness.
@@ -1212,7 +1140,8 @@ type fatalScreen struct {
 // fatalScreens enumerates the mid-turn failure screens the loop detects. The
 // usage-limit screen maps to iteration_limit (a quota/limit signal, distinct
 // from a crash); login/disconnect/error screens map to failed. Each match
-// evicts the session so a reused pool slot never inherits a broken process.
+// terminates the request-local session so no broken process survives the
+// invocation.
 var fatalScreens = []fatalScreen{
 	{
 		status:   "iteration_limit",
@@ -1243,39 +1172,6 @@ func detectFatalScreen(frame terminal.Frame) (fatalScreen, bool) {
 		}
 	}
 	return fatalScreen{}, false
-}
-
-// clearReusedSession issues /clear to a reused pooled session and waits, over
-// the SAME single Output() consumer discipline, for the input prompt to return
-// (rendered through the vt10x emulator). It answers Ink startup probes inline
-// so a reused process that re-probes does not stall. Returns true once the
-// ready prompt is observed, false on timeout / closed output / cancellation.
-func clearReusedSession(ctx context.Context, conn ptyConn, emu terminal.Emulator, probe *startupProbe, timeout time.Duration) bool {
-	if err := conn.SendBytes([]byte("/clear\r")); err != nil {
-		return false
-	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return false
-		case <-deadline.C:
-			return false
-		case chunk, ok := <-conn.Output():
-			if !ok {
-				return false
-			}
-			if chunk.ReadError != nil {
-				continue
-			}
-			probe.Feed(chunk.Bytes)
-			frame, _ := emu.Feed(chunk.Bytes)
-			if screenReadyForPrompt(frame) {
-				return true
-			}
-		}
-	}
 }
 
 // RunTurnForTest drives a single turn over an injected ptyConn with explicit
@@ -1313,50 +1209,6 @@ func RunTurnForTest(
 		events = append(events, ev)
 	}
 	return events
-}
-
-// RunTurnForTestWithOffset is RunTurnForTest with an explicit transcript resume
-// offset and prior transcript path, so a test can prove a reused pooled slot
-// reads ONLY the new turn's transcript lines (F2). It returns the events AND
-// the next resume offset the turn recorded.
-func RunTurnForTestWithOffset(
-	ctx context.Context,
-	conn TestPTYConn,
-	req harnesses.ExecuteRequest,
-	hookDir, stopPayloadPath, nonce string,
-	startOffset int64,
-	priorTranscriptPath string,
-	readyTimeout, pollInterval, turnTimeout time.Duration,
-) ([]harnesses.Event, int64, string) {
-	h := &Harness{}
-	eventChan := make(chan harnesses.Event, 256)
-	seq := int64(0)
-	start := time.Now()
-	te := turnEnv{
-		conn:                  conn,
-		hookDir:               hookDir,
-		stopPayloadPath:       stopPayloadPath,
-		nonce:                 nonce,
-		readyTimeout:          readyTimeout,
-		pollInterval:          pollInterval,
-		turnTimeout:           turnTimeout,
-		logger:                slog.Default(),
-		needsClear:            true,
-		transcriptStartOffset: startOffset,
-		priorTranscriptPath:   priorTranscriptPath,
-	}
-	done := make(chan struct{})
-	go func() {
-		h.runTurnOver(ctx, &te, req, eventChan, &seq, start)
-		close(eventChan)
-		close(done)
-	}()
-	var events []harnesses.Event
-	for ev := range eventChan {
-		events = append(events, ev)
-	}
-	<-done
-	return events, te.nextTranscriptOffset, te.lastTranscriptPath
 }
 
 // TestPTYConn is the injectable PTY surface used by RunTurnForTest. It mirrors

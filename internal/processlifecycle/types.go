@@ -273,6 +273,12 @@ type BatchOptions struct {
 	Registry       Registry
 }
 
+// PTYSize is the initial terminal size for a supervised PTY target.
+type PTYSize struct {
+	Rows uint16
+	Cols uint16
+}
+
 // CleanupResult says whether ownership evidence was safely removed.
 type CleanupResult struct {
 	State          State

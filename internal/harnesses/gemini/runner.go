@@ -222,14 +222,11 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	if promptMode == "stdin" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	stdoutPipe, err := cmd.StdoutPipe()
+	outputPipes, err := harnesses.PrepareHarnessOutputPipes(cmd)
 	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, -1, "", err, "failed"
-	}
+	defer outputPipes.Close()
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "gemini", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 	})
@@ -237,6 +234,9 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 		return nil, -1, "", err, "failed"
 	}
 	defer batch.Stop()
+	if err := outputPipes.ReleaseWriters(); err != nil {
+		return nil, -1, "", err, "failed"
+	}
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "gemini")
 	if progressLog != nil {
@@ -248,14 +248,14 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	stdoutReady := make(chan struct{})
 	go func() {
 		defer close(stdoutReady)
-		stdoutBytes, _ = io.ReadAll(stdoutPipe)
+		stdoutBytes, _ = io.ReadAll(outputPipes.Stdout)
 	}()
 
 	var stderrBuf strings.Builder
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
-		_, _ = io.Copy(&stringBuilderWriter{&stderrBuf}, stderrPipe)
+		_, _ = io.Copy(&stringBuilderWriter{&stderrBuf}, outputPipes.Stderr)
 	}()
 
 	var timedOut bool

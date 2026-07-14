@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/easel/fizeau/internal/pty/session"
 	"github.com/easel/fizeau/internal/pty/terminal"
@@ -154,7 +156,11 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	emu := terminal.New(terminal.Size{Rows: int(cfg.Size.Rows), Cols: int(cfg.Size.Cols)})
-	s, err := session.Start(ctx, binaryPath, cfg.Args, cfg.Workdir, probeEnv(cfg.Env), cfg.Size, session.WithTimeout(cfg.Timeout), session.WithBufferSize(4096))
+	s, err := session.Start(ctx, binaryPath, cfg.Args, cfg.Workdir, probeEnv(cfg.Env), cfg.Size,
+		session.WithTimeout(cfg.Timeout),
+		session.WithBufferSize(4096),
+		session.WithLifecycleOptions(processlifecycle.BatchOptions{Harness: cfg.HarnessName}),
+	)
 	if err != nil {
 		closeDiscard(rec)
 		cleanupRecordDir(recordDir, commitDir)
@@ -622,8 +628,7 @@ func detectBinaryVersion(ctx context.Context, binaryPath string) string {
 	}
 	versionCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
 	defer cancel()
-	cmd := exec.CommandContext(versionCtx, binaryPath, "--version") // #nosec G204 -- binaryPath was resolved by exec.LookPath and no shell is used.
-	out, err := cmd.CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(versionCtx, filepath.Base(binaryPath), binaryPath, "--version")
 	if err != nil {
 		return "unknown"
 	}

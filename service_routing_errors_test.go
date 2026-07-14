@@ -110,6 +110,15 @@ func TestValidateExplicitHarnessModelProviderRoutedHarnessesAcceptLocalProviderP
 }
 
 func TestResolveExecuteRouteNormalizesSubprocessAliases(t *testing.T) {
+	previousResolver := resolveSubprocessModelAlias
+	t.Cleanup(func() { resolveSubprocessModelAlias = previousResolver })
+	resolveSubprocessModelAlias = func(harness, model string) string {
+		if harness == "claude" {
+			return claudeCLIExecutableModel(model)
+		}
+		return model
+	}
+
 	svc := testRoutingErrorService()
 
 	claudeDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "claude", Model: "sonnet"})

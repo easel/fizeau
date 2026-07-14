@@ -121,14 +121,11 @@ type TranscriptTailer struct {
 	readCloser io.ReadCloser
 	scanner    *bufio.Scanner
 
-	// startOffset is the byte offset to resume reading from. The Claude Code
-	// transcript .jsonl is append-only for the WHOLE session, so a reused
-	// pooled session would otherwise replay every prior-turn block (and fold
-	// prior-turn usage/text into this turn's final). Seeking past the bytes
-	// consumed by earlier turns scopes the read to exactly this turn's lines.
+	// startOffset is the byte offset to resume reading from when one invocation
+	// incrementally reopens an append-only transcript.
 	startOffset int64
 	// endOffset is the byte offset just past the last line consumed by the most
-	// recent ReadEvents call. Callers persist it as the next turn's startOffset.
+	// recent ReadEvents call.
 	endOffset int64
 
 	// lastAssistant captures the most recent assistant message so the
@@ -152,9 +149,9 @@ func NewTranscriptTailer(path, session string, logger *slog.Logger) *TranscriptT
 	}
 }
 
-// SetStartOffset sets the byte offset ReadEvents resumes from. A reused pooled
-// session passes the prior turn's EndOffset() so it does not replay earlier
-// turns' content blocks. Offsets past EOF or <= 0 read from the start.
+// SetStartOffset sets the byte offset ReadEvents resumes from. It is an
+// incremental-read seam within one invocation; it does not retain a live PTY.
+// Offsets past EOF or <= 0 read from the start.
 func (t *TranscriptTailer) SetStartOffset(off int64) {
 	if off < 0 {
 		off = 0
@@ -167,8 +164,7 @@ func (t *TranscriptTailer) SetStartOffset(off int64) {
 // ReadEvents call it is the position the next turn should resume from.
 func (t *TranscriptTailer) EndOffset() int64 { return t.endOffset }
 
-// Open opens the transcript file for reading, seeking to startOffset so a
-// reused session resumes past prior turns instead of replaying the whole file.
+// Open opens the transcript file for reading, seeking to startOffset.
 func (t *TranscriptTailer) Open(ctx context.Context) error {
 	f, err := os.Open(t.path)
 	if err != nil {
@@ -228,8 +224,8 @@ func (t *TranscriptTailer) ReadEvents(ctx context.Context, eventChan chan<- harn
 		}
 
 		line := t.scanner.Text()
-		// Advance the resume offset past this line (+1 for the stripped newline).
-		// This is the per-turn bookmark a reused pooled session resumes from.
+		// Advance the incremental resume offset past this line (+1 for the
+		// stripped newline).
 		t.endOffset += int64(len(line)) + 1
 		if strings.TrimSpace(line) == "" {
 			continue

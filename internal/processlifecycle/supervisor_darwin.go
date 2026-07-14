@@ -18,6 +18,9 @@ func enableSupervisorParentDeath(int) error { return nil }
 // all members; orphaned grandchildren are reparented by the kernel.
 func enableSupervisorSubreaper() error { return nil }
 
-func lifecycleChildSysProcAttr() *syscall.SysProcAttr {
+func lifecycleChildSysProcAttr(terminal bool) *syscall.SysProcAttr {
+	if terminal {
+		return &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	}
 	return &syscall.SysProcAttr{Setpgid: true}
 }

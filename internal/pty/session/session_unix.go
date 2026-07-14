@@ -6,12 +6,10 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
-	"github.com/creack/pty"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 // Start launches command under a direct PTY with argv, workdir, env, and size.
@@ -38,24 +36,12 @@ func Start(ctx context.Context, command string, args []string, workdir string, e
 			timeoutCancel()
 		}
 	}
-	// #nosec G204 -- command and args are explicit PTY session API inputs;
-	// exec.Command does not invoke a shell.
-	cmd := exec.Command(command, args...)
-	cmd.Dir = workdir
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
+	lifecycleOptions := cfg.LifecycleOptions
+	if lifecycleOptions.Harness == "" {
+		lifecycleOptions.Harness = "pty"
 	}
-
-	// Do NOT set Setpgid here. creack/pty sets Setsid=true (and Setctty=true),
-	// which makes the child a session AND process-group leader. Calling
-	// setpgid(2) on a session leader fails with EPERM on Linux, so combining
-	// Setpgid with the PTY's Setsid makes pty.StartWithSize return
-	// "fork/exec: operation not permitted" and every PTY discovery/quota probe
-	// silently yields zero models. The child already has its own process group
-	// via Setsid, and kill() reaps it via Getpgid + killProcessGroup, so
-	// no explicit Setpgid is needed. (regression from fizeau-8b09722c)
-
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: size.Rows, Cols: size.Cols})
+	managedPTY, err := processlifecycle.StartPTYCommand(runCtx, command, args, workdir, env,
+		processlifecycle.PTYSize{Rows: size.Rows, Cols: size.Cols}, lifecycleOptions)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -71,9 +57,9 @@ func Start(ctx context.Context, command string, args []string, workdir string, e
 		waitDone: make(chan struct{}),
 		readDone: make(chan struct{}),
 	}
-	s.impl = &unixImpl{cmd: cmd, file: ptmx}
+	s.impl = &unixImpl{pty: managedPTY}
 
-	go s.readLoop(ptmx, cfg.BufferSize)
+	go s.readLoop(managedPTY, cfg.BufferSize)
 	go func() {
 		select {
 		case <-runCtx.Done():
@@ -116,43 +102,21 @@ func (s *Session) readLoop(r io.Reader, bufferSize int) {
 }
 
 type unixImpl struct {
-	cmd  *exec.Cmd
-	file *os.File
+	pty *processlifecycle.PTY
 }
 
-func (u *unixImpl) write(b []byte) (int, error) { return u.file.Write(b) }
+func (u *unixImpl) write(b []byte) (int, error) { return u.pty.Write(b) }
 
 func (u *unixImpl) resize(size Size) error {
-	return pty.Setsize(u.file, &pty.Winsize{Rows: size.Rows, Cols: size.Cols})
+	return u.pty.Resize(processlifecycle.PTYSize{Rows: size.Rows, Cols: size.Cols})
 }
 
-func (u *unixImpl) close() error { return u.file.Close() }
+func (u *unixImpl) close() error { return u.pty.Close() }
 
-func (u *unixImpl) kill() error {
-	if u.cmd.Process == nil {
-		return nil
-	}
-	pgid, err := syscall.Getpgid(u.cmd.Process.Pid)
-	if err == nil {
-		if killProcessGroup(pgid, syscall.SIGTERM) {
-			time.Sleep(100 * time.Millisecond)
-		}
-		_ = killProcessGroup(pgid, syscall.SIGKILL)
-		return nil
-	}
-	return u.cmd.Process.Kill()
-}
-
-func killProcessGroup(pgid int, sig syscall.Signal) bool {
-	if pgid <= 0 {
-		return false
-	}
-	err := syscall.Kill(-pgid, sig)
-	return err == nil || errors.Is(err, syscall.ESRCH)
-}
+func (u *unixImpl) kill() error { return u.pty.Kill() }
 
 func (u *unixImpl) wait() ExitStatus {
-	err := u.cmd.Wait()
+	err := u.pty.Wait()
 	if err == nil {
 		return ExitStatus{Code: 0, Exited: true}
 	}
@@ -175,8 +139,5 @@ func (u *unixImpl) wait() ExitStatus {
 }
 
 func (u *unixImpl) pid() int {
-	if u.cmd.Process == nil {
-		return -1
-	}
-	return u.cmd.Process.Pid
+	return u.pty.PID()
 }

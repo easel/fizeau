@@ -34,6 +34,9 @@ func enableSupervisorSubreaper() error {
 	return nil
 }
 
-func lifecycleChildSysProcAttr() *syscall.SysProcAttr {
+func lifecycleChildSysProcAttr(terminal bool) *syscall.SysProcAttr {
+	if terminal {
+		return &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0, Pdeathsig: syscall.SIGKILL}
+	}
 	return &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 }

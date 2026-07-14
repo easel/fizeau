@@ -211,14 +211,11 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if promptMode != "arg" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	stdoutPipe, err := cmd.StdoutPipe()
+	outputPipes, err := harnesses.PrepareHarnessOutputPipes(cmd)
 	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, -1, "", err, "failed"
-	}
+	defer outputPipes.Close()
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "pi", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 	})
@@ -226,6 +223,9 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 		return nil, -1, "", err, "failed"
 	}
 	defer batch.Stop()
+	if err := outputPipes.ReleaseWriters(); err != nil {
+		return nil, -1, "", err, "failed"
+	}
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "pi")
 	if progressLog != nil {
@@ -247,7 +247,7 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	stdoutDone := make(chan struct{})
 	go func() {
 		defer close(stdoutDone)
-		_, _ = io.Copy(parserWriter, stdoutPipe)
+		_, _ = io.Copy(parserWriter, outputPipes.Stdout)
 		_ = parserWriter.Close()
 	}()
 
@@ -255,7 +255,7 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
-		_, _ = io.Copy(&stringBuilderWriter{&stderrBuf}, stderrPipe)
+		_, _ = io.Copy(&stringBuilderWriter{&stderrBuf}, outputPipes.Stderr)
 	}()
 
 	var timedOut atomic.Bool

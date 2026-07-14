@@ -3,7 +3,6 @@ package claude
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -116,8 +115,7 @@ func readClaudeReasoningFromHelp(ctx context.Context, binary string, args ...str
 	if len(args) == 0 {
 		args = []string{"--help"}
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "claude", binary, args...)
 	levels := parseClaudeReasoningLevels(string(out))
 	if len(levels) > 0 {
 		return levels, nil
@@ -130,8 +128,7 @@ func readClaudeReasoningFromHelp(ctx context.Context, binary string, args ...str
 	// accepted values in --help. Ask the CLI to validate an impossible value;
 	// its local argument parser reports the authoritative choices without
 	// starting a model turn.
-	probe := exec.CommandContext(ctx, binary, "--effort", "__fizeau_probe__", "--print", "")
-	probeOut, probeErr := probe.CombinedOutput()
+	probeOut, probeErr := harnesses.HarnessCombinedOutput(ctx, "claude", binary, "--effort", "__fizeau_probe__", "--print", "")
 	levels = parseClaudeReasoningLevels(string(probeOut))
 	if len(levels) > 0 {
 		return levels, nil

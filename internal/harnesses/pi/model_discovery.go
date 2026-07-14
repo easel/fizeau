@@ -24,7 +24,7 @@ func readPiModelDiscoveryFromHelp(ctx context.Context, binary string, args ...st
 	if len(args) == 0 {
 		args = []string{"--help"}
 	}
-	out, err := harnesses.HarnessCommand(ctx, binary, args...).CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "pi", binary, args...)
 	if err != nil {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("pi help: %w", err)
 	}
@@ -46,7 +46,7 @@ func readPiModelDiscoveryFromListModels(ctx context.Context, binary string, args
 	if len(args) == 0 {
 		args = []string{"--list-models"}
 	}
-	out, err := harnesses.HarnessCommand(ctx, binary, args...).CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "pi", binary, args...)
 	if err != nil {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("pi list models: %w", err)
 	}
@@ -85,7 +85,7 @@ func readPiModelDiscoveryFromListModelsForProviders(ctx context.Context, binary 
 	if len(args) == 0 {
 		args = []string{"--list-models"}
 	}
-	out, err := harnesses.HarnessCommand(ctx, binary, args...).CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "pi", binary, args...)
 	if err != nil {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("pi list models: %w", err)
 	}

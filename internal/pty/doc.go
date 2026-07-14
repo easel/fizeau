@@ -7,7 +7,8 @@
 // docs/helix/02-design/harness-golden-integration.md.
 //
 // The package boundary is intentionally generic. Code below internal/pty owns
-// PTY lifecycle, raw/input/resize/signal event timing, terminal rendering, and
-// frame snapshots. It must not import upper-layer harness packages or contain
-// provider-specific policy.
+// PTY descriptors, raw/input/resize/signal event timing, terminal rendering,
+// and frame snapshots. Process-tree containment, caller-death supervision,
+// cleanup, and recovery belong to internal/processlifecycle. This subtree must
+// not import upper-layer harness packages or contain provider-specific policy.
 package pty

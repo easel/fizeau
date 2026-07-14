@@ -61,8 +61,7 @@ func readOpenCodeModelDiscovery(ctx context.Context, binary string, args ...stri
 	if len(args) == 0 {
 		args = []string{"models"}
 	}
-	cmd := harnesses.HarnessCommand(ctx, binary, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "opencode", binary, args...)
 	if err != nil {
 		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("opencode models: %w", err)
 	}
@@ -87,8 +86,7 @@ func readOpenCodeVerboseModelEvidence(ctx context.Context, binary string, args .
 	if len(args) == 0 {
 		args = []string{"models", "--verbose"}
 	}
-	cmd := harnesses.HarnessCommand(ctx, binary, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := harnesses.HarnessCombinedOutput(ctx, "opencode", binary, args...)
 	if err != nil {
 		return nil, fmt.Errorf("opencode models --verbose: %w", err)
 	}
