@@ -213,9 +213,11 @@ func TestRunReapsProcessGroupOnCompletion(t *testing.T) {
 	_, err := Run(context.Background(), Config{
 		HarnessName: "fake",
 		Binary:      "sh",
-		Args:        []string{"-c", "printf '100%% left\\n'; sleep 1"},
+		// Keep the child alive well past the assertion window so success
+		// proves marker-driven process-group cleanup, not natural exit.
+		Args:        []string{"-c", "printf '100%% left\\n'; sleep 10"},
 		DoneMarkers: []string{"% left"},
-		Timeout:     5 * time.Second,
+		Timeout:     10 * time.Second,
 		Size:        session.Size{Rows: 8, Cols: 80},
 		Quota: func(string) (cassette.QuotaRecord, error) {
 			return cassette.QuotaRecord{Source: "pty", Status: string(StatusOK)}, nil
@@ -226,7 +228,7 @@ func TestRunReapsProcessGroupOnCompletion(t *testing.T) {
 	}
 	require.NoError(t, err)
 	elapsed := time.Since(start)
-	require.Less(t, elapsed, 2*time.Second, "probe should complete quickly once markers are found")
+	require.Less(t, elapsed, 5*time.Second, "probe should complete from marker-driven cleanup without waiting for natural exit")
 }
 
 // TestRunReapsProcessGroupOnTimeout verifies that PTY probes properly
