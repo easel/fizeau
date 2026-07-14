@@ -71,7 +71,6 @@ func TestRunReturnsWhenProcessExitsBeforeMarkers(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell-backed PTY probes require Unix PTY support")
 	}
-	start := time.Now()
 	_, err := Run(context.Background(), Config{
 		HarnessName:  "fake",
 		Binary:       "sh",
@@ -81,7 +80,6 @@ func TestRunReturnsWhenProcessExitsBeforeMarkers(t *testing.T) {
 		Size:         session.Size{Rows: 8, Cols: 80},
 	})
 	require.ErrorContains(t, err, "exited before expected output")
-	require.Less(t, time.Since(start), time.Second)
 }
 
 func TestRunRequiresAllDoneMarkers(t *testing.T) {

@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Managed harness commands start a trusted supervisor and a gated child before
+// execing the fixture. Race-instrumented test binaries make both self-exec
+// stages substantially slower than production binaries, so functional model
+// discovery tests need a lifecycle-aware deadline rather than a startup-speed
+// assertion.
+const managedLifecycleTestTimeout = 5 * time.Second
+
 func TestDefaultOpenCodeModelDiscovery(t *testing.T) {
 	snapshot := testOpenCodeModelDiscovery()
 	snapshot.Models = []string{"opencode/gpt-5.4", "opencode/claude-sonnet-4-6"}
@@ -60,7 +67,7 @@ EOF
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), managedLifecycleTestTimeout)
 	defer cancel()
 	snapshot, err := readOpenCodeModelDiscovery(ctx, script)
 	if err != nil {
@@ -145,7 +152,7 @@ EOF
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), managedLifecycleTestTimeout)
 	defer cancel()
 	snapshot, err := readOpenCodeModelDiscovery(ctx, script, "models", "--verbose")
 	if err != nil {
@@ -204,7 +211,7 @@ EOF
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), managedLifecycleTestTimeout)
 	defer cancel()
 	evidence, err := readOpenCodeVerboseModelEvidence(ctx, script)
 	if err != nil {
@@ -252,11 +259,10 @@ printf 'no models here\n'
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), managedLifecycleTestTimeout)
 	defer cancel()
-	if _, err := readOpenCodeModelDiscovery(ctx, script); err == nil {
-		t.Fatal("expected empty model output to fail discovery")
-	}
+	_, err := readOpenCodeModelDiscovery(ctx, script)
+	require.ErrorContains(t, err, "returned no provider/model IDs")
 }
 
 func TestParseOpenCodeVerboseModelEvidenceRejectsMalformedJSON(t *testing.T) {

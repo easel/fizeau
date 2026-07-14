@@ -32,6 +32,11 @@ const (
 	StatusError           Status = "error"
 )
 
+// Version probes use the same two-stage managed lifecycle as every other
+// harness subprocess. Keep the probe bounded, but leave enough time for the
+// trusted supervisor and gated child to start on a cold system.
+const binaryVersionProbeTimeout = 2 * time.Second
+
 type ProbeError struct {
 	Status Status
 	Reason string
@@ -626,7 +631,7 @@ func detectBinaryVersion(ctx context.Context, binaryPath string) string {
 	if binaryPath == "" {
 		return "unknown"
 	}
-	versionCtx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	versionCtx, cancel := context.WithTimeout(ctx, binaryVersionProbeTimeout)
 	defer cancel()
 	out, err := harnesses.HarnessCombinedOutput(versionCtx, filepath.Base(binaryPath), binaryPath, "--version")
 	if err != nil {
