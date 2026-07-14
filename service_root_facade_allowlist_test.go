@@ -76,6 +76,79 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 	}
 }
 
+// TestRootHarnessCapabilityMechanicsStayInternal locks the root capability
+// surface to public contract declarations and field-for-field projection.
+// Status/detail classification belongs to internal/serviceimpl.
+func TestRootHarnessCapabilityMechanicsStayInternal(t *testing.T) {
+	forbiddenDecls := map[string]bool{
+		"capRequired":              true,
+		"capOptional":              true,
+		"capUnsupported":           true,
+		"capNotApplicable":         true,
+		"harnessCapabilityMatrix":  true,
+		"serviceExecuteWired":      true,
+		"executePromptCapability":  true,
+		"modelDiscoveryCapability": true,
+		"modelPinningCapability":   true,
+		"workdirContextCapability": true,
+		"reasoningCapability":      true,
+		"permissionCapability":     true,
+		"progressEventsCapability": true,
+		"usageCaptureCapability":   true,
+		"finalTextCapability":      true,
+		"toolEventsCapability":     true,
+		"quotaStatusCapability":    true,
+		"recordReplayCapability":   true,
+	}
+	classifyCalls := 0
+	projectionCalls := 0
+	for path, file := range parseRootProductionFiles(t) {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if forbiddenDecls[fn.Name.Name] {
+				t.Errorf("root %s declares %s; harness capability mechanics belong to internal/serviceimpl", path, fn.Name.Name)
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if selectorMatches(call.Fun, "serviceimpl", "ClassifyHarnessCapabilities") {
+				classifyCalls++
+			}
+			if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "publicHarnessCapabilityMatrix" {
+				projectionCalls++
+			}
+			return true
+		})
+	}
+	if classifyCalls != 1 {
+		t.Errorf("root internal/serviceimpl ClassifyHarnessCapabilities calls = %d, want exactly 1", classifyCalls)
+	}
+	if projectionCalls != 1 {
+		t.Errorf("root publicHarnessCapabilityMatrix calls = %d, want exactly 1", projectionCalls)
+	}
+
+	capabilityFile := parseRootProductionFiles(t)["service_capabilities.go"]
+	if capabilityFile == nil {
+		t.Fatal("missing public service_capabilities.go")
+	}
+	allowedAdapters := map[string]bool{
+		"publicHarnessCapabilityMatrix": true,
+		"publicHarnessCapability":       true,
+	}
+	for _, decl := range capabilityFile.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && !allowedAdapters[fn.Name.Name] {
+			t.Errorf("service_capabilities.go declares non-projection function %s", fn.Name.Name)
+		}
+	}
+}
+
 // TestRootSubscriptionQuotaOwnershipBoundary prevents the deleted quota
 // adapter from returning under another filename. Root routing seams consume
 // the API-neutral internal/quota projection directly; subscription quota math

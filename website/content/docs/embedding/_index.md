@@ -901,7 +901,6 @@ parameter types, and field-level documentation, follow the
 | `seamOptions` | type (struct) | seamOptions is empty in production builds |
 | `service` | type (struct) | service is the concrete FizeauService implementation |
 | `serviceConfigToModelSnapshotConfig` | func (func serviceConfigToModelSnapshotConfig(sc ServiceConfig) *modelsnapshot.Config) |  |
-| `serviceExecuteWired` | func (func serviceExecuteWired(name string, cfg harnesses.HarnessConfig) bool) |  |
 | `serviceImplExecuteRouteDecision` | func (func serviceImplExecuteRouteDecision(decision *RouteDecision) serviceimpl.ExecuteRouteDecision) |  |
 | `serviceImplProviderEntry` | func (func serviceImplProviderEntry(entry ServiceProviderEntry) serviceimpl.ProviderEntry) |  |
 | `serviceProviderDefaultInclusion` | func (func serviceProviderDefaultInclusion(entry ServiceProviderEntry) bool) |  |

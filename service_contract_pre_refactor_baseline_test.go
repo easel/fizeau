@@ -29,6 +29,21 @@ func preRefactorCapturedAt() time.Time {
 	return time.Date(2026, 5, 14, 17, 0, 0, 0, time.UTC)
 }
 
+// These constructors are fixture-only copies of the pre-refactor public
+// values. Production capability status/detail construction is owned by
+// internal/serviceimpl.
+func capRequired(detail string) HarnessCapability {
+	return HarnessCapability{Status: HarnessCapabilityRequired, Detail: detail}
+}
+
+func capOptional(detail string) HarnessCapability {
+	return HarnessCapability{Status: HarnessCapabilityOptional, Detail: detail}
+}
+
+func capUnsupported(detail string) HarnessCapability {
+	return HarnessCapability{Status: HarnessCapabilityUnsupported, Detail: detail}
+}
+
 func preRefactorQuotaWindowsClaude() []harnesses.QuotaWindow {
 	return []harnesses.QuotaWindow{
 		{

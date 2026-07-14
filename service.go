@@ -1440,7 +1440,7 @@ func (s *service) ListHarnesses(ctx context.Context) ([]HarnessInfo, error) {
 			SupportedPermissions: supportedPermissions(cfg),
 			SupportedReasoning:   supportedReasoning(cfg),
 			CostClass:            cfg.CostClass,
-			CapabilityMatrix:     harnessCapabilityMatrix(name, cfg),
+			CapabilityMatrix:     publicHarnessCapabilityMatrix(serviceimpl.ClassifyHarnessCapabilities(name, cfg)),
 		}
 		if !st.Available {
 			info.LastError = statusError(st.Error, "harness discovery", time.Now())

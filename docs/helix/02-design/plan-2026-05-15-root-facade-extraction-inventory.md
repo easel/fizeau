@@ -102,7 +102,8 @@ than the old home of the implementation bulk:
   `service_native_provider.go`, `service_override.go`,
   `service_projection.go`, `service_reasoning.go`.
 - Routing and status adapters:
-  `service_probe.go`, `service_routing.go`, `service_status.go`.
+  `service_probe.go`, `service_routing.go`, `service_status.go`,
+  `service_capabilities.go`.
   `service_status.go` retains only the public route-status projection; row
   assembly lives in `internal/routehealth`. `service_probe.go` retains the
   public `QuotaRecoveryProber` type and endpoint probe classification, while
@@ -113,6 +114,9 @@ than the old home of the implementation bulk:
   the former private `service_subscription_quota.go` adapter is gone. The
   public quota-state and burn-rate facades remain deliberate compatibility
   surfaces in `provider_quota_state.go` and `provider_burn_rate.go`.
+  `service_capabilities.go` retains the public capability types/constants and
+  a field-for-field projection; status/detail classification lives in
+  `internal/serviceimpl`.
 
 `RecordRouteAttempt` and final-attempt feedback now enter through the narrow
 adapter in `service_dispatch_feedback.go`; classification and exact-success
