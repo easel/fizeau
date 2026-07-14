@@ -5,11 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 const defaultStaleHarnessReaperGrace = 5 * time.Minute
 
 type staleHarnessRecord struct {
+	SchemaID  string    `json:"schema_id,omitempty"`
 	SessionID string    `json:"session_id"`
 	Harness   string    `json:"harness"`
 	Command   string    `json:"command"`
@@ -87,6 +90,12 @@ func readStaleHarnessRecord(path string) (staleHarnessRecord, bool) {
 	var record staleHarnessRecord
 	if err := json.Unmarshal(data, &record); err != nil {
 		_ = os.Remove(path)
+		return staleHarnessRecord{}, false
+	}
+	// The flat PID/PGID reaper is deliberately restricted to its legacy
+	// schema. V1 and future records carry birth identities and must be retained
+	// for the identity-safe lifecycle recovery path.
+	if record.SchemaID != "" && record.SchemaID != processlifecycle.LegacyRecordSchemaID {
 		return staleHarnessRecord{}, false
 	}
 	return record, true

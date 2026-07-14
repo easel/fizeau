@@ -1,0 +1,299 @@
+//go:build linux || darwin
+
+package processlifecycle
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+	"time"
+)
+
+func init() {
+	switch os.Getenv(lifecycleRoleEnv) {
+	case lifecycleRoleSupervisor:
+		os.Exit(runUnixBatchSupervisor())
+	case lifecycleRoleChild:
+		os.Exit(runUnixBatchChild())
+	}
+}
+
+func runUnixBatchSupervisor() int {
+	fdBase, ok := environmentInt(lifecycleFDBaseEnv)
+	if !ok {
+		return 126
+	}
+	extraCount, ok := environmentInt(lifecycleExtraCountEnv)
+	if !ok || extraCount < 0 || fdBase != 3+extraCount {
+		return 126
+	}
+	expectedPPID, ok := environmentInt(lifecycleExpectedPPIDEnv)
+	if !ok || expectedPPID <= 0 {
+		return 126
+	}
+
+	configFile := os.NewFile(uintptr(fdBase), "lifecycle-config")
+	gateFile := os.NewFile(uintptr(fdBase+1), "lifecycle-gate")
+	controlFile := os.NewFile(uintptr(fdBase+2), "lifecycle-control")
+	reportFile := os.NewFile(uintptr(fdBase+3), "lifecycle-report")
+	if configFile == nil || gateFile == nil || controlFile == nil || reportFile == nil {
+		return 126
+	}
+	for fd := fdBase; fd <= fdBase+3; fd++ {
+		syscall.CloseOnExec(fd)
+	}
+
+	// The supervisor alone owns controlFile. Monitoring and signal handling are
+	// active before Linux parent-death signaling is installed, closing the
+	// startup race where the owner dies between fork and prctl.
+	parentGone := make(chan struct{})
+	var parentGoneOnce sync.Once
+	markParentGone := func() { parentGoneOnce.Do(func() { close(parentGone) }) }
+	go func() {
+		_, _ = io.Copy(io.Discard, controlFile)
+		_ = controlFile.Close()
+		markParentGone()
+	}()
+	deathSignal := make(chan os.Signal, 1)
+	signal.Notify(deathSignal, supervisorParentDeathSignal())
+	defer signal.Stop(deathSignal)
+	go func() {
+		select {
+		case <-deathSignal:
+			markParentGone()
+		case <-parentGone:
+		}
+	}()
+	if err := enableSupervisorParentDeath(expectedPPID); err != nil {
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	if os.Getppid() != expectedPPID {
+		markParentGone()
+	}
+	if err := enableSupervisorSubreaper(); err != nil {
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+
+	var config batchTargetConfig
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	if config.GracePeriod <= 0 {
+		config.GracePeriod = defaultBatchGracePeriod
+	}
+	if config.CleanupTimeout <= 0 {
+		config.CleanupTimeout = defaultBatchCleanupTimeout
+	}
+	_ = configFile.Close()
+	select {
+	case <-parentGone:
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: "embedding process exited before gated child creation"})
+		return 125
+	default:
+	}
+
+	childConfigR, childConfigW, err := os.Pipe()
+	if err != nil {
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		closeFiles(childConfigR, childConfigW)
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	targetExtras := inheritedFiles(3, extraCount, "target-extra")
+	for fd := 3; fd < 3+extraCount; fd++ {
+		syscall.CloseOnExec(fd)
+	}
+	childFDBase := 3 + extraCount
+	child := exec.Command(executable)
+	child.Env = lifecycleEnvironment(os.Environ(), map[string]string{
+		lifecycleRoleEnv:       lifecycleRoleChild,
+		lifecycleFDBaseEnv:     strconv.Itoa(childFDBase),
+		lifecycleExtraCountEnv: strconv.Itoa(extraCount),
+	})
+	child.ExtraFiles = append(targetExtras, childConfigR, gateFile)
+	child.Stdin = os.Stdin
+	child.Stdout = os.Stdout
+	child.Stderr = os.Stderr
+	child.SysProcAttr = lifecycleChildSysProcAttr()
+	if err := child.Start(); err != nil {
+		closeFiles(childConfigR, childConfigW)
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	_ = childConfigR.Close()
+	if err := json.NewEncoder(childConfigW).Encode(config); err != nil {
+		_ = childConfigW.Close()
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	_ = childConfigW.Close()
+
+	pgid, err := syscall.Getpgid(child.Process.Pid)
+	if err != nil {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	writeSupervisorReport(reportFile, supervisorStartReport{PID: child.Process.Pid, PGID: pgid})
+	// The child now has the only gate read end. Config/report are closed and
+	// control was never inherited, so harness descendants cannot suppress EOF.
+	_ = gateFile.Close()
+	for _, file := range targetExtras {
+		_ = file.Close()
+	}
+	closeFiles(os.Stdin, os.Stdout, os.Stderr)
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- child.Wait() }()
+	var waitErr error
+	callerDied := false
+	select {
+	case waitErr = <-waitDone:
+	case <-parentGone:
+		callerDied = true
+		cleanupSupervisorGroup(pgid, config.GracePeriod, config.CleanupTimeout)
+		select {
+		case waitErr = <-waitDone:
+		default:
+		}
+	}
+
+	// Normal target exit can leave grandchildren in the saved group. The
+	// supervisor remains outside that group, so it can escalate and reap them.
+	if callerDied {
+		return 125
+	}
+	cleanupSupervisorGroup(pgid, config.GracePeriod, config.CleanupTimeout)
+	return processExitCode(waitErr)
+}
+
+func runUnixBatchChild() int {
+	fdBase, ok := environmentInt(lifecycleFDBaseEnv)
+	if !ok {
+		return 126
+	}
+	extraCount, ok := environmentInt(lifecycleExtraCountEnv)
+	if !ok || extraCount < 0 || fdBase != 3+extraCount {
+		return 126
+	}
+	configFile := os.NewFile(uintptr(fdBase), "target-config")
+	gateFile := os.NewFile(uintptr(fdBase+1), "target-gate")
+	if configFile == nil || gateFile == nil {
+		return 126
+	}
+	syscall.CloseOnExec(fdBase)
+	syscall.CloseOnExec(fdBase + 1)
+	var config batchTargetConfig
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		return 126
+	}
+	_ = configFile.Close()
+	var release [1]byte
+	if _, err := io.ReadFull(gateFile, release[:]); err != nil || release[0] != 1 {
+		_ = gateFile.Close()
+		return 125
+	}
+	_ = gateFile.Close()
+	if config.Dir != "" {
+		if err := os.Chdir(config.Dir); err != nil {
+			return 126
+		}
+	}
+	if len(config.Args) == 0 || config.Path == "" {
+		return 126
+	}
+	if err := syscall.Exec(config.Path, config.Args, config.Env); err != nil { // #nosec G204 -- target is the already-resolved builtin harness command
+		return 126
+	}
+	return 126
+}
+
+func cleanupSupervisorGroup(pgid int, grace, cleanupTimeout time.Duration) {
+	if pgid <= 0 {
+		return
+	}
+	started := time.Now()
+	deadline := started.Add(cleanupTimeout)
+	graceDeadline := started.Add(grace)
+	if graceDeadline.After(deadline) {
+		graceDeadline = deadline
+	}
+	_ = syscall.Kill(-pgid, syscall.SIGTERM)
+	for time.Now().Before(graceDeadline) {
+		reapAdoptedChildren()
+		alive, _ := unixProcessGroupAlive(pgid)
+		if !alive {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	for time.Now().Before(deadline) {
+		reapAdoptedChildren()
+		alive, _ := unixProcessGroupAlive(pgid)
+		if !alive {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func reapAdoptedChildren() {
+	for {
+		var status syscall.WaitStatus
+		pid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+		if pid <= 0 || (err != nil && !errors.Is(err, syscall.EINTR)) {
+			return
+		}
+	}
+}
+
+func inheritedFiles(start, count int, prefix string) []*os.File {
+	files := make([]*os.File, 0, count)
+	for index := 0; index < count; index++ {
+		files = append(files, os.NewFile(uintptr(start+index), prefix+"-"+strconv.Itoa(index)))
+	}
+	return files
+}
+
+func writeSupervisorReport(file *os.File, report supervisorStartReport) {
+	if file == nil {
+		return
+	}
+	_ = json.NewEncoder(file).Encode(report)
+	_ = file.Close()
+}
+
+func environmentInt(name string) (int, bool) {
+	value, err := strconv.Atoi(os.Getenv(name))
+	return value, err == nil
+}
+
+func processExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if code := exitErr.ExitCode(); code >= 0 {
+			return code
+		}
+	}
+	return 1
+}

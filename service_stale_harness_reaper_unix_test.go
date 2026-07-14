@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 func TestServiceStartupReapsStaleHarnessSessions(t *testing.T) {
@@ -81,6 +82,36 @@ func TestStaleHarnessReaperRemovesDeadPidRecords(t *testing.T) {
 	}
 	if _, err := os.Stat(recordPath); !os.IsNotExist(err) {
 		t.Fatalf("dead record was not removed, stat err=%v", err)
+	}
+}
+
+func TestStaleHarnessReaperPreservesLifecycleAndUnknownSchemas(t *testing.T) {
+	dir := t.TempDir()
+	for name, schema := range map[string]string{
+		"v1.json":     processlifecycle.RecordSchemaID,
+		"future.json": "fizeau.process-lifecycle/v99",
+	} {
+		path := filepath.Join(dir, name)
+		data, err := json.Marshal(map[string]any{
+			"schema_id": schema,
+			"record_id": name,
+			"state":     "owned",
+		})
+		if err != nil {
+			t.Fatalf("marshal %s: %v", name, err)
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	if err := reapStaleHarnessRecords(dir, 0, time.Now().UTC()); err != nil {
+		t.Fatalf("reap records: %v", err)
+	}
+	for _, name := range []string{"v1.json", "future.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("schema-owned record %s was not preserved: %v", name, err)
+		}
 	}
 }
 

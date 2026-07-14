@@ -9,10 +9,10 @@ import (
 	"os"
 	osexec "os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 const defaultEventBuffer = 64
@@ -215,15 +215,13 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cmd := harnesses.HarnessCommand(runCtx, binary, args...)
+	cmd := harnesses.HarnessBatchCommand(binary, args...)
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
 	if promptMode == "stdin" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	setProcessGroup(cmd)
-
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -232,12 +230,13 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-
-	if err := cmd.Start(); err != nil {
+	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
+		Harness: "gemini", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+	})
+	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	defer killProcessGroup(cmd)
-	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "gemini", cmd)
+	defer batch.Stop()
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "gemini")
 	if progressLog != nil {
@@ -276,12 +275,13 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	// Wait for stdout to be fully read; context cancellation also wakes us up.
 	// Either way, the defer ensures process group is killed on function exit.
 	select {
-	case <-ctx.Done():
+	case <-runCtx.Done():
+		_ = batch.Stop()
 	case <-stdoutReady:
 	}
 
 	<-stderrDone
-	runErr = cmd.Wait()
+	runErr = batch.Wait()
 	stderr = stderrBuf.String()
 
 	switch {
@@ -370,11 +370,4 @@ func trimErrorBlob(s string) string {
 		return s[:max] + "...(truncated)"
 	}
 	return s
-}
-
-func setProcessGroup(cmd *osexec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	setProcessGroupAttr(cmd.SysProcAttr)
 }

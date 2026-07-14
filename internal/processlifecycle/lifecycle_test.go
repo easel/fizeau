@@ -82,6 +82,8 @@ func testPrepared() *fakePreparedBoundary {
 	return &fakePreparedBoundary{
 		descriptor: BoundaryDescriptor{
 			OwnerIdentity:           ProcessIdentity{PID: 101, BirthTokenScheme: "test/v1", BirthToken: "owner-birth-a"},
+			SupervisorIdentity:      ProcessIdentity{PID: 150, BirthTokenScheme: "test/v1", BirthToken: "supervisor-birth-a"},
+			DirectChildIdentity:     ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-birth-a"},
 			BoundaryProcessIdentity: ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-birth-a"},
 			BoundaryID:              "pgid:202",
 			BoundaryType:            BoundaryTypeTest,
@@ -98,6 +100,8 @@ func matchingObservation() BoundaryObservation {
 	return BoundaryObservation{
 		Status:                  BoundaryMatching,
 		BoundaryIdentity:        "pgid:202",
+		SupervisorIdentity:      ProcessIdentity{PID: 150, BirthTokenScheme: "test/v1", BirthToken: "supervisor-birth-a"},
+		DirectChildIdentity:     ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-birth-a"},
 		BoundaryProcessIdentity: ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-birth-a"},
 		OwnerStatus:             OwnerMatching,
 		OwnerIdentity:           ProcessIdentity{PID: 101, BirthTokenScheme: "test/v1", BirthToken: "owner-birth-a"},
@@ -180,6 +184,7 @@ func TestLifecycleRecordSchemaFields(t *testing.T) {
 	}
 	for _, field := range []string{
 		"schema_id", "record_id", "revision", "operation_id", "harness", "owner_identity",
+		"supervisor_identity", "direct_child_identity",
 		"boundary_identity", "boundary_type", "boundary_process_identity", "state",
 		"timestamps", "escape_evidence",
 	} {

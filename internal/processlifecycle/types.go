@@ -26,6 +26,12 @@ var (
 	ErrInvalidRecord         = errors.New("invalid process lifecycle record")
 	ErrRecordExists          = errors.New("process lifecycle record already exists")
 	ErrRevisionConflict      = errors.New("process lifecycle record revision conflict")
+	ErrPlatformUnsupported   = errors.New("process lifecycle platform is unsupported")
+)
+
+const (
+	defaultBatchCleanupTimeout = 5 * time.Second
+	defaultBatchGracePeriod    = 100 * time.Millisecond
 )
 
 // BoundaryType identifies the platform containment primitive.
@@ -87,6 +93,8 @@ const (
 type BoundaryObservation struct {
 	Status                  BoundaryObservationStatus
 	BoundaryIdentity        string
+	SupervisorIdentity      ProcessIdentity
+	DirectChildIdentity     ProcessIdentity
 	BoundaryProcessIdentity ProcessIdentity
 	OwnerStatus             OwnerObservation
 	OwnerIdentity           ProcessIdentity
@@ -135,12 +143,19 @@ type Timestamps struct {
 // Record is the durable ownership fact used by current cleanup and later
 // recovery.
 type Record struct {
-	SchemaID                string           `json:"schema_id"`
-	RecordID                string           `json:"record_id"`
-	Revision                uint64           `json:"revision"`
-	OperationID             string           `json:"operation_id"`
-	Harness                 string           `json:"harness"`
+	SchemaID    string `json:"schema_id"`
+	RecordID    string `json:"record_id"`
+	Revision    uint64 `json:"revision"`
+	OperationID string `json:"operation_id"`
+	Harness     string `json:"harness"`
+	// OwnerIdentity is the embedding Fizeau process. SupervisorIdentity is
+	// its trusted direct child and survives owner death long enough to clean.
+	// DirectChildIdentity is the gated harness shim. BoundaryProcessIdentity
+	// identifies the exact process anchoring containment; on Unix it is the
+	// independently observed direct child because that shim leads the PGID.
 	OwnerIdentity           ProcessIdentity  `json:"owner_identity"`
+	SupervisorIdentity      ProcessIdentity  `json:"supervisor_identity"`
+	DirectChildIdentity     ProcessIdentity  `json:"direct_child_identity"`
 	BoundaryIdentity        string           `json:"boundary_identity"`
 	BoundaryType            BoundaryType     `json:"boundary_type"`
 	BoundaryProcessIdentity ProcessIdentity  `json:"boundary_process_identity"`
@@ -170,8 +185,8 @@ func (r Record) Validate() error {
 	if r.RecordID == "" || r.Revision == 0 || r.OperationID == "" || r.Harness == "" {
 		return fmt.Errorf("%w: record, operation, and harness IDs are required", ErrInvalidRecord)
 	}
-	if !r.OwnerIdentity.valid() || !r.BoundaryProcessIdentity.valid() {
-		return fmt.Errorf("%w: owner and boundary process birth identities are required", ErrInvalidRecord)
+	if !r.OwnerIdentity.valid() || !r.SupervisorIdentity.valid() || !r.DirectChildIdentity.valid() || !r.BoundaryProcessIdentity.valid() {
+		return fmt.Errorf("%w: owner, supervisor, direct-child, and boundary process birth identities are required", ErrInvalidRecord)
 	}
 	if r.BoundaryIdentity == "" || r.BoundaryType == "" || r.State == "" {
 		return fmt.Errorf("%w: boundary identity, boundary type, and state are required", ErrInvalidRecord)
@@ -215,6 +230,8 @@ type PlatformBackend interface {
 // caller cannot persist group A and accidentally release group B.
 type BoundaryDescriptor struct {
 	OwnerIdentity           ProcessIdentity
+	SupervisorIdentity      ProcessIdentity
+	DirectChildIdentity     ProcessIdentity
 	BoundaryProcessIdentity ProcessIdentity
 	BoundaryID              string
 	BoundaryType            BoundaryType
@@ -243,6 +260,17 @@ type Options struct {
 	OperationID string
 	Harness     string
 	Clock       Clock
+}
+
+// BatchOptions configures one subprocess batch invocation. Registry is a test
+// seam; production callers leave it nil so lifecycle state is crash-durable.
+type BatchOptions struct {
+	Harness        string
+	OperationID    string
+	SessionLogDir  string
+	CleanupTimeout time.Duration
+	GracePeriod    time.Duration
+	Registry       Registry
 }
 
 // CleanupResult says whether ownership evidence was safely removed.

@@ -9,12 +9,12 @@ import (
 	"os"
 	osexec "os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 // Fallback only: unpinned runs resolve through model discovery first.
@@ -327,17 +327,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cmd := osexec.CommandContext(runCtx, binary, args...)
+	cmd := harnesses.HarnessBatchCommand(binary, args...)
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
 	if promptMode != "arg" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	// Put the child in its own process group so we can signal the entire
-	// tree (PTY/tool children included) on ctx.Done().
-	setProcessGroup(cmd)
-
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -346,12 +342,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-
-	if err := cmd.Start(); err != nil {
+	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
+		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+	})
+	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	defer killProcessGroup(cmd)
-	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "claude", cmd)
+	defer batch.Stop()
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "claude")
 	if progressLog != nil {
@@ -425,22 +422,22 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	}
 
 	// Wait for stdout to be fully read; context cancellation also wakes us up.
-	// On cancellation we must reap the process group *immediately* — not via the
-	// deferred killProcessGroup — otherwise the stderr/stdout io.Copy goroutines
+	// On cancellation we must enter shared lifecycle cleanup immediately;
+	// otherwise the stderr/stdout io.Copy goroutines
 	// (and thus the <-stderrDone / <-parseDone waits below) block until the child
 	// closes its pipes on its own, which a long-running turn never does. Killing
 	// the group here closes the pipes and lets the drain goroutines complete so
 	// Execute terminates promptly with a cancelled/timed_out status.
 	select {
-	case <-ctx.Done():
-		killProcessGroup(cmd)
+	case <-runCtx.Done():
+		_ = batch.Stop()
 	case <-stdoutDone:
 	}
 
 	<-stderrDone
 	<-parseDone
 	<-mirrorDone
-	runErr = cmd.Wait()
+	runErr = batch.Wait()
 	stderr = stderrBuf.String()
 
 	// Classify exit.
@@ -484,15 +481,13 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cmd := osexec.CommandContext(runCtx, binary, args...)
+	cmd := harnesses.HarnessBatchCommand(binary, args...)
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
 	if promptMode != "arg" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	setProcessGroup(cmd)
-
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -502,15 +497,17 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 		return nil, -1, "", err, "failed"
 	}
 
-	if err := cmd.Start(); err != nil {
+	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
+		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+	})
+	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	defer killProcessGroup(cmd)
-	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "claude", cmd)
+	defer batch.Stop()
 
 	stdoutBytes, _ := io.ReadAll(stdoutPipe)
 	stderrBytes, _ := io.ReadAll(stderrPipe)
-	runErr := cmd.Wait()
+	runErr := batch.Wait()
 
 	stderrBytesStr := string(stderrBytes)
 	var exitErr *osexec.ExitError
@@ -583,13 +580,4 @@ func trimErrorBlob(s string) string {
 		return s[:max] + "...(truncated)"
 	}
 	return s
-}
-
-// setProcessGroup configures cmd to start in its own process group on
-// POSIX. Implemented in a build-tagged file for cross-platform support.
-func setProcessGroup(cmd *osexec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	setProcessGroupAttr(cmd.SysProcAttr)
 }

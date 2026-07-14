@@ -76,6 +76,8 @@ func validRegistryRecord() Record {
 		OperationID:             "session-file-1",
 		Harness:                 "codex",
 		OwnerIdentity:           ProcessIdentity{PID: 101, BirthTokenScheme: "test/v1", BirthToken: "owner-a"},
+		SupervisorIdentity:      ProcessIdentity{PID: 150, BirthTokenScheme: "test/v1", BirthToken: "supervisor-a"},
+		DirectChildIdentity:     ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-a"},
 		BoundaryIdentity:        "pgid:202",
 		BoundaryType:            BoundaryTypeTest,
 		BoundaryProcessIdentity: ProcessIdentity{PID: 202, BirthTokenScheme: "test/v1", BirthToken: "boundary-a"},

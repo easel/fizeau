@@ -44,6 +44,8 @@ func Acquire(ctx context.Context, opts Options, registry Registry, platform Plat
 		OperationID:             opts.OperationID,
 		Harness:                 opts.Harness,
 		OwnerIdentity:           descriptor.OwnerIdentity,
+		SupervisorIdentity:      descriptor.SupervisorIdentity,
+		DirectChildIdentity:     descriptor.DirectChildIdentity,
 		BoundaryIdentity:        descriptor.BoundaryID,
 		BoundaryType:            descriptor.BoundaryType,
 		BoundaryProcessIdentity: descriptor.BoundaryProcessIdentity,
@@ -212,7 +214,10 @@ func validateObservation(record Record, observation BoundaryObservation, recover
 	case BoundaryIndeterminate:
 		return BoundaryIndeterminate, ErrBoundaryIndeterminate
 	case BoundaryMatching:
-		if observation.BoundaryIdentity != record.BoundaryIdentity || !record.BoundaryProcessIdentity.matches(observation.BoundaryProcessIdentity) {
+		if observation.BoundaryIdentity != record.BoundaryIdentity ||
+			!record.SupervisorIdentity.matches(observation.SupervisorIdentity) ||
+			!record.DirectChildIdentity.matches(observation.DirectChildIdentity) ||
+			!record.BoundaryProcessIdentity.matches(observation.BoundaryProcessIdentity) {
 			return BoundaryMismatch, ErrIdentityMismatch
 		}
 		switch observation.OwnerStatus {

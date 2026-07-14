@@ -10,10 +10,10 @@ import (
 	osexec "os/exec"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 const defaultEventBuffer = 64
@@ -204,15 +204,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cmd := harnesses.HarnessCommand(runCtx, binary, args...)
+	cmd := harnesses.HarnessBatchCommand(binary, args...)
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
 	if promptMode != "arg" {
 		cmd.Stdin = strings.NewReader(req.Prompt)
 	}
-	setProcessGroup(cmd)
-
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -221,12 +219,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-
-	if err := cmd.Start(); err != nil {
+	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
+		Harness: "pi", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
+	})
+	if err != nil {
 		return nil, -1, "", err, "failed"
 	}
-	defer killProcessGroup(cmd)
-	_ = harnesses.RegisterHarnessSession(req.SessionLogDir, req.SessionID, "pi", cmd)
+	defer batch.Stop()
 
 	progressLog, _ := harnesses.OpenProgressLog(req.SessionLogDir, req.SessionID, "pi")
 	if progressLog != nil {
@@ -268,7 +267,6 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 			case <-time.After(req.Timeout):
 				timedOut.Store(true)
 				cancel()
-				killProcessGroup(cmd)
 			}
 		}()
 		defer close(stop)
@@ -278,12 +276,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	// Either way, the defer ensures process group is killed on function exit.
 	select {
 	case <-runCtx.Done():
+		_ = batch.Stop()
 	case <-stdoutDone:
 	}
 
 	<-stderrDone
 	<-parseDone
-	runErr = cmd.Wait()
+	runErr = batch.Wait()
 	stderr = stderrBuf.String()
 
 	switch {
@@ -332,13 +331,6 @@ func trimErrorBlob(s string) string {
 		return s[:max] + "...(truncated)"
 	}
 	return s
-}
-
-func setProcessGroup(cmd *osexec.Cmd) {
-	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	setProcessGroupAttr(cmd.SysProcAttr)
 }
 
 // DefaultModelSnapshot implements harnesses.ModelDiscoveryHarness. It calls

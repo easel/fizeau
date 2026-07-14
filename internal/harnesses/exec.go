@@ -21,3 +21,12 @@ func HarnessCommand(ctx context.Context, binary string, args ...string) *exec.Cm
 	// same config plus structured request fields, never raw external input.
 	return exec.CommandContext(ctx, binary, args...)
 }
+
+// HarnessBatchCommand constructs a command whose cancellation is owned by the
+// shared process-lifecycle supervisor. Do not replace this with CommandContext:
+// its hidden cancellation path can kill the trusted supervisor before it has
+// reaped the contained harness group.
+func HarnessBatchCommand(binary string, args ...string) *exec.Cmd {
+	// #nosec G204 -- same fixed builtin-harness contract as HarnessCommand.
+	return exec.Command(binary, args...)
+}
