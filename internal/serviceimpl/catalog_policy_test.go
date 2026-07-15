@@ -231,10 +231,10 @@ func TestRoutePowerPolicyForRequest(t *testing.T) {
 		}
 	})
 
-	t.Run("allow local and requirements compose defensively", func(t *testing.T) {
+	t.Run("air gapped requirements compose defensively", func(t *testing.T) {
 		requestRequire := []string{"request-first", "request-second"}
 		request := CatalogPolicyRequest{
-			Policy:  "default",
+			Policy:  "air-gapped",
 			Require: requestRequire,
 		}
 		result, failure := EvaluateCatalogPolicy(cat, request)
@@ -250,7 +250,7 @@ func TestRoutePowerPolicyForRequest(t *testing.T) {
 			t.Fatalf("result.Require changed with request slice: %v", result.Require)
 		}
 		result.Require[0] = "mutated-result"
-		again, againFailure := EvaluateCatalogPolicy(cat, CatalogPolicyRequest{Policy: "default"})
+		again, againFailure := EvaluateCatalogPolicy(cat, CatalogPolicyRequest{Policy: "air-gapped"})
 		if againFailure != nil {
 			t.Fatalf("second failure=%#v, want nil", againFailure)
 		}

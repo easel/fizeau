@@ -388,24 +388,6 @@ func TestRoutingDecisionEventCandidatesExposeRawScoreComponents(t *testing.T) {
 	}
 }
 
-// TestRouteRequestMinContextWindowDerivedFromEstimatedTokens verifies
-// the public-to-internal mapping for the auto-selection inputs that
-// ADR-005 step 1 added: EstimatedPromptTokens populates routing.Request
-// such that MinContextWindow() returns a positive value, which is the
-// hook the engine's context-window filter consults in step 2
-// (agent-d9c358ba). End-to-end FilterReason assertions through
-// ResolveRoute live in step 2's tests; step 1's responsibility ends at
-// the public-to-internal boundary.
-func TestRouteRequestMinContextWindowDerivedFromEstimatedTokens(t *testing.T) {
-	rReq := routing.Request{
-		EstimatedPromptTokens: 1_000_000,
-		RequiresTools:         true,
-	}
-	if rReq.MinContextWindow() == 0 {
-		t.Fatal("MinContextWindow must be positive when EstimatedPromptTokens is set")
-	}
-}
-
 // TestRoutingDecisionRejectedCandidatesMatchSnapshotEvidence verifies that
 // rejected routing candidates keep typed filter reasons and enough identity
 // to be matched back to list-models rows by provider/model/endpoint/server.

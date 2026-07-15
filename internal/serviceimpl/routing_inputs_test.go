@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/routing"
@@ -183,6 +184,9 @@ func TestBuildRoutingInputsPreservesSnapshotEvidence(t *testing.T) {
 func TestRoutingCostProjectionPreservesPolicyAndSubscriptionCurve(t *testing.T) {
 	cat := loadRoutingInputsTestCatalog(t)
 
+	if !ProviderTypeUsesFixedBilling("llama-server") {
+		t.Fatal("llama-server must remain a fixed-billing provider type")
+	}
 	fixedUnknown := routing.ProviderEntry{DefaultModel: "plain-model"}
 	ApplyEndpointRoutingCost(&fixedUnknown, ProviderEntry{Type: "lmstudio"}, cat, 0)
 	if fixedUnknown.ActualCashSpend || fixedUnknown.CostSource != routing.CostSourceUnknown || fixedUnknown.CostUSDPer1kTokens != 0 {
@@ -263,6 +267,85 @@ func TestRoutingCostProjectionPreservesPolicyAndSubscriptionCurve(t *testing.T) 
 	}
 }
 
+func TestBuildRoutingInputsProjectsPerProviderCatalogCosts(t *testing.T) {
+	cat := loadRoutingInputsTestCatalog(t)
+	providers := map[string]ProviderEntry{
+		"alpha": {Type: "openai", Model: "alpha-provider-model"},
+		"beta":  {Type: "openai", Model: "beta-provider-model"},
+		"gamma": {Type: "openai", Model: "gamma-provider-model"},
+	}
+	rows := make([]modelsnapshot.KnownModel, 0, len(providers))
+	for name, provider := range providers {
+		rows = append(rows, modelsnapshot.KnownModel{Provider: name, ID: provider.Model})
+	}
+	got := BuildRoutingInputs(RoutingInputsInput{
+		Harnesses:        []routing.HarnessEntry{{Name: "fiz", Available: true, AutoRoutingEligible: true}},
+		Providers:        providers,
+		ProviderNames:    []string{"alpha", "beta", "gamma"},
+		HasServiceConfig: true,
+		Snapshot:         modelsnapshot.ModelSnapshot{Models: rows},
+		Catalog:          cat,
+	})
+	if len(got.Harnesses) != 1 || len(got.Harnesses[0].Providers) != 3 {
+		t.Fatalf("provider projection = %#v, want three fiz providers", got.Harnesses)
+	}
+	want := map[string]float64{"alpha": 0.002, "beta": 0.003, "gamma": 0.006}
+	for _, provider := range got.Harnesses[0].Providers {
+		if provider.CostSource != routing.CostSourceCatalog || !provider.ActualCashSpend ||
+			!floatNearRoutingInput(provider.CostUSDPer1kTokens, want[provider.Name]) {
+			t.Fatalf("provider %q cost evidence = %#v, want catalog cost %v", provider.Name, provider, want[provider.Name])
+		}
+	}
+}
+
+func TestSnapshotContextWindowPrecedenceAndCatalogFallback(t *testing.T) {
+	cat := loadRoutingInputsTestCatalog(t)
+	tests := []struct {
+		name           string
+		provider       ProviderEntry
+		model          string
+		snapshotWindow int
+		snapshotSource string
+		wantWindow     int
+		wantSource     string
+	}{
+		{
+			name:     "provider config wins over provider API",
+			provider: ProviderEntry{ContextWindow: 4096}, model: "priced-model",
+			snapshotWindow: 65536, snapshotSource: routing.ContextSourceProviderAPI,
+			wantWindow: 4096, wantSource: routing.ContextSourceProviderConfig,
+		},
+		{
+			name:  "provider API wins over catalog",
+			model: "priced-model", snapshotWindow: 65536, snapshotSource: routing.ContextSourceProviderAPI,
+			wantWindow: 65536, wantSource: routing.ContextSourceProviderAPI,
+		},
+		{
+			name:  "legacy snapshot is catalog evidence",
+			model: "priced-model", snapshotWindow: 131072,
+			wantWindow: 131072, wantSource: routing.ContextSourceCatalog,
+		},
+		{
+			name:       "catalog fallback",
+			model:      "priced-model",
+			wantWindow: 262144, wantSource: routing.ContextSourceCatalog,
+		},
+		{
+			name:       "default fallback",
+			model:      "unknown-model",
+			wantWindow: compaction.DefaultContextWindow, wantSource: routing.ContextSourceDefault,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			window, source := SnapshotContextWindow(tc.provider, cat, tc.model, tc.snapshotWindow, tc.snapshotSource)
+			if window != tc.wantWindow || source != tc.wantSource {
+				t.Fatalf("SnapshotContextWindow() = %d/%q, want %d/%q", window, source, tc.wantWindow, tc.wantSource)
+			}
+		})
+	}
+}
+
 func loadRoutingInputsTestCatalog(t *testing.T) *modelcatalog.Catalog {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "models.yaml")
@@ -294,6 +377,24 @@ models:
     no_tools: true
     surfaces:
       agent.openai: plain-model
+  alpha-provider-model:
+    family: same
+    status: active
+    cost_input_per_m: 1
+    cost_output_per_m: 3
+    surfaces: {agent.openai: alpha-provider-model}
+  beta-provider-model:
+    family: same
+    status: active
+    cost_input_per_m: 2
+    cost_output_per_m: 4
+    surfaces: {agent.openai: beta-provider-model}
+  gamma-provider-model:
+    family: same
+    status: active
+    cost_input_per_m: 4
+    cost_output_per_m: 8
+    surfaces: {agent.openai: gamma-provider-model}
   claude-sonnet-4.6:
     family: claude
     status: active
