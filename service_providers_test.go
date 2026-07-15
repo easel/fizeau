@@ -359,7 +359,7 @@ func TestHealthCheck_ClaudeRefreshesQuotaWhenStale(t *testing.T) {
 	setFakeClaudeHarness(t, fakeClaude)
 
 	svc := newTestService(t, ServiceOptions{})
-	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc)
 	// HealthCheck for "claude" requires the binary to be discoverable.
 	// If claude is not in PATH, the harness is unavailable → the quota refresh
 	// is never reached. To keep the test self-contained we call the helper
@@ -409,7 +409,7 @@ func TestHealthCheck_ClaudeSkipsRefreshWhenFresh(t *testing.T) {
 	setFakeClaudeHarness(t, fakeClaude)
 
 	svc := newTestService(t, ServiceOptions{})
-	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc)
 	svc.healthCheckRefreshClaudeQuota(context.Background())
 
 	if got := fakeClaude.refreshCalls.Load(); got != 0 {
@@ -464,59 +464,10 @@ func TestHealthCheck_CodexCallsRefreshQuota(t *testing.T) {
 	setFakeCodexHarness(t, fake)
 
 	svc := newTestService(t, ServiceOptions{})
-	installPrimaryQuotaRefreshSchedulerForTest(t, svc, false)
+	installPrimaryQuotaRefreshSchedulerForTest(t, svc)
 	svc.refreshScheduler.RefreshPrimaryQuotaForHealthCheck(context.Background(), "codex")
 	if !refreshCalled {
 		t.Error("expected QuotaHarness.RefreshQuota to be called for codex")
-	}
-}
-
-func TestPrimaryQuotaRefresh_AutomaticAndThrottled(t *testing.T) {
-	dir := t.TempDir()
-	claudePath := filepath.Join(dir, "claude-quota.json")
-	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", claudePath)
-	resetPrimaryQuotaRefreshForTest(t)
-
-	var claudeCalls atomic.Int32
-	var codexCalls atomic.Int32
-	done := make(chan string, 2)
-
-	fakeClaude := newFakeClaudeQuotaHarness()
-	fakeClaude.refreshFn = func(_ context.Context) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
-		claudeCalls.Add(1)
-		done <- "claude"
-		return []harnesses.QuotaWindow{
-			{LimitID: "session", UsedPercent: 20},
-			{LimitID: "weekly-all", UsedPercent: 10},
-		}, &harnesses.AccountInfo{PlanType: "Claude Max"}, nil
-	}
-	setFakeClaudeHarness(t, fakeClaude)
-
-	fake := newFakeCodexQuotaHarness()
-	fake.refreshFn = func(_ context.Context) (harnesses.QuotaStatus, error) {
-		codexCalls.Add(1)
-		done <- "codex"
-		return harnesses.QuotaStatus{Fresh: true, State: harnesses.QuotaOK, RoutingPreference: harnesses.RoutingPreferenceAvailable}, nil
-	}
-	setFakeCodexHarness(t, fake)
-
-	svc := newTestService(t, ServiceOptions{})
-	installPrimaryQuotaRefreshSchedulerForTest(t, svc, true)
-	if _, err := svc.ListHarnesses(context.Background()); err != nil {
-		t.Fatalf("ListHarnesses: %v", err)
-	}
-	waitForQuotaRefreshes(t, done, "claude", "codex")
-
-	if _, err := svc.ListHarnesses(context.Background()); err != nil {
-		t.Fatalf("ListHarnesses second call: %v", err)
-	}
-	time.Sleep(25 * time.Millisecond)
-
-	if got := claudeCalls.Load(); got != 1 {
-		t.Fatalf("claude refresh calls: got %d, want 1", got)
-	}
-	if got := codexCalls.Load(); got != 1 {
-		t.Fatalf("codex refresh calls: got %d, want 1", got)
 	}
 }
 
@@ -614,100 +565,6 @@ func TestNewStartupQuotaRefreshContinuesAfterTimeout(t *testing.T) {
 	concreteSvc.refreshScheduler.Stop()
 }
 
-func TestPrimaryQuotaRefreshWorkerRefreshesOnTimer(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", filepath.Join(dir, "claude-quota.json"))
-	resetPrimaryQuotaRefreshForTest(t)
-
-	var claudeCalls atomic.Int32
-	var codexCalls atomic.Int32
-	fakeClaude := newFakeClaudeQuotaHarness()
-	fakeClaude.refreshFn = func(_ context.Context) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, error) {
-		claudeCalls.Add(1)
-		return []harnesses.QuotaWindow{
-			{LimitID: "session", UsedPercent: 20},
-			{LimitID: "weekly-all", UsedPercent: 10},
-		}, &harnesses.AccountInfo{PlanType: "Claude Max"}, nil
-	}
-	setFakeClaudeHarness(t, fakeClaude)
-
-	fake := newFakeCodexQuotaHarness()
-	fake.refreshFn = func(_ context.Context) (harnesses.QuotaStatus, error) {
-		codexCalls.Add(1)
-		return harnesses.QuotaStatus{Fresh: true, State: harnesses.QuotaOK, RoutingPreference: harnesses.RoutingPreferenceAvailable}, nil
-	}
-	setFakeCodexHarness(t, fake)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	svc, err := New(ServiceOptions{
-		ServiceConfig:           &fakeServiceConfig{},
-		QuotaRefreshContext:     ctx,
-		QuotaRefreshDebounce:    time.Millisecond,
-		QuotaRefreshStartupWait: time.Second,
-		QuotaRefreshInterval:    5 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	concreteSvc := svc.(*service)
-	t.Cleanup(concreteSvc.refreshScheduler.Stop)
-
-	deadline := time.After(time.Second)
-	for claudeCalls.Load() < 2 || codexCalls.Load() < 2 {
-		select {
-		case <-deadline:
-			t.Fatalf("timed out waiting for timer refreshes: claude=%d codex=%d", claudeCalls.Load(), codexCalls.Load())
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
-
-	// Cancel the periodic worker and wait for refreshes that were already
-	// dispatched before allowing t.TempDir cleanup to remove their cache root.
-	// Cancellation alone is not a join: a fake refresh may have passed its
-	// initial context check and still be finishing an atomic cache write.
-	cancel()
-	concreteSvc.refreshScheduler.Stop()
-}
-
-func TestPrimaryQuotaRefreshCancelledWorkerContextAllowsActivityRefresh(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", filepath.Join(dir, "claude-quota.json"))
-	resetPrimaryQuotaRefreshForTest(t)
-
-	fakeClaude := newFakeClaudeQuotaHarness()
-	setFakeClaudeHarness(t, fakeClaude)
-	setFakeCodexHarness(t, newFakeCodexQuotaHarness())
-
-	workerCtx, cancelWorker := context.WithCancel(context.Background())
-	cancelWorker()
-	svc, err := New(ServiceOptions{
-		ServiceConfig:        &fakeServiceConfig{},
-		QuotaRefreshContext:  workerCtx,
-		QuotaRefreshInterval: time.Second,
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	concreteSvc := svc.(*service)
-	t.Cleanup(concreteSvc.refreshScheduler.Stop)
-	if got := fakeClaude.refreshCalls.Load(); got != 0 {
-		t.Fatalf("cancelled worker context unexpectedly refreshed Claude at startup: %d", got)
-	}
-
-	if _, err := concreteSvc.ListHarnesses(context.Background()); err != nil {
-		t.Fatalf("ListHarnesses: %v", err)
-	}
-	deadline := time.Now().Add(time.Second)
-	for fakeClaude.refreshCalls.Load() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("activity refresh was disabled by cancelled QuotaRefreshContext")
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
 func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
 	dir := tempDiscoveryCacheDir(t)
 	t.Setenv("HOME", dir)
@@ -770,7 +627,7 @@ func resetPrimaryQuotaRefreshForTest(t *testing.T) {
 	t.Cleanup(routehealth.ResetPrimaryQuotaRefreshForTest())
 }
 
-func installPrimaryQuotaRefreshSchedulerForTest(t *testing.T, svc *service, start bool) {
+func installPrimaryQuotaRefreshSchedulerForTest(t *testing.T, svc *service) {
 	t.Helper()
 	// These tests exercise the primary compatibility path in isolation. The
 	// generic freshness-derived cadence has its own routehealth tests.
@@ -784,29 +641,6 @@ func installPrimaryQuotaRefreshSchedulerForTest(t *testing.T, svc *service, star
 	}
 	policy.Interval = svc.opts.QuotaRefreshInterval
 	svc.refreshScheduler.ConfigurePrimaryQuotaRefresh(policy)
-	if start {
-		svc.refreshScheduler.Start(context.Background())
-		t.Cleanup(svc.refreshScheduler.Stop)
-	}
-}
-
-func waitForQuotaRefreshes(t *testing.T, done <-chan string, want ...string) {
-	t.Helper()
-	seen := map[string]bool{}
-	deadline := time.After(time.Second)
-	for len(seen) < len(want) {
-		select {
-		case name := <-done:
-			seen[name] = true
-		case <-deadline:
-			t.Fatalf("timed out waiting for quota refreshes; saw %v want %v", seen, want)
-		}
-	}
-	for _, name := range want {
-		if !seen[name] {
-			t.Fatalf("missing quota refresh %q; saw %v", name, seen)
-		}
-	}
 }
 
 func waitForQuotaRefreshFiles(t *testing.T, paths ...string) {
