@@ -3,6 +3,8 @@ package fizeau_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -109,6 +111,293 @@ func assertExactStructContract(t *testing.T, typ reflect.Type, want []publicFiel
 				typ.Name(), i, field.Name, field.Type, field.Tag,
 				expected.name, expected.typ, expected.tag)
 		}
+	}
+}
+
+func newPublicRouteStatusFacade(t *testing.T, config *providerFacadeConfig) fizeau.FizeauService {
+	t.Helper()
+	t.Setenv("PATH", "")
+	cacheDir, err := os.MkdirTemp("", "fizeau-public-route-status-*")
+	if err != nil {
+		t.Fatalf("create route-status cache dir: %v", err)
+	}
+	t.Cleanup(func() {
+		for attempt := 0; attempt < 20; attempt++ {
+			if err := os.RemoveAll(cacheDir); err == nil {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Errorf("remove route-status cache dir %s", cacheDir)
+	})
+	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
+
+	svc, err := fizeau.New(fizeau.ServiceOptions{
+		ServiceConfig:       config,
+		QuotaRefreshContext: canceledPublicRefreshContext(),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return svc
+}
+
+func TestPublicRouteStatusEmptyConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("FIZEAU_CACHE_DIR", filepath.Join(home, "cache"))
+	t.Setenv("PATH", "")
+	svc, err := fizeau.New(fizeau.ServiceOptions{
+		ConfigPath:          filepath.Join(home, "project", "config.yaml"),
+		QuotaRefreshContext: canceledPublicRefreshContext(),
+	})
+	if err != nil {
+		t.Fatalf("New with nil ServiceConfig: %v", err)
+	}
+
+	report, err := svc.RouteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("RouteStatus: %v", err)
+	}
+	if report == nil {
+		t.Fatal("RouteStatus returned a nil report")
+	}
+	if len(report.Routes) != 0 {
+		t.Fatalf("Routes = %#v, want no configured routes", report.Routes)
+	}
+	if report.GeneratedAt.IsZero() {
+		t.Fatal("GeneratedAt is zero")
+	}
+}
+
+func TestPublicRouteStatusMultiEndpointSnapshot(t *testing.T) {
+	const model = "qwen3.5-27b"
+	primary := externalModelsServer(t, []string{model})
+	backup := externalModelsServer(t, []string{model})
+	svc := newPublicRouteStatusFacade(t, &providerFacadeConfig{
+		providers: map[string]fizeau.ServiceProviderEntry{
+			"bragi": {
+				Type:    "lmstudio",
+				BaseURL: primary.URL + "/v1",
+				Endpoints: []fizeau.ServiceProviderEndpoint{
+					{Name: "primary", BaseURL: primary.URL + "/v1"},
+					{Name: "backup", BaseURL: backup.URL + "/v1"},
+				},
+				Model: model,
+			},
+		},
+		names:       []string{"bragi"},
+		defaultName: "bragi",
+	})
+
+	models, err := svc.ListModels(context.Background(), fizeau.ModelFilter{Provider: "bragi"})
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("ListModels rows = %d, want 2: %#v", len(models), models)
+	}
+	wantRows := make(map[string]fizeau.ModelInfo, len(models))
+	var primaryRow *fizeau.ModelInfo
+	for _, info := range models {
+		key := info.Provider + "\x00" + info.ID + "\x00" + info.EndpointName + "\x00" + info.ServerInstance
+		wantRows[key] = info
+		if info.Provider == "bragi" && info.EndpointName == "primary" {
+			row := info
+			primaryRow = &row
+		}
+	}
+	if primaryRow == nil || primaryRow.ServerInstance == "" {
+		t.Fatalf("primary ListModels row is missing normalized server identity: %#v", models)
+	}
+	recordedAt := time.Now().UTC().Add(-time.Second)
+	if err := svc.RecordRouteAttempt(context.Background(), fizeau.RouteAttempt{
+		Harness:        "fiz",
+		Provider:       primaryRow.Provider,
+		Endpoint:       primaryRow.EndpointName,
+		ServerInstance: primaryRow.ServerInstance,
+		Model:          primaryRow.ID,
+		Status:         "failed",
+		Reason:         "route_attempt_failure",
+		Timestamp:      recordedAt,
+	}); err != nil {
+		t.Fatalf("RecordRouteAttempt: %v", err)
+	}
+
+	report, err := svc.RouteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("RouteStatus: %v", err)
+	}
+	if len(report.Routes) != 1 {
+		t.Fatalf("Routes = %d, want 1: %#v", len(report.Routes), report.Routes)
+	}
+	entry := report.Routes[0]
+	if entry.Model != model || entry.Strategy != "auto" {
+		t.Fatalf("route identity = %q/%q, want %q/auto", entry.Model, entry.Strategy, model)
+	}
+	if len(entry.Candidates) != 2 {
+		t.Fatalf("Candidates = %d, want 2: %#v", len(entry.Candidates), entry.Candidates)
+	}
+	byEndpoint := make(map[string]fizeau.RouteCandidateStatus, len(entry.Candidates))
+	for _, candidate := range entry.Candidates {
+		key := candidate.Provider + "\x00" + candidate.Model + "\x00" + candidate.Endpoint + "\x00" + candidate.ServerInstance
+		if _, ok := wantRows[key]; !ok {
+			t.Errorf("RouteStatus candidate %q has no matching ListModels row", key)
+		}
+		byEndpoint[candidate.Endpoint] = candidate
+		if candidate.Provider != "bragi" || candidate.Model != model || candidate.ServerInstance == "" {
+			t.Errorf("candidate identity = %#v", candidate)
+		}
+		if candidate.Billing != fizeau.BillingModelFixed {
+			t.Errorf("candidate billing = %q, want fixed", candidate.Billing)
+		}
+		if !candidate.SnapshotCapturedAt.Equal(report.SnapshotCapturedAt) {
+			t.Errorf("candidate snapshot = %v, want report snapshot %v", candidate.SnapshotCapturedAt, report.SnapshotCapturedAt)
+		}
+	}
+	primaryCandidate, ok := byEndpoint["primary"]
+	if !ok {
+		t.Fatalf("candidate endpoints = %#v, want primary and backup", byEndpoint)
+	}
+	if primaryCandidate.Healthy || primaryCandidate.Cooldown == nil {
+		t.Fatalf("primary candidate = %#v, want endpoint-scoped cooldown", primaryCandidate)
+	}
+	if primaryCandidate.Cooldown.Reason != "route_attempt_failure" ||
+		!primaryCandidate.Cooldown.LastAttempt.Equal(recordedAt) {
+		t.Fatalf("primary cooldown = %#v, want route_attempt_failure at %v", primaryCandidate.Cooldown, recordedAt)
+	}
+	backupCandidate, ok := byEndpoint["backup"]
+	if !ok {
+		t.Fatalf("candidate endpoints = %#v, want primary and backup", byEndpoint)
+	}
+	if !backupCandidate.Healthy || backupCandidate.Cooldown != nil {
+		t.Fatalf("backup candidate = %#v, want healthy without cooldown", backupCandidate)
+	}
+}
+
+func TestPublicRouteStatusLastDecision(t *testing.T) {
+	const (
+		model          = "qwen3.5-27b"
+		endpoint       = "primary"
+		serverInstance = "bragi-instance"
+	)
+	models := externalModelsServer(t, []string{model})
+	svc := newPublicRouteStatusFacade(t, &providerFacadeConfig{
+		providers: map[string]fizeau.ServiceProviderEntry{
+			"bragi": {
+				Type:           "lmstudio",
+				BaseURL:        models.URL + "/v1",
+				ServerInstance: serverInstance,
+				Endpoints: []fizeau.ServiceProviderEndpoint{{
+					Name: endpoint, BaseURL: models.URL + "/v1", ServerInstance: serverInstance,
+				}},
+				Model: model,
+			},
+		},
+		names:       []string{"bragi"},
+		defaultName: "bragi",
+	})
+	if _, err := svc.ListModels(context.Background(), fizeau.ModelFilter{Provider: "bragi"}); err != nil {
+		t.Fatalf("prime model snapshot: %v", err)
+	}
+
+	decision, err := svc.ResolveRoute(context.Background(), fizeau.RouteRequest{
+		Policy:        "air-gapped",
+		Provider:      "bragi",
+		Model:         model,
+		CorrelationID: "public-route-status-last-decision",
+	})
+	if err != nil {
+		t.Fatalf("ResolveRoute: %v", err)
+	}
+	if decision == nil {
+		t.Fatal("ResolveRoute returned a nil decision")
+	}
+
+	report, err := svc.RouteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("RouteStatus: %v", err)
+	}
+	var found *fizeau.RouteStatusEntry
+	for i := range report.Routes {
+		if report.Routes[i].Model == model {
+			found = &report.Routes[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("route %q not found in %#v", model, report.Routes)
+	}
+	if !reflect.DeepEqual(found.LastDecision, decision) {
+		t.Fatalf("LastDecision = %#v, want ResolveRoute decision %#v", found.LastDecision, decision)
+	}
+	if found.LastDecisionAt.IsZero() {
+		t.Fatal("LastDecisionAt is zero")
+	}
+	if found.SelectedEndpoint != endpoint || found.SelectedServerInstance != serverInstance {
+		t.Fatalf("selected endpoint/server = %q/%q, want %q/%q", found.SelectedEndpoint, found.SelectedServerInstance, endpoint, serverInstance)
+	}
+	if found.Sticky != decision.Sticky {
+		t.Fatalf("Sticky = %#v, want decision evidence %#v", found.Sticky, decision.Sticky)
+	}
+}
+
+func TestPublicRouteStatusCooldownObservation(t *testing.T) {
+	const model = "qwen3.5-27b"
+	models := externalModelsServer(t, []string{model})
+	svc := newPublicRouteStatusFacade(t, &providerFacadeConfig{
+		providers: map[string]fizeau.ServiceProviderEntry{
+			"bragi": {
+				Type: "lmstudio", BaseURL: models.URL + "/v1", Model: model,
+			},
+			"backup": {
+				Type: "lmstudio", BaseURL: models.URL + "/v1", Model: model,
+			},
+		},
+		names:       []string{"bragi", "backup"},
+		defaultName: "bragi",
+	})
+	if _, err := svc.ListModels(context.Background(), fizeau.ModelFilter{}); err != nil {
+		t.Fatalf("prime model snapshot: %v", err)
+	}
+	recordedAt := time.Now().UTC().Add(-time.Second)
+	if err := svc.RecordRouteAttempt(context.Background(), fizeau.RouteAttempt{
+		Provider:  "bragi",
+		Status:    "failed",
+		Reason:    "rate_limit",
+		Timestamp: recordedAt,
+	}); err != nil {
+		t.Fatalf("RecordRouteAttempt: %v", err)
+	}
+
+	report, err := svc.RouteStatus(context.Background())
+	if err != nil {
+		t.Fatalf("RouteStatus: %v", err)
+	}
+	if len(report.Routes) != 1 || len(report.Routes[0].Candidates) != 2 {
+		t.Fatalf("routes/candidates = %#v, want one route with two candidates", report.Routes)
+	}
+	byProvider := make(map[string]fizeau.RouteCandidateStatus, 2)
+	for _, candidate := range report.Routes[0].Candidates {
+		byProvider[candidate.Provider] = candidate
+	}
+	bragi, ok := byProvider["bragi"]
+	if !ok {
+		t.Fatal("bragi candidate not found")
+	}
+	if bragi.Healthy || bragi.Cooldown == nil {
+		t.Fatalf("bragi candidate = %#v, want an observed cooldown", bragi)
+	}
+	if bragi.Cooldown.Reason != "rate_limit" || !bragi.Cooldown.LastAttempt.Equal(recordedAt) || bragi.Cooldown.Until.IsZero() {
+		t.Fatalf("bragi cooldown = %#v, want rate_limit at %v", bragi.Cooldown, recordedAt)
+	}
+	backup, ok := byProvider["backup"]
+	if !ok {
+		t.Fatal("backup candidate not found")
+	}
+	if !backup.Healthy || backup.Cooldown != nil {
+		t.Fatalf("backup candidate = %#v, want healthy without cooldown", backup)
 	}
 }
 
