@@ -79,6 +79,25 @@ func externalModelInfoDebug(infos []fizeau.ModelInfo) []string {
 	return out
 }
 
+func TestListModels_SubprocessHarnessFilterComposition(t *testing.T) {
+	svc := newProviderModelFacade(t, &providerFacadeConfig{providers: map[string]fizeau.ServiceProviderEntry{}})
+	tests := map[string]fizeau.ModelFilter{
+		"unknown harness":   {Harness: "unknown-subprocess-harness"},
+		"provider mismatch": {Harness: "claude", Provider: "codex"},
+	}
+	for name, filter := range tests {
+		t.Run(name, func(t *testing.T) {
+			models, err := svc.ListModels(context.Background(), filter)
+			if err != nil {
+				t.Fatalf("ListModels(%#v): %v", filter, err)
+			}
+			if len(models) != 0 {
+				t.Fatalf("ListModels(%#v) = %#v, want no models", filter, models)
+			}
+		})
+	}
+}
+
 func TestListModels_providerTypesOpenRouterLMStudioOMLXVLLMRapidMLX(t *testing.T) {
 	openrouter := externalModelsServer(t, []string{"openrouter/model-a"})
 	lmstudio := externalModelsServer(t, []string{"lmstudio-model-a"})

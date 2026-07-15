@@ -47,6 +47,34 @@ func canceledRefreshContext() context.Context {
 	return ctx
 }
 
+// stubSubscriptionHarnessLookPath makes the given binaries discoverable via the
+// registry's LookPath seam and reports every other binary as missing, so the
+// test is hermetic regardless of which CLIs are installed on the host.
+func stubSubscriptionHarnessLookPath(svc *service, available ...string) {
+	set := make(map[string]struct{}, len(available))
+	for _, name := range available {
+		set[name] = struct{}{}
+	}
+	svc.registry.LookPath = func(file string) (string, error) {
+		if _, ok := set[file]; ok {
+			return "/usr/local/bin/" + file, nil
+		}
+		return "", exec.ErrNotFound
+	}
+}
+
+// stubSubprocessHarnessModelIDs replaces the package-level model-ID resolver
+// with a hermetic map for the duration of the test, so tests outside model
+// inventory do not depend on launching real CLIs via PTY.
+func stubSubprocessHarnessModelIDs(t *testing.T, byHarness map[string][]string) {
+	t.Helper()
+	prev := subprocessHarnessModelIDs
+	t.Cleanup(func() { subprocessHarnessModelIDs = prev })
+	subprocessHarnessModelIDs = func(name string, _ harnesses.HarnessConfig) []string {
+		return byHarness[name]
+	}
+}
+
 func TestNewTestServiceInitializesCommonRuntimeState(t *testing.T) {
 	svc := newTestService(t, ServiceOptions{})
 	if svc.registry == nil {

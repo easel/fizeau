@@ -1,6 +1,6 @@
 //go:build integration
 
-package fizeau
+package fizeau_test
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fizeau "github.com/easel/fizeau"
 )
 
 const openRouterModelsBaseURL = "https://openrouter.ai/api/v1"
@@ -80,17 +82,17 @@ func assertLiveListModelsProvider(t *testing.T, provider liveListModelsProvider)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	svc, err := New(ServiceOptions{
+	svc, err := fizeau.New(fizeau.ServiceOptions{
 		ServiceConfig: &liveListModelsServiceConfig{provider: provider},
 		// Keep this service-boundary test focused on model listing.
-		QuotaRefreshContext:     canceledRefreshContext(),
+		QuotaRefreshContext:     liveListModelsCanceledRefreshContext(),
 		QuotaRefreshStartupWait: time.Nanosecond,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	models, err := svc.ListModels(ctx, ModelFilter{Provider: provider.name})
+	models, err := svc.ListModels(ctx, fizeau.ModelFilter{Provider: provider.name})
 	if err != nil {
 		t.Fatalf("ListModels(%s): %v", provider.name, err)
 	}
@@ -132,14 +134,14 @@ func (c *liveListModelsServiceConfig) DefaultProviderName() string {
 	return c.provider.name
 }
 
-func (c *liveListModelsServiceConfig) Provider(name string) (ServiceProviderEntry, bool) {
+func (c *liveListModelsServiceConfig) Provider(name string) (fizeau.ServiceProviderEntry, bool) {
 	if name != c.provider.name {
-		return ServiceProviderEntry{}, false
+		return fizeau.ServiceProviderEntry{}, false
 	}
-	return ServiceProviderEntry{
+	return fizeau.ServiceProviderEntry{
 		Type:   c.provider.providerType,
 		APIKey: c.provider.apiKey,
-		Endpoints: []ServiceProviderEndpoint{{
+		Endpoints: []fizeau.ServiceProviderEndpoint{{
 			Name:    c.provider.endpointName,
 			BaseURL: c.provider.baseURL,
 		}},
@@ -152,6 +154,16 @@ func (c *liveListModelsServiceConfig) HealthCooldown() time.Duration {
 
 func (c *liveListModelsServiceConfig) WorkDir() string {
 	return ""
+}
+
+func (c *liveListModelsServiceConfig) SessionLogDir() string {
+	return ""
+}
+
+func liveListModelsCanceledRefreshContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
 }
 
 func liveListModelsEnsureV1BaseURL(raw string) string {

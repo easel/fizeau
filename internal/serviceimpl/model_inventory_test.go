@@ -265,7 +265,7 @@ func TestSubscriptionHarnessTierModelsPreservesOrderingAndBilling(t *testing.T) 
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	ids := []string{"opus-4.7", "sonnet-4.6"}
+	ids := []string{"opus-4.7", "haiku-5.5", "unknown-model-xyz"}
 	rows := SubscriptionHarnessTierModels(context.Background(), SubscriptionHarnessInventoryInput{
 		Name: "claude",
 		Config: harnesses.HarnessConfig{
@@ -275,7 +275,10 @@ func TestSubscriptionHarnessTierModelsPreservesOrderingAndBilling(t *testing.T) 
 		},
 		ModelIDs: ids,
 		Catalog:  cat,
-		EffectiveCostForModel: func(string) (float64, bool) {
+		EffectiveCostForModel: func(id string) (float64, bool) {
+			if id == "unknown-model-xyz" {
+				return 0, false
+			}
 			return 1.25, true
 		},
 	})
@@ -287,18 +290,54 @@ func TestSubscriptionHarnessTierModelsPreservesOrderingAndBilling(t *testing.T) 
 		if row.Model.ID != ids[i] || row.RankPosition != i {
 			t.Fatalf("row %d identity/rank = %q/%d, want %q/%d", i, row.Model.ID, row.RankPosition, ids[i], i)
 		}
+		if row.Model.Provider != "claude" || row.Model.Harness != "claude" || row.Model.EndpointName != "claude" || row.Model.ServerInstance != "claude" {
+			t.Fatalf("row %d service identity = provider:%q harness:%q endpoint:%q server:%q", i, row.Model.Provider, row.Model.Harness, row.Model.EndpointName, row.Model.ServerInstance)
+		}
 		if row.Model.Billing != modelcatalog.BillingModelSubscription {
 			t.Fatalf("row %d billing = %q, want subscription", i, row.Model.Billing)
 		}
-		if row.Model.EffectiveCost != 1.25 || row.Model.EffectiveCostSource != "subscription_shadow" {
-			t.Fatalf("row %d effective cost = %v/%q, want 1.25/subscription_shadow", i, row.Model.EffectiveCost, row.Model.EffectiveCostSource)
-		}
-		if row.Model.ContextWindow <= 0 || row.ContextSource == "" {
-			t.Fatalf("row %d missing context evidence: %d/%q", i, row.Model.ContextWindow, row.ContextSource)
+		if !row.Available || !slices.Equal(row.Capabilities, []string{"streaming", "tool_use"}) {
+			t.Fatalf("row %d availability/capabilities = %v/%#v", i, row.Available, row.Capabilities)
 		}
 	}
-	if rows[0].IsDefault || !rows[1].IsDefault {
-		t.Fatalf("default flags = %v/%v, want false/true", rows[0].IsDefault, rows[1].IsDefault)
+	if rows[0].IsDefault || !rows[1].IsDefault || rows[2].IsDefault {
+		t.Fatalf("default flags = %v/%v/%v, want false/true/false", rows[0].IsDefault, rows[1].IsDefault, rows[2].IsDefault)
+	}
+
+	opus := rows[0]
+	if opus.Model.ContextWindow != 1000000 || opus.ContextSource != routing.ContextSourceCatalog {
+		t.Fatalf("opus context = %d/%q, want 1000000/%q", opus.Model.ContextWindow, opus.ContextSource, routing.ContextSourceCatalog)
+	}
+	if opus.Model.CostInputPerM != 15 || opus.Model.CostOutputPerM != 75 {
+		t.Fatalf("opus cost = %v/%v, want 15/75", opus.Model.CostInputPerM, opus.Model.CostOutputPerM)
+	}
+	if opus.Model.EffectiveCost != 1.25 || opus.Model.EffectiveCostSource != "subscription_shadow" {
+		t.Fatalf("opus effective cost = %v/%q, want 1.25/subscription_shadow", opus.Model.EffectiveCost, opus.Model.EffectiveCostSource)
+	}
+	if opus.Model.Power != 10 || !opus.Model.AutoRoutable || opus.Model.ExactPinOnly {
+		t.Fatalf("opus eligibility = power:%d auto:%v exact:%v, want 10/true/false", opus.Model.Power, opus.Model.AutoRoutable, opus.Model.ExactPinOnly)
+	}
+
+	haiku := rows[1]
+	if haiku.Model.ContextWindow != 200000 || haiku.ContextSource != routing.ContextSourceCatalog {
+		t.Fatalf("haiku context = %d/%q, want 200000/%q", haiku.Model.ContextWindow, haiku.ContextSource, routing.ContextSourceCatalog)
+	}
+	if haiku.Model.CostInputPerM != 0.8 || haiku.Model.CostOutputPerM != 4 {
+		t.Fatalf("haiku cost = %v/%v, want 0.8/4", haiku.Model.CostInputPerM, haiku.Model.CostOutputPerM)
+	}
+	if haiku.Model.EffectiveCost != 1.25 || haiku.Model.EffectiveCostSource != "subscription_shadow" {
+		t.Fatalf("haiku effective cost = %v/%q, want 1.25/subscription_shadow", haiku.Model.EffectiveCost, haiku.Model.EffectiveCostSource)
+	}
+	if haiku.Model.Power != 7 || haiku.Model.AutoRoutable || !haiku.Model.ExactPinOnly {
+		t.Fatalf("haiku eligibility = power:%d auto:%v exact:%v, want 7/false/true", haiku.Model.Power, haiku.Model.AutoRoutable, haiku.Model.ExactPinOnly)
+	}
+
+	unknown := rows[2]
+	if unknown.Model.ContextWindow != compaction.DefaultContextWindow || unknown.ContextSource != routing.ContextSourceDefault {
+		t.Fatalf("unknown context = %d/%q, want %d/%q", unknown.Model.ContextWindow, unknown.ContextSource, compaction.DefaultContextWindow, routing.ContextSourceDefault)
+	}
+	if unknown.Model.CostInputPerM != 0 || unknown.Model.CostOutputPerM != 0 || unknown.Model.EffectiveCost != 0 || unknown.Model.EffectiveCostSource != "" || unknown.Model.Power != 0 || unknown.Model.AutoRoutable || unknown.Model.ExactPinOnly {
+		t.Fatalf("unknown catalog fallback = cost:%v/%v effective:%v/%q power:%d auto:%v exact:%v, want zero/empty/false", unknown.Model.CostInputPerM, unknown.Model.CostOutputPerM, unknown.Model.EffectiveCost, unknown.Model.EffectiveCostSource, unknown.Model.Power, unknown.Model.AutoRoutable, unknown.Model.ExactPinOnly)
 	}
 }
 
@@ -313,5 +352,38 @@ func TestSubscriptionHarnessTierModelsNilCatalogLeavesContextUnknown(t *testing.
 	}
 	if rows[0].Model.ContextWindow != 0 || rows[0].ContextSource != "" {
 		t.Fatalf("nil-catalog context = %d/%q, want zero/empty", rows[0].Model.ContextWindow, rows[0].ContextSource)
+	}
+}
+
+func TestClaudeCLIExecutableModelNormalizesFamilies(t *testing.T) {
+	tests := map[string]string{
+		"sonnet":              "sonnet",
+		" sonnet-4.6 ":        "sonnet",
+		"CLAUDE-SONNET-4.6":   "sonnet",
+		"opus":                "opus",
+		"opus-4.7":            "opus",
+		"claude-opus-4.7":     "opus",
+		"haiku":               "haiku",
+		"haiku-5.5":           "haiku",
+		"claude-haiku-5.5":    "haiku",
+		"custom-model-family": "custom-model-family",
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			if got := ClaudeCLIExecutableModel(input); got != want {
+				t.Fatalf("ClaudeCLIExecutableModel(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+}
+
+func TestAppendUniqueModelIDsPreservesOrderAndDeduplicates(t *testing.T) {
+	got := AppendUniqueModelIDs(
+		[]string{"opus-4.7", "sonnet-4.6"},
+		" sonnet-4.6 ", "", " haiku-5.5 ", "\t", "opus-4.7", "unknown-model-xyz",
+	)
+	want := []string{"opus-4.7", "sonnet-4.6", "haiku-5.5", "unknown-model-xyz"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("AppendUniqueModelIDs = %#v, want %#v", got, want)
 	}
 }
