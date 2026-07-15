@@ -888,8 +888,9 @@ func TestSmellSingleCooldownAbstraction(t *testing.T) {
 // unreachable in Inputs.ProviderUnreachable (within CooldownDuration) is hard-
 // gated — eligible=false with FilterReasonUnhealthy — instead of merely
 // demoted in score. This is the FEAT-004 AC-28 path: known-down endpoints are
-// dispatchability failures. Discovery failures feed this map via
-// service_routing.providerCooldownsFromSnapshotErrors.
+// dispatchability failures. Discovery failures feed this map through
+// serviceimpl.ProviderCooldownsFromSnapshotErrors, with classification owned
+// by routehealth.ProviderCooldownsFromSnapshotErrors.
 func TestProviderUnreachableHardGatesCandidate(t *testing.T) {
 	in := newTestRoutingEngine()
 

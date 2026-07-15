@@ -7,8 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+)
+
+const (
+	serviceimplImportPath = "github.com/easel/fizeau/internal/serviceimpl"
+	routehealthImportPath = "github.com/easel/fizeau/internal/routehealth"
 )
 
 // TestRootFacadeSourceAllowlist locks the deliberate non-test source files that
@@ -77,6 +83,560 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("root source allowlist mismatch\nwant: %v\ngot:  %v", want, got)
 	}
+}
+
+// TestRootRoutingInputMechanicsStayInternal locks the root routing-input
+// surface to public contract identity plus the four intended internal calls.
+// Surface preference, credential classification, snapshot-health adaptation,
+// and OpenRouter key-shape validation belong to internal/serviceimpl.
+func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
+	files := parseRootProductionFiles(t)
+	forbiddenDecls := map[string]bool{
+		"routingSurfacePreference":            true,
+		"providerCredentialMissingMap":        true,
+		"credentialMissingForProvider":        true,
+		"openrouterAPIKeyWellFormed":          true,
+		"providerCooldownsFromSnapshotErrors": true,
+		"isSnapshotDialFailure":               true,
+		"isDispatchabilityFailure":            true,
+	}
+	targetInternalCalls := map[string]bool{
+		"RoutingSurfacePreference":            true,
+		"ProviderCredentialMissing":           true,
+		"ProviderCooldownsFromSnapshotErrors": true,
+		"OpenRouterAPIKeyWellFormed":          true,
+	}
+	forbiddenRoutehealthRefs := map[string]bool{
+		"ProviderCooldownsFromSnapshotErrors": true,
+		"IsDispatchabilityFailure":            true,
+	}
+	wantRootCalls := map[string]int{
+		"service_routing.go:routingInputs:RoutingSurfacePreference":                   1,
+		"service_routing.go:routingInputs:ProviderCredentialMissing":                  1,
+		"service_routing.go:routingInputs:ProviderCooldownsFromSnapshotErrors":        1,
+		"service_openrouter_credit.go:openrouterProbeMaps:OpenRouterAPIKeyWellFormed": 1,
+	}
+	rootCalls := make(map[string]int)
+	rootRefs := make(map[string]int)
+	publicTypes := make(map[string]*ast.TypeSpec)
+	publicTypeFiles := make(map[string]string)
+	providerUsesLiveDiscoveryDecls := 0
+	serviceConfigSourceIdentifiers := 0
+	serviceConfigSourceDeclarationIdentifiers := 0
+
+	for path, file := range files {
+		serviceimplBindings, invalidServiceimplBindings := importBindingsForPath(file, serviceimplImportPath, "serviceimpl")
+		for _, binding := range invalidServiceimplBindings {
+			t.Errorf("root %s imports %s with forbidden binding %q", path, serviceimplImportPath, binding)
+		}
+		routehealthBindings, invalidRoutehealthBindings := importBindingsForPath(file, routehealthImportPath, "routehealth")
+		for _, binding := range invalidRoutehealthBindings {
+			t.Errorf("root %s imports %s with forbidden binding %q", path, routehealthImportPath, binding)
+		}
+		serviceConfigSourceIdentifiers += countUnqualifiedRootIdentifiers(file, "ServiceConfigSource")
+		ast.Inspect(file, func(node ast.Node) bool {
+			switch current := node.(type) {
+			case *ast.SelectorExpr:
+				if forbiddenImportedSelector(current, routehealthBindings, forbiddenRoutehealthRefs) {
+					t.Errorf("root %s references forbidden direct routehealth seam %s", path, current.Sel.Name)
+				}
+			}
+			return true
+		})
+		for _, decl := range file.Decls {
+			switch current := decl.(type) {
+			case *ast.FuncDecl:
+				if forbiddenDecls[current.Name.Name] {
+					t.Errorf("root %s declares migrated routing-input mechanic %s", path, current.Name.Name)
+				}
+				if current.Name.Name == "providerUsesLiveDiscovery" {
+					providerUsesLiveDiscoveryDecls++
+					if path != "service_routing.go" {
+						t.Errorf("providerUsesLiveDiscovery declared in %s, want service_routing.go pending fizeau-4623caea", path)
+					}
+				}
+				if current.Body == nil {
+					continue
+				}
+				ast.Inspect(current.Body, func(node ast.Node) bool {
+					switch expression := node.(type) {
+					case *ast.CallExpr:
+						if name, ok := expression.Fun.(*ast.Ident); ok && forbiddenDecls[name.Name] {
+							t.Errorf("root %s %s calls migrated root mechanic %s", path, current.Name.Name, name.Name)
+						}
+						selector, ok := expression.Fun.(*ast.SelectorExpr)
+						if !ok {
+							return true
+						}
+						if !selectorUsesImport(selector, serviceimplBindings) || !targetInternalCalls[selector.Sel.Name] {
+							return true
+						}
+						key := path + ":" + current.Name.Name + ":" + selector.Sel.Name
+						rootCalls[key]++
+						assertRootRoutingInputCallArguments(t, selector.Sel.Name, expression)
+					case *ast.SelectorExpr:
+						if selectorUsesImport(expression, serviceimplBindings) && targetInternalCalls[expression.Sel.Name] {
+							key := path + ":" + current.Name.Name + ":" + expression.Sel.Name
+							rootRefs[key]++
+						}
+					}
+					return true
+				})
+			case *ast.GenDecl:
+				for _, spec := range current.Specs {
+					switch named := spec.(type) {
+					case *ast.TypeSpec:
+						if forbiddenDecls[named.Name.Name] {
+							t.Errorf("root %s declares migrated routing-input type %s", path, named.Name.Name)
+						}
+						if named.Name.Name == "ServiceConfigSource" {
+							serviceConfigSourceDeclarationIdentifiers++
+						}
+						if isRootRoutingPublicType(named.Name.Name) {
+							if previous := publicTypeFiles[named.Name.Name]; previous != "" {
+								t.Errorf("root type %s declared in both %s and %s", named.Name.Name, previous, path)
+							}
+							publicTypes[named.Name.Name] = named
+							publicTypeFiles[named.Name.Name] = path
+						}
+					case *ast.ValueSpec:
+						for _, name := range named.Names {
+							if forbiddenDecls[name.Name] {
+								t.Errorf("root %s aliases migrated routing-input mechanic %s", path, name.Name)
+							}
+						}
+					}
+				}
+				ast.Inspect(current, func(node ast.Node) bool {
+					selector, ok := node.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					if selectorUsesImport(selector, serviceimplBindings) && targetInternalCalls[selector.Sel.Name] {
+						t.Errorf("root %s aliases serviceimpl.%s outside an intended call site", path, selector.Sel.Name)
+					}
+					return true
+				})
+			}
+		}
+	}
+
+	if !reflectIntMapEqual(rootCalls, wantRootCalls) {
+		t.Errorf("root routing-input internal calls = %v, want %v", rootCalls, wantRootCalls)
+	}
+	if !reflectIntMapEqual(rootRefs, wantRootCalls) {
+		t.Errorf("root routing-input internal references = %v, want only direct calls %v", rootRefs, wantRootCalls)
+	}
+	if providerUsesLiveDiscoveryDecls != 1 {
+		t.Errorf("root providerUsesLiveDiscovery declarations = %d, want 1 pending fizeau-4623caea", providerUsesLiveDiscoveryDecls)
+	}
+	if serviceConfigSourceIdentifiers != 1 || serviceConfigSourceDeclarationIdentifiers != 1 {
+		t.Errorf(
+			"root ServiceConfigSource identifiers = %d with %d declarations, want its sole occurrence to be one TypeSpec declaration",
+			serviceConfigSourceIdentifiers,
+			serviceConfigSourceDeclarationIdentifiers,
+		)
+	}
+
+	assertRootRoutingPublicTypes(t, publicTypes, publicTypeFiles)
+	assertServiceConfigSourceDeprecated(t)
+	assertInternalRoutingCredentialValidationCall(t)
+}
+
+func importBindingsForPath(file *ast.File, targetPath, defaultName string) (map[string]bool, []string) {
+	bindings := make(map[string]bool)
+	var invalid []string
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path != targetPath {
+			continue
+		}
+		if spec.Name == nil {
+			bindings[defaultName] = true
+			continue
+		}
+		switch spec.Name.Name {
+		case ".", "_":
+			invalid = append(invalid, spec.Name.Name)
+		default:
+			bindings[spec.Name.Name] = true
+		}
+	}
+	return bindings, invalid
+}
+
+func selectorUsesImport(selector *ast.SelectorExpr, bindings map[string]bool) bool {
+	qualifier, ok := selector.X.(*ast.Ident)
+	return ok && qualifier.Obj == nil && bindings[qualifier.Name]
+}
+
+func forbiddenImportedSelector(selector *ast.SelectorExpr, bindings, forbidden map[string]bool) bool {
+	return selectorUsesImport(selector, bindings) && forbidden[selector.Sel.Name]
+}
+
+func countUnqualifiedRootIdentifiers(file *ast.File, name string) int {
+	excluded := make(map[*ast.Ident]bool)
+	explicitImportAliases := make(map[string]bool)
+	for _, spec := range file.Imports {
+		if spec.Name == nil {
+			continue
+		}
+		excluded[spec.Name] = true
+		explicitImportAliases[spec.Name.Name] = true
+	}
+
+	count := 0
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch current := node.(type) {
+		case *ast.SelectorExpr:
+			excluded[current.Sel] = true
+			qualifier, ok := current.X.(*ast.Ident)
+			if ok && qualifier.Obj == nil && explicitImportAliases[qualifier.Name] {
+				excluded[qualifier] = true
+			}
+		case *ast.Ident:
+			if current.Name == name && !excluded[current] {
+				count++
+			}
+		}
+		return true
+	})
+	return count
+}
+
+func TestRoutingInputTargetImportBindingsAreAliasAware(t *testing.T) {
+	tests := []struct {
+		name          string
+		source        string
+		targetPath    string
+		defaultName   string
+		wantBinding   string
+		wantInvalid   []string
+		wantSelector  bool
+		wantForbidden bool
+	}{
+		{
+			name:         "default serviceimpl import",
+			source:       `package fizeau; import "github.com/easel/fizeau/internal/serviceimpl"; var _ = serviceimpl.RoutingSurfacePreference`,
+			targetPath:   serviceimplImportPath,
+			defaultName:  "serviceimpl",
+			wantBinding:  "serviceimpl",
+			wantSelector: true,
+		},
+		{
+			name:         "renamed serviceimpl import",
+			source:       `package fizeau; import impl "github.com/easel/fizeau/internal/serviceimpl"; var _ = impl.RoutingSurfacePreference`,
+			targetPath:   serviceimplImportPath,
+			defaultName:  "serviceimpl",
+			wantBinding:  "impl",
+			wantSelector: true,
+		},
+		{
+			name:          "renamed routehealth import",
+			source:        `package fizeau; import health "github.com/easel/fizeau/internal/routehealth"; var _ = health.IsDispatchabilityFailure`,
+			targetPath:    routehealthImportPath,
+			defaultName:   "routehealth",
+			wantBinding:   "health",
+			wantSelector:  true,
+			wantForbidden: true,
+		},
+		{
+			name:        "shadowed serviceimpl alias",
+			source:      `package fizeau; import impl "github.com/easel/fizeau/internal/serviceimpl"; func f() { impl := struct{ RoutingSurfacePreference bool }{}; _ = impl.RoutingSurfacePreference }`,
+			targetPath:  serviceimplImportPath,
+			defaultName: "serviceimpl",
+			wantBinding: "impl",
+		},
+		{
+			name:        "shadowed routehealth alias",
+			source:      `package fizeau; import health "github.com/easel/fizeau/internal/routehealth"; func f() { health := struct{ IsDispatchabilityFailure bool }{}; _ = health.IsDispatchabilityFailure }`,
+			targetPath:  routehealthImportPath,
+			defaultName: "routehealth",
+			wantBinding: "health",
+		},
+		{
+			name:        "dot import rejected",
+			source:      `package fizeau; import . "github.com/easel/fizeau/internal/serviceimpl"`,
+			targetPath:  serviceimplImportPath,
+			defaultName: "serviceimpl",
+			wantInvalid: []string{"."},
+		},
+		{
+			name:        "blank import rejected",
+			source:      `package fizeau; import _ "github.com/easel/fizeau/internal/routehealth"`,
+			targetPath:  routehealthImportPath,
+			defaultName: "routehealth",
+			wantInvalid: []string{"_"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "mutation.go", test.source, 0)
+			if err != nil {
+				t.Fatalf("parse mutation source: %v", err)
+			}
+			bindings, invalid := importBindingsForPath(file, test.targetPath, test.defaultName)
+			if !slices.Equal(invalid, test.wantInvalid) {
+				t.Fatalf("invalid bindings = %v, want %v", invalid, test.wantInvalid)
+			}
+			if test.wantBinding == "" {
+				if len(bindings) != 0 {
+					t.Fatalf("bindings = %v, want none", bindings)
+				}
+				return
+			}
+			if len(bindings) != 1 || !bindings[test.wantBinding] {
+				t.Fatalf("bindings = %v, want only %q", bindings, test.wantBinding)
+			}
+			matchedSelector := false
+			matchedForbidden := false
+			ast.Inspect(file, func(node ast.Node) bool {
+				selector, ok := node.(*ast.SelectorExpr)
+				if ok && selectorUsesImport(selector, bindings) {
+					matchedSelector = true
+				}
+				if ok && forbiddenImportedSelector(selector, bindings, map[string]bool{
+					"ProviderCooldownsFromSnapshotErrors": true,
+					"IsDispatchabilityFailure":            true,
+				}) {
+					matchedForbidden = true
+				}
+				return true
+			})
+			if matchedSelector != test.wantSelector {
+				t.Fatalf("selector match = %t, want %t for binding %q", matchedSelector, test.wantSelector, test.wantBinding)
+			}
+			if matchedForbidden != test.wantForbidden {
+				t.Fatalf("forbidden selector match = %t, want %t", matchedForbidden, test.wantForbidden)
+			}
+		})
+	}
+}
+
+func TestUnqualifiedRootIdentifierCountingExcludesQualifiedNames(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   int
+	}{
+		{
+			name:   "declaration only",
+			source: `package fizeau; type ServiceConfigSource interface{ ProviderNames() []string }`,
+			want:   1,
+		},
+		{
+			name:   "unqualified consumer counted",
+			source: `package fizeau; type ServiceConfigSource interface{}; var _ ServiceConfigSource`,
+			want:   2,
+		},
+		{
+			name:   "unrelated external selector excluded",
+			source: `package fizeau; import other "example.com/other"; type ServiceConfigSource interface{}; var _ = other.ServiceConfigSource`,
+			want:   1,
+		},
+		{
+			name:   "explicit import alias excluded",
+			source: `package fizeau; import ServiceConfigSource "example.com/other"; var _ = ServiceConfigSource.Value`,
+			want:   0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "mutation.go", test.source, 0)
+			if err != nil {
+				t.Fatalf("parse mutation source: %v", err)
+			}
+			if got := countUnqualifiedRootIdentifiers(file, "ServiceConfigSource"); got != test.want {
+				t.Fatalf("unqualified ServiceConfigSource identifiers = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func isRootRoutingPublicType(name string) bool {
+	switch name {
+	case "ServiceProviderEntry", "RouteDecision", "RouteCandidate", "ServiceConfigSource":
+		return true
+	default:
+		return false
+	}
+}
+
+func assertRootRoutingInputCallArguments(t *testing.T, name string, call *ast.CallExpr) {
+	t.Helper()
+	switch name {
+	case "RoutingSurfacePreference":
+		if len(call.Args) != 1 {
+			t.Errorf("serviceimpl.RoutingSurfacePreference arguments = %d, want 1", len(call.Args))
+			return
+		}
+		env, ok := call.Args[0].(*ast.CallExpr)
+		if !ok || !selectorMatches(env.Fun, "os", "Getenv") || len(env.Args) != 1 {
+			t.Errorf("serviceimpl.RoutingSurfacePreference must receive os.Getenv kill-switch value")
+			return
+		}
+		literal, ok := env.Args[0].(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING || literal.Value != `"FIZEAU_DISABLE_CLAUDE_TUI_DEFAULT"` {
+			t.Errorf("surface-preference environment key = %v, want FIZEAU_DISABLE_CLAUDE_TUI_DEFAULT", env.Args[0])
+		}
+	case "ProviderCredentialMissing":
+		assertIdentifierArguments(t, call, "providerNames", "providers")
+	case "ProviderCooldownsFromSnapshotErrors":
+		assertIdentifierArguments(t, call, "snapshot", "providerNames", "now", "healthCooldownTTL")
+	case "OpenRouterAPIKeyWellFormed":
+		assertIdentifierArguments(t, call, "apiKey")
+	}
+}
+
+func assertIdentifierArguments(t *testing.T, call *ast.CallExpr, want ...string) {
+	t.Helper()
+	if len(call.Args) != len(want) {
+		t.Errorf("call arguments = %d, want %d (%v)", len(call.Args), len(want), want)
+		return
+	}
+	for index, name := range want {
+		if !identMatches(call.Args[index], name) {
+			t.Errorf("call argument %d = %T, want identifier %s", index, call.Args[index], name)
+		}
+	}
+}
+
+func assertRootRoutingPublicTypes(t *testing.T, specs map[string]*ast.TypeSpec, paths map[string]string) {
+	t.Helper()
+	for name, wantPath := range map[string]string{
+		"ServiceProviderEntry": "service.go",
+		"RouteDecision":        "service.go",
+		"RouteCandidate":       "service.go",
+	} {
+		spec := specs[name]
+		if spec == nil {
+			t.Errorf("missing root public struct %s", name)
+			continue
+		}
+		if paths[name] != wantPath {
+			t.Errorf("root public struct %s declared in %s, want %s", name, paths[name], wantPath)
+		}
+		if spec.Assign.IsValid() {
+			t.Errorf("root public struct %s is a type alias", name)
+		}
+		if _, ok := spec.Type.(*ast.StructType); !ok {
+			t.Errorf("root public %s type = %T, want concrete struct", name, spec.Type)
+		}
+	}
+
+	spec := specs["ServiceConfigSource"]
+	if spec == nil {
+		t.Error("missing root ServiceConfigSource compatibility interface")
+		return
+	}
+	if paths["ServiceConfigSource"] != "service_routing.go" {
+		t.Errorf("ServiceConfigSource declared in %s, want service_routing.go", paths["ServiceConfigSource"])
+	}
+	if spec.Assign.IsValid() {
+		t.Error("ServiceConfigSource is a type alias, want concrete root interface")
+	}
+	contract, ok := spec.Type.(*ast.InterfaceType)
+	if !ok {
+		t.Errorf("ServiceConfigSource type = %T, want interface", spec.Type)
+		return
+	}
+	if contract.Methods.NumFields() != 1 || len(contract.Methods.List) != 1 {
+		t.Errorf("ServiceConfigSource methods = %d, want only ProviderNames", contract.Methods.NumFields())
+		return
+	}
+	method := contract.Methods.List[0]
+	if len(method.Names) != 1 || method.Names[0].Name != "ProviderNames" {
+		t.Errorf("ServiceConfigSource method = %v, want ProviderNames", method.Names)
+		return
+	}
+	signature, ok := method.Type.(*ast.FuncType)
+	if !ok || signature.Params.NumFields() != 0 || signature.Results.NumFields() != 1 ||
+		!sliceOfIdent(signature.Results.List[0].Type, "string") {
+		t.Error("ServiceConfigSource.ProviderNames signature must remain func() []string")
+	}
+}
+
+func assertServiceConfigSourceDeprecated(t *testing.T) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "service_routing.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse service_routing.go comments: %v", err)
+	}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			named, ok := spec.(*ast.TypeSpec)
+			if !ok || named.Name.Name != "ServiceConfigSource" {
+				continue
+			}
+			comment := ""
+			if gen.Doc != nil {
+				comment += gen.Doc.Text()
+			}
+			if named.Doc != nil {
+				comment += named.Doc.Text()
+			}
+			lower := strings.ToLower(comment)
+			if !strings.Contains(lower, "deprecated:") || !strings.Contains(lower, "compatib") {
+				t.Errorf("ServiceConfigSource comment must retain compatibility and Deprecated marker; got %q", comment)
+			}
+			return
+		}
+	}
+	t.Fatal("ServiceConfigSource declaration missing while checking deprecation comment")
+}
+
+func assertInternalRoutingCredentialValidationCall(t *testing.T) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "internal/serviceimpl/provider_credentials.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse internal credential projection: %v", err)
+	}
+	calls := 0
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name, nameOK := call.Fun.(*ast.Ident)
+			if !nameOK || name.Name != "OpenRouterAPIKeyWellFormed" {
+				return true
+			}
+			calls++
+			if fn.Name.Name != "ProviderCredentialMissing" {
+				t.Errorf("internal OpenRouterAPIKeyWellFormed called from %s, want ProviderCredentialMissing", fn.Name.Name)
+			}
+			if len(call.Args) != 1 || !qualifiedFieldMatches(call.Args[0], "provider", "APIKey") {
+				t.Error("ProviderCredentialMissing must validate provider.APIKey exactly once")
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Errorf("internal routing OpenRouterAPIKeyWellFormed calls = %d, want exactly 1", calls)
+	}
+}
+
+func reflectIntMapEqual(got, want map[string]int) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for key, value := range want {
+		if got[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // TestRootCatalogCacheMechanicsStayInternal locks the root catalog surface to

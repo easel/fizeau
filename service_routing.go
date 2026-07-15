@@ -920,6 +920,8 @@ func routingPolicyForName(cat *modelcatalog.Catalog, name string) string {
 	}
 }
 
+// providerUsesLiveDiscovery remains root request-policy wiring until the
+// catalog-policy extraction tracked by fizeau-4623caea.
 func providerUsesLiveDiscovery(providerType string) bool {
 	switch normalizeServiceProviderType(providerType) {
 	case "openai", "openrouter", "lmstudio", "llama-server", "ds4", "omlx", "rapid-mlx", "ollama", "lucebox", "vllm", "minimax", "qwen", "zai":

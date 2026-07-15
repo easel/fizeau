@@ -119,6 +119,21 @@ than the old home of the implementation bulk:
   a field-for-field projection; status/detail classification lives in
   `internal/serviceimpl`.
 
+Routing-input extraction is complete for the three mechanics covered by this
+slice. `internal/serviceimpl.RoutingSurfacePreference` owns kill-switch value
+classification, `ProviderCredentialMissing` and
+`OpenRouterAPIKeyWellFormed` own credential projection and key-shape
+validation, and `ProviderCooldownsFromSnapshotErrors` owns snapshot-source
+adaptation before delegating failure classification to `internal/routehealth`.
+Root `service_routing.go` reads process/service state and calls each internal
+projection once; `service_openrouter_credit.go` shares the same internal key
+validator. The shipped `ServiceConfigSource` declaration remains as a
+deprecated source-compatibility interface with no production consumer.
+`providerUsesLiveDiscovery` deliberately remains root request-policy wiring
+until downstream bead `fizeau-4623caea`. These boundaries are locked by
+`TestRootRoutingInputMechanicsStayInternal` and the external-package
+`TestServiceConfigSourcePublicCompatibility`.
+
 Catalog-cache extraction is complete. `service_catalog_cache.go` retains only
 the concrete public `CatalogProbeFunc`, six-field `CatalogResult`, and the
 root-owned discovery-unsupported error identity. The `service` constructor and
@@ -198,6 +213,14 @@ contract identity and the two narrow construction/dispatch-feedback wiring
 sites. The cache-test entry below is retained as historical inventory; it now
 lives at `internal/serviceimpl/catalog_cache_test.go`.
 
+The routing-input slice is also complete:
+`internal/serviceimpl/routing_surface_preference.go`,
+`provider_credentials.go`, and `snapshot_route_health.go` own the pure
+mechanics; their focused tests live beside them. Snapshot failure marker,
+provider-prefix, latest-failure, and TTL semantics remain directly tested in
+`internal/routehealth/routing_helpers_test.go` rather than through root
+white-box helpers.
+
 - Source files:
   `metadata_billing.go`, `service_execute.go`,
   `service_execute_dispatch.go`, `service_harness_instances.go`,
@@ -246,6 +269,12 @@ matching, metric fallback, and neutral status rows, while the public
 those rows onto the root API. The source and test lists below are retained as
 the historical extraction inventory and ordered implementation slice.
 
+Snapshot routing-health adaptation is complete as well. The root helper and
+`service_routing_snapshot_health_test.go` were deleted;
+`internal/serviceimpl.ProviderCooldownsFromSnapshotErrors` adapts snapshot
+metadata, while `internal/routehealth` owns and tests dispatchability and
+cooldown classification.
+
 - Source files:
   `service_route_attempts.go`, `service_route_leases.go`,
   `service_routestatus.go`.
@@ -253,7 +282,7 @@ the historical extraction inventory and ordered implementation slice.
   `service_aliveness_test.go`, `service_route_attempts_test.go`,
   `service_route_evidence_test.go`, `service_route_leases_test.go`,
   `service_routestatus_test.go`, `service_routing_errors_test.go`,
-  `service_routing_snapshot_health_test.go`, `service_routing_test.go`.
+  `service_routing_test.go`.
 
 #### Owner: `internal/quota`
 

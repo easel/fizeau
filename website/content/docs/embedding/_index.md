@@ -844,7 +844,7 @@ parameter types, and field-level documentation, follow the
 | `providerPreferenceForPolicy` | func (func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error)) |  |
 | `providerPreferenceForPolicyName` | func (func providerPreferenceForPolicyName(name string) string) |  |
 | `providerTypeUsesFixedBilling` | func (func providerTypeUsesFixedBilling(providerType string) bool) |  |
-| `providerUsesLiveDiscovery` | func (func providerUsesLiveDiscovery(providerType string) bool) |  |
+| `providerUsesLiveDiscovery` | func (func providerUsesLiveDiscovery(providerType string) bool) | providerUsesLiveDiscovery remains root request-policy wiring until the |
 | `publicExecuteRouteFailure` | func (func publicExecuteRouteFailure(failure *serviceimpl.ExecuteRouteFailure) error) |  |
 | `publicFilterReason` | func (func publicFilterReason(c routing.Candidate) string) | publicFilterReason maps the typed FilterReason emitted by the internal |
 | `publicRoutingError` | func (func publicRoutingError(err error, candidates []RouteCandidate, requestedPolicy ...string) error) |  |
