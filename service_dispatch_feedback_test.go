@@ -92,7 +92,6 @@ models:
 		},
 	})
 	svc.providerProbe = routehealth.NewProbeStore()
-	svc.catalog = newCatalogCache(catalogCacheOptions{})
 
 	// Seed both endpoints as alive so the first routing pass treats them
 	// equally — mirrors the start-of-day state where /v1/models probes
@@ -110,17 +109,6 @@ models:
 	// the canonical bragi:8020 i/o-timeout error shape.
 	dispatchErr := errors.New(`Post "http://aaa-down.example/v1/chat/completions": dial tcp 10.0.0.1:443: i/o timeout`)
 	svc.recordDispatchFailure("aaa-down", "", dispatchErr)
-
-	// Catalog cache: the feedback hook must have stamped UnreachableAt on
-	// the cache key derived from the provider's baseURL/apiKey/headers.
-	cacheKey := newCatalogCacheKey(aBaseURL, "", nil)
-	entry, ok := svc.catalog.snapshot(cacheKey)
-	if !ok {
-		t.Fatal("catalog cache missing entry for aaa-down after dispatch failure")
-	}
-	if entry.UnreachableAt.IsZero() {
-		t.Fatal("catalog cache UnreachableAt not stamped after dispatch failure feedback")
-	}
 
 	// Routing pass: aaa-down is now gated as endpoint_unreachable; zzz-up wins.
 	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{})

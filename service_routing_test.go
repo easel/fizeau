@@ -1727,7 +1727,6 @@ models:
 			opts:     ServiceOptions{ServiceConfig: sc},
 			registry: registry,
 			hub:      newSessionHub(),
-			catalog:  newCatalogCache(catalogCacheOptions{}),
 		}
 		cleanup := func() {
 			mediumSrv.Close()

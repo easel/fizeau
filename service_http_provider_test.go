@@ -296,18 +296,9 @@ func TestExecuteEndpointFirstRoutingIgnoresStaleCacheForDeadEndpoint(t *testing.
 		names:       []string{"dead", "live"},
 		defaultName: "dead",
 	}
-	rawSvc, err := New(ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
+	svc, err := New(ServiceOptions{ServiceConfig: sc, QuotaRefreshContext: canceledRefreshContext()})
 	if err != nil {
 		t.Fatalf("New: %v", err)
-	}
-	svc := rawSvc.(*service)
-
-	cacheKey := newCatalogCacheKey(dead.URL+"/v1", "", nil)
-	_, err = svc.catalog.Get(context.Background(), cacheKey, func(context.Context) ([]string, error) {
-		return []string{"Qwen3.6-35B-A3B-4bit"}, nil
-	})
-	if err != nil {
-		t.Fatalf("seed catalog cache: %v", err)
 	}
 
 	final := executeAndFinal(t, svc, ServiceExecuteRequest{
