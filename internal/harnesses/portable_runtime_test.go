@@ -163,6 +163,60 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 
 }
 
+func TestPortableRuntimeExactLibraryRootValidation(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 is Linux-only")
+	}
+	hostRoot := t.TempDir()
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	contribution := PortableRuntimeContribution{
+		ClosureClass: PortableRuntimeClosureDynamic,
+		Launch: PortableRuntimeLaunch{
+			EntrypointTarget:   "bin/tool",
+			LoaderTarget:       "loader/ld.so",
+			LibraryRootTargets: []string{"lib/exact"},
+		},
+		Assets: []PortableRuntimeAsset{
+			portableRuntimeTestAsset(hostRoot, "tool", "bin/tool", PortableRuntimeAssetExecutable, PortableRuntimePathFile, true),
+			portableRuntimeTestAsset(hostRoot, "loader", "loader/ld.so", PortableRuntimeAssetSupport, PortableRuntimePathFile, true),
+			portableRuntimeTestAsset(hostRoot, "libc", "lib/exact/libc.so", PortableRuntimeAssetSupport, PortableRuntimePathFile, false),
+		},
+	}
+	if _, err := NormalizePortableRuntimeContribution(target, contribution); err != nil {
+		t.Fatalf("exact support-file root rejected: %v", err)
+	}
+
+	for _, mutate := range []func(*PortableRuntimeAsset){
+		func(asset *PortableRuntimeAsset) { asset.Kind = PortableRuntimeAssetCredential },
+		func(asset *PortableRuntimeAsset) { asset.Executable = true },
+	} {
+		malformed := contribution
+		malformed.Assets = append([]PortableRuntimeAsset(nil), contribution.Assets...)
+		mutate(&malformed.Assets[2])
+		if _, err := NormalizePortableRuntimeContribution(target, malformed); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+			t.Fatalf("malformed exact library root error = %v, want closure incomplete", err)
+		}
+	}
+	mixed := contribution
+	mixed.Assets = append(append([]PortableRuntimeAsset(nil), contribution.Assets...),
+		portableRuntimeTestAsset(hostRoot, "credential", "lib/exact/credential.json", PortableRuntimeAssetCredential, PortableRuntimePathFile, false))
+	if _, err := NormalizePortableRuntimeContribution(target, mixed); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("mixed-state exact library root error = %v, want closure incomplete", err)
+	}
+	nested := contribution
+	nested.Assets = append([]PortableRuntimeAsset(nil), contribution.Assets...)
+	nested.Assets[2].Target = "lib/exact/nested/libc.so"
+	if _, err := NormalizePortableRuntimeContribution(target, nested); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("nested exact library root error = %v, want closure incomplete", err)
+	}
+	nestedTree := contribution
+	nestedTree.Assets = append(append([]PortableRuntimeAsset(nil), contribution.Assets...),
+		portableRuntimeTestAsset(hostRoot, "nested-tree", "lib/exact/nested", PortableRuntimeAssetSupport, PortableRuntimePathTree, false))
+	if _, err := NormalizePortableRuntimeContribution(target, nestedTree); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("nested-tree exact library root error = %v, want closure incomplete", err)
+	}
+}
+
 func TestPortableRuntimeValidationRejectsInvalidRecords(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("portable runtime v0.15 validation is Linux-only")

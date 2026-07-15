@@ -187,8 +187,8 @@ func validatePortableRuntimeLaunch(contribution PortableRuntimeContribution) err
 			return closureErrorAt("library root", i, "duplicates an earlier target")
 		}
 		seenRoots[root] = struct{}{}
-		if !portableRuntimeTreeCovers(contribution.Assets, root) {
-			return closureErrorAt("library root", i, "is not backed by a declared tree")
+		if !portableRuntimeLibraryRootBacked(contribution.Assets, root) {
+			return closureErrorAt("library root", i, "is not backed by declared library assets")
 		}
 	}
 	for i, argument := range launch.RuntimeArgs {
@@ -340,16 +340,21 @@ func portableRuntimeExecutableFile(assets []PortableRuntimeAsset, target string)
 	return ok && asset.Executable
 }
 
-func portableRuntimeTreeCovers(assets []PortableRuntimeAsset, target string) bool {
+func portableRuntimeLibraryRootBacked(assets []PortableRuntimeAsset, target string) bool {
+	exactFile := false
 	for _, asset := range assets {
-		if asset.PathKind != PortableRuntimePathTree {
-			continue
-		}
-		if asset.Target == target || strings.HasPrefix(target, asset.Target+"/") {
+		if asset.PathKind == PortableRuntimePathTree && (asset.Kind == PortableRuntimeAssetInstallTree || asset.Kind == PortableRuntimeAssetSupport) &&
+			(asset.Target == target || strings.HasPrefix(target, asset.Target+"/")) {
 			return true
 		}
+		if strings.HasPrefix(asset.Target, target+"/") {
+			if asset.PathKind != PortableRuntimePathFile || path.Dir(asset.Target) != target || asset.Kind != PortableRuntimeAssetSupport || asset.Executable {
+				return false
+			}
+			exactFile = true
+		}
 	}
-	return false
+	return exactFile
 }
 
 func closureError(message string, args ...any) error {

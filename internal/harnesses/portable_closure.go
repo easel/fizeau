@@ -12,9 +12,11 @@ import (
 	"hash"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/easel/fizeau/internal/safefs"
 )
@@ -27,12 +29,37 @@ type PortableRuntimeSourceTree struct {
 	Target string
 }
 
+// PortableRuntimeLibrarySearchRoot maps one host ELF search directory to one
+// private guest search directory. Unlike PortableRuntimeSourceTree, discovery
+// emits only the recursive dependency files actually selected from this root.
+type PortableRuntimeLibrarySearchRoot struct {
+	Source string
+	Target string
+}
+
 // PortableRuntimeLookupPolicy records the contributor's evidence about
 // runtime-only lookup (for example dlopen or plugin discovery). The zero value
 // is deliberately invalid so an unknown installed layout fails closed.
 type PortableRuntimeLookupPolicy string
 
 type portableRuntimeELFRole uint8
+
+type portableRuntimeELFFile struct {
+	*elf.File
+	descriptor *os.File
+}
+
+func (file *portableRuntimeELFFile) Close() error {
+	if file == nil {
+		return nil
+	}
+	elfErr := file.File.Close()
+	descriptorErr := file.descriptor.Close()
+	if elfErr != nil {
+		return elfErr
+	}
+	return descriptorErr
+}
 
 const (
 	portableRuntimeELFExecutable portableRuntimeELFRole = iota + 1
@@ -60,15 +87,20 @@ type PortableRuntimeStaticClosureRequest struct {
 }
 
 // PortableRuntimeDynamicClosureRequest describes a recognized dynamically
-// linked Linux executable layout. LibraryRoots are searched in order, which is
-// also the order retained in the loader's --library-path recipe.
+// linked Linux executable layout. Tree-backed LibraryRoots are searched in
+// order. ExactLibraryRoots require one unique candidate for every dependency;
+// their original order is retained after unused roots are removed.
 type PortableRuntimeDynamicClosureRequest struct {
 	EntrypointSource string
 	EntrypointTarget string
 	LoaderTarget     string
 	LibraryRoots     []PortableRuntimeSourceTree
-	RuntimeLookup    PortableRuntimeLookupPolicy
-	RuntimeTrees     []PortableRuntimeSourceTree
+	// ExactLibraryRoots emit only the recursive DT_NEEDED files selected from
+	// unique candidates. Exactly one of LibraryRoots and ExactLibraryRoots must
+	// be set.
+	ExactLibraryRoots []PortableRuntimeLibrarySearchRoot
+	RuntimeLookup     PortableRuntimeLookupPolicy
+	RuntimeTrees      []PortableRuntimeSourceTree
 }
 
 // PortableRuntimeInterpretedClosureRequest describes a recognized launcher,
@@ -81,6 +113,7 @@ type PortableRuntimeInterpretedClosureRequest struct {
 	InterpreterTarget string
 	LoaderTarget      string
 	LibraryRoots      []PortableRuntimeSourceTree
+	ExactLibraryRoots []PortableRuntimeLibrarySearchRoot
 	PackageTrees      []PortableRuntimeSourceTree
 	RuntimeArgs       []string
 	RuntimeLookup     PortableRuntimeLookupPolicy
@@ -105,14 +138,14 @@ func AnalyzePortableRuntimeStaticClosure(ctx context.Context, target PortableRun
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0100 == 0 {
 		return PortableRuntimeContribution{}, closureError("static entrypoint is not an owner-executable regular file")
 	}
-	interpreter, err := portableRuntimeELFInterpreter(executable)
+	interpreter, err := portableRuntimeELFInterpreter(executable.File)
 	if err != nil {
 		return PortableRuntimeContribution{}, err
 	}
 	if interpreter != "" {
 		return PortableRuntimeContribution{}, closureError("static entrypoint has an ELF interpreter")
 	}
-	if err := validatePortableRuntimeELFDynamicLookup(executable, request.RuntimeLookup); err != nil {
+	if err := validatePortableRuntimeELFDynamicLookup(executable.File, request.RuntimeLookup); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
 	if libraries, libraryErr := executable.ImportedLibraries(); libraryErr != nil || len(libraries) != 0 {
@@ -149,8 +182,12 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
-	if len(request.LibraryRoots) == 0 || request.LoaderTarget == "" {
+	if request.LoaderTarget == "" {
 		return PortableRuntimeContribution{}, closureError("dynamic layout lacks explicit loader or library roots")
+	}
+	roots, exact, err := inspectPortableRuntimeLibraryRoots(request.LibraryRoots, request.ExactLibraryRoots)
+	if err != nil {
+		return PortableRuntimeContribution{}, err
 	}
 	if err := validatePortableRuntimeLookup(request.RuntimeLookup, request.RuntimeTrees); err != nil {
 		return PortableRuntimeContribution{}, err
@@ -164,7 +201,7 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 		closePortableRuntimeELF(executable)
 		return PortableRuntimeContribution{}, closureError("dynamic entrypoint is not an owner-executable regular file")
 	}
-	interpreter, err := portableRuntimeELFInterpreter(executable)
+	interpreter, err := portableRuntimeELFInterpreter(executable.File)
 	if err != nil {
 		closePortableRuntimeELF(executable)
 		return PortableRuntimeContribution{}, err
@@ -178,12 +215,8 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 		return PortableRuntimeContribution{}, closureError("ELF loader does not support the portable launch recipe")
 	}
 
-	roots, err := inspectPortableRuntimeRoots(request.LibraryRoots)
+	resolvedLibraries, err := resolvePortableRuntimeELFClosure(ctx, executable, target, roots, request.RuntimeLookup)
 	if err != nil {
-		closePortableRuntimeELF(executable)
-		return PortableRuntimeContribution{}, err
-	}
-	if err := resolvePortableRuntimeELFClosure(ctx, executable, target, roots, request.RuntimeLookup); err != nil {
 		closePortableRuntimeELF(executable)
 		return PortableRuntimeContribution{}, err
 	}
@@ -199,12 +232,28 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 		closePortableRuntimeELF(loaderELF)
 		return PortableRuntimeContribution{}, closureError("ELF loader is not owner-executable")
 	}
-	if err := resolvePortableRuntimeELFClosure(ctx, loaderELF, target, roots, request.RuntimeLookup); err != nil {
+	if portableRuntimeELFHasInterpreter(loaderELF.File) {
+		closePortableRuntimeELF(loaderELF)
+		return PortableRuntimeContribution{}, closureError("ELF loader declares an unsupported interpreter")
+	}
+	loaderLibraries, err := resolvePortableRuntimeELFClosure(ctx, loaderELF, target, roots, request.RuntimeLookup)
+	if err != nil {
+		closePortableRuntimeELF(loaderELF)
+		return PortableRuntimeContribution{}, err
+	}
+	resolvedLibraries, err = mergePortableRuntimeResolvedLibraries(resolvedLibraries, loaderLibraries)
+	if err != nil {
 		closePortableRuntimeELF(loaderELF)
 		return PortableRuntimeContribution{}, err
 	}
 	if err := loaderELF.Close(); err != nil {
 		return PortableRuntimeContribution{}, closureError("could not finish inspecting ELF loader")
+	}
+	if exact {
+		roots = portableRuntimeUsedExactRoots(roots, resolvedLibraries)
+		if len(roots) == 0 {
+			return PortableRuntimeContribution{}, closureError("exact library closure resolved no library roots")
+		}
 	}
 
 	entryDigest, err := portableRuntimeDigestInspectedFile(entrypoint, info)
@@ -219,7 +268,11 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 		{Kind: PortableRuntimeAssetExecutable, PathKind: PortableRuntimePathFile, Source: entrypoint, Target: request.EntrypointTarget, ContentSHA256: entryDigest, Executable: true},
 		{Kind: PortableRuntimeAssetSupport, PathKind: PortableRuntimePathFile, Source: loader, Target: request.LoaderTarget, ContentSHA256: loaderDigest, Executable: true},
 	}
-	assets, err = appendInspectedPortableRuntimeRoots(ctx, assets, roots, PortableRuntimeAssetInstallTree)
+	if exact {
+		assets, err = appendPortableRuntimeResolvedLibraries(ctx, assets, resolvedLibraries)
+	} else {
+		assets, err = appendInspectedPortableRuntimeRoots(ctx, assets, roots, PortableRuntimeAssetInstallTree)
+	}
 	if err != nil {
 		return PortableRuntimeContribution{}, err
 	}
@@ -271,18 +324,20 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		closePortableRuntimeELF(interpreterELF)
 		return PortableRuntimeContribution{}, closureError("interpreter is not owner-executable")
 	}
-	elfInterpreter, err := portableRuntimeELFInterpreter(interpreterELF)
+	elfInterpreter, err := portableRuntimeELFInterpreter(interpreterELF.File)
 	if err != nil {
 		closePortableRuntimeELF(interpreterELF)
 		return PortableRuntimeContribution{}, err
 	}
 
 	var roots []portableRuntimeInspectedRoot
+	var resolvedLibraries []portableRuntimeResolvedLibrary
+	exactLibraries := false
 	var loader string
-	var loaderELF *elf.File
+	var loaderELF *portableRuntimeELFFile
 	var loaderInfo os.FileInfo
 	if elfInterpreter == "" {
-		if request.LoaderTarget != "" || len(request.LibraryRoots) != 0 {
+		if request.LoaderTarget != "" || len(request.LibraryRoots) != 0 || len(request.ExactLibraryRoots) != 0 {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("static interpreter layout declares dynamic loader state")
 		}
@@ -290,12 +345,12 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("static interpreter has an unverifiable dynamic dependency table")
 		}
-		if err := validatePortableRuntimeELFDynamicLookup(interpreterELF, request.RuntimeLookup); err != nil {
+		if err := validatePortableRuntimeELFDynamicLookup(interpreterELF.File, request.RuntimeLookup); err != nil {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, err
 		}
 	} else {
-		if request.LoaderTarget == "" || len(request.LibraryRoots) == 0 {
+		if request.LoaderTarget == "" {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("dynamic interpreter layout lacks explicit loader or library roots")
 		}
@@ -303,12 +358,13 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("interpreter loader does not support the portable launch recipe")
 		}
-		roots, err = inspectPortableRuntimeRoots(request.LibraryRoots)
+		roots, exactLibraries, err = inspectPortableRuntimeLibraryRoots(request.LibraryRoots, request.ExactLibraryRoots)
 		if err != nil {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, err
 		}
-		if err := resolvePortableRuntimeELFClosure(ctx, interpreterELF, target, roots, request.RuntimeLookup); err != nil {
+		resolvedLibraries, err = resolvePortableRuntimeELFClosure(ctx, interpreterELF, target, roots, request.RuntimeLookup)
+		if err != nil {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, err
 		}
@@ -322,7 +378,19 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("interpreter ELF loader is not owner-executable")
 		}
-		if err := resolvePortableRuntimeELFClosure(ctx, loaderELF, target, roots, request.RuntimeLookup); err != nil {
+		if portableRuntimeELFHasInterpreter(loaderELF.File) {
+			closePortableRuntimeELF(loaderELF)
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, closureError("interpreter ELF loader declares an unsupported interpreter")
+		}
+		loaderLibraries, resolveErr := resolvePortableRuntimeELFClosure(ctx, loaderELF, target, roots, request.RuntimeLookup)
+		if resolveErr != nil {
+			closePortableRuntimeELF(loaderELF)
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, resolveErr
+		}
+		resolvedLibraries, err = mergePortableRuntimeResolvedLibraries(resolvedLibraries, loaderLibraries)
+		if err != nil {
 			closePortableRuntimeELF(loaderELF)
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, err
@@ -330,6 +398,13 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		if err := loaderELF.Close(); err != nil {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("could not finish inspecting interpreter loader")
+		}
+		if exactLibraries {
+			roots = portableRuntimeUsedExactRoots(roots, resolvedLibraries)
+			if len(roots) == 0 {
+				closePortableRuntimeELF(interpreterELF)
+				return PortableRuntimeContribution{}, closureError("exact interpreter closure resolved no library roots")
+			}
 		}
 	}
 	if err := interpreterELF.Close(); err != nil {
@@ -354,7 +429,11 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			return PortableRuntimeContribution{}, digestErr
 		}
 		assets = append(assets, PortableRuntimeAsset{Kind: PortableRuntimeAssetSupport, PathKind: PortableRuntimePathFile, Source: loader, Target: request.LoaderTarget, ContentSHA256: loaderDigest, Executable: true})
-		assets, err = appendInspectedPortableRuntimeRoots(ctx, assets, roots, PortableRuntimeAssetInstallTree)
+		if exactLibraries {
+			assets, err = appendPortableRuntimeResolvedLibraries(ctx, assets, resolvedLibraries)
+		} else {
+			assets, err = appendInspectedPortableRuntimeRoots(ctx, assets, roots, PortableRuntimeAssetInstallTree)
+		}
 		if err != nil {
 			return PortableRuntimeContribution{}, err
 		}
@@ -545,6 +624,14 @@ type portableRuntimeInspectedRoot struct {
 	source string
 	target string
 	digest string
+	exact  bool
+}
+
+type portableRuntimeResolvedLibrary struct {
+	source string
+	target string
+	info   os.FileInfo
+	digest string
 }
 
 type portableRuntimeTreeRecord struct {
@@ -575,6 +662,55 @@ func inspectPortableRuntimeRoots(mappings []PortableRuntimeSourceTree) ([]portab
 	return roots, nil
 }
 
+func inspectPortableRuntimeLibraryRoots(treeMappings []PortableRuntimeSourceTree, exactMappings []PortableRuntimeLibrarySearchRoot) ([]portableRuntimeInspectedRoot, bool, error) {
+	if len(treeMappings) == 0 && len(exactMappings) == 0 {
+		return nil, false, closureError("dynamic layout lacks explicit library roots")
+	}
+	if len(treeMappings) != 0 && len(exactMappings) != 0 {
+		return nil, false, closureError("dynamic layout mixes tree and exact library roots")
+	}
+	if len(treeMappings) != 0 {
+		roots, err := inspectPortableRuntimeRoots(treeMappings)
+		return roots, false, err
+	}
+
+	roots := make([]portableRuntimeInspectedRoot, len(exactMappings))
+	seenTargets := make(map[string]struct{}, len(exactMappings))
+	for i, mapping := range exactMappings {
+		if !validPortableRuntimeTargetPath(mapping.Target) {
+			return nil, false, closureErrorAt("exact library root", i, "has invalid target")
+		}
+		if _, exists := seenTargets[mapping.Target]; exists {
+			return nil, false, closureErrorAt("exact library root", i, "duplicates an earlier target")
+		}
+		for previous := range seenTargets {
+			if strings.HasPrefix(mapping.Target, previous+"/") || strings.HasPrefix(previous, mapping.Target+"/") {
+				return nil, false, closureErrorAt("exact library root", i, "overlaps an earlier target")
+			}
+		}
+		seenTargets[mapping.Target] = struct{}{}
+		source, _, err := inspectPortableRuntimeTreeRoot(mapping.Source)
+		if err != nil {
+			return nil, false, closureErrorAt("exact library root", i, "is not a stable regular directory")
+		}
+		roots[i] = portableRuntimeInspectedRoot{source: source, target: mapping.Target, exact: true}
+	}
+	return roots, true, nil
+}
+
+func portableRuntimeUsedExactRoots(roots []portableRuntimeInspectedRoot, libraries []portableRuntimeResolvedLibrary) []portableRuntimeInspectedRoot {
+	used := make([]portableRuntimeInspectedRoot, 0, len(roots))
+	for _, root := range roots {
+		for _, library := range libraries {
+			if strings.HasPrefix(library.target, root.target+"/") {
+				used = append(used, root)
+				break
+			}
+		}
+	}
+	return used
+}
+
 func inspectPortableRuntimeTreeRoot(source string) (string, os.FileInfo, error) {
 	if !validPortableRuntimeSource(source) {
 		return "", nil, closureError("tree has invalid source path")
@@ -594,7 +730,11 @@ func inspectPortableRuntimeTreeRoot(source string) (string, os.FileInfo, error) 
 	return filepath.Clean(resolved), info, nil
 }
 
-func inspectPortableRuntimeELF(ctx context.Context, source string, target PortableRuntimeTarget, role portableRuntimeELFRole) (string, os.FileInfo, *elf.File, error) {
+func inspectPortableRuntimeELF(ctx context.Context, source string, target PortableRuntimeTarget, role portableRuntimeELFRole) (string, os.FileInfo, *portableRuntimeELFFile, error) {
+	return inspectPortableRuntimeELFWithHook(ctx, source, target, role, nil)
+}
+
+func inspectPortableRuntimeELFWithHook(ctx context.Context, source string, target PortableRuntimeTarget, role portableRuntimeELFRole, afterPathInspection func()) (string, os.FileInfo, *portableRuntimeELFFile, error) {
 	if err := checkPortableRuntimeContext(ctx); err != nil {
 		return "", nil, nil, err
 	}
@@ -602,10 +742,24 @@ func inspectPortableRuntimeELF(ctx context.Context, source string, target Portab
 	if err != nil {
 		return "", nil, nil, err
 	}
-	file, err := safefs.OpenELF(resolved)
+	if afterPathInspection != nil {
+		afterPathInspection()
+	}
+	descriptor, err := safefs.OpenRead(resolved)
 	if err != nil {
 		return "", nil, nil, closureError("installed layout is not a recognized Linux ELF file")
 	}
+	descriptorInfo, err := descriptor.Stat()
+	if err != nil || !samePortableRuntimeFile(info, descriptorInfo) {
+		_ = descriptor.Close()
+		return "", nil, nil, closureError("installed ELF changed before it could be inspected")
+	}
+	parsed, err := elf.NewFile(descriptor)
+	if err != nil {
+		_ = descriptor.Close()
+		return "", nil, nil, closureError("installed layout is not a recognized Linux ELF file")
+	}
+	file := &portableRuntimeELFFile{File: parsed, descriptor: descriptor}
 	if file.OSABI != elf.ELFOSABI_NONE && file.OSABI != elf.ELFOSABI_LINUX {
 		closePortableRuntimeELF(file)
 		return "", nil, nil, closureError("ELF operating-system ABI is not Linux-compatible")
@@ -624,9 +778,9 @@ func inspectPortableRuntimeELF(ctx context.Context, source string, target Portab
 	switch role {
 	case portableRuntimeELFExecutable:
 		// Linux PIE executables use ET_DYN even when they have no PT_INTERP.
-		validType = (file.Type == elf.ET_EXEC || file.Type == elf.ET_DYN) && portableRuntimeELFHasExecutableEntry(file)
+		validType = (file.Type == elf.ET_EXEC || file.Type == elf.ET_DYN) && portableRuntimeELFHasExecutableEntry(file.File)
 	case portableRuntimeELFLoader:
-		validType = file.Type == elf.ET_DYN && portableRuntimeELFHasExecutableEntry(file)
+		validType = file.Type == elf.ET_DYN && portableRuntimeELFHasExecutableEntry(file.File)
 	case portableRuntimeELFDependency:
 		validType = file.Type == elf.ET_DYN
 	}
@@ -634,7 +788,7 @@ func inspectPortableRuntimeELF(ctx context.Context, source string, target Portab
 		closePortableRuntimeELF(file)
 		return "", nil, nil, closureError("ELF file has an unsupported executable type")
 	}
-	return resolved, info, file, nil
+	return resolved, descriptorInfo, file, nil
 }
 
 func portableRuntimeELFHasExecutableEntry(file *elf.File) bool {
@@ -649,7 +803,7 @@ func portableRuntimeELFHasExecutableEntry(file *elf.File) bool {
 	return false
 }
 
-func closePortableRuntimeELF(file *elf.File) {
+func closePortableRuntimeELF(file *portableRuntimeELFFile) {
 	if file != nil {
 		_ = file.Close()
 	}
@@ -735,47 +889,111 @@ func portableRuntimeELFHasInterpreter(file *elf.File) bool {
 	return false
 }
 
-func resolvePortableRuntimeELFClosure(ctx context.Context, entrypoint *elf.File, target PortableRuntimeTarget, roots []portableRuntimeInspectedRoot, lookup PortableRuntimeLookupPolicy) error {
-	queue := []*elf.File{entrypoint}
-	opened := make([]*elf.File, 0)
+func resolvePortableRuntimeELFClosure(ctx context.Context, entrypoint *portableRuntimeELFFile, target PortableRuntimeTarget, roots []portableRuntimeInspectedRoot, lookup PortableRuntimeLookupPolicy) ([]portableRuntimeResolvedLibrary, error) {
+	queue := []*portableRuntimeELFFile{entrypoint}
+	opened := make([]*portableRuntimeELFFile, 0)
 	defer func() {
 		for _, file := range opened {
 			_ = file.Close()
 		}
 	}()
-	seen := make(map[string]struct{})
+	seen := make(map[string]portableRuntimeResolvedLibrary)
+	resolvedByTarget := make(map[string]portableRuntimeResolvedLibrary)
 	for len(queue) != 0 {
 		if err := checkPortableRuntimeContext(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		current := queue[0]
 		queue = queue[1:]
-		if err := validatePortableRuntimeELFDynamicLookup(current, lookup); err != nil {
-			return err
+		if err := validatePortableRuntimeELFDynamicLookup(current.File, lookup); err != nil {
+			return nil, err
 		}
 		libraries, err := current.ImportedLibraries()
 		if err != nil {
-			return closureError("ELF dependency table cannot be verified")
+			return nil, closureError("ELF dependency table cannot be verified")
 		}
 		sort.Strings(libraries)
 		for _, library := range libraries {
-			if library == "" || filepath.Base(library) != library || strings.ContainsRune(library, '\x00') {
-				return closureError("ELF dependency name is invalid")
+			if library == "" || library == "." || library == ".." || !utf8.ValidString(library) || filepath.Base(library) != library || strings.ContainsAny(library, "\\\x00") {
+				return nil, closureError("ELF dependency name is invalid")
 			}
-			resolved, err := resolvePortableRuntimeLibrary(library, roots)
+			selected, rootIndex, err := resolvePortableRuntimeLibrary(library, roots)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if _, exists := seen[resolved]; exists {
+			libraryTarget := path.Join(roots[rootIndex].target, library)
+			if previous, exists := resolvedByTarget[libraryTarget]; exists && previous.source != selected {
+				return nil, closureError("ELF dependency target is ambiguous")
+			}
+			if inspected, exists := seen[selected]; exists {
+				if _, recorded := resolvedByTarget[libraryTarget]; !recorded {
+					inspected.target = libraryTarget
+					resolvedByTarget[libraryTarget] = inspected
+				}
 				continue
 			}
-			seen[resolved] = struct{}{}
-			_, _, dependency, err := inspectPortableRuntimeELF(ctx, resolved, target, portableRuntimeELFDependency)
-			if err != nil {
-				return err
+			beforeInfo, statErr := os.Lstat(selected)
+			if statErr != nil || !beforeInfo.Mode().IsRegular() || beforeInfo.Mode()&os.ModeSymlink != 0 {
+				return nil, closureError("ELF dependency changed before inspection")
 			}
+			beforeDigest, digestErr := portableRuntimeDigestInspectedFile(selected, beforeInfo)
+			if digestErr != nil {
+				return nil, digestErr
+			}
+			resolved, info, dependency, err := inspectPortableRuntimeELF(ctx, selected, target, portableRuntimeELFDependency)
+			if err != nil {
+				return nil, err
+			}
+			if resolved != selected || resolved == roots[rootIndex].source || !strings.HasPrefix(resolved, roots[rootIndex].source+string(filepath.Separator)) {
+				closePortableRuntimeELF(dependency)
+				return nil, closureError("ELF dependency changed or escaped its declared library root")
+			}
+			if err := validatePortableRuntimeELFDependencyIdentity(dependency.File, library); err != nil {
+				closePortableRuntimeELF(dependency)
+				return nil, err
+			}
+			afterDigest, digestErr := portableRuntimeDigestInspectedFile(resolved, info)
+			if digestErr != nil || afterDigest != beforeDigest {
+				closePortableRuntimeELF(dependency)
+				return nil, closureError("ELF dependency changed during inspection")
+			}
+			inspected := portableRuntimeResolvedLibrary{source: resolved, target: libraryTarget, info: info, digest: afterDigest}
+			seen[selected] = inspected
+			resolvedByTarget[libraryTarget] = inspected
 			opened = append(opened, dependency)
 			queue = append(queue, dependency)
+		}
+	}
+	resolvedLibraries := make([]portableRuntimeResolvedLibrary, 0, len(resolvedByTarget))
+	for _, library := range resolvedByTarget {
+		resolvedLibraries = append(resolvedLibraries, library)
+	}
+	sort.Slice(resolvedLibraries, func(i, j int) bool { return resolvedLibraries[i].target < resolvedLibraries[j].target })
+	return resolvedLibraries, nil
+}
+
+func validatePortableRuntimeELFDependencyIdentity(file *elf.File, requestedName string) error {
+	sonames, err := file.DynString(elf.DT_SONAME)
+	if err != nil {
+		return closureError("ELF dependency SONAME cannot be verified")
+	}
+	if len(sonames) > 1 || len(sonames) == 1 && sonames[0] != requestedName {
+		return closureError("ELF dependency SONAME does not match its requested name")
+	}
+	// Some executable shared objects, notably glibc's libc, legitimately carry
+	// PT_INTERP. They are valid dependencies only when an exact matching SONAME
+	// proves that the file is intended to be loaded as this library. A renamed
+	// PIE normally has no SONAME and is rejected here.
+	if portableRuntimeELFHasInterpreter(file) && len(sonames) != 1 {
+		return closureError("ELF dependency is an executable without a matching SONAME")
+	}
+	flags, err := file.DynValue(elf.DT_FLAGS_1)
+	if err != nil {
+		return closureError("ELF dependency flags cannot be verified")
+	}
+	for _, value := range flags {
+		if value&uint64(elf.DF_1_PIE) != 0 {
+			return closureError("ELF dependency is marked as a position-independent executable")
 		}
 	}
 	return nil
@@ -822,8 +1040,10 @@ func portableRuntimeHasPluginLookupSymbol(symbols []elf.ImportedSymbol) bool {
 	return false
 }
 
-func resolvePortableRuntimeLibrary(name string, roots []portableRuntimeInspectedRoot) (string, error) {
-	for _, root := range roots {
+func resolvePortableRuntimeLibrary(name string, roots []portableRuntimeInspectedRoot) (string, int, error) {
+	var selected string
+	selectedRoot := 0
+	for i, root := range roots {
 		candidate := filepath.Join(root.source, name)
 		resolved, err := filepath.EvalSymlinks(candidate)
 		if err != nil {
@@ -835,10 +1055,20 @@ func resolvePortableRuntimeLibrary(name string, roots []portableRuntimeInspected
 		}
 		info, err := os.Lstat(resolved)
 		if err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 {
-			return resolved, nil
+			if !root.exact {
+				return resolved, i, nil
+			}
+			if selected != "" {
+				return "", 0, closureError("ELF dependency is ambiguous across exact library roots")
+			}
+			selected = resolved
+			selectedRoot = i
 		}
 	}
-	return "", closureError("ELF dependency is unresolved in declared library roots")
+	if selected != "" {
+		return selected, selectedRoot, nil
+	}
+	return "", 0, closureError("ELF dependency is unresolved in declared library roots")
 }
 
 func portableRuntimeELFMachine(goarch string) elf.Machine {
@@ -930,6 +1160,53 @@ func appendPortableRuntimeTrees(ctx context.Context, assets []PortableRuntimeAss
 		return nil, err
 	}
 	return appendInspectedPortableRuntimeRoots(ctx, assets, roots, kind)
+}
+
+func mergePortableRuntimeResolvedLibraries(left, right []portableRuntimeResolvedLibrary) ([]portableRuntimeResolvedLibrary, error) {
+	merged := make(map[string]portableRuntimeResolvedLibrary, len(left)+len(right))
+	for _, library := range append(append([]portableRuntimeResolvedLibrary(nil), left...), right...) {
+		if previous, exists := merged[library.target]; exists {
+			if previous.source != library.source {
+				return nil, closureError("ELF dependency target is ambiguous")
+			}
+			continue
+		}
+		merged[library.target] = library
+	}
+	result := make([]portableRuntimeResolvedLibrary, 0, len(merged))
+	for _, library := range merged {
+		result = append(result, library)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].target < result[j].target })
+	return result, nil
+}
+
+func appendPortableRuntimeResolvedLibraries(ctx context.Context, assets []PortableRuntimeAsset, libraries []portableRuntimeResolvedLibrary) ([]PortableRuntimeAsset, error) {
+	for _, library := range libraries {
+		if err := checkPortableRuntimeContext(ctx); err != nil {
+			return nil, err
+		}
+		for _, asset := range assets {
+			if asset.Target == library.target {
+				return nil, closureError("ELF dependency target collides with another asset")
+			}
+		}
+		digest, err := portableRuntimeDigestInspectedFile(library.source, library.info)
+		if err != nil {
+			return nil, err
+		}
+		if digest != library.digest {
+			return nil, closureError("ELF dependency changed after inspection")
+		}
+		assets = append(assets, PortableRuntimeAsset{
+			Kind:          PortableRuntimeAssetSupport,
+			PathKind:      PortableRuntimePathFile,
+			Source:        library.source,
+			Target:        library.target,
+			ContentSHA256: digest,
+		})
+	}
+	return assets, nil
 }
 
 func appendInspectedPortableRuntimeRoots(ctx context.Context, assets []PortableRuntimeAsset, roots []portableRuntimeInspectedRoot, kind PortableRuntimeAssetKind) ([]PortableRuntimeAsset, error) {

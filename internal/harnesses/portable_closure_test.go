@@ -144,6 +144,220 @@ func TestPortableRuntimeDynamicClosure(t *testing.T) {
 	}
 }
 
+func TestPortableRuntimeDynamicExactLibraryClosure(t *testing.T) {
+	requirePortableRuntimeLinux(t)
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	executable, loader := findPortableRuntimeDynamicFixture(t)
+	libraryRoot := collectPortableRuntimeLibraries(t, executable, loader)
+	request := PortableRuntimeDynamicClosureRequest{
+		EntrypointSource: executable,
+		EntrypointTarget: "exact/bin/tool",
+		LoaderTarget:     "exact/loader/" + filepath.Base(loader),
+		ExactLibraryRoots: []PortableRuntimeLibrarySearchRoot{{
+			Source: libraryRoot,
+			Target: "exact/lib",
+		}},
+		RuntimeLookup: PortableRuntimeLookupClosed,
+	}
+
+	contribution, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, request)
+	if err != nil {
+		t.Fatalf("AnalyzePortableRuntimeDynamicClosure() exact error = %v", err)
+	}
+	if got, want := contribution.Launch.LibraryRootTargets, []string{"exact/lib"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("exact library roots = %q, want %q", got, want)
+	}
+	libraryFiles := 0
+	emittedLibraries := make(map[string]struct{})
+	for _, asset := range contribution.Assets {
+		if asset.PathKind == PortableRuntimePathTree {
+			t.Fatalf("exact closure emitted whole tree asset: %#v", asset)
+		}
+		if strings.HasPrefix(asset.Target, "exact/lib/") {
+			libraryFiles++
+			emittedLibraries[strings.TrimPrefix(asset.Target, "exact/lib/")] = struct{}{}
+			if asset.Kind != PortableRuntimeAssetSupport || asset.ContentSHA256 == "" {
+				t.Fatalf("exact library asset = %#v, want digest-bound support file", asset)
+			}
+		}
+	}
+	if libraryFiles == 0 {
+		t.Fatal("exact closure emitted no recursive library files")
+	}
+	expectedEntries, err := os.ReadDir(libraryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range expectedEntries {
+		if _, exists := emittedLibraries[entry.Name()]; !exists {
+			t.Fatalf("recursive executable/loader dependency %q was not emitted", entry.Name())
+		}
+	}
+	command, arguments, err := BuildPortableRuntimeLaunchCommand("/runtime", contribution, []string{"request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command != "/runtime/"+request.LoaderTarget || !reflect.DeepEqual(arguments, []string{
+		"--library-path", "/runtime/exact/lib", "/runtime/exact/bin/tool", "request",
+	}) {
+		t.Fatalf("exact loader recipe = %q %q", command, arguments)
+	}
+
+	assertRedactedFailure := func(t *testing.T, got error, forbidden ...string) {
+		t.Helper()
+		if !errors.Is(got, ErrPortableRuntimeClosureIncomplete) {
+			t.Fatalf("error = %v, want closure incomplete", got)
+		}
+		for _, value := range forbidden {
+			if value != "" && strings.Contains(got.Error(), value) {
+				t.Fatalf("error leaked %q: %v", value, got)
+			}
+		}
+	}
+
+	t.Run("missing dependency", func(t *testing.T) {
+		missing := request
+		missingRoot := filepath.Join(t.TempDir(), "account-secret-missing-root")
+		if err := os.Mkdir(missingRoot, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		missing.ExactLibraryRoots = []PortableRuntimeLibrarySearchRoot{{Source: missingRoot, Target: "exact/lib"}}
+		_, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, missing)
+		assertRedactedFailure(t, err, missingRoot)
+	})
+
+	t.Run("ambiguous SONAME", func(t *testing.T) {
+		ambiguous := request
+		secondRoot := collectPortableRuntimeLibraries(t, executable, loader)
+		ambiguous.ExactLibraryRoots = append(ambiguous.ExactLibraryRoots,
+			PortableRuntimeLibrarySearchRoot{Source: secondRoot, Target: "exact/lib-second"})
+		_, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, ambiguous)
+		assertRedactedFailure(t, err, libraryRoot, secondRoot)
+	})
+
+	t.Run("wrong dependency type and architecture", func(t *testing.T) {
+		needed, err := firstPortableRuntimeNeeded(executable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, mutate := range []func([]byte, binary.ByteOrder){
+			func(header []byte, order binary.ByteOrder) { order.PutUint16(header[16:18], uint16(elf.ET_EXEC)) },
+			func(header []byte, order binary.ByteOrder) { order.PutUint16(header[18:20], uint16(elf.EM_NONE)) },
+		} {
+			bad := request
+			badRoot := collectPortableRuntimeLibraries(t, executable, loader)
+			mutatePortableRuntimeELFHeader(t, filepath.Join(badRoot, needed), mutate)
+			bad.ExactLibraryRoots = []PortableRuntimeLibrarySearchRoot{{Source: badRoot, Target: "exact/lib"}}
+			_, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, bad)
+			assertRedactedFailure(t, err, badRoot)
+		}
+
+		pieRoot := collectPortableRuntimeLibraries(t, executable, loader)
+		pie := buildPortableRuntimePIEFixture(t, needed)
+		pieContents, err := os.ReadFile(pie)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(pieRoot, needed), pieContents, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		pieRequest := request
+		pieRequest.ExactLibraryRoots = []PortableRuntimeLibrarySearchRoot{{Source: pieRoot, Target: "exact/lib"}}
+		_, err = AnalyzePortableRuntimeDynamicClosure(context.Background(), target, pieRequest)
+		assertRedactedFailure(t, err, pieRoot, pie)
+	})
+
+	t.Run("mutation after inspection", func(t *testing.T) {
+		mutableRoot := collectPortableRuntimeLibraries(t, executable, loader)
+		roots, _, err := inspectPortableRuntimeLibraryRoots(nil, []PortableRuntimeLibrarySearchRoot{{Source: mutableRoot, Target: "exact/lib"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, executableELF, err := inspectPortableRuntimeELF(context.Background(), executable, target, portableRuntimeELFExecutable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		libraries, err := resolvePortableRuntimeELFClosure(context.Background(), executableELF, target, roots, PortableRuntimeLookupClosed)
+		_ = executableELF.Close()
+		if err != nil || len(libraries) == 0 {
+			t.Fatalf("resolve exact mutation fixture = %v, %d libraries", err, len(libraries))
+		}
+		secret := "mutated-library-secret"
+		if err := os.WriteFile(libraries[0].source, []byte(secret), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		_, err = appendPortableRuntimeResolvedLibraries(context.Background(), nil, libraries)
+		assertRedactedFailure(t, err, mutableRoot, libraries[0].source, secret)
+
+		raced := filepath.Join(t.TempDir(), "account-secret-open-race")
+		original, err := os.ReadFile(executable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(raced, original, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		replacement := filepath.Join(t.TempDir(), "replacement")
+		if err := os.WriteFile(replacement, original, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		_, _, opened, err := inspectPortableRuntimeELFWithHook(context.Background(), raced, target, portableRuntimeELFExecutable, func() {
+			if renameErr := os.Rename(replacement, raced); renameErr != nil {
+				t.Fatal(renameErr)
+			}
+		})
+		closePortableRuntimeELF(opened)
+		assertRedactedFailure(t, err, raced)
+	})
+
+	t.Run("target and mode collisions", func(t *testing.T) {
+		duplicateTarget := request
+		duplicateTarget.ExactLibraryRoots = append(duplicateTarget.ExactLibraryRoots,
+			PortableRuntimeLibrarySearchRoot{Source: libraryRoot, Target: "exact/lib"})
+		_, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, duplicateTarget)
+		assertRedactedFailure(t, err)
+
+		mixed := request
+		mixed.LibraryRoots = []PortableRuntimeSourceTree{{Source: libraryRoot, Target: "exact/tree"}}
+		_, err = AnalyzePortableRuntimeDynamicClosure(context.Background(), target, mixed)
+		assertRedactedFailure(t, err)
+
+		needed, neededErr := firstPortableRuntimeNeeded(executable)
+		if neededErr != nil {
+			t.Fatal(neededErr)
+		}
+		collision := request
+		collision.LoaderTarget = "exact/lib/" + needed
+		_, err = AnalyzePortableRuntimeDynamicClosure(context.Background(), target, collision)
+		assertRedactedFailure(t, err)
+	})
+
+	t.Run("runtime lookup and RPATH", func(t *testing.T) {
+		unknownLookup := request
+		unknownLookup.RuntimeLookup = ""
+		_, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, unknownLookup)
+		assertRedactedFailure(t, err)
+
+		rpathExecutable := buildPortableRuntimeRPATHFixture(t)
+		rpathFile, err := elf.Open(rpathExecutable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rpathLoader, err := portableRuntimeELFInterpreter(rpathFile)
+		_ = rpathFile.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rpathRoot := collectPortableRuntimeLibraries(t, rpathExecutable, rpathLoader)
+		rpathRequest := request
+		rpathRequest.EntrypointSource = rpathExecutable
+		rpathRequest.LoaderTarget = "exact/loader/" + filepath.Base(rpathLoader)
+		rpathRequest.ExactLibraryRoots = []PortableRuntimeLibrarySearchRoot{{Source: rpathRoot, Target: "exact/lib"}}
+		_, err = AnalyzePortableRuntimeDynamicClosure(context.Background(), target, rpathRequest)
+		assertRedactedFailure(t, err, rpathExecutable, "account-secret-rpath")
+	})
+}
+
 func TestPortableRuntimeInterpretedClosure(t *testing.T) {
 	requirePortableRuntimeLinux(t)
 	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
@@ -443,6 +657,36 @@ func buildPortableRuntimeStaticFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return resolved
+}
+
+func buildPortableRuntimeRPATHFixture(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	source := filepath.Join(directory, "main.c")
+	if err := os.WriteFile(source, []byte("int main(void) { return 0; }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(directory, "fixture")
+	command := exec.Command("cc", "-Wl,-rpath,/account-secret-rpath", "-o", executable, source)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build RPATH ELF fixture: %v: %s", err, output)
+	}
+	return executable
+}
+
+func buildPortableRuntimePIEFixture(t *testing.T, soname string) string {
+	t.Helper()
+	directory := t.TempDir()
+	source := filepath.Join(directory, "main.c")
+	if err := os.WriteFile(source, []byte("int main(void) { return 0; }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(directory, "fixture")
+	command := exec.Command("cc", "-fPIE", "-pie", "-Wl,-soname,"+soname, "-o", executable, source)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build PIE ELF fixture: %v: %s", err, output)
+	}
+	return executable
 }
 
 func copyPortableRuntimeELFFixture(t *testing.T, source string) string {

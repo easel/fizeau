@@ -587,7 +587,7 @@ The supported v0.15 closure classes are mechanically distinct:
 | Class | Required discovery and evidence |
 |-------|---------------------------------|
 | `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
-| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into the private target tree. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless the containing install tree is included and its offline probe passes. |
+| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. |
 | `interpreted` | Include the launcher/script, interpreter, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
 
 Launch construction is exhaustive and does not use guest PATH, the copied
@@ -602,8 +602,10 @@ interpreted, dynamic interpreter:
              <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + request argv
 ```
 
-Every target in `Launch` MUST resolve to a declared asset or declared directory
-within an asset tree. The static/dynamic entrypoint plus every loader and
+Every target in `Launch` MUST resolve to a declared asset, a declared directory
+within an asset tree, or a private library directory implied by exact library
+file assets beneath it. Unused host search roots are not retained in the launch
+recipe. The static/dynamic entrypoint plus every loader and
 interpreter target are regular owner-executable files. An interpreted entrypoint may be a
 non-executable regular file because the bundled interpreter opens it directly.
 `RuntimeArgs` contains no placeholder, environment assignment, route selector,

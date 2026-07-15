@@ -556,7 +556,8 @@ packages only for the preparing process's Linux GOARCH. Darwin, Windows, and
 cross-target preparation are later decisions. A PATH result, resolved symlink,
 or platform label is not enough. Each contributor classifies one static,
 dynamic, or interpreted entrypoint, content-addresses the complete
-loader/interpreter, library, install-tree, and runtime-support closure, supplies
+loader/interpreter, exact recursive library files, required install-tree, and
+runtime-support closure without copying unrelated host library directories, supplies
 a typed guest-relative launch recipe that bypasses copied `PT_INTERP`/shebang
 paths, and passes its offline same-target conformance probe. An installed non-test subprocess instance that
 is structurally capable of unpinned routing cannot be silently omitted because
