@@ -12,19 +12,21 @@ func serviceImplProviderEntry(entry ServiceProviderEntry) serviceimpl.ProviderEn
 		})
 	}
 	return serviceimpl.ProviderEntry{
-		Type:                entry.Type,
-		BaseURL:             entry.BaseURL,
-		ServerInstance:      entry.ServerInstance,
-		Endpoints:           endpoints,
-		APIKey:              entry.APIKey,
-		Headers:             entry.Headers,
-		Model:               entry.Model,
-		Billing:             entry.Billing,
-		IncludeByDefault:    entry.IncludeByDefault,
-		IncludeByDefaultSet: entry.IncludeByDefaultSet,
-		ContextWindow:       entry.ContextWindow,
-		ConfigError:         entry.ConfigError,
-		DailyTokenBudget:    entry.DailyTokenBudget,
+		Type:                      entry.Type,
+		BaseURL:                   entry.BaseURL,
+		ServerInstance:            entry.ServerInstance,
+		Endpoints:                 endpoints,
+		APIKey:                    entry.APIKey,
+		Headers:                   entry.Headers,
+		Model:                     entry.Model,
+		Billing:                   entry.Billing,
+		IncludeByDefault:          entry.IncludeByDefault,
+		IncludeByDefaultSet:       entry.IncludeByDefaultSet,
+		ContextWindow:             entry.ContextWindow,
+		ConfigError:               entry.ConfigError,
+		DailyTokenBudget:          entry.DailyTokenBudget,
+		CreditBalanceThresholdUSD: entry.CreditBalanceThresholdUSD,
+		CreditProbeTTL:            entry.CreditProbeTTL,
 	}
 }
 

@@ -3,6 +3,7 @@ package fizeau
 import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/builtin"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 // harnessInstanceHook, when non-nil, is applied to the default harness map
@@ -37,4 +38,30 @@ func defaultHarnessInstances() map[string]harnesses.Harness {
 // a competing authority.
 func (s *service) portableRuntimeInventory() ([]harnesses.PortableRuntimeSurface, error) {
 	return harnesses.BuildPortableRuntimeInventory(s.registry, s.harnessInstances)
+}
+
+// portableRuntimeConfiguredProviders projects the effective ServiceConfig
+// through the same root-to-serviceimpl adapter used by production provider
+// paths. It deliberately consults no health, quota, catalog, or route state.
+func (s *service) portableRuntimeConfiguredProviders() (serviceimpl.PortableRuntimeConfiguredProviders, error) {
+	input := serviceimpl.PortableRuntimeConfiguredProvidersInput{}
+	if s.opts.ServiceConfig == nil {
+		return serviceimpl.BuildPortableRuntimeConfiguredProviders(input)
+	}
+
+	config := s.opts.ServiceConfig
+	input.ProviderNames = append([]string(nil), config.ProviderNames()...)
+	input.DefaultProviderName = config.DefaultProviderName()
+	input.Providers = make(map[string]serviceimpl.ProviderEntry, len(input.ProviderNames))
+	for _, name := range input.ProviderNames {
+		entry, ok := config.Provider(name)
+		if !ok {
+			continue
+		}
+		input.Providers[name] = serviceImplProviderEntry(entry)
+	}
+	input.HealthCooldown = config.HealthCooldown()
+	input.WorkDir = config.WorkDir()
+	input.SessionLogDir = config.SessionLogDir()
+	return serviceimpl.BuildPortableRuntimeConfiguredProviders(input)
 }

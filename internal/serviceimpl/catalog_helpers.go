@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/harnesses"
@@ -23,19 +24,21 @@ type ProviderEndpoint struct {
 }
 
 type ProviderEntry struct {
-	Type                string
-	BaseURL             string
-	ServerInstance      string
-	Endpoints           []ProviderEndpoint
-	APIKey              string
-	Headers             map[string]string
-	Model               string
-	Billing             modelcatalog.BillingModel
-	IncludeByDefault    bool
-	IncludeByDefaultSet bool
-	ContextWindow       int
-	ConfigError         string
-	DailyTokenBudget    int
+	Type                      string
+	BaseURL                   string
+	ServerInstance            string
+	Endpoints                 []ProviderEndpoint
+	APIKey                    string
+	Headers                   map[string]string
+	Model                     string
+	Billing                   modelcatalog.BillingModel
+	IncludeByDefault          bool
+	IncludeByDefaultSet       bool
+	ContextWindow             int
+	ConfigError               string
+	DailyTokenBudget          int
+	CreditBalanceThresholdUSD float64
+	CreditProbeTTL            time.Duration
 }
 
 type ModelDiscoveryEndpoint struct {
