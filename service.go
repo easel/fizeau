@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	quotaimpl "github.com/easel/fizeau/internal/quota"
 	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routingquality"
 	"github.com/easel/fizeau/internal/serviceimpl"
@@ -983,7 +984,7 @@ type service struct {
 	// openrouterCredit caches per-provider openrouter account balance
 	// readings with a per-provider TTL so the routing-quality credit gate
 	// never blocks on the provider's /api/v1/credits endpoint per request.
-	openrouterCredit *openrouterCreditStore
+	openrouterCredit *quotaimpl.OpenRouterCreditStore
 
 	runtime serviceimpl.Runtime
 
@@ -1084,7 +1085,7 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		Prober:  routehealth.AlivenessProber(opts.AlivenessProber),
 		Persist: svc.persistRouteHealthSnapshot,
 	})
-	svc.openrouterCredit = newOpenrouterCreditStore()
+	svc.openrouterCredit = quotaimpl.NewOpenRouterCreditStore()
 	// Hydrate per-provider daily_token_budget from ServiceConfig so the
 	// burn-rate tracker can predict exhaustion before the upstream quota
 	// signal arrives.

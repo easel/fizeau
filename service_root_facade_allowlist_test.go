@@ -15,6 +15,7 @@ import (
 
 const (
 	serviceimplImportPath = "github.com/easel/fizeau/internal/serviceimpl"
+	quotaImportPath       = "github.com/easel/fizeau/internal/quota"
 	routehealthImportPath = "github.com/easel/fizeau/internal/routehealth"
 )
 
@@ -245,6 +246,355 @@ func rootRoutingInputMechanicNames() map[string]bool {
 		"isSnapshotDialFailure":               true,
 		"isDispatchabilityFailure":            true,
 		"providerUsesLiveDiscovery":           true,
+	}
+}
+
+// TestOpenRouterCreditMechanicsStayInternal locks the OpenRouter cache,
+// single-flight, HTTP, decoding, failure classification, threshold, TTL, and
+// candidate-normalization mechanics behind internal/quota. The root retains
+// only public-config and routing-evidence adapters plus the compatibility
+// constants.
+func TestOpenRouterCreditMechanicsStayInternal(t *testing.T) {
+	for _, violation := range rootOpenRouterCreditOwnershipViolations(parseRootProductionFiles(t)) {
+		t.Error(violation)
+	}
+}
+
+func rootOpenRouterCreditOwnershipViolations(files map[string]*ast.File) []string {
+	var violations []string
+	forbiddenDeclarations := map[string]bool{
+		"openrouterCreditFailureMode":                true,
+		"openrouterCreditFailureNone":                true,
+		"openrouterCreditFailureCredentialInvalid":   true,
+		"openrouterCreditFailureProviderUnreachable": true,
+		"openrouterCreditProbeTimeout":               true,
+		"openrouterCreditFreshnessSource":            true,
+		"openrouterCreditRecord":                     true,
+		"openrouterCreditStore":                      true,
+		"openrouterCreditProbeResult":                true,
+		"openrouterCreditsResponse":                  true,
+		"newOpenrouterCreditStore":                   true,
+		"openrouterCreditsEndpoint":                  true,
+		"openrouterCreditThresholdFor":               true,
+		"openrouterCreditTTLFor":                     true,
+		"openrouterCreditExhaustedMap":               true,
+		"candidateBaseProviderName":                  true,
+	}
+	forbiddenCreditFileImports := map[string]bool{
+		"encoding/json": true,
+		"fmt":           true,
+		"io":            true,
+		"net/http":      true,
+		"sync":          true,
+	}
+	targetQuotaCalls := map[string]bool{
+		"NewOpenRouterCreditStore":  true,
+		"ProjectOpenRouterCredits":  true,
+		"OpenRouterCreditFreshness": true,
+	}
+	wantCalls := map[string]int{
+		"service.go:New:NewOpenRouterCreditStore":                                                  1,
+		"service_openrouter_credit.go:openrouterProbeMaps:ProjectOpenRouterCredits":                1,
+		"service_openrouter_credit.go:annotateOpenrouterCreditFreshness:OpenRouterCreditFreshness": 1,
+	}
+	calls := make(map[string]int)
+	refs := make(map[string]int)
+
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	for _, path := range paths {
+		file := files[path]
+		quotaBindings, invalidQuotaBindings := importBindingsForPath(file, quotaImportPath, "quota")
+		httpBindings, _ := importBindingsForPath(file, "net/http", "http")
+		syncBindings, _ := importBindingsForPath(file, "sync", "sync")
+		for _, binding := range invalidQuotaBindings {
+			violations = append(violations, fmt.Sprintf("root %s imports %s with forbidden binding %q", path, quotaImportPath, binding))
+		}
+		if path == "service_openrouter_credit.go" {
+			for _, spec := range file.Imports {
+				importPath, err := strconv.Unquote(spec.Path.Value)
+				if err == nil && forbiddenCreditFileImports[importPath] {
+					violations = append(violations, fmt.Sprintf("root %s imports migrated credit-mechanic package %s", path, importPath))
+				}
+			}
+		}
+
+		for _, declaration := range file.Decls {
+			owner := "package scope"
+			switch current := declaration.(type) {
+			case *ast.FuncDecl:
+				owner = current.Name.Name
+				if forbiddenDeclarations[current.Name.Name] {
+					violations = append(violations, fmt.Sprintf("root %s declares migrated OpenRouter credit mechanic %s", path, current.Name.Name))
+				} else if rootOpenRouterCreditMechanicName(current.Name.Name) {
+					violations = append(violations, fmt.Sprintf("root %s declares renamed OpenRouter credit mechanic %s", path, current.Name.Name))
+				}
+				if rootOpenRouterCreditProbeSignature(current, httpBindings) {
+					violations = append(violations, fmt.Sprintf("root %s function %s contains migrated OpenRouter credit HTTP-probe mechanics", path, current.Name.Name))
+				}
+			case *ast.GenDecl:
+				for _, spec := range current.Specs {
+					switch named := spec.(type) {
+					case *ast.TypeSpec:
+						if forbiddenDeclarations[named.Name.Name] {
+							violations = append(violations, fmt.Sprintf("root %s declares migrated OpenRouter credit type %s", path, named.Name.Name))
+						} else if rootOpenRouterCreditMechanicName(named.Name.Name) {
+							violations = append(violations, fmt.Sprintf("root %s declares renamed OpenRouter credit type %s", path, named.Name.Name))
+						}
+						if rootOpenRouterCreditStructSignature(named, httpBindings, syncBindings) {
+							violations = append(violations, fmt.Sprintf("root %s type %s contains migrated OpenRouter credit cache/response mechanics", path, named.Name.Name))
+						}
+						if named.Assign.IsValid() && rootOpenRouterCreditMechanicName(named.Name.Name) {
+							violations = append(violations, fmt.Sprintf("root %s aliases OpenRouter credit type %s", path, named.Name.Name))
+						}
+					case *ast.ValueSpec:
+						for _, name := range named.Names {
+							if forbiddenDeclarations[name.Name] {
+								violations = append(violations, fmt.Sprintf("root %s aliases migrated OpenRouter credit mechanic %s", path, name.Name))
+							} else if rootOpenRouterCreditMechanicName(name.Name) {
+								violations = append(violations, fmt.Sprintf("root %s declares renamed OpenRouter credit value %s", path, name.Name))
+							}
+						}
+					}
+				}
+			}
+
+			ast.Inspect(declaration, func(node ast.Node) bool {
+				selector, ok := node.(*ast.SelectorExpr)
+				if !ok || !selectorUsesImport(selector, quotaBindings) || !targetQuotaCalls[selector.Sel.Name] {
+					return true
+				}
+				key := path + ":" + owner + ":" + selector.Sel.Name
+				refs[key]++
+				return true
+			})
+			ast.Inspect(declaration, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				selector, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || !selectorUsesImport(selector, quotaBindings) || !targetQuotaCalls[selector.Sel.Name] {
+					return true
+				}
+				key := path + ":" + owner + ":" + selector.Sel.Name
+				calls[key]++
+				return true
+			})
+		}
+	}
+	if !reflectIntMapEqual(calls, wantCalls) {
+		violations = append(violations, fmt.Sprintf("root OpenRouter quota calls = %v, want %v", calls, wantCalls))
+	}
+	if !reflectIntMapEqual(refs, wantCalls) {
+		violations = append(violations, fmt.Sprintf("root OpenRouter quota references = %v, want direct calls only %v", refs, wantCalls))
+	}
+	return violations
+}
+
+func rootOpenRouterCreditMechanicName(name string) bool {
+	switch name {
+	case "DefaultOpenrouterCreditBalanceThresholdUSD",
+		"DefaultOpenrouterCreditProbeTTL",
+		"openrouterProbeProjection",
+		"openrouterProbeMaps",
+		"annotateOpenrouterCreditFreshness":
+		return false
+	}
+	lower := strings.ToLower(name)
+	containsAny := func(terms ...string) bool {
+		for _, term := range terms {
+			if strings.Contains(lower, term) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case strings.Contains(lower, "openrouter") && containsAny("credit", "balance", "probe", "cache", "freshness"):
+		return true
+	case strings.Contains(lower, "credit") && containsAny("probe", "balance", "cache", "record", "store", "failure", "freshness", "threshold", "ttl", "response"):
+		return true
+	case strings.Contains(lower, "balance") && containsAny("probe", "cache", "record", "store", "threshold"):
+		return true
+	case strings.Contains(lower, "probe") && containsAny("credit", "balance", "account", "credential", "response", "cache"):
+		return true
+	default:
+		return false
+	}
+}
+
+func rootOpenRouterCreditStructSignature(spec *ast.TypeSpec, httpBindings, syncBindings map[string]bool) bool {
+	structure, ok := spec.Type.(*ast.StructType)
+	if !ok {
+		return false
+	}
+	mapCount := 0
+	hasCacheMap := false
+	hasMapToChannel := false
+	hasSyncMap := false
+	hasHTTPState := false
+	hasMutex := false
+	hasTotalCredits := false
+	hasTotalUsage := false
+	for _, field := range structure.Fields.List {
+		if mapType, isMap := field.Type.(*ast.MapType); isMap {
+			mapCount++
+			if rootTypeLooksLikeChannel(mapType.Value) {
+				hasMapToChannel = true
+			} else {
+				hasCacheMap = true
+			}
+		}
+		hasSyncMap = hasSyncMap || rootTypeUsesImportedSelector(field.Type, syncBindings, "Map")
+		hasMutex = hasMutex || rootTypeUsesImportedSelector(field.Type, syncBindings, "Mutex") || rootTypeUsesImportedSelector(field.Type, syncBindings, "RWMutex")
+		hasHTTPState = hasHTTPState ||
+			rootTypeUsesImportedSelector(field.Type, httpBindings, "RoundTripper") ||
+			rootTypeUsesImportedSelector(field.Type, httpBindings, "Response") ||
+			rootTypeUsesImportedSelector(field.Type, httpBindings, "Client")
+		for _, name := range field.Names {
+			switch strings.ToLower(name.Name) {
+			case "totalcredits":
+				hasTotalCredits = true
+			case "totalusage":
+				hasTotalUsage = true
+			}
+		}
+		if field.Tag != nil {
+			hasTotalCredits = hasTotalCredits || strings.Contains(field.Tag.Value, "total_credits")
+			hasTotalUsage = hasTotalUsage || strings.Contains(field.Tag.Value, "total_usage")
+		}
+	}
+	return (hasMutex && hasHTTPState) ||
+		(hasHTTPState && hasSyncMap) ||
+		(hasHTTPState && hasMapToChannel && (hasCacheMap || mapCount >= 2)) ||
+		(hasMutex && hasMapToChannel && rootOpenRouterCreditMechanicName(spec.Name.Name)) ||
+		((hasCacheMap || hasSyncMap) && rootOpenRouterCreditMechanicName(spec.Name.Name)) ||
+		(hasHTTPState && rootOpenRouterCreditMechanicName(spec.Name.Name)) ||
+		(hasTotalCredits && hasTotalUsage)
+}
+
+func rootTypeLooksLikeChannel(expression ast.Expr) bool {
+	for {
+		switch current := expression.(type) {
+		case *ast.ChanType:
+			return true
+		case *ast.StarExpr:
+			expression = current.X
+		case *ast.ParenExpr:
+			expression = current.X
+		case *ast.Ident:
+			lower := strings.ToLower(current.Name)
+			return strings.Contains(lower, "chan") ||
+				strings.Contains(lower, "channel") ||
+				strings.Contains(lower, "waiter") ||
+				strings.Contains(lower, "flight") ||
+				strings.Contains(lower, "signal") ||
+				lower == "done"
+		case *ast.SelectorExpr:
+			lower := strings.ToLower(current.Sel.Name)
+			return strings.Contains(lower, "chan") ||
+				strings.Contains(lower, "channel") ||
+				strings.Contains(lower, "waiter") ||
+				strings.Contains(lower, "flight") ||
+				strings.Contains(lower, "signal") ||
+				lower == "done"
+		default:
+			return false
+		}
+	}
+}
+
+func rootTypeUsesImportedSelector(expression ast.Expr, bindings map[string]bool, selectorName string) bool {
+	for {
+		switch current := expression.(type) {
+		case *ast.StarExpr:
+			expression = current.X
+		case *ast.ArrayType:
+			expression = current.Elt
+		case *ast.ParenExpr:
+			expression = current.X
+		default:
+			selector, ok := expression.(*ast.SelectorExpr)
+			return ok && selector.Sel.Name == selectorName && selectorUsesImport(selector, bindings)
+		}
+	}
+}
+
+func rootOpenRouterCreditProbeSignature(function *ast.FuncDecl, httpBindings map[string]bool) bool {
+	if function.Body == nil {
+		return false
+	}
+	hasCreditsEndpoint := false
+	hasRequestConstruction := false
+	hasAuthorization := false
+	ast.Inspect(function.Body, func(node ast.Node) bool {
+		switch current := node.(type) {
+		case *ast.BasicLit:
+			if current.Kind != token.STRING {
+				return true
+			}
+			value, err := strconv.Unquote(current.Value)
+			if err != nil {
+				return true
+			}
+			hasCreditsEndpoint = hasCreditsEndpoint || strings.Contains(value, "/credits")
+			hasAuthorization = hasAuthorization || value == "Authorization" || strings.HasPrefix(value, "Bearer ")
+		case *ast.SelectorExpr:
+			if selectorUsesImport(current, httpBindings) && (current.Sel.Name == "NewRequest" || current.Sel.Name == "NewRequestWithContext") {
+				hasRequestConstruction = true
+			}
+		}
+		return true
+	})
+	return hasCreditsEndpoint && (hasRequestConstruction || hasAuthorization)
+}
+
+func TestOpenRouterCreditOwnershipCheckRejectsMutations(t *testing.T) {
+	mutations := []struct {
+		name          string
+		source        string
+		wantViolation string
+	}{
+		{name: "failure none", source: `package fizeau; const openrouterCreditFailureNone = ""`, wantViolation: "openrouterCreditFailureNone"},
+		{name: "credential failure", source: `package fizeau; const openrouterCreditFailureCredentialInvalid = "credential_invalid"`, wantViolation: "openrouterCreditFailureCredentialInvalid"},
+		{name: "unreachable failure", source: `package fizeau; const openrouterCreditFailureProviderUnreachable = "provider_unreachable"`, wantViolation: "openrouterCreditFailureProviderUnreachable"},
+		{name: "probe timeout", source: `package fizeau; import "time"; const openrouterCreditProbeTimeout = 5*time.Second`, wantViolation: "openrouterCreditProbeTimeout"},
+		{name: "freshness source", source: `package fizeau; const openrouterCreditFreshnessSource = "openrouter_credits_probe"`, wantViolation: "openrouterCreditFreshnessSource"},
+		{name: "private cache type", source: `package fizeau; type openrouterCreditStore struct{ records map[string]float64 }`, wantViolation: "openrouterCreditStore"},
+		{name: "private alias", source: `package fizeau; import quota "github.com/easel/fizeau/internal/quota"; type openrouterCreditStore = quota.OpenRouterCreditStore`, wantViolation: "aliases OpenRouter credit type"},
+		{name: "renamed balance cache", source: `package fizeau; type openrouterBalanceCache struct{records map[string]float64}`, wantViolation: "renamed OpenRouter credit type openrouterBalanceCache"},
+		{name: "structural renamed cache", source: `package fizeau; import "net/http"; type accountState struct{ records map[string]float64; inFlight map[string]chan struct{}; transport http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "generic mutex flight transport cache", source: `package fizeau; import ("net/http"; "sync"); type accountState struct{ mu sync.Mutex; inFlight map[string]chan struct{}; transport http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "field independent cache owner", source: `package fizeau; import ("net/http"; "sync"); type accountState struct { mu sync.Mutex; observations map[string]float64; pending map[string]chan struct{}; client http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "renamed client and named waiter", source: `package fizeau; import (web "net/http"; state "sync"); type waiterSignal chan struct{}; type accountState struct { lock state.RWMutex; values map[string]float64; sleepers map[string]*waiterSignal; wire *web.Client }`, wantViolation: "cache/response mechanics"},
+		{name: "local map aliases", source: `package fizeau; import ("net/http"; "sync"); type observationSet map[string]float64; type pendingSet map[string]chan struct{}; type accountState struct { lock sync.Mutex; observations observationSet; pending pendingSet; client http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "sync map HTTP state", source: `package fizeau; import ("net/http"; "sync"); type accountState struct { observations sync.Map; pending sync.Map; client http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "channel coordinator", source: `package fizeau; import ("net/http"; "sync"); type probeCoordinator struct{ mu sync.Mutex; inFlight map[string]chan struct{}; transport http.RoundTripper }`, wantViolation: "cache/response mechanics"},
+		{name: "sync map balance cache", source: `package fizeau; import state "sync"; type balanceCache struct{ records state.Map }`, wantViolation: "cache/response mechanics"},
+		{name: "HTTP response mechanics in other file", source: `package fizeau; import "net/http"; type creditProbe struct{response *http.Response}`, wantViolation: "renamed OpenRouter credit type creditProbe"},
+		{name: "aliased HTTP response", source: `package fizeau; import web "net/http"; type probeResponse struct{response *web.Response}`, wantViolation: "cache/response mechanics"},
+		{name: "renamed credits response", source: "package fizeau; type accountPayload struct { TotalCredits float64 `json:\"total_credits\"`; TotalUsage float64 `json:\"total_usage\"` }", wantViolation: "cache/response mechanics"},
+		{name: "renamed HTTP probe", source: `package fizeau; import ("context"; "net/http"); func refreshAccount(ctx context.Context) { req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://openrouter.ai/api/v1/credits", nil); req.Header.Set("Authorization", "Bearer key") }`, wantViolation: "HTTP-probe mechanics"},
+		{name: "goroutine channel aliased HTTP probe", source: `package fizeau; import ("context"; web "net/http"); func refreshAccount(ctx context.Context) { done := make(chan struct{}); go func() { defer close(done); req, _ := web.NewRequestWithContext(ctx, web.MethodGet, "https://openrouter.ai/api/v1/credits", nil); req.Header.Set("Authorization", "Bearer key") }(); <-done }`, wantViolation: "HTTP-probe mechanics"},
+		{name: "quota call alias", source: `package fizeau; import quota "github.com/easel/fizeau/internal/quota"; var projectOpenrouterCredits = quota.ProjectOpenRouterCredits`, wantViolation: "root OpenRouter quota references"},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "service_openrouter_credit.go", mutation.source, 0)
+			if err != nil {
+				t.Fatalf("parse mutation: %v", err)
+			}
+			files := parseRootProductionFiles(t)
+			files["mutation_"+strings.ReplaceAll(mutation.name, " ", "_")+".go"] = file
+			violations := rootOpenRouterCreditOwnershipViolations(files)
+			if !slices.ContainsFunc(violations, func(violation string) bool { return strings.Contains(violation, mutation.wantViolation) }) {
+				t.Fatalf("ownership check did not report %q for mutation; violations=%v", mutation.wantViolation, violations)
+			}
+		})
 	}
 }
 
