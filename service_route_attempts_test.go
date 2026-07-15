@@ -29,16 +29,20 @@ func TestExecuteDispatchFailureRecordsExactRouteCooldownForNextRoute(t *testing.
 	}
 	beforeBragi := findCandidate(t, before, "fiz", "bragi")
 
+	// These durations are test watchdogs, not timeout assertions. Keep enough
+	// slack for the full repository race suite to schedule the provider call;
+	// the unreachable loopback endpoint still fails immediately in the path
+	// whose exact-route feedback this test exercises.
 	ch, err := svc.Execute(context.Background(), ServiceExecuteRequest{
 		Prompt:          "try once",
 		Model:           "qwen",
-		Timeout:         2 * time.Second,
-		ProviderTimeout: 500 * time.Millisecond,
+		Timeout:         30 * time.Second,
+		ProviderTimeout: 10 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	events := drainRouteAttemptServiceEvents(t, ch, 5*time.Second)
+	events := drainRouteAttemptServiceEvents(t, ch, 45*time.Second)
 	final := finalRouteAttemptServiceData(t, events)
 	if final.Status != "failed" {
 		t.Fatalf("final.Status = %q, want failed", final.Status)
