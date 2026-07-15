@@ -104,11 +104,20 @@ func TestCatalogCache_StaleServesCachedAndAsyncRefreshes(t *testing.T) {
 	key := testKey("http://host/v1")
 
 	var callCount atomic.Int32
-	refreshedCh := make(chan struct{}, 2)
+	refreshStarted := make(chan struct{})
+	releaseRefresh := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() { close(releaseRefresh) })
+	}
+	t.Cleanup(release)
 	probe := func(ctx context.Context) ([]string, error) {
 		n := callCount.Add(1)
 		if n > 1 {
-			refreshedCh <- struct{}{}
+			if n == 2 {
+				close(refreshStarted)
+			}
+			<-releaseRefresh
 		}
 		return []string{"fresh-model"}, nil
 	}
@@ -126,20 +135,40 @@ func TestCatalogCache_StaleServesCachedAndAsyncRefreshes(t *testing.T) {
 	assert.True(t, r.Stale, "result must be flagged stale")
 	assert.Equal(t, []string{"fresh-model"}, r.IDs)
 
-	// Wait for async refresh to complete.
+	// Hold the async refresh inside the probe callback so the callback-start
+	// signal cannot be mistaken for a committed cache update.
 	select {
-	case <-refreshedCh:
-		// refreshed
+	case <-refreshStarted:
+		// refresh is in flight
 	case <-time.After(2 * time.Second):
 		t.Fatal("async refresh did not fire within 2s")
 	}
 
-	// After refresh, the next call should see the fresh fetch timestamp.
-	r2, err := cache.Get(context.Background(), key, probe)
-	require.NoError(t, err)
-	assert.True(t, r2.FromCache, "still within FreshTTL of the refresh")
-	assert.Equal(t, clock.Now(), r2.FetchedAt,
+	// Register a waiter while the refresh's same-key singleflight call is
+	// known to be active. Its result is delivered only after probe has written
+	// the refreshed entry, so it is a deterministic commit barrier.
+	refreshedAt := clock.Now()
+	unexpectedLeader := errors.New("test: refresh waiter unexpectedly became singleflight leader")
+	refreshDone := cache.sf.DoChan(key.String(), func() (interface{}, error) {
+		return nil, unexpectedLeader
+	})
+	release()
+	barrier := <-refreshDone
+	require.NoError(t, barrier.Err)
+	require.NotNil(t, barrier.Val)
+	r2, ok := barrier.Val.(CatalogResult)
+	require.True(t, ok, "singleflight result must retain the catalog result type")
+	assert.Equal(t, refreshedAt, r2.FetchedAt,
 		"refresh at a repeated injected timestamp must replace the fetch timestamp exactly")
+
+	// The committed result is now a fresh cache hit and must not probe again.
+	r3, err := cache.Get(context.Background(), key, probe)
+	require.NoError(t, err)
+	assert.True(t, r3.FromCache, "still within FreshTTL of the refresh")
+	assert.False(t, r3.Stale)
+	assert.Equal(t, []string{"fresh-model"}, r3.IDs)
+	assert.Equal(t, refreshedAt, r3.FetchedAt)
+	assert.EqualValues(t, 2, callCount.Load(), "seed and async refresh must be the only probes")
 }
 
 func TestCatalogCache_AsyncRefreshUsesConfiguredDeadline(t *testing.T) {
