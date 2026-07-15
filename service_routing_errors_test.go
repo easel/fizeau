@@ -109,59 +109,6 @@ func TestValidateExplicitHarnessModelProviderRoutedHarnessesAcceptLocalProviderP
 	}
 }
 
-func TestResolveExecuteRouteNormalizesSubprocessAliases(t *testing.T) {
-	previousResolver := resolveSubprocessModelAlias
-	t.Cleanup(func() { resolveSubprocessModelAlias = previousResolver })
-	resolveSubprocessModelAlias = func(harness, model string) string {
-		if harness == "claude" {
-			return claudeCLIExecutableModel(model)
-		}
-		return model
-	}
-
-	svc := testRoutingErrorService()
-
-	claudeDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "claude", Model: "sonnet"})
-	if err != nil {
-		t.Fatalf("resolve claude sonnet alias: %v", err)
-	}
-	if claudeDecision.Model != "sonnet" {
-		t.Fatalf("claude sonnet alias resolved to %q, want sonnet", claudeDecision.Model)
-	}
-
-	claudeOpusDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "claude", Model: "opus-4.7"})
-	if err != nil {
-		t.Fatalf("resolve claude opus version: %v", err)
-	}
-	if claudeOpusDecision.Model != "opus" {
-		t.Fatalf("claude opus version normalized to %q, want opus", claudeOpusDecision.Model)
-	}
-
-	claudeFullOpusDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "claude", Model: "claude-opus-4-6"})
-	if err != nil {
-		t.Fatalf("resolve claude full opus version: %v", err)
-	}
-	if claudeFullOpusDecision.Model != "opus" {
-		t.Fatalf("claude full opus version normalized to %q, want opus", claudeFullOpusDecision.Model)
-	}
-
-	codexDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "codex", Model: "gpt"})
-	if err != nil {
-		t.Fatalf("resolve codex gpt alias: %v", err)
-	}
-	if codexDecision.Model != "gpt-5.5" {
-		t.Fatalf("codex gpt alias resolved to %q, want gpt-5.5", codexDecision.Model)
-	}
-
-	geminiDecision, err := svc.resolveExecuteRoute(ServiceExecuteRequest{Harness: "gemini", Model: "gemini"})
-	if err != nil {
-		t.Fatalf("resolve gemini alias: %v", err)
-	}
-	if geminiDecision.Model != "gemini-2.5-pro" {
-		t.Fatalf("gemini alias resolved to %q, want gemini-2.5-pro", geminiDecision.Model)
-	}
-}
-
 func TestResolveExplicitClaudeRejectedWhenFreshQuotaExhausted(t *testing.T) {
 	cachePath := filepath.Join(t.TempDir(), "claude-quota.json")
 	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", cachePath)

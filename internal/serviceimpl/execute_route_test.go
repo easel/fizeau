@@ -127,6 +127,18 @@ func TestResolveExecuteRoutePreservesExplicitValidationFailures(t *testing.T) {
 			},
 		},
 		{
+			name:    "unsupported named reasoning",
+			request: ExecuteRouteRequest{Harness: "claude", Model: "sonnet-4.6", Reasoning: "minimal"},
+			kind:    ExecuteRouteFailureUnsupportedReasoning,
+			message: `unsupported reasoning "minimal" for harness "claude"; supported reasoning: low, medium, high, xhigh, max`,
+			assertMore: func(t *testing.T, failure *ExecuteRouteFailure) {
+				t.Helper()
+				if failure.Cause != nil || failure.Reasoning != "minimal" || failure.Harness != "claude" {
+					t.Fatalf("reasoning projection = %#v", failure)
+				}
+			},
+		},
+		{
 			name:    "fresh exhausted subscription quota",
 			request: ExecuteRouteRequest{Harness: "codex", Model: "gpt-5.4"},
 			mutate: func(input *ExecuteRouteInput) {
@@ -178,6 +190,103 @@ func TestResolveExecuteRoutePreservesExplicitValidationFailures(t *testing.T) {
 				tc.assertMore(t, failure)
 			}
 		})
+	}
+}
+
+func TestResolveExecuteRouteNormalizesSubprocessAliases(t *testing.T) {
+	input := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
+	input.DiscoverModels = func(harness string, _ harnesses.HarnessConfig) []string {
+		if harness == "claude" {
+			return []string{"opus-4.7"}
+		}
+		return nil
+	}
+	input.ResolveModelAlias = func(harness, model string) string {
+		switch {
+		case harness == "claude":
+			return ClaudeCLIExecutableModel(model)
+		case harness == "codex" && model == "gpt":
+			return "gpt-5.5"
+		case harness == "gemini" && model == "gemini":
+			return "gemini-2.5-pro"
+		default:
+			return model
+		}
+	}
+
+	tests := []struct {
+		harness string
+		model   string
+		want    string
+	}{
+		{harness: "claude", model: "sonnet", want: "sonnet"},
+		{harness: "claude", model: "opus-4.7", want: "opus"},
+		{harness: "claude", model: "claude-opus-4-6", want: "opus"},
+		{harness: "codex", model: "gpt", want: "gpt-5.5"},
+		{harness: "gemini", model: "gemini", want: "gemini-2.5-pro"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.harness+"/"+tc.model, func(t *testing.T) {
+			input.Request = ExecuteRouteRequest{Harness: tc.harness, Model: tc.model}
+			got, failure := ResolveExecuteRoute(context.Background(), input)
+			if failure != nil {
+				t.Fatalf("ResolveExecuteRoute failure: %v", failure)
+			}
+			if got.Model != tc.want {
+				t.Fatalf("Model = %q, want %q", got.Model, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveExecuteRouteAcceptsClaudeFamilyWithoutDiscovery(t *testing.T) {
+	input := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
+	discoveryCalls := 0
+	input.DiscoverModels = func(string, harnesses.HarnessConfig) []string {
+		discoveryCalls++
+		return nil
+	}
+
+	tests := []struct {
+		harness string
+		model   string
+		want    string
+	}{
+		{harness: "claude", model: "sonnet-4.6", want: "sonnet"},
+		{harness: "claude", model: "opus", want: "opus"},
+		{harness: "claude", model: "haiku-5.5", want: "haiku"},
+		{harness: "claude", model: "fable", want: "fable"},
+		{harness: "claude-tui", model: "sonnet-4.6", want: "sonnet-4.6"},
+		{harness: "claude-tui", model: "opus", want: "opus"},
+		{harness: "claude-tui", model: "haiku-5.5", want: "haiku-5.5"},
+		{harness: "claude-tui", model: "fable", want: "fable"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.harness+"/"+tc.model, func(t *testing.T) {
+			input.Request = ExecuteRouteRequest{Harness: tc.harness, Model: tc.model}
+			got, failure := ResolveExecuteRoute(context.Background(), input)
+			if failure != nil {
+				t.Fatalf("ResolveExecuteRoute failure without discovered models: %v", failure)
+			}
+			if got.Model != tc.want {
+				t.Fatalf("Model = %q, want %q", got.Model, tc.want)
+			}
+		})
+	}
+
+	for _, harness := range []string{"claude", "claude-tui"} {
+		t.Run(harness+"/rejects-gpt", func(t *testing.T) {
+			input.Request = ExecuteRouteRequest{Harness: harness, Model: "gpt-5.4"}
+			_, failure := ResolveExecuteRoute(context.Background(), input)
+			if failure == nil || failure.Kind != ExecuteRouteFailureHarnessModelIncompatible {
+				t.Fatalf("failure = %#v, want Claude-family validation to reject GPT", failure)
+			}
+		})
+	}
+	if discoveryCalls != len(tests)+2 {
+		t.Fatalf("discovery calls = %d, want %d validation reads returning no models", discoveryCalls, len(tests)+2)
 	}
 }
 
