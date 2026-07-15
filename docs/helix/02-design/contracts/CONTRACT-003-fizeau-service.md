@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
+    self_hash: 5b644d5b77a8ddcc8cdb3f9caaa9730931d0a2e2cee96521ed03279645c8b7f8
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T05:49:25Z"
+    reviewed_at: "2026-07-15T12:04:09Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -279,6 +279,13 @@ only; they do not affect candidate eligibility or scoring.
 single public reasoning control; provider-specific names remain adapter
 terminology.
 
+`MaxTokens` and `CompactionContextWindow` MUST be non-negative. A negative
+value is a synchronous public validation error: `Execute` returns no event
+channel and creates no session. `MaxTokens == 0` preserves the provider-default
+output-budget convention. `CompactionContextWindow == 0` preserves the
+selected route's context window; a positive value may only tighten that window
+as specified below.
+
 `ResolveRoute` and `Execute` are cache-first on the route hot path. Before
 scoring an unpinned or partially pinned automatic route, they read the freshest
 cached routing-relevant facts available and may request a coordinated
@@ -424,6 +431,7 @@ const (
     TerminalCauseToolLoopFailed   TerminalCause = "tool_loop_failed"
     TerminalCauseIterationLimit   TerminalCause = "iteration_limit"
     TerminalCauseBudgetHalted     TerminalCause = "budget_halted"
+    TerminalCauseContextCapacityExceeded TerminalCause = "context_capacity_exceeded"
     TerminalCauseDeadlineExceeded TerminalCause = "deadline_exceeded"
     TerminalCauseContextCancelled TerminalCause = "context_cancelled"
     TerminalCauseCallerDied       TerminalCause = "caller_died"
@@ -454,8 +462,14 @@ type ServiceFinalData struct {
     PrimaryStage SessionStage `json:"primary_stage,omitempty"`
     ParentSessionID string `json:"parent_session_id,omitempty"`
     Continuation ContinuationDisposition `json:"continuation,omitempty"`
+    ContextCapacity *ServiceContextCapacityData `json:"context_capacity,omitempty"`
 }
 ```
+
+`ContextCapacity` is required when `Cause` is
+`context_capacity_exceeded` and omitted for terminal facts with other causes.
+A main provider call rejected by capacity preflight maps to
+`failed / context_capacity_exceeded / tool_loop`.
 
 ### Executing-surface route-failure evidence
 
@@ -487,9 +501,9 @@ Failure evidence belongs only to the executing surface. A failed Claude batch
 process does not declare Claude TUI, the host account, or any other route
 failed, and the inverse is also true. The adapter attaches its class before
 terminal delivery. The service-resolved `RouteDecision` is authoritative for
-`Harness`, `Provider`, `ServerInstance`, and `Model`: final projection
-overwrites conflicting adapter identity with those four values while preserving
-the adapter-owned `FailureClass`.
+`Harness`, `Provider`, `ServerInstance`, `Model`, `ContextLength`, and
+`ContextSource`: final projection overwrites conflicting adapter identity with
+those values while preserving the adapter-owned `FailureClass`.
 
 Before emission, adapter diagnostics follow ADR-002 secret and account-data
 scrubbing. Claude diagnostics are bounded to 2048 bytes. A TUI adapter retains
@@ -707,6 +721,7 @@ type RouteRequest struct {
     MinPower int
     MaxPower int
     EstimatedPromptTokens int
+    MaxTokens int
     RequiresTools bool
     CachePolicy string
     Role string
@@ -732,6 +747,11 @@ type RouteDecision struct {
     Endpoint string
     ServerInstance string
     Model string
+    EstimatedPromptTokens int
+    MaxTokens int
+    RequiredContext int
+    ContextLength int
+    ContextSource string
     Reason string
     Sticky RouteStickyState
     Utilization RouteUtilizationState
@@ -745,6 +765,8 @@ type RouteCandidate struct {
     Endpoint string
     ServerInstance string
     Model string
+    ContextLength int
+    ContextSource string
     Score float64
     Eligible bool
     Reason string
@@ -754,6 +776,106 @@ type RouteCandidate struct {
     Utilization RouteUtilizationState
 }
 ```
+
+`RouteRequest.MaxTokens` is the requested per-provider-call output budget.
+`ResolveRoute` and `Execute` reject a negative `MaxTokens` before candidate
+construction. `Execute` copies `ServiceExecuteRequest.MaxTokens` unchanged into
+`RouteRequest.MaxTokens` and the native core request. Candidate metadata does
+not silently replace a caller's zero with a provider maximum. The router
+computes the following with saturating integer addition:
+
+```text
+required_context = max(EstimatedPromptTokens, 0)
+                 + floor(max(EstimatedPromptTokens, 0) / 4)
+                 + max(MaxTokens, 0)
+```
+
+Each `+` saturates at Go `math.MaxInt`; overflow of non-negative `int` fields
+cannot wrap to a smaller requirement. When `required_context > 0`, an unknown
+or zero candidate `ContextLength` is ineligible with
+`FilterReason="context_too_small"`; a positive value below the requirement is
+also ineligible, while equality passes. When `required_context == 0`, this gate
+does not reject an unknown window. FEAT-004 requirements 23–28 therefore permit
+an exact pin to select an otherwise allowed exact-pin-only candidate with raw
+unknown capacity; unpinned auto-routing exclusions still apply. This covers an
+output-only budget, exact pins, and a single route. `MaxTokens == 0` contributes
+no route-time output reserve.
+
+`RouteDecision.EstimatedPromptTokens`, `MaxTokens`, and `RequiredContext`
+preserve the request evidence used for the gate. Every candidate retains its
+raw `ContextLength` and `ContextSource`. After selection, a positive candidate
+value wins; otherwise selected-context resolution uses explicit provider
+configuration, cached provider-API evidence, catalog metadata, then
+`compaction.DefaultContextWindow` (currently `131072`) with source `default`.
+`RouteDecision.ContextLength` and `ContextSource` expose that resolved execution
+value and are authoritative for native execution.
+
+The public `ServiceRoutingDecisionData` projection includes
+`EstimatedPromptTokens`, `MaxTokens`, `RequiredContext`, `ContextLength`, and
+`ContextSource`. Each `ServiceRoutingDecisionCandidate` includes its own
+`ContextLength` and `ContextSource`. The terminal `ServiceRoutingActual`
+projection repeats the selected `ContextLength` and `ContextSource`; consumers
+never need private session JSON to recover capacity provenance.
+
+The root route decision is copied through serviceimpl's API-neutral
+execution-decision and native-request types into core `Request` as
+`SelectedContextWindow`, `SelectedContextSource`, and the raw
+`CompactionContextWindow`. Core and serviceimpl do not import root/public DTOs.
+
+For a native execution path without a routing decision, the same chain starts
+at explicit provider configuration because no selected candidate exists. These
+fallbacks never perform a synchronous provider probe and source `default` never
+claims provider-observed capacity.
+
+Execution derives its window without enlarging the selected route:
+
+```text
+selected_window = RouteDecision.ContextLength
+error                                                  if CompactionContextWindow < 0
+working_window = selected_window                         if CompactionContextWindow == 0
+working_window = CompactionContextWindow                 if selected_window <= 0
+working_window = min(selected_window, CompactionContextWindow) otherwise
+
+quotient = working_window / 100
+remainder = working_window % 100
+effective_window = quotient * 95 + floor(remainder * 95 / 100)
+```
+
+Core owns the overflow-safe `ResolveWorkingContextWindow` helper and rejects a
+negative raw override before `session.start`. Serviceimpl uses that same helper
+to configure the compactor, so compaction and provider preflight share one
+working-window definition. Percentage scaling uses the quotient/remainder form
+above for both the fixed 95-percent effective window and the validated
+compaction percentage; it never evaluates `working_window * percent`.
+`CompactionReserveTokens` remains compaction-only and MUST NOT be subtracted
+from provider-call headroom. SD-006 owns canonical call estimation and the
+per-attempt behavior.
+
+The core compactor boundary is exact:
+
+```go
+type CompactionInput struct {
+    History                     []Message
+    ProviderMessages            []Message
+    ExecutedToolCalls           []ToolCallLog
+    ToolDefinitions             []ToolDef
+    EstimatedProviderCallTokens int
+}
+
+type Compactor func(
+    ctx context.Context,
+    input CompactionInput,
+    provider Provider,
+) ([]Message, *CompactionResult, error)
+```
+
+`History` excludes the separately owned system prompt. Core constructs
+`ProviderMessages` as the exact next envelope with the system prompt once and
+estimates `ProviderMessages` plus `ToolDefinitions`. `ExecutedToolCalls` exists
+for file tracking. The trigger uses the supplied estimate; the compactor
+retains `provider` for summarization and returns replacement history plus a
+nullable result/error. Core alone rebuilds the provider envelope so the system
+prompt cannot be duplicated; a nil result preserves compaction no-op semantics.
 
 `RecordRouteAttempt` requires at least one of `Harness` or `Provider` after
 whitespace normalization and requires a non-empty `Status`. Status matching is
@@ -957,6 +1079,152 @@ Fizeau owns public `ServiceEvent` construction and session-log projection.
 Consumers may subscribe through `Execute` or `TailSessionLog` and may render
 stored sessions through `WriteSessionLog` and `ReplaySession`.
 
+Context-capacity decisions use one public event type and payload:
+
+```go
+const ServiceEventTypeContextCapacity = "context_capacity"
+
+type ServiceContextCapacityAction string
+
+const (
+    ServiceContextCapacityClamped         ServiceContextCapacityAction = "clamped"
+    ServiceContextCapacityPlanningSkipped ServiceContextCapacityAction = "planning_skipped"
+    ServiceContextCapacityRejected        ServiceContextCapacityAction = "rejected"
+)
+
+type ServiceContextCapacityCallKind string
+
+const (
+    ServiceContextCapacityPlanning ServiceContextCapacityCallKind = "planning"
+    ServiceContextCapacityMain     ServiceContextCapacityCallKind = "main"
+)
+
+type ServiceContextCapacityData struct {
+    Action                 ServiceContextCapacityAction `json:"action"`
+    CallKind               ServiceContextCapacityCallKind `json:"call_kind"`
+    TurnIndex              int    `json:"turn_index"`
+    AttemptIndex           int    `json:"attempt_index"`
+    ContextWindow          int    `json:"context_window"`
+    EffectiveContextWindow int    `json:"effective_context_window"`
+    EstimatedInputTokens   int    `json:"estimated_input_tokens"`
+    RequestedMaxTokens     int    `json:"requested_max_tokens"`
+    EffectiveMaxTokens     int    `json:"effective_max_tokens"`
+    AvailableOutputTokens  int    `json:"available_output_tokens"`
+}
+
+type ServiceDecodedEvent struct {
+    // Other decoded payload pointers omitted.
+    ContextCapacity *ServiceContextCapacityData
+}
+```
+
+`ContextWindow` is the `working_window` after the non-enlarging request
+override. `EffectiveContextWindow` is its fixed 95-percent envelope.
+`RequestedMaxTokens` is the original request value on every attempt;
+`EffectiveMaxTokens` is the value sent to the provider, or zero for a skipped
+or rejected call. `AvailableOutputTokens` is reported before the caller budget
+is applied.
+
+Core owns primitive `ContextCapacityEventData` and emits
+`EventContextCapacity`; it imports no root/public DTO. Serviceimpl
+field-exhaustively maps that payload to
+`internal/harnesses.ContextCapacityData` and
+`internal/harnesses.EventTypeContextCapacity`. The root facade owns
+`ServiceContextCapacityData`, maps every field into the public event, and
+populates `ServiceDecodedEvent.ContextCapacity` when decoding
+`ServiceEventTypeContextCapacity`. Exhaustive mapping tests fail when a field is
+added at one layer without being projected through the next.
+
+`available_output_tokens == 0` is evaluated before clamping. Planning emits
+only `planning_skipped`; main emits only `rejected`. A prevented call emits no
+`clamped`, `llm.request`, or provider call. Planning capacity is checked against
+the separate planning messages with no tool definitions; a skip also emits no
+`llm.response` or `planning.turn`, then main execution continues without a
+plan. A main `rejected` capacity event precedes core `session.end` and the
+required public terminal fact `failed / context_capacity_exceeded / tool_loop`;
+`ServiceFinalData.ContextCapacity` repeats the same structured payload.
+
+When headroom is positive and `MaxTokens` is reduced, `clamped` is non-terminal
+and immediately precedes the corresponding `llm.request`. That request event
+carries the same `EffectiveMaxTokens` sent to the provider. `MaxTokens == 0`
+remains zero when headroom exists and emits no clamp.
+
+Core recomputes capacity before every actual native planning call, main
+streaming or non-streaming call, same-route transient retry,
+overflow-after-compaction retry, and service no-stream rerun. Each attempt
+starts from the original requested `MaxTokens`; it does not inherit a previous
+clamp. Compaction summarization calls are outside this contract. Neither a
+route-time `context_too_small` rejection nor an accepted-session capacity
+failure advances to the next route candidate.
+
+Index semantics are exact:
+
+```go
+type CapacityAttemptKey struct {
+    CallKind string
+    TurnIndex int
+}
+
+// Values are the last assigned AttemptIndex per key.
+type CapacityAttemptState map[CapacityAttemptKey]int
+
+// Relevant core fields; other fields omitted.
+type Request struct {
+    InitialCapacityAttempts CapacityAttemptState
+}
+
+type Result struct {
+    CapacityAttempts CapacityAttemptState
+}
+```
+
+- Planning uses `CallKind="planning"` and `TurnIndex=0`.
+- Main uses `CallKind="main"`; `TurnIndex` is the one-based logical tool-loop
+  turn within the accepted service session.
+- A retry of the same logical turn preserves `TurnIndex`.
+- Core defensively copies `Request.InitialCapacityAttempts`. Every preflight
+  reserves the next one-based index in the copy, whether it proceeds normally
+  or emits `clamped`, `planning_skipped`, or `rejected`; ordinary
+  `llm.request` calls therefore advance state too.
+- `Result.CapacityAttempts` returns the last assigned index per key. Transient
+  and overflow-compaction retries use the same state and never reset it.
+- Serviceimpl passes the first run's `Result.CapacityAttempts` as the no-stream
+  rerun's `Request.InitialCapacityAttempts`. Repeated planning remains turn
+  zero with the next index; a reattempted main call preserves its logical turn
+  and gets the next index.
+
+### Direct-core error identity versus accepted sessions
+
+Callers that invoke `internal/core` directly receive a concrete
+`ContextCapacityError` with stable code `CONTEXT_CAPACITY_EXCEEDED`. It supports
+`errors.Is(err, ErrContextCapacityExceeded)` and `errors.As` into
+`*ContextCapacityError`, and includes call kind, turn and attempt indexes,
+selected and effective windows, estimated input, requested output, and
+available output.
+
+```go
+const ContextCapacityErrorCode = "CONTEXT_CAPACITY_EXCEEDED"
+
+var ErrContextCapacityExceeded = errors.New("agent: context capacity exceeded")
+
+type ContextCapacityError struct {
+    CallKind              string // planning or main
+    TurnIndex             int    // planning is 0; main is one-based
+    AttemptIndex          int    // one-based within the call
+    ContextWindow         int
+    EffectiveWindow       int
+    EstimatedInputTokens  int
+    RequestedMaxTokens    int
+    AvailableOutputTokens int
+}
+```
+
+`FizeauService.Execute` is asynchronous after acceptance and MUST NOT surface
+that condition as a returned Go error. It reports accepted-session capacity
+through `ServiceEventTypeContextCapacity` and, for a main rejection, the typed
+terminal cause and final payload. Negative request fields remain synchronous
+public validation errors because no session has yet been accepted.
+
 Successful completion with empty `final_text` is a valid outcome. Consumers
 MUST NOT retry, mark failure, or synthesize fallback text on empty text alone;
 they must use the terminal status, process outcome, and error fields to decide
@@ -1010,10 +1278,25 @@ changed by this routing contract.
 The typed session-lifecycle and continuation surface is introduced in product
 API v0.15. Adding `Continue` to `FizeauService` is a Go source-compatibility
 break for third-party implementations and mocks of that interface. Adding
-`HarnessCleanupTimeout` and the typed terminal and primary-fact fields is an
-additive public API/schema change. These changes MUST ship only with the v0.15
-API update and migration notes. Callers that only consume a service returned by
-`New` do not need to implement the new method.
+`HarnessCleanupTimeout` and typed terminal or primary-fact fields to exported
+structs also breaks external unkeyed composite literals, while their JSON
+fields are additive. These changes MUST ship only with the v0.15 API update and
+migration notes. Callers that only consume a service returned by `New` do not
+need to implement the new method, but must migrate unkeyed public struct
+literals to keyed form.
+
+Adding fields to exported Go structs—including `RouteRequest.MaxTokens`,
+selected-route context evidence, `ServiceFinalData.ContextCapacity`, and
+`ServiceDecodedEvent.ContextCapacity`—is source-breaking for external unkeyed
+composite literals. These fields ship in the v0.15 migration, whose Go guidance
+requires keyed literals for public Fizeau structs. Existing keyed literals and
+field selectors remain source-compatible.
+
+The JSON/event additions—`ServiceEventTypeContextCapacity`,
+`ServiceContextCapacityData`, `TerminalCauseContextCapacityExceeded`, and the
+new capacity fields—are additive. Consumers MUST preserve unknown event and
+terminal-cause values and may ignore the new non-terminal event when they do
+not need capacity telemetry.
 
 Compatibility rules after v0.15 are:
 
@@ -1051,6 +1334,10 @@ Compatibility rules after v0.15 are:
 | Condition | Error / Outcome | Retry | Recovery Expectation |
 |-----------|-----------------|-------|----------------------|
 | Request rejected before a session starts | Public validation error; no event channel | After correcting request | Caller fixes the request; no cleanup or terminal event is expected because Fizeau accepted no session. |
+| Negative `MaxTokens` or `CompactionContextWindow` | Public validation error; no event channel | After correcting request | Supply zero or a positive value. Direct-core callers receive the same rejection before `session.start`. |
+| Positive route requirement meets unknown or insufficient candidate context | Candidate rejected with `context_too_small`; no provider call for that candidate | With a corrected request or explicit caller-owned reroute | Inspect `RequiredContext` and raw candidate context evidence; exact pins do not bypass a positive requirement. With a zero requirement, a permitted exact pin may select raw unknown capacity and execution resolves the fallback in `RouteDecision`. |
+| Accepted main call has no context headroom | `failed / context_capacity_exceeded / tool_loop` plus required capacity event and final payload | Caller policy | No `llm.request` was emitted for the prevented call and Fizeau does not try the next candidate. |
+| Planning call has no context headroom | Non-terminal `context_capacity` action `planning_skipped` | Main execution continues | No planning request, response, or planning-turn event is emitted. |
 | Unknown continuation policy | `ErrContinuationPolicyInvalid`; no session | No, without correction | Use one of the three declared policy values. |
 | Prior session missing or unusable | `ErrContinuationSessionUnavailable`; no session | After restoring lineage | Supply a readable completed Fizeau session ID. |
 | Resume required but route lacks continuation | `ErrContinuationUnsupported`; no session | With a different policy | Choose `prefer_resume` or `fresh_session`; do not guess a harness-specific token. |
@@ -1150,6 +1437,48 @@ that prove:
     mismatched process-birth identity.
 16. Cleanup failure or indeterminate boundary state retains its lifecycle
     ownership record until a later recovery confirms emptiness.
+17. Route-capacity fixtures cover prompt-plus-25-percent-safety-plus-output,
+    `math.MaxInt` saturation, equality, output-only budgets, explicit pins, and
+    a single remaining route. Unknown and zero candidate windows reject only
+    for a positive requirement; a permitted exact pin with a zero requirement
+    survives and resolves execution context through config, cache, catalog, or
+    default while its candidate trace remains raw zero.
+18. Selected `ContextLength` and `ContextSource` survive route decision,
+    execution handoff, routing event, and terminal projection. A positive
+    `CompactionContextWindow` can only reduce the selected value; zero passes it
+    through and negatives fail before session acceptance and direct-core
+    `session.start`. Serviceimpl and core use the same working-window helper;
+    quotient/remainder scaling cannot overflow at `math.MaxInt`.
+19. The canonical provider-call estimator covers message roles and content,
+    assistant tool-call names and JSON arguments, tool-result IDs, and tool
+    definition names, descriptions, and schemas. Pre-iteration and mid-turn
+    checks pass history without system, exact provider messages with system
+    once, executed tool-call logs, exact built definitions, and the core
+    estimate through `CompactionInput`; the trigger uses that estimate and no
+    provider usage or cache counter. The compactor returns replacement history
+    only, and core rebuilds the provider envelope without duplicating system.
+20. Planning, main streaming and non-streaming calls, same-route transient
+    retries, overflow-after-compaction retries, and service no-stream reruns
+    recompute capacity from fresh inputs and the original `MaxTokens`.
+    Compaction summarization calls are excluded. Every ordinary or capacity
+    preflight reserves a one-based index in a defensively copied
+    `CapacityAttemptState`; `Result.CapacityAttempts` feeds a service-created
+    second core run, so indexes remain monotonic per `(CallKind, TurnIndex)`.
+21. Clamp, planning-skip, and main-rejection fixtures assert the complete
+    `ServiceContextCapacityData` payload and event order. Zero headroom emits no
+    clamp or `llm.request`; a clamp immediately precedes a request carrying its
+    effective maximum; rejection precedes `session.end` and
+    `failed / context_capacity_exceeded / tool_loop` without trying another
+    candidate. Exhaustive core-to-harness-to-root mapping and
+    `ServiceDecodedEvent.ContextCapacity` decoding are covered.
+22. Direct-core fixtures prove `errors.Is` against
+    `ErrContextCapacityExceeded` and `errors.As` into
+    `*ContextCapacityError`. Public accepted-session fixtures prove the same
+    condition is event/final evidence rather than an `Execute` return error.
+23. Public compile and AST fixtures require keyed literals for exported Fizeau
+    structs added to in v0.15. JSON fixtures accept the additive capacity event,
+    payload, decoded-event field, and terminal cause while preserving unknown
+    future event and enum values.
 
 ## Validation Checklist
 
@@ -1162,5 +1491,9 @@ that prove:
 - [ ] Caller-signalled cancellation, Claude-TUI per-invocation teardown,
   process-birth identity reuse, and lifecycle-record retention have named tests.
 - [ ] Compatibility fixtures cover legacy logs and unknown additive values.
+- [ ] Route capacity, selected-window precedence, canonical estimation,
+  overflow-safe scaling, compaction input, monotonic attempts, capacity event
+  order/mapping, keyed-literal migration, and direct-core error identity have
+  named tests.
 - [ ] The full repository test gate passes with the public conformance suite.
 - [ ] Non-normative implementation notes cannot override this contract.

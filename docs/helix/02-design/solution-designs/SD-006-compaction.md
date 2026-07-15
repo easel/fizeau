@@ -5,11 +5,11 @@ ddx:
     - FEAT-001
     - SD-001
   review:
-    self_hash: 07e0138c482daa54314d15188f1273ce002ff66e8a56dbfec67d67778163e7e2
+    self_hash: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T12:10:44Z"
 ---
 # Solution Design: SD-006 — Conversation Compaction
 
@@ -45,11 +45,10 @@ have especially small windows (8K-32K) making this a practical blocker.
   *beginning* to preserve prefix-based prompt cache hits. The comment explicitly
   states: "Trim from the beginning to preserve cache (prefix-based) and keep
   recent messages intact."
-- **Initial context reinjection**: Two modes — `DoNotInject` (pre-turn: clears
-  `reference_context_item` so the next regular turn reinjects system context
-  fresh) and `BeforeLastUserMessage` (mid-turn: injects system context into the
-  replacement history just above the last user message, because the model expects
-  the compaction summary as the last item)
+- **Initial context handling**: Codex has separate pre-turn and mid-turn
+  reinjection modes. Fizeau does not adopt that ownership model: its separately
+  owned `Request.SystemPrompt` never enters `History`, while every non-system
+  initial-context message is an ordinary `History` message.
 - **Window generation**: After compaction, advances a `window_generation` counter
   that invalidates the websocket session / prompt cache, forcing the provider to
   re-process the compacted history from scratch
@@ -72,8 +71,8 @@ type CompactionConfig struct {
     // Enabled controls whether automatic compaction runs. Default: true.
     Enabled bool
 
-    // ContextWindow is the model's context window in tokens. If zero,
-    // the provider is queried or a conservative default (8192) is used.
+    // ContextWindow is the compaction working window in tokens. If zero,
+    // compaction uses DefaultContextWindow (currently 131072).
     ContextWindow int
 
     // ReserveTokens is the token budget reserved for the model's response
@@ -113,87 +112,90 @@ type CompactionConfig struct {
 }
 ```
 
-Added to `Request`:
+The core request receives selected-route evidence and the raw public override:
 
 ```go
 type Request struct {
     // ...existing fields...
+    SelectedContextWindow    int
+    SelectedContextSource    string
+    CompactionContextWindow  int
+    InitialCapacityAttempts  CapacityAttemptState
+}
 
-    // Compaction configures automatic conversation compaction.
-    // If nil, compaction is enabled with defaults.
-    Compaction *CompactionConfig
+type Result struct {
+    // ...existing fields...
+    CapacityAttempts CapacityAttemptState
 }
 ```
 
-### CLI Context Window Resolution
+### Selected Context Window Authority
 
-The production CLI (`cmd/fiz/main.go`) resolves `ContextWindow` and
-`ReserveTokens` before constructing the `CompactionConfig`. This wiring was
-previously undocumented.
+The context window resolved after routing is authoritative for native
+execution. A positive raw selected-candidate value wins. When the selected
+candidate is a permitted exact pin with raw unknown/zero capacity, serviceimpl
+uses explicit provider configuration, cached provider-API evidence, catalog
+metadata, then `compaction.DefaultContextWindow` (currently `131072`) with
+source `default`. The root `RouteDecision` exposes that resolved execution
+`ContextLength` and `ContextSource`, while its candidate trace preserves the
+raw zero/unknown value. `internal/serviceimpl` copies the resolved facts through
+its API-neutral execution-decision and native-request types into core `Request`
+as `SelectedContextWindow` and `SelectedContextSource`; neither serviceimpl nor
+core imports a root/public DTO. Keeping raw candidate evidence distinct from
+resolved execution evidence explains when fallback was applied.
 
-#### Resolution order
+An explicit native fast path without a routing decision uses the same fallback
+chain, beginning at provider configuration because it has no candidate value:
 
-**Step 1 — Explicit config.** The provider config fields `context_window` and
-`max_tokens` (surfaced as `pc.ContextWindow` and `pc.MaxTokens`) are used
-directly if non-zero.
+1. explicit provider configuration
+2. cached provider-API snapshot
+3. catalog metadata
+4. `compaction.DefaultContextWindow` (currently `131072`), with source
+   `default`
 
-**Step 2 — Live API discovery.** If either value is still zero after step 1,
-the CLI calls:
+The default is fallback evidence, not a provider observation. No execution hot
+path contacts a provider merely to fill this value.
 
-```go
-limits := oaiProvider.LookupModelLimits(ctx, pc.BaseURL, pc.APIKey, pc.Flavor, pc.Headers, selection.ResolvedModel)
+`ServiceExecuteRequest.CompactionContextWindow` is an optional stricter
+operator bound. Serviceimpl passes it unchanged into core. Core rejects a
+negative raw override and owns the overflow-safe
+`ResolveWorkingContextWindow(selected, override)` helper:
+
+```text
+selected_window = Request.SelectedContextWindow
+error                                                  if CompactionContextWindow < 0
+working_window = selected_window                         if CompactionContextWindow == 0
+working_window = CompactionContextWindow                 if selected_window <= 0
+working_window = min(selected_window, CompactionContextWindow) otherwise
 ```
 
-`LookupModelLimits` queries the live provider API (LM Studio, omlx, or
-OpenRouter) to discover the actual loaded context window and maximum output
-tokens for the model. The two resolved values are then filled in independently:
+Zero preserves the selected-route value; a positive override can reduce, but
+never enlarge, a known selected window. Public validation rejects a negative
+override before session acceptance, and core repeats that check before
+`session.start` for direct callers. Serviceimpl uses the same
+`ResolveWorkingContextWindow` helper to configure the compactor. Compaction
+triggering and provider-call preflight therefore share one `working_window`
+definition rather than independently resolving context.
 
-```go
-if resolvedContextWindow == 0 {
-    resolvedContextWindow = limits.ContextLength
-}
-if resolvedMaxTokens == 0 {
-    resolvedMaxTokens = limits.MaxCompletionTokens
-}
+Percent scaling never evaluates `working_window * percent`. For a non-negative
+window and a validated `percent` in `0..100`, both effective and compaction
+windows use:
+
+```text
+quotient = working_window / 100
+remainder = working_window % 100
+scale_percent(working_window, percent) =
+    quotient * percent + floor(remainder * percent / 100)
+effective_window = scale_percent(working_window, 95)
 ```
 
-**Step 3 — Zero means use package defaults.** Any value that remains zero
-after discovery leaves the corresponding `CompactionConfig` field at zero, and
-the compaction package falls back to its own defaults (`ContextWindow: 8192`,
-`ReserveTokens: 8192`).
+Because `quotient <= math.MaxInt/100`, `percent <= 100`, and
+`remainder < 100`, neither multiplication nor the final addition can overflow.
 
-#### Discovery gate
-
-The live API call is gated:
-
-```go
-if resolvedContextWindow == 0 || resolvedMaxTokens == 0 {
-    limits := oaiProvider.LookupModelLimits(...)
-    ...
-}
-```
-
-A provider with both `context_window` and `max_tokens` set explicitly in
-config incurs **zero** additional network round-trips at startup.
-
-#### CompactionConfig fields set by the CLI
-
-```go
-compactionCfg := compaction.DefaultConfig()
-if resolvedContextWindow > 0 {
-    compactionCfg.ContextWindow = resolvedContextWindow
-    if resolvedMaxTokens > 0 {
-        compactionCfg.ReserveTokens = resolvedMaxTokens
-    }
-}
-if cfg.CompactionPercent > 0 {
-    compactionCfg.EffectivePercent = cfg.CompactionPercent
-}
-```
-
-`ReserveTokens` is set to the provider's maximum output tokens (not a
-fixed constant) so the compaction trigger reserves exactly as many tokens as
-the model is allowed to generate per turn.
+The compactor uses `working_window` as its context window. Its
+`CompactionReserveTokens` is subtracted once, only when deciding whether to
+compact. Per-provider-call output headroom uses `effective_window` and does not
+subtract the compaction reserve a second time.
 
 #### `compaction_percent` top-level config field
 
@@ -204,47 +206,178 @@ the model is allowed to generate per turn.
 compaction_percent: 75   # trigger compaction at 75% of context window
 ```
 
-When unset (zero), the compaction package default of 95% applies.
+When unset (zero), the compaction package default of 95% applies. A resolved
+non-zero percentage must be in `1..100`; values outside that range are invalid.
 
 #### `req.MaxTokens`
 
-The resolved max output tokens are also passed directly to the agent request:
+The non-negative requested output budget is passed to both route resolution and
+the agent request:
 
 ```go
-req.MaxTokens = resolvedMaxTokens
+routeReq.MaxTokens = serviceReq.MaxTokens
+coreReq.MaxTokens = serviceReq.MaxTokens
 ```
 
-This ensures the provider enforces the per-turn output limit independently of
-compaction, keeping both the provider and compaction trigger in sync on the
-same token budget.
+`MaxTokens > 0` is a caller limit that may be clamped for each provider call;
+`MaxTokens == 0` preserves the provider-default convention. A negative value is
+rejected synchronously before session acceptance and defensively by direct core
+execution before `session.start`.
 
 ### Trigger Logic
 
-```
-effectiveWindow = contextWindow * effectivePercent / 100  (default 95%)
-shouldCompact = estimatedTokens > (effectiveWindow - reserveTokens)
+```text
+compaction_window = scale_percent(working_window, effectivePercent)
+compaction_threshold = max(compaction_window - reserve_tokens, 0)
+should_compact = EstimatedProviderCallTokens > compaction_threshold
 ```
 
-The `effectivePercent` (default 95%, following Codex) applies a safety margin
-because models may fail slightly below their advertised context limit due to
-internal overhead. For a 32K model: effective = 30720, trigger at 30720 - 8192 = 22528.
+The configurable `effectivePercent` controls only when compaction runs. The
+provider-call capacity envelope always uses the selected-window formula above,
+including its fixed five-percent safety margin. `reserve_tokens` is not part of
+that per-call envelope.
 
-Token estimation: use the provider's reported usage from the last response
-(accurate), plus chars/4 heuristic for messages added since. For the trigger
-check, use the full context footprint:
+### Canonical Provider-Call Estimator and Compactor Input
+
+`internal/core` owns one estimator for the exact request about to be sent to a
+native provider. For every included string it adds `ceil(UTF-8 byte length / 4)`
+and uses saturating integer addition capped at Go `math.MaxInt`. The estimate
+includes:
+
+- every message role and content, including the system prompt as a provider
+  message
+- every assistant tool-call name and serialized JSON arguments
+- every tool-result `ToolCallID`
+- every available tool definition's name, description, and serialized JSON
+  schema
+
+Planning calls estimate their separate planning message list and have no tool
+definitions. Provider-reported cumulative usage, previous-response usage, and
+cache read/write accounting do not estimate the current call; those counters
+remain usage and billing evidence only.
+
+At both the pre-iteration and mid-turn compaction checks, core first constructs
+the exact next `providerMessages`: the system message followed by the current
+history in provider order. It estimates that complete list with current
+`req.Tools`, then calls the compactor through a core-owned input contract:
+
+```go
+type CompactionInput struct {
+    History                     []Message
+    ProviderMessages            []Message
+    ExecutedToolCalls           []ToolCallLog
+    ToolDefinitions             []ToolDef
+    EstimatedProviderCallTokens int
+}
+
+type Compactor func(
+    ctx context.Context,
+    input CompactionInput,
+    provider Provider,
+) ([]Message, *CompactionResult, error)
 ```
-effectiveTokens = usage.Input + usage.Output + usage.CacheRead + usage.CacheWrite
+
+`History` is mutable conversation history and excludes the separately owned
+system prompt. `ProviderMessages` is the exact next envelope, including that
+system prompt exactly once. `ExecutedToolCalls` supplies file-tracking evidence;
+`ToolDefinitions` is the exact built definition list for the next call.
+`EstimatedProviderCallTokens` is computed from `ProviderMessages` plus
+`ToolDefinitions`. The compactor uses the supplied estimate for its trigger and
+may use the canonical estimator for retention accounting. It returns only
+replacement `History`, a nullable result for no-op versus completed compaction,
+and an error; `provider` remains available for summarization. Core alone
+rebuilds `ProviderMessages` and prepends the system prompt, preventing
+duplication. The trigger never uses response usage or cache counters. After
+replacement, provider-call preflight estimates the rebuilt call again before
+dispatch.
+
+### Provider-Call Capacity Enforcement
+
+Immediately before each actual native provider call, core recomputes
+`estimated_input_tokens` from the exact messages and tools for that attempt:
+
+```text
+available_output_tokens = max(effective_window - estimated_input_tokens, 0)
 ```
-This matches pi's `calculateContextTokens()`. All four components contribute
-to context window consumption — output tokens from the current turn become
-input tokens on the next turn, and cache tokens represent context the model
-processed regardless of billing discount.
 
-**Non-text estimation**: Tool call arguments are estimated by JSON byte length / 4.
-Images (if supported) use a fixed estimate of 1200 tokens (following pi's 4800
-chars / 4). Thinking/reasoning blocks are included in char count.
+`available_output_tokens == 0` is decided first. Planning emits only
+`planning_skipped`; main emits only `rejected`. A prevented call never also
+emits `clamped`. When headroom is positive, a positive requested `MaxTokens`
+sends `min(MaxTokens, available_output_tokens)`. If that reduces the request,
+core emits `EventContextCapacity{Action: "clamped"}` immediately before the
+corresponding `EventLLMRequest`; the request event carries the same
+`EffectiveMaxTokens` sent to the provider. For `MaxTokens == 0`, the call
+preserves zero so the provider may apply its default.
 
-Checked at two points:
+Planning is non-fatal. If it has no output headroom, core emits
+`context_capacity` with action `planning_skipped`, emits no `llm.request`,
+`llm.response`, or `planning.turn` for that prevented call, and continues to
+the main turn without a plan. A main call with no output headroom emits action
+`rejected` and terminates with `context_capacity_exceeded`; no `llm.request` is
+emitted for the prevented call.
+
+The preflight applies to the planning `Chat`, every main `Chat` or `ChatStream`,
+same-route transient retries, overflow-after-compaction retries, and service
+no-stream reruns. Each attempt derives fresh call options from the original
+requested `MaxTokens`; a clamp from one attempt is never reused as the next
+attempt's request. Compaction summarization calls are excluded because their
+budget is governed by the compactor. Capacity failure never switches to the
+next routing candidate.
+
+Capacity indexes are stable across those paths:
+
+```go
+type CapacityAttemptKey struct {
+    CallKind string
+    TurnIndex int
+}
+
+// Value is the last assigned AttemptIndex for the key.
+type CapacityAttemptState map[CapacityAttemptKey]int
+```
+
+- `TurnIndex == 0` denotes planning. Main `TurnIndex` is the one-based logical
+  tool-loop turn within the accepted service session.
+- Retrying the same logical planning or main turn preserves `TurnIndex`.
+- Core defensively copies `Request.InitialCapacityAttempts` before mutation.
+  Every preflight reserves the next one-based index in that copy, including an
+  ordinary request and a `clamped`, `planning_skipped`, or `rejected` outcome.
+  Ordinary `llm.request` attempts therefore advance the same state as capacity
+  events.
+- `Result.CapacityAttempts` returns the last assigned index for every key.
+  Transient and overflow-compaction retries use that same state and never
+  reset it.
+- For a service no-stream rerun, serviceimpl passes the first
+  `Result.CapacityAttempts` as the second core run's
+  `InitialCapacityAttempts`. Repeated planning remains planning turn zero and
+  gets the next index; a reattempted main call keeps its logical main turn and
+  also gets the next index.
+
+Direct callers of the core loop receive stable typed identity:
+
+```go
+const ContextCapacityErrorCode = "CONTEXT_CAPACITY_EXCEEDED"
+
+var ErrContextCapacityExceeded = errors.New("agent: context capacity exceeded")
+
+type ContextCapacityError struct {
+    CallKind             string // planning or main
+    TurnIndex            int    // planning is 0; main is one-based
+    AttemptIndex         int    // one-based within the call
+    ContextWindow        int
+    EffectiveWindow      int
+    EstimatedInputTokens int
+    RequestedMaxTokens   int
+    AvailableOutputTokens int
+}
+```
+
+The concrete error supports `errors.Is(err, ErrContextCapacityExceeded)` and
+`errors.As` into `*ContextCapacityError`. An accepted service session does not
+return this Go error through `Execute`; it projects the same evidence through
+the public capacity event and terminal payload described below.
+
+Compaction itself remains checked at two points:
 1. **Pre-iteration**: Before sending the next prompt to the model
 2. **Mid-iteration**: After tool results are appended (a large bash output
    can push over the limit between iterations)
@@ -263,9 +396,12 @@ Checked at two points:
    that was just created)
 5. **Previous compaction entries are excluded** from the messages-to-summarize
    (the previous summary is passed separately via `<previous-summary>` tags)
-6. **Session prefix messages are excluded** from the preserved user messages
-   (AGENTS.md injections, environment context, system prompt wrappers are not
-   "real" user messages — following Codex's `collect_user_messages` filter)
+6. **The separately owned system prompt is excluded** from both input and
+   replacement `History`; prefix-token accounting still reserves its capacity.
+   Required non-system initial context, including instruction or environment
+   messages, must be represented as ordinary messages in `History` and follows
+   the same retention or summarization rules as the rest of that history. There
+   is no hidden initial-context reinjection channel.
 7. **Overlong individual user messages are truncated** to fit within the
    `keepRecentTokens` budget (following Codex's `build_compacted_history_with_limit`)
 
@@ -427,29 +563,26 @@ caches the tokenized prefix of the conversation, and subsequent requests that
 share the same prefix get a cache hit (faster, cheaper). Compaction destroys
 the prefix, but we can minimize the damage.
 
-**Post-compaction message ordering** — two variants depending on timing:
+**Post-compaction message ordering** uses one invariant at every timing.
 
-**Pre-iteration compaction** (between turns):
+Replacement `History`, for pre-iteration, mid-turn, and overflow compaction:
 ```
-1. System prompt                    ← injected by loop on next Chat() call (not in history)
-2. Recent user messages (preserved) ← real user messages, truncated to budget
-3. Compaction summary (user msg)    ← LAST in history
+1. Retained ordinary history messages ← includes any non-system initial context
+2. Compaction summary (user msg)      ← LAST in history
 ```
-The system prompt is always first and never changes — maximum cache prefix
-stability. The summary is last because it's the most recent context for the
-model. On the next turn, the loop reinjects system context fresh.
 
-**Mid-turn compaction** (during tool call rounds):
+The exact next application-provider envelope constructed by core is:
 ```
-1. System prompt                    ← stable prefix
-2. Initial context (reinjected)     ← permissions, personality, developer instructions
-3. Recent user messages (preserved) ← real user messages, truncated to budget
-4. Compaction summary (user msg)    ← LAST (model trained to see summary last — per Codex)
+1. Request.SystemPrompt               ← exactly once when non-empty
+2. Replacement History                ← unchanged order
 ```
-Mid-turn compaction must inject initial context into the replacement history
-because the loop won't reinject it naturally. Context is placed before the
-last real user message (following Codex's
-`insert_initial_context_before_last_real_user_or_summary` pattern).
+
+The compactor neither owns nor returns `Request.SystemPrompt`. Core rebuilds
+the provider envelope after any compaction, including a mid-turn overflow, and
+prepends that prompt exactly once before preflight accounting and provider
+dispatch. Non-system permissions, personality, developer instructions, or
+environment context survive only through ordinary `History`; Fizeau neither
+synthesizes nor reinjects a separate initial-context block.
 
 **Key rules** (learned from Codex):
 
@@ -458,15 +591,10 @@ last real user message (following Codex's
    the summarization input (not the newest). This preserves the prefix
    cache for the summarization call itself.
 
-2. **System prompt reinjection.** After compaction replaces the history,
-   the system prompt must remain at position 0. Two strategies:
-   - **Pre-iteration compaction**: Replace history with
-     `[summary, recent_messages]`. The system prompt is injected by the
-     agent loop as usual on the next `Chat()` call — it's not part of
-     the history.
-   - **Mid-iteration compaction**: The loop is already mid-conversation.
-     Inject system context above the last user message in the replacement
-     history so the model sees it in the expected position.
+2. **System prompt ownership.** `Request.SystemPrompt` is never persisted in
+   replacement `History`. For both pre-iteration and mid-turn paths, core
+   constructs the next provider envelope by prepending the non-empty system
+   prompt exactly once to the replacement history.
 
 3. **Invalidate provider-side cache after compaction.** The conversation
    prefix has fundamentally changed. If the provider uses sticky sessions
@@ -474,16 +602,10 @@ last real user message (following Codex's
    Fizeau exposes this via `EventCompactionEnd` — providers that maintain
    session state should listen for it.
 
-### Token Counting — Cache-Aware
+### Usage Accounting Is Not Capacity Estimation
 
-Pi counts `cacheRead` and `cacheWrite` tokens in its usage calculation:
-```
-totalTokens = input + output + cacheRead + cacheWrite
-```
-
-Fizeau should do the same. The `TokenUsage` type already has `Input` and
-`Output` — add `CacheRead` and `CacheWrite` fields so compaction triggers
-account for the full context footprint, not just the billed tokens.
+Fizeau records cache token streams separately so billing and usage projections
+retain provider evidence:
 
 ```go
 type TokenUsage struct {
@@ -495,32 +617,61 @@ type TokenUsage struct {
 }
 ```
 
-For compaction trigger purposes:
-```
-effectiveTokens = usage.Input + usage.CacheRead
-```
-
-The `CacheRead` tokens represent context the model processed from cache —
-they still count against the context window even though they're cheaper.
-
-### Token Counting
-
-Three approaches, in preference order:
-1. **Provider-reported usage**: From the last `Response.Usage` — most accurate
-2. **Chars/4 heuristic**: For messages added since last response — conservative
-3. **Configured context window**: From `CompactionConfig.ContextWindow` or
-   provider metadata
+These counters do not replace or augment the canonical provider-call estimator.
+In particular, input, output, cache-read, and cache-write usage from a completed
+response are not added to a later request's capacity estimate. The next call is
+estimated from its complete messages and tool definitions at preflight.
 
 ### Events
 
-New event types:
+Core event types:
 ```go
 EventCompactionStart EventType = "compaction.start"
 EventCompactionEnd   EventType = "compaction.end"
+EventContextCapacity EventType = "context_capacity"
 ```
 
 The `compaction.end` event data includes the summary text, tokens before/after,
 and file lists.
+
+Core owns an internal payload containing primitive fields only:
+
+```go
+type ContextCapacityEventData struct {
+    Action                 string
+    CallKind               string
+    TurnIndex              int
+    AttemptIndex           int
+    ContextWindow          int
+    EffectiveContextWindow int
+    EstimatedInputTokens   int
+    RequestedMaxTokens     int
+    EffectiveMaxTokens     int
+    AvailableOutputTokens  int
+}
+```
+
+Core emits this payload as `EventContextCapacity` and does not import root or
+public service DTOs. Serviceimpl field-exhaustively maps it to
+`internal/harnesses.ContextCapacityData` with
+`internal/harnesses.EventTypeContextCapacity`. The root facade then owns and
+maps `ServiceContextCapacityData`, including
+`ServiceDecodedEvent.ContextCapacity` in decoded streams. Added fields must
+break an exhaustive mapping test instead of being silently dropped.
+
+`ContextWindow` is `working_window`, `EffectiveContextWindow` is the fixed
+95-percent envelope, and `RequestedMaxTokens` is always the original request
+value for that attempt. `EffectiveMaxTokens` is the provider-call value, or
+zero for a skipped or rejected call; `AvailableOutputTokens` is the headroom
+before applying the caller budget.
+
+Clamps and planning skips are non-terminal. When headroom is positive, a clamp
+event immediately precedes its `llm.request`. When headroom is zero,
+`planning_skipped` or `rejected` takes precedence and no clamp or request event
+is emitted. A rejected capacity event precedes core `session.end` and the root
+final service event. That final event has `outcome="failed"`,
+`cause="context_capacity_exceeded"`, `stage="tool_loop"`, and the mapped
+`ServiceContextCapacityData` payload.
 
 ### Split Turn Handling
 
@@ -575,14 +726,15 @@ empty. This ensures downstream code always has a non-empty summary to work with.
 
 | # | Bead | Depends |
 |---|------|---------|
-| 1 | Token estimation (chars/4 + provider usage, cache-aware) | — |
+| 1 | Core canonical estimator over exact provider messages and tool definitions, with `math.MaxInt` saturation and `CompactionInput` | — |
 | 2 | Conversation serialization for summarization | — |
-| 3 | Compaction config types and trigger logic | 1 |
+| 3 | Shared working-window resolver, overflow-safe percentage scaling, and compaction trigger from `EstimatedProviderCallTokens` | 1 |
 | 4 | Summarization prompt and summary injection (cache-optimized ordering) | 2, 3 |
 | 5 | File tracking across compactions | 4 |
-| 6 | Mid-turn compaction in agent loop (with system context reinjection) | 4 |
+| 6 | Pre-iteration and mid-turn compaction input from the exact next provider call, with core-owned provider-envelope reconstruction | 1, 4 |
 | 7 | Update mode (merge with previous summary) + split turn handling | 4 |
-| 8 | Integration test: multi-round task with compaction | 6 |
+| 8 | Per-call capacity enforcement, stable attempt indexes, and exhaustive core → harness → root event mapping | 1, 3, 6 |
+| 9 | Integration test: multi-round task with compaction and retry/no-stream event order | 7, 8 |
 
 ## Design Decisions Not Taken
 
@@ -601,9 +753,9 @@ empty. This ensures downstream code always has a non-empty summary to work with.
 | Risk | Prob | Impact | Mitigation |
 |------|------|--------|------------|
 | Local model produces poor summaries | M | H | Allow dedicated summarization model; structured format constrains output |
-| Token estimation inaccurate | M | M | Conservative estimate (chars/4 overestimates); triggers early rather than late |
+| Token estimation inaccurate | M | M | Estimate the exact prospective provider call and retain the fixed five-percent capacity margin |
 | Multiple compactions degrade quality | M | M | Warn after compaction; update mode preserves prior summary content |
 | Summarization adds latency | L | M | Use faster model for summarization; only triggers when needed |
-| Compaction destroys prompt cache | H | M | Cache-optimized ordering (system prompt first, summary second); accepted cost |
-| Cache token accounting wrong | M | M | Include CacheRead in effective token count; use provider-reported usage |
+| Compaction destroys prompt cache | H | M | Core keeps the system prefix stable and preserves replacement-history order; accepted cost |
+| Integer overflow understates capacity needs | L | H | Saturate additive estimates at `math.MaxInt` and use quotient/remainder percentage scaling |
 | Split turn summary inaccurate | L | L | Smaller token budget; separate focused prompt |

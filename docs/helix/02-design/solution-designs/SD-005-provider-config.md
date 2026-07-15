@@ -7,13 +7,13 @@ ddx:
     - FEAT-006
     - SD-001
   review:
-    self_hash: f7fcaedf895c1336816b1d71229989746acc3364aed4cf958465ab8a98c2485e
+    self_hash: c6778d97161b6c273a32a7b9c51483c613b10d8dd96a639ced9186cc4ad960c2
     deps:
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
       FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T12:04:09Z"
 ---
 # Solution Design: SD-005 — Provider Sources, Model Catalog, and Power Routing
 
@@ -64,7 +64,7 @@ Caller boundary (see CONTRACT-003):
   surface. Otherwise the service may consider all eligible harnesses.
 - Callers pass routing intent through public request fields (`Policy`,
   `Provider`, `Model`, `MinPower`, `MaxPower`) plus optional auto-selection
-  inputs (`EstimatedPromptTokens`, `RequiresTools`, `Reasoning`).
+  inputs (`EstimatedPromptTokens`, `MaxTokens`, `RequiresTools`, `Reasoning`).
 - Explicit model, provider-source/endpoint, and harness pins always win over
   automatic selection. If a hard pin cannot be satisfied, routing fails with
   detailed no-candidate evidence and never substitutes a broader model, source,
@@ -317,7 +317,8 @@ Per request, the service:
    - `Harness` is a hard harness constraint.
    - A request is unpinned when `Harness`, `Provider`, and exact `Model` are all
      empty. Policy, power, reasoning, capability, and token-estimate fields are
-     routing intent, not pins.
+     routing intent, not pins. `MaxTokens` is the requested per-call output
+     budget and is also routing intent, not a pin.
    - Fully pinned requests still run validation gates. They bypass comparative
      scoring only when a single candidate remains; multiple endpoints under the
      same constrained source are still ranked.
@@ -342,9 +343,32 @@ Per request, the service:
       model.
    6. Liveness/model-discovery removes endpoints that are down or do not serve
       the candidate model.
-   7. Capability removes candidates with too-small context windows, missing
-      tool support for `RequiresTools`, unsupported explicit reasoning, or
-      stale/deprecated catalog status when not explicitly allowed.
+   7. Capability applies the context-capacity gate before tool and reasoning
+      checks. The route request computes, with non-negative inputs and
+      saturating integer addition:
+
+      ```text
+      prompt = max(EstimatedPromptTokens, 0)
+      output = max(MaxTokens, 0)
+      required_context = saturating_add(prompt, floor(prompt / 4), output)
+      ```
+
+      `saturating_add` caps at Go `math.MaxInt`; non-negative integer input
+      overflow can never wrap to a smaller requirement.
+
+      When `required_context > 0`, an unknown or zero `ContextLength` is
+      rejected with `context_too_small`; a positive context length below the
+      requirement is also rejected, while equality passes. When
+      `required_context == 0`, this gate does not reject an unknown window. A
+      permitted exact pin may therefore select an exact-pin-only candidate with
+      raw unknown capacity, consistent with FEAT-004 requirements 23–28;
+      unpinned auto-routing exclusions still apply. An output-only request
+      (`EstimatedPromptTokens == 0`, `MaxTokens > 0`) remains a real capacity
+      gate. `MaxTokens == 0` contributes no reserved output tokens. Exact pins
+      do not bypass a positive requirement. The remaining capability checks
+      remove candidates missing tool support for `RequiresTools`, unsupported
+      explicit reasoning, or stale/deprecated catalog status when not
+      explicitly allowed.
 6. Applies sticky endpoint assignment for equivalent local/free endpoints:
    1. If the request has a live sticky route key with a valid lease, reuse that
       `(provider source, endpoint, model)` assignment before new load balancing.
@@ -378,7 +402,9 @@ Per request, the service:
 8. Dispatches the top candidate exactly once. On provider/harness failure, the
    service records the attempted route outcome and returns the full ranked
    trace. It does not try the next eligible candidate and it does not widen
-   power bounds inside the same request.
+   power bounds inside the same request. A selected route that later lacks
+   enough per-call context capacity fails on that route; execution does not
+   fall through to the next ranked candidate.
 
 The full ranked candidate trace and per-candidate score components are emitted
 as part of the routing-decision event (CONTRACT-003). Operators explain a
@@ -400,6 +426,9 @@ Every failed routed `Execute` returns enough structured evidence for that
 caller decision:
 
 - requested power bounds, hard constraints, and exact pins
+- requested prompt estimate and output budget, the saturating
+  `required_context`, each candidate's context length and source, and any
+  `context_too_small` rejection
 - selected candidate, rejected candidates, and filter reasons
 - score components and the live/cost/quota facts used for ranking
 - final failure class: `setup/config`, `no-candidate`, `provider-transient`,
@@ -473,15 +502,21 @@ Routing may optimize cost and availability inside those constraints but must
 fail with a detailed candidate trace when they cannot be met.
 
 **D6: Auto-selection inputs are deterministic.** Auto-selection signals are
-`EstimatedPromptTokens` (filter by context window), `RequiresTools` (filter by
-tool support), and `Reasoning` (filter by reasoning support). No prose
-heuristic complexity classifier. `RequiresTools` is explicit caller intent, or
-derived only when a request surface has unambiguously enabled tool execution.
+`EstimatedPromptTokens` plus `MaxTokens` (the saturating context-capacity gate
+defined in Resolution step 5.7), `RequiresTools` (filter by tool support), and
+`Reasoning` (filter by reasoning support). `CompactionContextWindow` is not a
+routing input; it may only tighten the selected route's execution window. No
+prose heuristic complexity classifier is used. `RequiresTools` is explicit
+caller intent, or derived only when a request surface has unambiguously enabled
+tool execution.
 
 **D7: No Fizeau-owned semantic retry.** The routing engine ranks candidates with explicit
 components. `Execute` dispatches the top candidate once and returns the ranked
 trace plus attempted-route outcome. DDx or another caller owns any follow-up
 request with a stronger `MinPower`, capped `MaxPower`, or different hard pins.
+Same-route transient retries may repeat the provider call, but neither a
+route-time `context_too_small` rejection nor an execution-time context-capacity
+failure advances to the next candidate.
 Per-(harness, provider source, endpoint, model) availability/latency replaces
 coarser health memory.
 
@@ -499,10 +534,11 @@ config still maps to one endpoint under the declared provider source.
 the removed route-table field parsing has been removed after its deprecation cycle. A
 boundary test forbids re-introduction of that parser.
 
-**D10: Provider limit discovery is live and type-gated.** When
-`context_window` or `max_tokens` are zero, the CLI calls `LookupModelLimits`
-against the provider's API to discover them. Explicit config values always win.
-Discovery is keyed by server type:
+**D10: Provider limit discovery is cached and type-gated.** Explicit refresh
+and background snapshot maintenance may call `LookupModelLimits` when
+`context_window` or `max_tokens` are absent. Route resolution and execution read
+the resulting snapshot and never synchronously probe a provider merely to fill
+a limit. Explicit config values always win. Discovery is keyed by server type:
 
 - **LM Studio** — `GET /api/v0/models/{model}`; prefers
   `loaded_context_length`
@@ -510,7 +546,15 @@ Discovery is keyed by server type:
   `max_tokens` per model
 - **OpenRouter** — `GET /api/v1/models` (public list)
 
-Undiscoverable values stay zero and the compaction layer uses its own defaults.
+Undiscoverable candidate values stay zero in the candidate trace. A positive
+route requirement rejects them with `context_too_small`; a permitted exact pin
+with a zero requirement may select one. Before native execution, selected
+context resolution uses the candidate value when positive and otherwise uses
+explicit provider config, cached provider-API evidence, catalog metadata, then
+`compaction.DefaultContextWindow` with source `default`. `RouteDecision`
+reports the resolved execution value and source while its candidate trace
+retains the raw unknown value. A direct native path uses the same chain without
+the candidate-value step.
 
 **D11: Provider type replaces flavor heuristics for limit discovery.**
 Port-based provider detection fails when servers run on non-default ports. The
@@ -673,9 +717,9 @@ Package split:
   manifest format, and consumer examples.
 - `plan-2026-04-10-catalog-distribution-and-refresh.md` defines published
   manifest bundles, explicit update flow, and the initial reasoning baseline.
-- D10-D12 (provider limit discovery, flavor detection, omlx support) are
-  implemented in `internal/config/config.go`, provider adapters, and the
-  `LookupModelLimits` call-site in the CLI layer.
+- D10-D12 define provider limit discovery, flavor detection, and omlx support;
+  provider adapters implement the probes, while refresh and snapshot ownership
+  keep those probes off the route and execution hot paths.
 - D15 (reasoning contract) is implemented through `reasoning`,
   `reasoning_default`, and CLI `--reasoning`.
 - D16 (endpoint-aware provider model listing) is implemented through
