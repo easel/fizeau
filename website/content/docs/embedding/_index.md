@@ -873,7 +873,6 @@ parameter types, and field-level documentation, follow the
 | `routingHarnessEntryFromMetadata` | func (func routingHarnessEntryFromMetadata(name string, cfg harnesses.HarnessConfig, st harnesses.HarnessStatus) routing.HarnessEntry) |  |
 | `routingHarnessUsesAccountBilling` | func (func routingHarnessUsesAccountBilling(entry *routing.HarnessEntry) bool) |  |
 | `routingPolicyForName` | func (func routingPolicyForName(cat *modelcatalog.Catalog, name string) string) |  |
-| `routingSurfacePreference` | func (func routingSurfacePreference() map[string]string) | routingSurfacePreference returns the surface→harness preference that makes |
 | `runAlivenessProbeLoop` | func (func runAlivenessProbeLoop( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, interval time.Duration, now func() time.Time, sleep func(ctx context.Context, d time.Duration) bool, persistPath string, )) | runAlivenessProbeLoop periodically re-probes each endpoint whose last probe |
 | `runRouteTimeAlivenessProbes` | func (func runRouteTimeAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, perProbeTimeout time.Duration, )) |  |
 | `runStartupAlivenessProbes` | func (func runStartupAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, totalTimeout time.Duration, )) | runStartupAlivenessProbes probes each endpoint sequentially within totalTimeout |

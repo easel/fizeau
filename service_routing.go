@@ -779,7 +779,7 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 			ProviderProbeUnreachable:     probeMaps.ProviderUnreachable,
 			CooldownDuration:             healthCooldownTTL,
 			Now:                          now,
-			SurfacePreference:            routingSurfacePreference(),
+			SurfacePreference:            serviceimpl.RoutingSurfacePreference(os.Getenv("FIZEAU_DISABLE_CLAUDE_TUI_DEFAULT")),
 			EndpointLoadResolver:         endpointLoadResolver,
 			StickyServerInstanceResolver: stickyServerInstanceResolver,
 		},
@@ -792,22 +792,6 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 		LocalCostUSDPer1kTokens: s.opts.LocalCostUSDPer1kTokens,
 	})
 	return inputs, snapshot
-}
-
-// routingSurfacePreference returns the surface→harness preference that makes
-// claude-tui the DEFAULT for the shared "claude" surface. It is config-gated
-// and revertible via the FIZEAU_DISABLE_CLAUDE_TUI_DEFAULT kill-switch env var:
-// when that is set to a truthy value the preference is disabled (returns an
-// explicit empty map) and routing falls back to the alphabetical tie-break
-// (claude --print). Unset (the default) returns the built-in preference.
-func routingSurfacePreference() map[string]string {
-	if v := strings.TrimSpace(os.Getenv("FIZEAU_DISABLE_CLAUDE_TUI_DEFAULT")); v != "" {
-		switch strings.ToLower(v) {
-		case "1", "true", "yes", "on":
-			return map[string]string{} // explicit empty = preference disabled
-		}
-	}
-	return routing.DefaultSurfacePreference()
 }
 
 // providerCredentialMissingMap inspects each configured provider that
