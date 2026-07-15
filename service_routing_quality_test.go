@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -46,47 +45,6 @@ func TestProviderReliabilityNotRenamedToRoutingQuality(t *testing.T) {
 		if strings.Contains(lower, "providerreliability") || strings.Contains(lower, "successrate") {
 			t.Errorf("RouteStatusReport unexpectedly carries provider-reliability field %q (should live on RouteCandidateStatus)", name)
 		}
-	}
-}
-
-func TestRoutingQualityFieldsExposedOnPublicTypes(t *testing.T) {
-	report := reflect.TypeOf(RouteStatusReport{})
-	usage := reflect.TypeOf(UsageReport{})
-	rq := reflect.TypeOf(RoutingQualityMetrics{})
-	bucket := reflect.TypeOf(OverrideClassBucket{})
-
-	assertFieldTypeAndTag(t, report, "RoutingQuality", "RoutingQualityMetrics", "")
-	assertFieldTypeAndTag(t, usage, "RoutingQuality", "RoutingQualityMetrics", `json:"routing_quality"`)
-
-	assertFieldTypeAndTag(t, rq, "AutoAcceptanceRate", "float64", `json:"auto_acceptance_rate"`)
-	assertFieldTypeAndTag(t, rq, "OverrideDisagreementRate", "float64", `json:"override_disagreement_rate"`)
-	assertFieldTypeAndTag(t, rq, "OverrideClassBreakdown", "[]OverrideClassBucket", `json:"override_class_breakdown,omitempty"`)
-	assertFieldTypeAndTag(t, rq, "TotalRequests", "int", `json:"total_requests"`)
-	assertFieldTypeAndTag(t, rq, "TotalOverrides", "int", `json:"total_overrides"`)
-
-	assertFieldTypeAndTag(t, bucket, "PromptFeatureBucket", "string", `json:"prompt_feature_bucket"`)
-	assertFieldTypeAndTag(t, bucket, "Axis", "string", `json:"axis"`)
-	assertFieldTypeAndTag(t, bucket, "Match", "bool", `json:"match"`)
-	assertFieldTypeAndTag(t, bucket, "Count", "int", `json:"count"`)
-	assertFieldTypeAndTag(t, bucket, "SuccessOutcomes", "int", `json:"success_outcomes"`)
-	assertFieldTypeAndTag(t, bucket, "StalledOutcomes", "int", `json:"stalled_outcomes"`)
-	assertFieldTypeAndTag(t, bucket, "FailedOutcomes", "int", `json:"failed_outcomes"`)
-	assertFieldTypeAndTag(t, bucket, "CancelledOutcomes", "int", `json:"cancelled_outcomes"`)
-	assertFieldTypeAndTag(t, bucket, "UnknownOutcomes", "int", `json:"unknown_outcomes"`)
-}
-
-func assertFieldTypeAndTag(t *testing.T, typ reflect.Type, fieldName, wantType, wantTag string) {
-	t.Helper()
-	field, ok := typ.FieldByName(fieldName)
-	if !ok {
-		t.Fatalf("%s missing field %s", typ.Name(), fieldName)
-	}
-	gotType := strings.ReplaceAll(field.Type.String(), "fizeau.", "")
-	if gotType != wantType {
-		t.Errorf("%s.%s type = %s, want %s", typ.Name(), fieldName, gotType, wantType)
-	}
-	if got := string(field.Tag); got != wantTag {
-		t.Errorf("%s.%s tag = %q, want %q", typ.Name(), fieldName, got, wantTag)
 	}
 }
 

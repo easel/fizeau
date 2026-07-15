@@ -29,7 +29,8 @@ type RoutingQualityScan struct {
 // session logs.
 //
 // A nil window means "no time filter" (include every session). Sessions
-// without a session.start event are skipped (incomplete logs).
+// without a session.start event are skipped (incomplete logs). Corrupt logs
+// are skipped, while a valid prefix from a partially written log is retained.
 func ScanRoutingQuality(logDir string, window *UsageWindow) (*RoutingQualityScan, error) {
 	scan := &RoutingQualityScan{}
 	if logDir == "" {
@@ -49,7 +50,13 @@ func ScanRoutingQuality(logDir string, window *UsageWindow) (*RoutingQualityScan
 		path := filepath.Join(logDir, entry.Name())
 		events, err := ReadEvents(path)
 		if err != nil {
-			return nil, fmt.Errorf("routing-quality: reading %s: %w", path, err)
+			// Session logs are written incrementally and may be truncated if a
+			// process exits mid-write. Preserve any complete prefix that
+			// ReadEvents recovered, but skip files with no readable events so
+			// one damaged log cannot poison the aggregate report.
+			if len(events) == 0 {
+				continue
+			}
 		}
 		var startedAt time.Time
 		var haveStart bool

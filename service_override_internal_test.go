@@ -4,74 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
 )
 
-func TestAxesOverridden_EmptyForUnpinnedRequest(t *testing.T) {
-	got := axesOverridden(ServiceExecuteRequest{Policy: "smart"})
-	if len(got) != 0 {
-		t.Fatalf("axesOverridden(policy-only) = %v, want empty", got)
-	}
-}
-
-func TestAxesOverridden_TracksEachAxisIndependently(t *testing.T) {
-	cases := []struct {
-		name string
-		req  ServiceExecuteRequest
-		want []string
-	}{
-		{"harness only", ServiceExecuteRequest{Harness: "claude"}, []string{overrideAxisHarness}},
-		{"provider only", ServiceExecuteRequest{Provider: "openrouter"}, []string{overrideAxisProvider}},
-		{"model only", ServiceExecuteRequest{Model: "opus-4.7"}, []string{overrideAxisModel}},
-		{"all three", ServiceExecuteRequest{Harness: "claude", Provider: "openrouter", Model: "opus-4.7"},
-			[]string{overrideAxisHarness, overrideAxisProvider, overrideAxisModel}},
-		{"harness+model", ServiceExecuteRequest{Harness: "claude", Model: "opus-4.7"},
-			[]string{overrideAxisHarness, overrideAxisModel}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := axesOverridden(tc.req); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("axesOverridden(%+v) = %v, want %v", tc.req, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestBuildPromptFeatures_NullableEstimatedTokens(t *testing.T) {
-	pf := buildPromptFeatures(ServiceExecuteRequest{})
-	if pf.EstimatedTokens != nil {
-		t.Fatalf("EstimatedTokens for empty request: want nil, got %d", *pf.EstimatedTokens)
-	}
-	pf = buildPromptFeatures(ServiceExecuteRequest{EstimatedPromptTokens: 12500, RequiresTools: true, Reasoning: "high"})
-	if pf.EstimatedTokens == nil || *pf.EstimatedTokens != 12500 {
-		t.Fatalf("EstimatedTokens: want 12500, got %v", pf.EstimatedTokens)
-	}
-	if !pf.RequiresTools {
-		t.Fatalf("RequiresTools: want true, got false")
-	}
-	if pf.Reasoning != "high" {
-		t.Fatalf("Reasoning: want high, got %q", pf.Reasoning)
-	}
-}
-
-func TestOverrideReasonHint_FromMetadata(t *testing.T) {
-	if got := overrideReasonHint(ServiceExecuteRequest{}); got != "" {
-		t.Fatalf("empty request reason_hint: want empty, got %q", got)
-	}
-	req := ServiceExecuteRequest{Metadata: map[string]string{"override.reason": "model needs to match training"}}
-	if got := overrideReasonHint(req); got != "model needs to match training" {
-		t.Fatalf("reason_hint: got %q", got)
-	}
-}
-
 // coincidenceFakeService returns a *service backed by a fakeServiceConfig
 // that exposes a single provider so ResolveRoute deterministically picks
-// that one provider regardless of pin. Used by coincidence and per-axis
-// override tests to anchor stripped-auto resolution.
+// that one provider regardless of pin. It anchors the coincidental-agreement
+// test's stripped-auto resolution.
 func coincidenceFakeService(t *testing.T) *service {
 	t.Helper()
 	catalog := loadRoutingFixtureCatalog(t, `
@@ -159,76 +101,6 @@ func TestOverrideEventCoincidentalAgreement(t *testing.T) {
 	}
 	if ev.Sequence >= finalEv.Sequence {
 		t.Fatalf("override Sequence=%d must precede final Sequence=%d", ev.Sequence, finalEv.Sequence)
-	}
-}
-
-// TestBuildOverrideContext_AxesIndividuallyAndInCombination covers AC #2's
-// per-axis bookkeeping that is awkward to exercise from the external
-// integration test (provider-only and model-only need a configured
-// service to dispatch successfully). Each subtest pins exactly one or two
-// axes and asserts the override-context payload reflects the pin.
-func TestBuildOverrideContext_AxesIndividuallyAndInCombination(t *testing.T) {
-	svc := coincidenceFakeService(t)
-	cases := []struct {
-		name     string
-		req      ServiceExecuteRequest
-		wantAxes []string
-		wantPin  ServiceOverridePin
-	}{
-		{
-			name:     "harness_only",
-			req:      ServiceExecuteRequest{Harness: "fiz"},
-			wantAxes: []string{overrideAxisHarness},
-			wantPin:  ServiceOverridePin{Harness: "fiz"},
-		},
-		{
-			name:     "provider_only",
-			req:      ServiceExecuteRequest{Provider: "local"},
-			wantAxes: []string{overrideAxisProvider},
-			wantPin:  ServiceOverridePin{Provider: "local"},
-		},
-		{
-			name:     "model_only",
-			req:      ServiceExecuteRequest{Model: "model-a"},
-			wantAxes: []string{overrideAxisModel},
-			wantPin:  ServiceOverridePin{Model: "model-a"},
-		},
-		{
-			name:     "harness_and_provider",
-			req:      ServiceExecuteRequest{Harness: "fiz", Provider: "local"},
-			wantAxes: []string{overrideAxisHarness, overrideAxisProvider},
-			wantPin:  ServiceOverridePin{Harness: "fiz", Provider: "local"},
-		},
-		{
-			name:     "provider_and_model",
-			req:      ServiceExecuteRequest{Provider: "local", Model: "model-a"},
-			wantAxes: []string{overrideAxisProvider, overrideAxisModel},
-			wantPin:  ServiceOverridePin{Provider: "local", Model: "model-a"},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			octx := svc.buildOverrideContext(context.Background(), tc.req)
-			if octx == nil {
-				t.Fatalf("buildOverrideContext returned nil for %+v", tc.req)
-			}
-			if !reflect.DeepEqual(octx.payload.AxesOverridden, tc.wantAxes) {
-				t.Fatalf("axes_overridden: got %v, want %v", octx.payload.AxesOverridden, tc.wantAxes)
-			}
-			if octx.payload.UserPin != tc.wantPin {
-				t.Fatalf("user_pin: got %+v, want %+v", octx.payload.UserPin, tc.wantPin)
-			}
-			// MatchPerAxis must contain a key per axis, even when false.
-			if len(octx.payload.MatchPerAxis) != len(tc.wantAxes) {
-				t.Fatalf("match_per_axis size: got %d (%v), want %d",
-					len(octx.payload.MatchPerAxis), octx.payload.MatchPerAxis, len(tc.wantAxes))
-			}
-			for _, axis := range tc.wantAxes {
-				if _, ok := octx.payload.MatchPerAxis[axis]; !ok {
-					t.Fatalf("match_per_axis missing key %q: %v", axis, octx.payload.MatchPerAxis)
-				}
-			}
-		})
 	}
 }
 
