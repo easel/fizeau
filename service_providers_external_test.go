@@ -48,12 +48,10 @@ func newProviderFacade(t *testing.T, config *providerFacadeConfig) fizeau.Fizeau
 	return svc
 }
 
-func closedProviderBaseURL(t *testing.T) string {
-	t.Helper()
-	server := httptest.NewServer(http.NotFoundHandler())
-	baseURL := server.URL + "/v1"
-	server.Close()
-	return baseURL
+func unreachableProviderBaseURL() string {
+	// TCP port zero is never assigned to a listening server, so this endpoint
+	// stays offline and cannot alias a later httptest server through port reuse.
+	return "http://127.0.0.1:0/v1"
 }
 
 // @covers US-003-AC2
@@ -228,7 +226,7 @@ func TestListProviders_OMLXAdvertisesReasoningControl(t *testing.T) {
 }
 
 func TestListProviders_Unreachable(t *testing.T) {
-	baseURL := closedProviderBaseURL(t)
+	baseURL := unreachableProviderBaseURL()
 	config := &providerFacadeConfig{
 		providers: map[string]fizeau.ServiceProviderEntry{
 			"remote": {Type: "lmstudio", BaseURL: baseURL},
@@ -255,7 +253,7 @@ func TestListProviders_Unreachable(t *testing.T) {
 }
 
 func TestProviderStatus_EndpointDownSurfaced(t *testing.T) {
-	deadBaseURL := closedProviderBaseURL(t)
+	deadBaseURL := unreachableProviderBaseURL()
 	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" && r.URL.Path != "/models" {
 			http.NotFound(w, r)
@@ -384,7 +382,7 @@ func TestHealthCheck_Provider_Connected(t *testing.T) {
 }
 
 func TestHealthCheckProviders_UnreachableIncludesReason(t *testing.T) {
-	baseURL := closedProviderBaseURL(t)
+	baseURL := unreachableProviderBaseURL()
 	config := &providerFacadeConfig{providers: map[string]fizeau.ServiceProviderEntry{
 		"dead": {Type: "lmstudio", BaseURL: baseURL},
 	}}
