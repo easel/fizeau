@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - helix.prd
   review:
-    self_hash: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
+    self_hash: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
     deps:
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T05:24:31Z"
+    reviewed_at: "2026-07-15T16:59:30Z"
 ---
 # Architecture — Fizeau
 
@@ -61,6 +61,13 @@ service interfaces, request/response/event types, constructors, errors,
 compatibility wrappers, and public contract tests. It delegates mechanics to
 internal packages and must not expose their concrete types.
 
+The executable root inventory is exact, not heuristic:
+`TestRootFacadeSourceAllowlist` locks the production facade/adapters, and
+`TestRootFacadeTestAllowlist` locks the remaining `package fizeau` composition
+and structural tests. The literal lists and ownership rationale live in the
+root-facade extraction inventory. External `package fizeau_test` tests exercise
+the importable public contract and are not white-box implementation owners.
+
 ### Service implementation: `internal/serviceimpl`
 
 `internal/serviceimpl` performs service execution and dispatch for the root
@@ -85,7 +92,11 @@ events. It does not give callers a provider instance or harness-native stream.
   probe lifecycle concurrency, refresh single-flight state, and dispatch
   feedback transactions. Root service files supply API-neutral configuration,
   catalog, persistence, and harness callbacks only.
-- `internal/quota` owns normalized quota state and burn-rate prediction.
+- `internal/quota` owns normalized quota state, burn-rate prediction, recovery
+  scheduling and signal transitions, plus OpenRouter credit cache,
+  single-flight, HTTP/decoding, failure-classification, threshold, TTL, and
+  candidate-normalization mechanics. The root retains public quota/burn-rate
+  compatibility types and narrow public-config/routing-evidence adapters.
 - `internal/routingquality` owns routing-quality aggregation and override-class
   pivots; public metric structs remain in the root package.
 - `internal/session` and `internal/sessionlog` support persisted service
@@ -103,6 +114,8 @@ render output. Some non-execution catalog, discovery, and configuration
 commands still use a narrow, test-enforced internal-package allowlist while
 equivalent public projections are completed; this is transitional
 implementation reference, not permission to bypass the service for execution.
+The concrete transitional list is `approvedProductionInternalImports` in
+`agentcli/service_boundary_test.go`.
 `cmd/fiz` supplies version/process wiring and owns process termination. Neither
 package constructs providers, invokes `internal/core`, implements failover,
 parses harness-native output, or synthesizes session lifecycle records.

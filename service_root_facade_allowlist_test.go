@@ -87,6 +87,152 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 	}
 }
 
+// TestRootFacadeTestAllowlist locks the package-internal root tests that still
+// need direct access to facade adapters, composition seams, or structural
+// ownership checks. Public contract tests belong in package fizeau_test, and
+// implementation mechanics belong beside their internal package owners.
+func TestRootFacadeTestAllowlist(t *testing.T) {
+	want := []string{
+		"claude_quota_test_helpers_test.go",
+		"harness_golden_integration_test.go",
+		"no_viable_provider_for_now_test.go",
+		"quota_header_observer_test.go",
+		"service_adr005_test.go",
+		"service_aliveness_test.go",
+		"service_cleanup_options_test.go",
+		"service_contract_post_refactor_structural_test.go",
+		"service_contract_pre_refactor_baseline_test.go",
+		"service_contract_snapshot_test.go",
+		"service_dispatch_feedback_test.go",
+		"service_execute_claudetui_default_test.go",
+		"service_execute_dispatch_test.go",
+		"service_execute_harness_pin_test.go",
+		"service_execute_session_log_adapter_test.go",
+		"service_haiku_alias_eligibility_test.go",
+		"service_http_provider_test.go",
+		"service_model_resolution_test.go",
+		"service_models_test.go",
+		"service_new_internal_test.go",
+		"service_openrouter_credit_test.go",
+		"service_override_internal_test.go",
+		"service_probe_test.go",
+		"service_projection_internal_test.go",
+		"service_providers_test.go",
+		"service_root_facade_allowlist_test.go",
+		"service_route_attempts_test.go",
+		"service_route_evidence_test.go",
+		"service_route_leases_test.go",
+		"service_routehealth_boundary_test.go",
+		"service_routehealth_ownership_test.go",
+		"service_routestatus_nil_config_test.go",
+		"service_routing_errors_test.go",
+		"service_routing_quality_test.go",
+		"service_routing_test.go",
+		"service_snapshot_autorouting_test.go",
+		"service_snapshot_test.go",
+		"service_stale_harness_reaper_unix_test.go",
+		"service_status_internal_test.go",
+		"service_test_helpers_test.go",
+		"service_transcript_ownership_test.go",
+		"service_usage_routing_quality_test.go",
+		"service_wrapped_route_observation_test.go",
+	}
+
+	got := rootPackageInternalTestFiles(t)
+	if mismatch := rootFacadeTestAllowlistMismatch(got, want); mismatch != "" {
+		t.Fatal(mismatch)
+	}
+	if violations := rootFacadeTestOwnershipViolations(parseRootPackageInternalTests(t)); len(violations) != 0 {
+		t.Fatalf("root package-fizeau test ownership violations: %v", violations)
+	}
+
+	t.Run("rejects deleted session hub file drift", func(t *testing.T) {
+		mutated := append(slices.Clone(got), "service_session_hub_test.go")
+		slices.Sort(mutated)
+		mismatch := rootFacadeTestAllowlistMismatch(mutated, want)
+		if !strings.Contains(mismatch, "service_session_hub_test.go") {
+			t.Fatalf("known implementation helper drift was not rejected: %q", mismatch)
+		}
+	})
+
+	t.Run("rejects session hub helper drift in allowed test", func(t *testing.T) {
+		file, err := parser.ParseFile(token.NewFileSet(), "service_routing_test.go", `package fizeau
+
+func newSessionHub() any { return nil }
+`, 0)
+		if err != nil {
+			t.Fatalf("parse mutation: %v", err)
+		}
+		violations := rootFacadeTestOwnershipViolations(map[string]*ast.File{
+			"service_routing_test.go": file,
+		})
+		if !slices.ContainsFunc(violations, func(violation string) bool {
+			return strings.Contains(violation, "newSessionHub")
+		}) {
+			t.Fatalf("newSessionHub mutation passed package-fizeau test ownership check: %v", violations)
+		}
+	})
+}
+
+func rootPackageInternalTestFiles(t *testing.T) []string {
+	t.Helper()
+	files := parseRootPackageInternalTests(t)
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func parseRootPackageInternalTests(t *testing.T) map[string]*ast.File {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir(.): %v", err)
+	}
+
+	files := make(map[string]*ast.File)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		if file.Name.Name == "fizeau" {
+			files[name] = file
+		}
+	}
+	return files
+}
+
+func rootFacadeTestOwnershipViolations(files map[string]*ast.File) []string {
+	var violations []string
+	for path, file := range files {
+		for _, decl := range file.Decls {
+			function, ok := decl.(*ast.FuncDecl)
+			if ok && function.Recv == nil && function.Name.Name == "newSessionHub" {
+				violations = append(violations, fmt.Sprintf(
+					"root package-fizeau test %s declares newSessionHub; construct serviceimpl.NewSessionHub explicitly",
+					path,
+				))
+			}
+		}
+	}
+	slices.Sort(violations)
+	return violations
+}
+
+func rootFacadeTestAllowlistMismatch(got, want []string) string {
+	if slices.Equal(got, want) {
+		return ""
+	}
+	return fmt.Sprintf("root package-fizeau test allowlist mismatch\nwant: %v\ngot:  %v", want, got)
+}
+
 // TestRootRoutingInputMechanicsStayInternal locks the root routing-input
 // surface to public contract identity plus the four intended internal calls.
 // Surface preference, credential classification, snapshot-health adaptation,

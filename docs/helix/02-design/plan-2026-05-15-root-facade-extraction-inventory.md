@@ -51,10 +51,11 @@ Documentation also consumes the root facade even when it is not a Go import:
 `cmd/docgen-embedding/page.tmpl` both describe `github.com/easel/fizeau` as
 the library entry point.
 
-## Root file inventory
+## Original root file inventory
 
-The inventory buckets every current root-level `.go` file into one of three
-classes:
+The original 2026-05-15 inventory bucketed the then-current root-level `.go`
+files into three classes. It is historical planning evidence, not a statement
+that every path named in its extraction lists still exists at the root:
 
 - `Public facade`: root must keep these symbols importable, although several
   files are mixed and need internal logic split out.
@@ -64,14 +65,17 @@ classes:
 - `Implementation-owned`: concrete mechanics or white-box tests that should
   move behind the named internal-package owner.
 
-## Post-extraction root source allowlist
+## Current executable root allowlists
 
-Update 2026-05-15: the ADR-008 extraction chain is now far enough along that
+The ADR-008 extraction chain is now far enough along that
 the module root should be read as an explicit allowlist, not as the planning
-inventory above. The enforced source-file set is locked by
-`TestRootFacadeSourceAllowlist` in `service_root_facade_allowlist_test.go`.
+inventory above. The enforced production and package-internal test sets are
+locked by `TestRootFacadeSourceAllowlist` and `TestRootFacadeTestAllowlist` in
+`service_root_facade_allowlist_test.go`.
 
-### Public contract and compatibility surface
+### Production source allowlist
+
+#### Public contract and compatibility surface
 
 These files are the deliberate import boundary for `github.com/easel/fizeau`:
 
@@ -90,7 +94,7 @@ These files are the deliberate import boundary for `github.com/easel/fizeau`:
   `options_prod.go`, `options_testseam.go`, `service_execute_seam_prod.go`,
   `service_execute_seam_testseam.go`, `testseam_types.go`.
 
-### Root facade adapters over internal owners
+#### Root facade adapters over internal owners
 
 These root files still exist on purpose, but after the extraction chain they
 are adapters/wiring over internal execution, routing, and quota owners rather
@@ -117,6 +121,12 @@ than the old home of the implementation bulk:
   the former private `service_subscription_quota.go` adapter is gone. The
   public quota-state and burn-rate facades remain deliberate compatibility
   surfaces in `provider_quota_state.go` and `provider_burn_rate.go`.
+  `internal/quota/openrouter_credit.go` owns the OpenRouter credit cache,
+  single-flight coordination, HTTP and decoding work, failure classification,
+  thresholds, TTLs, and candidate-name normalization. Root
+  `service_openrouter_credit.go` only adapts public provider configuration,
+  projects quota evidence into root routing types, and exposes the two
+  compatibility constants.
   `service_capabilities.go` retains the public capability types/constants and
   a field-for-field projection; status/detail classification lives in
   `internal/serviceimpl`.
@@ -171,7 +181,70 @@ Sticky lease and utilization mechanics now enter through API-neutral
 `internal/routehealth.StickyState` operations at the routing and model
 projection boundaries; the former `service_route_leases.go` adapter is gone.
 
-Anything outside this allowlist is drift and should fail the root-facade audit.
+### Package-internal root test allowlist
+
+The following root `package fizeau` tests deliberately retain direct access to
+facade adapters, composition seams, fixtures, or structural ownership checks:
+
+- Shared fixtures and integration setup:
+  `claude_quota_test_helpers_test.go`,
+  `harness_golden_integration_test.go`,
+  `quota_header_observer_test.go`, and
+  `service_test_helpers_test.go`.
+- Facade composition and adapter tests:
+  `no_viable_provider_for_now_test.go`,
+  `service_adr005_test.go`,
+  `service_aliveness_test.go`,
+  `service_cleanup_options_test.go`,
+  `service_contract_snapshot_test.go`,
+  `service_dispatch_feedback_test.go`,
+  `service_execute_claudetui_default_test.go`,
+  `service_execute_dispatch_test.go`,
+  `service_execute_harness_pin_test.go`,
+  `service_execute_session_log_adapter_test.go`,
+  `service_haiku_alias_eligibility_test.go`,
+  `service_http_provider_test.go`,
+  `service_model_resolution_test.go`,
+  `service_models_test.go`,
+  `service_new_internal_test.go`,
+  `service_openrouter_credit_test.go`,
+  `service_override_internal_test.go`,
+  `service_probe_test.go`,
+  `service_projection_internal_test.go`,
+  `service_providers_test.go`,
+  `service_route_attempts_test.go`,
+  `service_route_evidence_test.go`,
+  `service_route_leases_test.go`,
+  `service_routestatus_nil_config_test.go`,
+  `service_routing_errors_test.go`,
+  `service_routing_quality_test.go`,
+  `service_routing_test.go`,
+  `service_snapshot_autorouting_test.go`,
+  `service_snapshot_test.go`,
+  `service_stale_harness_reaper_unix_test.go`,
+  `service_status_internal_test.go`,
+  `service_usage_routing_quality_test.go`, and
+  `service_wrapped_route_observation_test.go`.
+- Boundary and ownership locks:
+  `service_contract_post_refactor_structural_test.go`,
+  `service_contract_pre_refactor_baseline_test.go`,
+  `service_root_facade_allowlist_test.go`,
+  `service_routehealth_boundary_test.go`,
+  `service_routehealth_ownership_test.go`, and
+  `service_transcript_ownership_test.go`.
+
+Root `package fizeau_test` files are external public-contract tests and are not
+white-box implementation owners. Any new root `package fizeau` test outside
+the literal list above is drift and fails `TestRootFacadeTestAllowlist`; its
+mutation case specifically rejects reintroducing the deleted
+`service_session_hub_test.go` helper surface. Any production source outside the
+production list likewise fails `TestRootFacadeSourceAllowlist`.
+
+## Historical extraction inventory (2026-05-15 baseline)
+
+Everything below records the original planning baseline and ordered move
+sequence. Its source/test paths are intentionally historical and must not be
+used as a current allowlist or current ownership claim.
 
 ### Public facade
 
@@ -333,15 +406,20 @@ to ordinary review rather than a claim of complete semantic detection.
 
 #### Owner: `internal/quota`
 
-These files own provider quota state, recovery probing, and subscription
-quota math. The extraction is now complete: root routing and execute-route
-seams call `internal/quota.SubscriptionForHarness` directly, quota recovery
-scheduling and signal transitions delegate to `internal/quota`, and the
-private subscription projection wrapper has been deleted. Root intentionally
-retains the public `ProviderQuotaStateStore` and `ProviderBurnRateTracker`
-facades plus `QuotaRecoveryProber` and its ServiceConfig-backed probe wiring.
+The current internal package owns provider quota state, recovery probing,
+subscription quota math, and OpenRouter credit mechanics. In particular,
+`internal/quota/openrouter_credit.go` owns caching, single-flight, HTTP,
+decoding, failure classification, thresholds, TTLs, and candidate-name
+normalization. Root routing and execute-route seams call
+`internal/quota.SubscriptionForHarness` directly, quota recovery scheduling
+and signal transitions delegate to `internal/quota`, and the private
+subscription projection wrapper has been deleted. Root intentionally retains
+the public `ProviderQuotaStateStore` and `ProviderBurnRateTracker` facades,
+`QuotaRecoveryProber` plus its ServiceConfig-backed probe wiring, and the
+narrow OpenRouter config/evidence adapter in `service_openrouter_credit.go`.
 The source and test lists below are retained only as the historical extraction
-inventory and ordered implementation slice.
+inventory and ordered implementation slice; they are not the current root
+allowlist.
 
 - Source files:
   `service_subscription_quota.go`.
@@ -359,10 +437,11 @@ aggregators, store records, and override-outcome bookkeeping should move here.
   `service_routing_quality_test.go`,
   `service_usage_routing_quality_test.go`.
 
-## Ordered extraction slices
+## Historical ordered extraction slices
 
-The parent bead should be broken into these smaller execution slices, in this
-order.
+The parent bead was planned as these smaller execution slices, in this order.
+This table records the original sequence; it does not override the executable
+allowlists above.
 
 | Order | Slice | Files/scope | Target internal owners |
 |---|---|---|---|

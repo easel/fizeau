@@ -751,7 +751,6 @@ parameter types, and field-level documentation, follow the
 | `attachRuntimeSignalToModelInfo` | func (func attachRuntimeSignalToModelInfo(info *ModelInfo, providerName string)) |  |
 | `autoRoutingModelsForHarness` | func (func autoRoutingModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []string) |  |
 | `axesOverridden` | func (func axesOverridden(req ServiceExecuteRequest) []string) | axesOverridden returns the canonical, ordered list of axes the caller |
-| `candidateBaseProviderName` | func (func candidateBaseProviderName(identity string) string) | candidateBaseProviderName strips any "@endpoint" suffix from a candidate |
 | `capabilityScoreForCostClass` | func (func capabilityScoreForCostClass(class string) float64) | capabilityScoreForCostClass maps the harness cost class to a coarse |
 | `catalogCostAndPerf` | func (func catalogCostAndPerf(cat *modelcatalog.Catalog, modelID string) (CostInfo, PerfSignal)) | catalogCostAndPerf extracts CostInfo and PerfSignal for a model from the catalog |
 | `catalogModelsForHarness` | func (func catalogModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []string) |  |
@@ -813,17 +812,7 @@ parameter types, and field-level documentation, follow the
 | `nativeProviderResolution` | type (struct) |  |
 | `nativeRouteCandidates` | func (func nativeRouteCandidates(in []RouteCandidate) []serviceimpl.NativeRouteCandidate) |  |
 | `normalizeServiceProviderType` | func (func normalizeServiceProviderType(t string) string) |  |
-| `openrouterCreditFailureMode` | type | openrouterCreditFailureMode classifies why a credit probe attempt did not |
-| `openrouterCreditFreshnessSource` | const | openrouterCreditFreshnessSource labels candidate |
-| `openrouterCreditProbeResult` | type (struct) | openrouterCreditProbeResult is the classified outcome of one /api/v1/credits |
-| `openrouterCreditProbeTimeout` | const | openrouterCreditProbeTimeout bounds one synchronous credit probe so a |
-| `openrouterCreditRecord` | type (struct) | openrouterCreditRecord is one cached balance reading |
-| `openrouterCreditStore` | type (struct) | openrouterCreditStore caches openrouter account balance readings with a |
-| `openrouterCreditTTLFor` | func (func openrouterCreditTTLFor(pcfg ServiceProviderEntry) time.Duration) | openrouterCreditTTLFor returns the configured credit-probe TTL for the |
-| `openrouterCreditThresholdFor` | func (func openrouterCreditThresholdFor(pcfg ServiceProviderEntry) float64) | openrouterCreditThresholdFor returns the configured credit balance threshold |
-| `openrouterCreditsEndpoint` | func (func openrouterCreditsEndpoint(baseURL string) string) | openrouterCreditsEndpoint resolves the /api/v1/credits URL from a provider's |
-| `openrouterCreditsResponse` | type (struct) | openrouterCreditsResponse decodes /api/v1/credits |
-| `openrouterProbeProjection` | type (struct) | openrouterProbeProjection is the routing engine's view of the openrouter |
+| `openrouterProbeProjection` | type (struct) | openrouterProbeProjection is the root facade's narrow adaptation from |
 | `overrideAxisHarness` | const | overrideAxis* enumerates the three independently-tracked override axes |
 | `overrideAxisModel` | const | overrideAxis* enumerates the three independently-tracked override axes |
 | `overrideAxisProvider` | const | overrideAxis* enumerates the three independently-tracked override axes |

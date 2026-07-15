@@ -3,9 +3,9 @@ package fizeau
 // public_cli_api.go re-exports the minimal set of types and helpers that the
 // `cmd/fiz` CLI binary needs. These exist so the binary can stay behind a
 // strict service-boundary import allowlist (see
-// cmd/fiz/service_boundary_test.go) while still using shared building
-// blocks. Add re-exports here only when removing one would force the CLI to
-// import an internal package directly.
+// agentcli/service_boundary_test.go and approvedProductionInternalImports)
+// while still using shared building blocks. Add re-exports here only when
+// removing one would force the CLI to import an internal package directly.
 
 import (
 	"context"

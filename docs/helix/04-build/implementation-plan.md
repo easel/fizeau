@@ -25,9 +25,9 @@ ddx:
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
-      helix.arch: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
+      helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T12:46:06Z"
+    reviewed_at: "2026-07-15T16:59:30Z"
 ---
 # Build Plan — Fizeau
 
