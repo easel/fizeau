@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -23,11 +24,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestRouteCandidateFromInternalMapsFields(t *testing.T) {
+// TestRouteCandidateFromInternalProjectionParity is the intentional
+// same-package seam for the private routing-candidate mapper. The public
+// facade tests exercise routing behavior; this test exhaustively owns the
+// field projection and copy boundary that callers cannot construct directly.
+func TestRouteCandidateFromInternalProjectionParity(t *testing.T) {
+	scoreComponents := map[string]float64{
+		"base":                100,
+		"cost":                -4,
+		"deployment_locality": 12,
+		"quota_health":        6,
+		"utilization":         -3,
+		"performance":         -9,
+		"power":               18,
+	}
 	candidate := routing.Candidate{
 		Harness:            "fiz",
 		Provider:           "local",
+		Billing:            BillingModelFixed,
+		ActualCashSpend:    true,
 		Endpoint:           "primary",
+		ServerInstance:     "127.0.0.1:9999",
 		Model:              "model-a",
 		Score:              42.5,
 		CostUSDPer1kTokens: 0.012,
@@ -36,201 +53,133 @@ func TestRouteCandidateFromInternalMapsFields(t *testing.T) {
 		ContextLength:      200000,
 		ContextSource:      routing.ContextSourceCatalog,
 		ContextHeadroom:    150000,
-		Eligible:           true,
-		Reason:             "profile=cheap; score=42.5",
+		Eligible:           false,
+		Reason:             "context window is too small",
+		FilterReason:       routing.FilterReasonContextTooSmall,
 		LatencyMS:          123,
 		SpeedTPS:           55,
+		Utilization:        0.25,
 		SuccessRate:        0.8,
-		CostClass:          "local",
+		CostClass:          "expensive",
 		QuotaOK:            true,
 		QuotaPercentUsed:   25,
 		QuotaTrend:         routing.QuotaTrendHealthy,
 		StickyAffinity:     10,
+		ScoreComponents:    scoreComponents,
+	}
+	want := RouteCandidate{
+		Harness:             "fiz",
+		Provider:            "local",
+		Billing:             BillingModelFixed,
+		ActualCashSpend:     true,
+		Endpoint:            "primary",
+		ServerInstance:      "127.0.0.1:9999",
+		Model:               "model-a",
+		Score:               42.5,
+		CostUSDPer1kTokens:  0.012,
+		CostSource:          routing.CostSourceCatalog,
+		EffectiveCost:       0.012,
+		EffectiveCostSource: routing.CostSourceCatalog,
+		Eligible:            false,
+		Reason:              "context window is too small",
+		FilterReason:        FilterReasonContextTooSmall,
+		ContextLength:       200000,
+		ContextSource:       routing.ContextSourceCatalog,
+		Components: RouteCandidateComponents{
+			Power:                   7,
+			Cost:                    0.012,
+			CostClass:               "expensive",
+			LatencyMS:               123,
+			SpeedTPS:                55,
+			Utilization:             0.25,
+			SuccessRate:             0.8,
+			QuotaOK:                 true,
+			QuotaPercentUsed:        25,
+			QuotaTrend:              routing.QuotaTrendHealthy,
+			Capability:              3,
+			ContextHeadroom:         150000,
+			StickyAffinity:          10,
+			PowerWeightedCapability: 18,
+			PlacementBonus:          22,
+			QuotaBonus:              6,
+			MarginalCostPenalty:     4,
+			AvailabilityPenalty:     3,
+			StaleSignalPenalty:      9,
+		},
 		ScoreComponents: map[string]float64{
 			"base":                100,
 			"cost":                -4,
 			"deployment_locality": 12,
 			"quota_health":        6,
 			"utilization":         -3,
-			"performance":         9,
+			"performance":         -9,
 			"power":               18,
-			"context_headroom":    0.15,
-			"sticky_affinity":     10,
 		},
 	}
-
 	got := routeCandidateFromInternal(candidate, RoutePowerPolicy{MinPower: 6, MaxPower: 8})
-	if got.Harness != candidate.Harness ||
-		got.Provider != candidate.Provider ||
-		got.Endpoint != candidate.Endpoint ||
-		got.Model != candidate.Model ||
-		got.Score != candidate.Score ||
-		got.CostUSDPer1kTokens != candidate.CostUSDPer1kTokens ||
-		got.CostSource != candidate.CostSource ||
-		got.Eligible != candidate.Eligible {
-		t.Fatalf("routeCandidateFromInternal()=%#v, want fields from %#v", got, candidate)
-	}
-	if got.Reason != candidate.Reason {
-		t.Fatalf("eligible Reason=%q, want %q", got.Reason, candidate.Reason)
-	}
-	if got.Components.Power != 7 || got.Components.SpeedTPS != 55 || got.Components.QuotaPercentUsed != 25 || got.Components.QuotaTrend != routing.QuotaTrendHealthy {
-		t.Fatalf("components=%#v, want power/speed/quota inputs from candidate", got.Components)
-	}
-	if got.Components.Utilization != 0 {
-		t.Fatalf("components utilization=%v, want zero when unavailable", got.Components.Utilization)
-	}
-	if got.Components.StickyAffinity != 10 {
-		t.Fatalf("components sticky affinity=%v, want 10 from sticky match", got.Components.StickyAffinity)
-	}
-	if got.Components.PowerWeightedCapability != 18 {
-		t.Fatalf("components power_weighted_capability=%v, want 18", got.Components.PowerWeightedCapability)
-	}
-	if got.Components.PowerHintFit != 0 {
-		t.Fatalf("components power_hint_fit=%v, want 0 within bounds", got.Components.PowerHintFit)
-	}
-	if got.Components.LatencyWeight != 9 {
-		t.Fatalf("components latency_weight=%v, want 9", got.Components.LatencyWeight)
-	}
-	if got.Components.PlacementBonus != 12+10 {
-		t.Fatalf("components placement_bonus=%v, want 22", got.Components.PlacementBonus)
-	}
-	if got.Components.QuotaBonus != 6 {
-		t.Fatalf("components quota_bonus=%v, want 6", got.Components.QuotaBonus)
-	}
-	if got.Components.MarginalCostPenalty != 4 {
-		t.Fatalf("components marginal_cost_penalty=%v, want 4", got.Components.MarginalCostPenalty)
-	}
-	if got.Components.AvailabilityPenalty != 3 {
-		t.Fatalf("components availability_penalty=%v, want 3", got.Components.AvailabilityPenalty)
-	}
-	if got.Components.StaleSignalPenalty != 0 {
-		t.Fatalf("components stale_signal_penalty=%v, want 0", got.Components.StaleSignalPenalty)
-	}
-	if got.ContextLength != candidate.ContextLength || got.ContextSource != candidate.ContextSource {
-		t.Fatalf("context evidence=%d/%q, want %d/%q", got.ContextLength, got.ContextSource, candidate.ContextLength, candidate.ContextSource)
-	}
-	if got.Components.ContextHeadroom != candidate.ContextHeadroom {
-		t.Fatalf("context headroom=%d, want %d", got.Components.ContextHeadroom, candidate.ContextHeadroom)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("routeCandidateFromInternal()=%#v, want %#v", got, want)
 	}
 
-	rejected := candidate
-	rejected.Eligible = false
-	rejected.Reason = "model not in harness allow-list"
-	got = routeCandidateFromInternal(rejected, RoutePowerPolicy{})
-	if got.Reason != rejected.Reason {
-		t.Fatalf("rejected Reason=%q, want %q", got.Reason, rejected.Reason)
+	// Keep this list exhaustive: a new public field must be classified as
+	// mapper-owned above or explicitly left for a later evidence annotator.
+	wantFields := []string{
+		"Harness", "Provider", "Billing", "ActualCashSpend", "Endpoint", "ServerInstance", "Model", "Score",
+		"CostUSDPer1kTokens", "CostSource", "EffectiveCost", "EffectiveCostSource", "Eligible", "Reason", "FilterReason",
+		"ContextLength", "ContextSource", "SourceStatus", "AutoRoutable", "ExactPinOnly", "ExclusionReason", "SnapshotCapturedAt",
+		"HealthFreshnessAt", "HealthFreshnessSource", "QuotaFreshnessAt", "QuotaFreshnessSource", "ModelDiscoveryFreshnessAt",
+		"ModelDiscoveryFreshnessSource", "Components", "ScoreComponents", "Utilization", "LastProbeAt", "LastProbeSuccess",
 	}
-}
-
-func TestRouteDecisionCandidatesExposeRawScoreComponents(t *testing.T) {
-	rawComponents := map[string]float64{
-		"base":                100,
-		"power":               18,
-		"cost":                -4,
-		"quota_health":        6,
-		"deployment_locality": 12,
-		"utilization":         -3,
-		"context_headroom":    0.15,
-		"performance":         9,
+	typ := reflect.TypeOf(RouteCandidate{})
+	if typ.NumField() != len(wantFields) {
+		t.Fatalf("RouteCandidate has %d fields, mapper parity classifies %d; update this test for the new public field", typ.NumField(), len(wantFields))
 	}
-	got := routeCandidateFromInternal(routing.Candidate{
-		Harness:            "fiz",
-		Provider:           "local",
-		Model:              "model-a",
-		Score:              138.15,
-		Eligible:           true,
-		Power:              7,
-		CostUSDPer1kTokens: 0.012,
-		ScoreComponents:    rawComponents,
-	}, RoutePowerPolicy{})
-
-	if len(got.ScoreComponents) != len(rawComponents) {
-		t.Fatalf("len(ScoreComponents)=%d, want %d: %#v", len(got.ScoreComponents), len(rawComponents), got.ScoreComponents)
-	}
-	for key, want := range rawComponents {
-		if got.ScoreComponents[key] != want {
-			t.Fatalf("ScoreComponents[%q]=%v, want %v in %#v", key, got.ScoreComponents[key], want, got.ScoreComponents)
+	for i, wantField := range wantFields {
+		if gotField := typ.Field(i).Name; gotField != wantField {
+			t.Fatalf("RouteCandidate field %d=%q, want %q; update mapper parity classification", i, gotField, wantField)
 		}
 	}
-	if got.Components.Power != 7 || got.Components.Cost != 0.012 {
-		t.Fatalf("aggregate Components=%#v, want preserved alongside raw ScoreComponents", got.Components)
+	componentFields := []string{
+		"Power", "Cost", "CostClass", "LatencyMS", "SpeedTPS", "Utilization", "SuccessRate", "QuotaOK", "QuotaPercentUsed",
+		"QuotaTrend", "Capability", "ContextHeadroom", "StickyAffinity", "PowerWeightedCapability", "PowerHintFit", "LatencyWeight",
+		"PlacementBonus", "QuotaBonus", "MarginalCostPenalty", "AvailabilityPenalty", "StaleSignalPenalty",
 	}
-	rawComponents["base"] = -999
+	componentType := reflect.TypeOf(RouteCandidateComponents{})
+	if componentType.NumField() != len(componentFields) {
+		t.Fatalf("RouteCandidateComponents has %d fields, mapper parity classifies %d; update this test for the new component", componentType.NumField(), len(componentFields))
+	}
+	for i, wantField := range componentFields {
+		if gotField := componentType.Field(i).Name; gotField != wantField {
+			t.Fatalf("RouteCandidateComponents field %d=%q, want %q; update mapper parity classification", i, gotField, wantField)
+		}
+	}
+
+	scoreComponents["base"] = -999
 	if got.ScoreComponents["base"] != 100 {
 		t.Fatalf("ScoreComponents aliases internal map; base=%v, want copied 100", got.ScoreComponents["base"])
 	}
-}
 
-func TestRouteCandidateFromInternalUsesExclusionStrengthForAboveMaxPower(t *testing.T) {
-	candidate := routing.Candidate{
-		Harness:      "codex",
-		Provider:     "frontier",
-		Model:        "frontier-10",
-		Power:        10,
-		Eligible:     false,
-		Reason:       "model power 10 exceeds max_power=8 while an in-bounds candidate exists",
-		FilterReason: routing.FilterReasonAboveMaxPower,
-		ScoreComponents: map[string]float64{
-			"power": -1002,
-		},
+	for internal, public := range map[routing.FilterReason]string{
+		routing.FilterReasonContextTooSmall:      FilterReasonContextTooSmall,
+		routing.FilterReasonNoToolSupport:        FilterReasonNoToolSupport,
+		routing.FilterReasonReasoningUnsupported: FilterReasonReasoningUnsupported,
+		routing.FilterReasonUnhealthy:            FilterReasonUnhealthy,
+		routing.FilterReasonScoredBelowTop:       FilterReasonScoredBelowTop,
+		routing.FilterReasonAboveMaxPower:        FilterReasonAboveMaxPower,
+	} {
+		mapped := routeCandidateFromInternal(routing.Candidate{FilterReason: internal}, RoutePowerPolicy{})
+		if mapped.FilterReason != public {
+			t.Errorf("FilterReason %q mapped to %q, want %q", internal, mapped.FilterReason, public)
+		}
 	}
 
-	got := routeCandidateFromInternal(candidate, RoutePowerPolicy{MaxPower: 8})
-	if got.FilterReason != FilterReasonAboveMaxPower {
-		t.Fatalf("filter reason=%q, want %q", got.FilterReason, FilterReasonAboveMaxPower)
-	}
-	if got.Components.PowerHintFit != -1002 {
-		t.Fatalf("power_hint_fit=%v, want exclusion-strength power evidence", got.Components.PowerHintFit)
-	}
-	if got.Components.PowerWeightedCapability != 0 {
-		t.Fatalf("power_weighted_capability=%v, want 0 once max-power exclusion consumes the power signal", got.Components.PowerWeightedCapability)
-	}
-}
-
-func TestResolveRouteSuccessIncludesCandidates(t *testing.T) {
-	svc := publicRouteTraceService(&fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"local": {Type: "test", BaseURL: "http://127.0.0.1:9999/v1", ServerInstance: "127.0.0.1:9999", Model: "model-a"},
-		},
-		names:       []string{"local"},
-		defaultName: "local",
-	})
-
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Harness:               "fiz",
-		Model:                 "model-a",
-		EstimatedPromptTokens: 1_000,
-	})
-	if err != nil {
-		t.Fatalf("ResolveRoute: %v", err)
-	}
-	if dec == nil {
-		t.Fatal("ResolveRoute returned nil decision")
-	}
-	if dec.Harness != "fiz" || dec.Provider != "local" || dec.Model != "model-a" {
-		t.Fatalf("decision=%#v, want fiz/local/model-a", dec)
-	}
-	if dec.ServerInstance == "" {
-		t.Fatalf("decision=%#v, want server_instance", dec)
-	}
-	if len(dec.Candidates) != 1 {
-		t.Fatalf("Candidates length=%d, want 1: %#v", len(dec.Candidates), dec.Candidates)
-	}
-	candidate := dec.Candidates[0]
-	if !candidate.Eligible || candidate.Harness != "fiz" || candidate.Provider != "local" || candidate.Model != "model-a" {
-		t.Fatalf("candidate=%#v, want eligible fiz/local/model-a", candidate)
-	}
-	if candidate.ServerInstance == "" {
-		t.Fatalf("candidate=%#v, want server_instance", candidate)
-	}
-	if candidate.ContextLength == 0 || candidate.ContextSource != ContextSourceDefault {
-		t.Fatalf("candidate context = %d/%q, want default context evidence", candidate.ContextLength, candidate.ContextSource)
-	}
-	if candidate.Components.ContextHeadroom == 0 {
-		t.Fatalf("candidate context headroom should be populated for eligible candidates: %#v", candidate.Components)
-	}
-	if !strings.Contains(candidate.Reason, "score=") {
-		t.Fatalf("eligible candidate Reason=%q, want scoring reason", candidate.Reason)
+	aboveMax := routeCandidateFromInternal(routing.Candidate{
+		Power:           10,
+		FilterReason:    routing.FilterReasonAboveMaxPower,
+		ScoreComponents: map[string]float64{"power": -1002},
+	}, RoutePowerPolicy{MaxPower: 8})
+	if aboveMax.Components.PowerHintFit != -1002 || aboveMax.Components.PowerWeightedCapability != 0 {
+		t.Fatalf("above-max components=%#v, want exclusion power_hint_fit=-1002 and weighted capability=0", aboveMax.Components)
 	}
 }
 
@@ -640,414 +589,6 @@ models:
 	}
 	if dec.Provider != "catalog-only" || dec.Model != "catalog-only-model" {
 		t.Fatalf("decision=%#v, want hard-pinned catalog-only/model", dec)
-	}
-}
-
-func TestServiceTranslatesPolicyAirGappedToRequireNoRemote(t *testing.T) {
-	catalog := loadRoutingFixtureCatalog(t, `
-version: 5
-generated_at: 2026-05-08T00:00:00Z
-catalog_version: test
-policies:
-  default:
-    min_power: 5
-    max_power: 8
-    allow_local: true
-  cheap:
-    min_power: 5
-    max_power: 5
-    allow_local: true
-  smart:
-    min_power: 9
-    max_power: 10
-    allow_local: false
-  air-gapped:
-    min_power: 5
-    max_power: 5
-    allow_local: true
-    require: [no_remote]
-models:
-  remote-model:
-    family: example
-    status: active
-    provider_system: openrouter
-    deployment_class: managed_cloud_frontier
-    power: 5
-    surfaces:
-      agent.openai: remote-model
-`)
-	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
-
-	svc := newTestService(t, ServiceOptions{
-		ServiceConfig: &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"openrouter": {Type: "openrouter", BaseURL: "http://remote.invalid/v1", Model: "remote-model"},
-			},
-			names:       []string{"openrouter"},
-			defaultName: "openrouter",
-		},
-	})
-
-	_, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Policy:   "air-gapped",
-		Provider: "openrouter",
-	})
-	if err == nil {
-		t.Fatal("expected air-gapped policy to reject remote provider pin")
-	}
-	var typed *ErrPolicyRequirementUnsatisfied
-	if !errors.As(err, &typed) {
-		t.Fatalf("errors.As ErrPolicyRequirementUnsatisfied: %T %v", err, err)
-	}
-	if typed.Policy != "air-gapped" || typed.Requirement != "no_remote" || typed.AttemptedPin != "openrouter" {
-		t.Fatalf("ErrPolicyRequirementUnsatisfied=%#v, want air-gapped/no_remote/openrouter", typed)
-	}
-}
-
-func TestResolveRouteCatalogSmartAllowLocalProjection(t *testing.T) {
-	catalog := loadRoutingFixtureCatalog(t, `
-version: 5
-generated_at: 2026-07-15T00:00:00Z
-catalog_version: smart-allow-local-test
-policies:
-  default:
-    min_power: 5
-    max_power: 8
-    allow_local: true
-  smart:
-    min_power: 9
-    max_power: 10
-    allow_local: true
-models:
-  local-smart:
-    family: example
-    status: active
-    power: 9
-    surfaces:
-      agent.openai: local-smart
-`)
-	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
-
-	svc := newTestService(t, ServiceOptions{
-		ServiceConfig: &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"local": {
-					Type:    "test",
-					BaseURL: "http://127.0.0.1:9999/v1",
-					Model:   "local-smart",
-					Billing: BillingModelFixed,
-				},
-			},
-			names:       []string{"local"},
-			defaultName: "local",
-		},
-	})
-
-	decision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "smart"})
-	if err != nil {
-		t.Fatalf("ResolveRoute smart allow_local catalog policy: %v", err)
-	}
-	if decision == nil || decision.Provider != "local" || decision.Model != "local-smart" {
-		t.Fatalf("decision=%#v, want catalog-enabled local smart route", decision)
-	}
-	if decision.PowerPolicy != (RoutePowerPolicy{PolicyName: "smart", MinPower: 9, MaxPower: 10}) {
-		t.Fatalf("PowerPolicy=%#v, want smart 9..10", decision.PowerPolicy)
-	}
-}
-
-func TestResolveRoutePolicyReportsEffectivePowerPolicy(t *testing.T) {
-	catalog := loadRoutingFixtureCatalog(t, `
-version: 5
-generated_at: 2026-05-06T00:00:00Z
-catalog_version: test
-policies:
-  default:
-    min_power: 7
-    max_power: 8
-    allow_local: true
-  smart:
-    min_power: 9
-    max_power: 10
-    allow_local: false
-  custom:
-    min_power: 6
-    max_power: 9
-    allow_local: true
-models:
-  provider-default:
-    family: example
-    status: active
-    power: 7
-    surfaces:
-      agent.openai: provider-default
-  catalog-smart:
-    family: example
-    status: active
-    power: 9
-    surfaces:
-      agent.openai: catalog-smart
-`)
-	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
-
-	svc := newTestService(t, ServiceOptions{
-		ServiceConfig: &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"local": {Type: "test", BaseURL: "http://127.0.0.1:9999/v1", Model: "provider-default"},
-			},
-			names:       []string{"local"},
-			defaultName: "local",
-		},
-	})
-
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "default"})
-	if err != nil {
-		t.Fatalf("ResolveRoute: %v", err)
-	}
-	if dec == nil {
-		t.Fatal("ResolveRoute returned nil decision")
-	}
-	if dec.RequestedPolicy != "default" {
-		t.Fatalf("RequestedPolicy=%q, want default", dec.RequestedPolicy)
-	}
-	if dec.PowerPolicy.PolicyName != "default" || dec.PowerPolicy.MinPower != 7 || dec.PowerPolicy.MaxPower != 8 {
-		t.Fatalf("PowerPolicy=%#v, want default 7..8", dec.PowerPolicy)
-	}
-	if dec.Model != "provider-default" {
-		t.Fatalf("Model=%q, want provider-default without treating policy as a model ref", dec.Model)
-	}
-
-	whitespaceDecision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: " default "})
-	if err != nil {
-		t.Fatalf("ResolveRoute whitespace default: %v", err)
-	}
-	if whitespaceDecision.RequestedPolicy != " default " || whitespaceDecision.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 7, MaxPower: 8}) {
-		t.Fatalf("whitespace decision=%#v, want raw request and canonical default power evidence", whitespaceDecision)
-	}
-
-	customDecision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: " custom "})
-	if err == nil {
-		t.Fatal("custom catalog policy unexpectedly bypassed routing engine canonical-policy validation")
-	}
-	var unknown *ErrUnknownPolicy
-	if !errors.As(err, &unknown) || unknown.Policy != " custom " {
-		t.Fatalf("custom policy error=%T %v, want raw *ErrUnknownPolicy", err, err)
-	}
-	if customDecision == nil || customDecision.RequestedPolicy != " custom " || customDecision.PowerPolicy != (RoutePowerPolicy{PolicyName: "custom", MinPower: 6, MaxPower: 9}) {
-		t.Fatalf("custom decision=%#v, want preserved custom policy evidence", customDecision)
-	}
-}
-
-func TestResolveRoutePolicyAppliesEffectivePowerPolicyBeforeFiltering(t *testing.T) {
-	catalog := loadRoutingFixtureCatalog(t, `
-version: 5
-generated_at: 2026-05-06T00:00:00Z
-catalog_version: test
-policies:
-  default:
-    min_power: 7
-    max_power: 8
-    allow_local: true
-models:
-  power-5:
-    family: example
-    status: active
-    power: 5
-    surfaces:
-      agent.openai: power-5
-  power-7:
-    family: example
-    status: active
-    power: 7
-    surfaces:
-      agent.openai: power-7
-  power-9:
-    family: example
-    status: active
-    power: 9
-    surfaces:
-      agent.openai: power-9
-`)
-	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
-
-	svc := newTestService(t, ServiceOptions{
-		ServiceConfig: &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"power-5": {Type: "test", BaseURL: "http://127.0.0.1:1111/v1", Model: "power-5"},
-				"power-7": {Type: "test", BaseURL: "http://127.0.0.1:2222/v1", Model: "power-7"},
-				"power-9": {Type: "test", BaseURL: "http://127.0.0.1:3333/v1", Model: "power-9"},
-			},
-			names:       []string{"power-5", "power-7", "power-9"},
-			defaultName: "power-7",
-		},
-	})
-
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Policy: "default",
-	})
-	if err != nil {
-		t.Fatalf("ResolveRoute: %v", err)
-	}
-	if dec == nil {
-		t.Fatal("ResolveRoute returned nil decision")
-	}
-	if dec.Model != "power-7" {
-		t.Fatalf("decision=%#v, want power-7 winner", dec)
-	}
-	if dec.RequestedPolicy != "default" {
-		t.Fatalf("RequestedPolicy=%q, want default", dec.RequestedPolicy)
-	}
-	if dec.PowerPolicy.PolicyName != "default" || dec.PowerPolicy.MinPower != 7 || dec.PowerPolicy.MaxPower != 8 {
-		t.Fatalf("PowerPolicy=%#v, want default 7..8", dec.PowerPolicy)
-	}
-
-	var sawBelowTarget, sawAboveTarget bool
-	for _, candidate := range dec.Candidates {
-		switch candidate.Model {
-		case "power-5":
-			if !candidate.Eligible {
-				t.Fatalf("power-5 candidate should remain eligible under soft power scoring: %#v", candidate)
-			}
-			if candidate.FilterReason != "" {
-				t.Fatalf("power-5 FilterReason=%q, want empty under soft power scoring", candidate.FilterReason)
-			}
-			sawBelowTarget = true
-		case "power-7":
-			if !candidate.Eligible {
-				t.Fatalf("power-7 candidate should remain eligible under default: %#v", candidate)
-			}
-		case "power-9":
-			if candidate.Eligible {
-				t.Fatalf("power-9 candidate should be excluded once an in-bounds max_power route exists: %#v", candidate)
-			}
-			if candidate.FilterReason != FilterReasonAboveMaxPower {
-				t.Fatalf("power-9 FilterReason=%q, want %q", candidate.FilterReason, FilterReasonAboveMaxPower)
-			}
-			sawAboveTarget = true
-		}
-	}
-	if !sawBelowTarget || !sawAboveTarget {
-		t.Fatalf("decision candidates did not cover the full power-policy trace: %#v", dec.Candidates)
-	}
-
-	pinned, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Policy:   "default",
-		Model:    "power-9",
-		MinPower: 1,
-		MaxPower: 10,
-	})
-	if err != nil {
-		t.Fatalf("ResolveRoute explicit power-9 model: %v", err)
-	}
-	if pinned == nil || pinned.Model != "power-9" {
-		t.Fatalf("pinned decision=%#v, want explicit power-9 model", pinned)
-	}
-	if pinned.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 7, MaxPower: 8}) {
-		t.Fatalf("pinned PowerPolicy=%#v, want default evidence 7..8 with caller bounds enforced internally", pinned.PowerPolicy)
-	}
-	var pinnedPower9 *RouteCandidate
-	for index := range pinned.Candidates {
-		if pinned.Candidates[index].Model == "power-9" {
-			pinnedPower9 = &pinned.Candidates[index]
-			break
-		}
-	}
-	if pinnedPower9 == nil {
-		t.Fatalf("pinned power-9 candidate missing: %#v", pinned.Candidates)
-	}
-	if got, ok := pinnedPower9.ScoreComponents["power"]; !ok || got != 0 {
-		t.Fatalf("pinned power component=%v present=%t, want raw caller-bound score 0", got, ok)
-	}
-
-	intersected, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Policy:   "default",
-		MinPower: 8,
-		MaxPower: 10,
-	})
-	if err != nil {
-		t.Fatalf("ResolveRoute intersected caller/catalog bounds: %v", err)
-	}
-	if intersected == nil || intersected.Model != "power-9" {
-		t.Fatalf("intersected decision=%#v, want power-9 winner under effective 8..8", intersected)
-	}
-	if intersected.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 8, MaxPower: 8}) {
-		t.Fatalf("intersected PowerPolicy=%#v, want effective default 8..8", intersected.PowerPolicy)
-	}
-	var power7, power9 *RouteCandidate
-	for index := range intersected.Candidates {
-		switch intersected.Candidates[index].Model {
-		case "power-7":
-			power7 = &intersected.Candidates[index]
-		case "power-9":
-			power9 = &intersected.Candidates[index]
-		}
-	}
-	if power7 == nil || power9 == nil {
-		t.Fatalf("intersected candidates missing power-7 or power-9: %#v", intersected.Candidates)
-	}
-	if got := power7.ScoreComponents["power"]; got != -12 {
-		t.Fatalf("power-7 raw power component=%v, want -12 below effective min_power=8", got)
-	}
-	if got := power9.ScoreComponents["power"]; got != -1 {
-		t.Fatalf("power-9 raw power component=%v, want -1 above effective max_power=8", got)
-	}
-}
-
-func TestResolveRouteErrorIncludesCandidatesAndTraceError(t *testing.T) {
-	t.Setenv("GEMINI_API_KEY", "redacted")
-	t.Setenv("GOOGLE_API_KEY", "")
-	t.Setenv("GOOGLE_GENAI_USE_VERTEXAI", "")
-	t.Setenv("GOOGLE_GENAI_USE_GCA", "")
-	t.Setenv("GEMINI_CLI_USE_COMPUTE_ADC", "")
-	t.Setenv("CLOUD_SHELL", "")
-
-	registry := harnesses.NewRegistry()
-	registry.LookPath = func(file string) (string, error) {
-		if file == "gemini" {
-			return "/usr/bin/gemini", nil
-		}
-		return "", os.ErrNotExist
-	}
-	svc := &service{
-		opts:     ServiceOptions{},
-		registry: registry,
-		hub:      newSessionHub(),
-	}
-
-	dec, err := svc.ResolveRoute(context.Background(), RouteRequest{
-		Model: "minimax/minimax-m2.7",
-	})
-	if err == nil {
-		t.Fatal("ResolveRoute expected no viable candidate error")
-	}
-	if dec == nil {
-		t.Fatal("ResolveRoute error path returned nil decision")
-	}
-	if dec.Harness != "" || dec.Provider != "" || dec.Model != "" {
-		t.Fatalf("error decision selected a candidate: %#v", dec)
-	}
-	if len(dec.Candidates) == 0 {
-		t.Fatal("error decision Candidates is empty")
-	}
-
-	var noMatch *ErrModelConstraintNoMatch
-	if !errors.As(err, &noMatch) {
-		t.Fatalf("errors.As no-match: %T %v", err, err)
-	}
-	var traced DecisionWithCandidates
-	if !errors.As(err, &traced) {
-		t.Fatalf("errors.As DecisionWithCandidates: %T %v", err, err)
-	}
-	tracedCandidates := traced.RouteCandidates()
-	if len(tracedCandidates) != len(dec.Candidates) {
-		t.Fatalf("traced candidates length=%d, decision candidates length=%d", len(tracedCandidates), len(dec.Candidates))
-	}
-	tracedCandidates[0].Reason = "mutated"
-	if dec.Candidates[0].Reason == "mutated" {
-		t.Fatal("RouteCandidates returned an alias of the decision candidates")
-	}
-
-	if !strings.Contains(err.Error(), "no matching model") {
-		t.Fatalf("error=%q, want no matching model detail", err.Error())
 	}
 }
 
@@ -1564,24 +1105,6 @@ models:
 	})
 }
 
-func TestDecisionWithCandidatesCopiesInput(t *testing.T) {
-	candidates := []RouteCandidate{{Harness: "fiz", Reason: "original"}}
-	err := withRouteCandidates(errors.New("no viable routing candidate"), candidates)
-
-	candidates[0].Reason = "changed"
-	var traced DecisionWithCandidates
-	if !errors.As(err, &traced) {
-		t.Fatalf("errors.As DecisionWithCandidates: %T %v", err, err)
-	}
-	got := traced.RouteCandidates()
-	if len(got) != 1 || got[0].Reason != "original" {
-		t.Fatalf("RouteCandidates=%#v, want copied original candidate", got)
-	}
-}
-
-// openrouterCredentialGateCatalog returns a minimal catalog with one
-// openrouter-surfaced model so the credential gate has a candidate to
-// evaluate. Power 5 keeps it inside the default 1..10 policy bounds.
 func openrouterCredentialGateCatalog(t *testing.T) *modelcatalog.Catalog {
 	t.Helper()
 	return loadRoutingFixtureCatalog(t, `

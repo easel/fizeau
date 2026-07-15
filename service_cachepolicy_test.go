@@ -1,65 +1,35 @@
-package fizeau
+package fizeau_test
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"testing"
+
+	fizeau "github.com/easel/fizeau"
 )
 
-// TestServiceExecuteRequestHasCachePolicy is an AST guard that pins the
-// public CachePolicy field on ServiceExecuteRequest so beads C and D can rely
-// on its presence without further contract churn.
-func TestServiceExecuteRequestHasCachePolicy(t *testing.T) {
-	requireStructHasField(t, "service.go", "ServiceExecuteRequest", "CachePolicy")
-}
+func TestPublicCachePolicyValidationContract(t *testing.T) {
+	_ = fizeau.ServiceExecuteRequest{CachePolicy: fizeau.CachePolicyOff}
+	_ = fizeau.RouteRequest{CachePolicy: fizeau.CachePolicyDefault}
 
-// TestRouteRequestHasCachePolicy is an AST guard for the mirrored field on
-// RouteRequest.
-func TestRouteRequestHasCachePolicy(t *testing.T) {
-	requireStructHasField(t, "service.go", "RouteRequest", "CachePolicy")
-}
-
-// TestServiceExecuteRequestRejectsUnknownCachePolicy verifies that
-// svc.Execute rejects unknown CachePolicy values at the boundary, before any
-// session is opened or events are emitted.
-func TestServiceExecuteRequestRejectsUnknownCachePolicy(t *testing.T) {
-	svc, err := New(ServiceOptions{
-		ServiceConfig:       &fakeServiceConfig{},
-		QuotaRefreshContext: canceledRefreshContext(),
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	ch, err := svc.Execute(context.Background(), ServiceExecuteRequest{
-		Prompt:      "irrelevant",
-		Harness:     "fiz",
-		CachePolicy: "aggressive",
-	})
-	if err == nil {
-		t.Fatal("expected Execute to reject unknown CachePolicy")
-	}
-	if ch != nil {
-		t.Fatalf("expected no event channel for boundary error, got %#v", ch)
-	}
-	if !strings.Contains(err.Error(), "CachePolicy") {
-		t.Fatalf("error should mention CachePolicy, got %v", err)
-	}
-}
-
-// TestValidateCachePolicy covers the accepted/rejected values directly so the
-// contract is exercised independent of the Execute path.
-func TestValidateCachePolicy(t *testing.T) {
-	for _, ok := range []string{"", "default", "off"} {
-		if err := ValidateCachePolicy(ok); err != nil {
-			t.Errorf("ValidateCachePolicy(%q) = %v, want nil", ok, err)
+	for _, valid := range []string{"", fizeau.CachePolicyDefault, fizeau.CachePolicyOff} {
+		if err := fizeau.ValidateCachePolicy(valid); err != nil {
+			t.Errorf("ValidateCachePolicy(%q) = %v, want nil", valid, err)
 		}
 	}
-	for _, bad := range []string{"on", "aggressive", "Default", "OFF", "auto"} {
-		if err := ValidateCachePolicy(bad); err == nil {
-			t.Errorf("ValidateCachePolicy(%q) = nil, want error", bad)
-		} else if !errors.Is(err, err) {
-			t.Errorf("error wrapping smoke test failed for %q", bad)
-		}
+	for _, invalid := range []string{"on", "aggressive", "Default", "OFF", "auto"} {
+		t.Run(invalid, func(t *testing.T) {
+			want := `invalid CachePolicy "` + invalid + `": want "", "default", or "off"`
+			if err := fizeau.ValidateCachePolicy(invalid); err == nil || err.Error() != want {
+				t.Fatalf("ValidateCachePolicy(%q) = %v, want %q", invalid, err, want)
+			}
+		})
+	}
+
+	service := newProviderFacade(t, &providerFacadeConfig{})
+	events, err := service.Execute(context.Background(), fizeau.ServiceExecuteRequest{
+		Prompt: "must fail before dispatch", CachePolicy: "aggressive",
+	})
+	if events != nil || err == nil || err.Error() != `invalid CachePolicy "aggressive": want "", "default", or "off"` {
+		t.Fatalf("Execute events=%#v error=%v, want exact pre-dispatch CachePolicy failure", events, err)
 	}
 }

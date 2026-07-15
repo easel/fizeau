@@ -9,7 +9,11 @@ import (
 	"github.com/easel/fizeau/internal/routing"
 )
 
-func TestNoViableProviderForNowExposesFields(t *testing.T) {
+// TestPublicRoutingErrorCopiesQuotaExhaustedProviders is the intentional
+// same-package seam for translating the private routing quota error into its
+// public typed counterpart. The public facade cannot construct the source
+// error, so this test owns both identity and caller-isolated slice copying.
+func TestPublicRoutingErrorCopiesQuotaExhaustedProviders(t *testing.T) {
 	retry := time.Date(2026, 5, 2, 11, 0, 0, 0, time.UTC)
 	src := &routing.ErrAllProvidersQuotaExhausted{
 		RetryAfter:         retry,
@@ -37,18 +41,5 @@ func TestNoViableProviderForNowExposesFields(t *testing.T) {
 	typed.ExhaustedProviders[0] = "mutated"
 	if src.ExhaustedProviders[0] != "openai" {
 		t.Fatalf("publicRoutingError must copy ExhaustedProviders; saw mutation back: %v", src.ExhaustedProviders)
-	}
-}
-
-func TestNoViableProviderForNowDistinctFromOtherErrors(t *testing.T) {
-	err := &NoViableProviderForNow{RetryAfter: time.Now().Add(time.Minute)}
-	if errors.Is(err, ErrUnknownProvider{}) {
-		t.Fatal("NoViableProviderForNow should not match ErrUnknownProvider")
-	}
-	if errors.Is(err, ErrNoLiveProvider{}) {
-		t.Fatal("NoViableProviderForNow should not match ErrNoLiveProvider")
-	}
-	if errors.Is(err, ErrPolicyRequirementUnsatisfied{}) {
-		t.Fatal("NoViableProviderForNow should not match ErrPolicyRequirementUnsatisfied")
 	}
 }

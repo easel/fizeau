@@ -1,23 +1,17 @@
-package fizeau
+package fizeau_test
 
 import (
 	"context"
-	"strings"
 	"testing"
+
+	fizeau "github.com/easel/fizeau"
 )
 
-func TestServiceExecuteRequestHasPowerBounds(t *testing.T) {
-	requireStructHasField(t, "service.go", "ServiceExecuteRequest", "MinPower")
-	requireStructHasField(t, "service.go", "ServiceExecuteRequest", "MaxPower")
-}
+func TestPublicPowerBoundsValidationContract(t *testing.T) {
+	_ = fizeau.ServiceExecuteRequest{MinPower: 3, MaxPower: 8}
+	_ = fizeau.RouteRequest{MinPower: 3, MaxPower: 8}
 
-func TestRouteRequestHasPowerBounds(t *testing.T) {
-	requireStructHasField(t, "service.go", "RouteRequest", "MinPower")
-	requireStructHasField(t, "service.go", "RouteRequest", "MaxPower")
-}
-
-func TestValidatePowerBounds(t *testing.T) {
-	for _, tc := range []struct {
+	for _, test := range []struct {
 		name string
 		min  int
 		max  int
@@ -28,61 +22,39 @@ func TestValidatePowerBounds(t *testing.T) {
 		{name: "range", min: 3, max: 8},
 		{name: "same", min: 7, max: 7},
 	} {
-		if err := ValidatePowerBounds(tc.min, tc.max); err != nil {
-			t.Errorf("%s: ValidatePowerBounds(%d, %d) = %v, want nil", tc.name, tc.min, tc.max, err)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			if err := fizeau.ValidatePowerBounds(test.min, test.max); err != nil {
+				t.Fatalf("ValidatePowerBounds(%d, %d) = %v", test.min, test.max, err)
+			}
+		})
 	}
 
-	for _, tc := range []struct {
+	for _, test := range []struct {
 		name string
 		min  int
 		max  int
+		want string
 	}{
-		{name: "negative min", min: -1},
-		{name: "negative max", max: -1},
-		{name: "max below min", min: 8, max: 3},
+		{name: "negative min", min: -1, want: "invalid MinPower -1: must be >= 0"},
+		{name: "negative max", max: -1, want: "invalid MaxPower -1: must be >= 0"},
+		{name: "max below min", min: 8, max: 3, want: "invalid power bounds: MaxPower 3 must be >= MinPower 8"},
 	} {
-		if err := ValidatePowerBounds(tc.min, tc.max); err == nil {
-			t.Errorf("%s: ValidatePowerBounds(%d, %d) = nil, want error", tc.name, tc.min, tc.max)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			if err := fizeau.ValidatePowerBounds(test.min, test.max); err == nil || err.Error() != test.want {
+				t.Fatalf("ValidatePowerBounds(%d, %d) = %v, want %q", test.min, test.max, err, test.want)
+			}
+		})
 	}
-}
 
-func TestServiceExecuteRequestRejectsInvalidPowerBounds(t *testing.T) {
-	svc, err := New(ServiceOptions{
-		ServiceConfig:       &fakeServiceConfig{},
-		QuotaRefreshContext: canceledRefreshContext(),
+	service := newProviderFacade(t, &providerFacadeConfig{})
+	events, err := service.Execute(context.Background(), fizeau.ServiceExecuteRequest{
+		Prompt: "must fail before dispatch", MinPower: 9, MaxPower: 4,
 	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
+	if events != nil || err == nil || err.Error() != "invalid power bounds: MaxPower 4 must be >= MinPower 9" {
+		t.Fatalf("Execute events=%#v error=%v, want exact invalid-power failure", events, err)
 	}
-	ch, err := svc.Execute(context.Background(), ServiceExecuteRequest{
-		Prompt:   "irrelevant",
-		Harness:  "fiz",
-		MinPower: 9,
-		MaxPower: 4,
-	})
-	if err == nil {
-		t.Fatal("expected Execute to reject invalid power bounds")
-	}
-	if ch != nil {
-		t.Fatalf("expected no event channel for boundary error, got %#v", ch)
-	}
-	if !strings.Contains(err.Error(), "power") && !strings.Contains(err.Error(), "Power") {
-		t.Fatalf("error should mention power, got %v", err)
-	}
-}
-
-func TestResolveRouteRejectsInvalidPowerBounds(t *testing.T) {
-	svc, err := New(ServiceOptions{
-		ServiceConfig:       &fakeServiceConfig{},
-		QuotaRefreshContext: canceledRefreshContext(),
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	_, err = svc.ResolveRoute(context.Background(), RouteRequest{MinPower: -1})
-	if err == nil {
-		t.Fatal("expected ResolveRoute to reject invalid power bounds")
+	_, err = service.ResolveRoute(context.Background(), fizeau.RouteRequest{MinPower: -1})
+	if err == nil || err.Error() != "invalid MinPower -1: must be >= 0" {
+		t.Fatalf("ResolveRoute error=%v, want exact invalid MinPower failure", err)
 	}
 }
