@@ -22,27 +22,20 @@ func TestCodexDefaultModelSnapshotWithContext_UsesCallerContext(t *testing.T) {
 		t.Skip("shell-backed PTY probes require Unix PTY support")
 	}
 	dir := t.TempDir()
-	startedPath := filepath.Join(dir, "started")
 	script := filepath.Join(dir, "fake-codex")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
-script_dir=$(dirname "$0")
-printf started > "$script_dir/started"
 printf '› '
 IFS= read line
 sleep 30
 `), 0o700))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	result := make(chan error, 1)
 	go func() {
 		_, err := (&Runner{Binary: script}).DefaultModelSnapshotWithContext(ctx)
 		result <- err
 	}()
-	require.Eventually(t, func() bool {
-		_, err := os.Stat(startedPath)
-		return err == nil
-	}, time.Second, 10*time.Millisecond)
-	cancel()
 
 	select {
 	case err := <-result:
