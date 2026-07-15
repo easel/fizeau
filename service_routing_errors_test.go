@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 func TestResolveExplicitClaudeRejectedWhenFreshQuotaExhausted(t *testing.T) {
@@ -56,6 +57,6 @@ func testRoutingErrorService() *service {
 	return &service{
 		opts:     ServiceOptions{},
 		registry: registry,
-		hub:      newSessionHub(),
+		hub:      serviceimpl.NewSessionHub(),
 	}
 }

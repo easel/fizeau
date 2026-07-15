@@ -18,6 +18,7 @@ import (
 	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routingquality"
 	"github.com/easel/fizeau/internal/runtimesignals"
+	"github.com/easel/fizeau/internal/serviceimpl"
 	"github.com/stretchr/testify/require"
 )
 
@@ -217,7 +218,7 @@ models:
 	svc := &service{
 		opts:             ServiceOptions{ServiceConfig: sc},
 		registry:         harnesses.NewRegistry(),
-		hub:              newSessionHub(),
+		hub:              serviceimpl.NewSessionHub(),
 		routeHealth:      routehealth.NewStore(),
 		routeSticky:      routehealth.NewStickyState(),
 		routingQuality:   routingquality.NewStore(routingquality.DefaultStoreCap),

@@ -821,7 +821,7 @@ func publicRouteTraceService(sc ServiceConfig) *service {
 	return &service{
 		opts:     ServiceOptions{ServiceConfig: sc},
 		registry: harnesses.NewRegistry(),
-		hub:      newSessionHub(),
+		hub:      serviceimpl.NewSessionHub(),
 	}
 }
 
@@ -1029,7 +1029,7 @@ models:
 		svc := &service{
 			opts:     ServiceOptions{ServiceConfig: sc},
 			registry: registry,
-			hub:      newSessionHub(),
+			hub:      serviceimpl.NewSessionHub(),
 		}
 		cleanup := func() {
 			mediumSrv.Close()
