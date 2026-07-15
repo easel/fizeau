@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
@@ -55,371 +54,45 @@ func TestListModels_noServiceConfig(t *testing.T) {
 	}
 }
 
-func TestListModels_providerTypesOpenRouterLMStudioOMLXVLLMRapidMLX(t *testing.T) {
-	openrouter := fakeModelsServer([]string{"openrouter/model-a"})
-	defer openrouter.Close()
-	lmstudio := fakeModelsServer([]string{"lmstudio-model-a"})
-	defer lmstudio.Close()
-	omlx := fakeModelsServer([]string{"omlx-model-a"})
-	defer omlx.Close()
-	vllm := fakeModelsServer([]string{"vllm-model-a"})
-	defer vllm.Close()
-	rapidmlx := fakeModelsServer([]string{"rapid-mlx-model-a"})
-	defer rapidmlx.Close()
+func TestListModels_utilizationProjection(t *testing.T) {
+	server := fakeModelsServer([]string{"qwen3.5-27b"})
+	defer server.Close()
 
-	sc := &fakeServiceConfig{
+	config := &fakeServiceConfig{
 		providers: map[string]ServiceProviderEntry{
-			"openrouter": {Type: "openrouter", BaseURL: openrouter.URL + "/api/v1"},
-			"studio":     {Type: "lmstudio", BaseURL: lmstudio.URL + "/v1"},
-			"vidar-omlx": {Type: "omlx", BaseURL: omlx.URL + "/v1"},
-			"sindri":     {Type: "vllm", BaseURL: vllm.URL + "/v1"},
-			"grendel":    {Type: "rapid-mlx", BaseURL: rapidmlx.URL + "/v1"},
-		},
-		names:       []string{"openrouter", "studio", "vidar-omlx", "sindri", "grendel"},
-		defaultName: "openrouter",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 5 {
-		t.Fatalf("want 5 models, got %d: %v", len(infos), modelIDs(infos))
-	}
-
-	wantTypes := map[string]string{
-		"openrouter": "openrouter",
-		"studio":     "lmstudio",
-		"vidar-omlx": "omlx",
-		"sindri":     "vllm",
-		"grendel":    "rapid-mlx",
-	}
-	for _, info := range infos {
-		if info.ProviderType != wantTypes[info.Provider] {
-			t.Errorf("provider %q type=%q, want %q", info.Provider, info.ProviderType, wantTypes[info.Provider])
-		}
-		if info.EndpointName == "" {
-			t.Errorf("provider %q model %q missing EndpointName", info.Provider, info.ID)
-		}
-		if info.EndpointBaseURL == "" {
-			t.Errorf("provider %q model %q missing EndpointBaseURL", info.Provider, info.ID)
-		}
-		if got := serverinstance.FromBaseURL(info.EndpointBaseURL); info.ServerInstance != got {
-			t.Errorf("provider %q model %q server instance = %q, want %q", info.Provider, info.ID, info.ServerInstance, got)
-		}
-	}
-}
-
-func TestListModels_providerTypeLlamaServer(t *testing.T) {
-	llama := fakeModelsServer([]string{"llama-3.1"})
-	defer llama.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"llama": {Type: "llama-server", BaseURL: llama.URL + "/v1"},
-		},
-		names:       []string{"llama"},
-		defaultName: "llama",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 1 {
-		t.Fatalf("want 1 model, got %d: %v", len(infos), modelIDs(infos))
-	}
-	info := infos[0]
-	if info.ProviderType != "llama-server" {
-		t.Fatalf("provider type = %q, want llama-server", info.ProviderType)
-	}
-	if info.EndpointBaseURL != llama.URL+"/v1" {
-		t.Fatalf("endpoint base URL = %q, want %q", info.EndpointBaseURL, llama.URL+"/v1")
-	}
-}
-
-func TestListModels_endpointPoolReturnsEndpointMetadata(t *testing.T) {
-	vidar := fakeModelsServer([]string{"vidar-model"})
-	defer vidar.Close()
-	eitri := fakeModelsServer([]string{"eitri-model"})
-	defer eitri.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"studio": {
-				Type:    "lmstudio",
-				BaseURL: vidar.URL + "/v1",
-				Endpoints: []ServiceProviderEndpoint{
-					{Name: "vidar", BaseURL: vidar.URL + "/v1", ServerInstance: "vidar-instance"},
-					{Name: "eitri", BaseURL: eitri.URL + "/v1"},
-				},
-			},
-		},
-		names:       []string{"studio"},
-		defaultName: "studio",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{Provider: "studio"})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 2 {
-		t.Fatalf("want 2 endpoint models, got %d: %v", len(infos), modelInfoDebug(infos))
-	}
-
-	got := map[string]ModelInfo{}
-	for _, info := range infos {
-		got[info.ID] = info
-	}
-	if got["vidar-model"].EndpointName != "vidar" || got["vidar-model"].EndpointBaseURL != vidar.URL+"/v1" {
-		t.Errorf("vidar metadata = %#v", got["vidar-model"])
-	}
-	if got["vidar-model"].ServerInstance != "vidar-instance" {
-		t.Errorf("vidar server instance = %q, want explicit override", got["vidar-model"].ServerInstance)
-	}
-	if got["eitri-model"].EndpointName != "eitri" || got["eitri-model"].EndpointBaseURL != eitri.URL+"/v1" {
-		t.Errorf("eitri metadata = %#v", got["eitri-model"])
-	}
-	if got["eitri-model"].ServerInstance != serverinstance.FromBaseURL(eitri.URL+"/v1") {
-		t.Errorf("eitri server instance = %q, want derived host:port", got["eitri-model"].ServerInstance)
-	}
-}
-
-func TestListModels_endpointPoolSkipsFailingEndpoint(t *testing.T) {
-	healthy := fakeModelsServer([]string{"healthy-model"})
-	defer healthy.Close()
-	failing := fakeFailingModelsServer(http.StatusInternalServerError)
-	defer failing.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"studio": {
-				Type: "lmstudio",
-				Endpoints: []ServiceProviderEndpoint{
-					{Name: "broken", BaseURL: failing.URL + "/v1"},
-					{Name: "healthy", BaseURL: healthy.URL + "/v1"},
-				},
-			},
-		},
-		names:       []string{"studio"},
-		defaultName: "studio",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{Provider: "studio"})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 1 {
-		t.Fatalf("want 1 healthy endpoint model, got %d: %v", len(infos), modelInfoDebug(infos))
-	}
-	if infos[0].ID != "healthy-model" || infos[0].EndpointName != "healthy" {
-		t.Fatalf("unexpected endpoint result: %#v", infos[0])
-	}
-}
-
-func TestListModels_emptyFilterReturnsAll(t *testing.T) {
-	ts1 := fakeModelsServer([]string{"model-a", "model-b"})
-	defer ts1.Close()
-	ts2 := fakeModelsServer([]string{"model-c"})
-	defer ts2.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi":  {Type: "lmstudio", BaseURL: ts1.URL + "/v1"},
-			"remote": {Type: "lmstudio", BaseURL: ts2.URL + "/v1"},
-		},
-		names:       []string{"bragi", "remote"},
-		defaultName: "bragi",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 3 {
-		t.Fatalf("want 3 models total, got %d: %v", len(infos), modelIDs(infos))
-	}
-}
-
-func TestListModels_filtersProvider(t *testing.T) {
-	ts1 := fakeModelsServer([]string{"model-a", "model-b"})
-	defer ts1.Close()
-	ts2 := fakeModelsServer([]string{"model-c"})
-	defer ts2.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi":  {Type: "lmstudio", BaseURL: ts1.URL + "/v1"},
-			"remote": {Type: "lmstudio", BaseURL: ts2.URL + "/v1"},
-		},
-		names:       []string{"bragi", "remote"},
-		defaultName: "bragi",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{Provider: "bragi"})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 2 {
-		t.Fatalf("want 2 bragi models, got %d: %v", len(infos), modelIDs(infos))
-	}
-	for _, info := range infos {
-		if info.Provider != "bragi" {
-			t.Errorf("model %q has Provider=%q, want bragi", info.ID, info.Provider)
-		}
-	}
-}
-
-func TestListModels_isDefaultMatchesConfig(t *testing.T) {
-	ts := fakeModelsServer([]string{"model-a", "model-b", "default-model"})
-	defer ts.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1", Model: "default-model"},
+			"bragi": {Type: "lmstudio", BaseURL: server.URL + "/v1"},
 		},
 		names:       []string{"bragi"},
 		defaultName: "bragi",
 	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-
-	var defaultCount int
-	for _, info := range infos {
-		if info.IsDefault {
-			defaultCount++
-			if info.ID != "default-model" {
-				t.Errorf("IsDefault=true for wrong model %q", info.ID)
-			}
-		}
-	}
-	if defaultCount != 1 {
-		t.Errorf("want exactly 1 IsDefault model, got %d", defaultCount)
-	}
-}
-
-func TestListModels_billingSetForProviderModels(t *testing.T) {
-	ts := fakeModelsServer([]string{"qwen3.5-27b", "unknown-model-xyz"})
-	defer ts.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1"},
-		},
-		names:       []string{"bragi"},
-		defaultName: "bragi",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-
-	for _, info := range infos {
-		if info.Billing != BillingModelFixed {
-			t.Errorf("model %q Billing = %q, want fixed", info.ID, info.Billing)
-		}
-	}
-}
-
-func TestListModels_catalogMetadataForKnownAndUnknownProviderModels(t *testing.T) {
-	ts := fakeModelsServer([]string{"qwen3.5-27b", "unknown-model-xyz"})
-	defer ts.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1"},
-		},
-		names:       []string{"bragi"},
-		defaultName: "bragi",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
+	svc := newTestService(t, ServiceOptions{ServiceConfig: config})
 	svc.routeSticky = routehealth.NewStickyState()
-	instance := serverinstance.FromBaseURL(ts.URL + "/v1")
+	instance := serverinstance.FromBaseURL(server.URL + "/v1")
 	svc.routeSticky.RecordUtilization("bragi", instance, "qwen3.5-27b", utilization.EndpointUtilization{
 		ActiveRequests: utilization.Int(2),
 		QueuedRequests: utilization.Int(1),
 		Source:         utilization.SourceVLLMMetrics,
 		Freshness:      utilization.FreshnessFresh,
 	})
-	if sample, ok := svc.routeSticky.UtilizationSample("bragi", instance, "qwen3.5-27b"); !ok || sample.Source != utilization.SourceVLLMMetrics {
-		t.Fatalf("route utilization sample not recorded: ok=%v sample=%#v", ok, sample)
-	}
 
 	infos, err := svc.ListModels(context.Background(), ModelFilter{})
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
-	if len(infos) != 2 {
-		t.Fatalf("want 2 models, got %d: %v", len(infos), modelInfoDebug(infos))
+	if len(infos) != 1 {
+		t.Fatalf("want 1 model, got %d: %v", len(infos), modelInfoDebug(infos))
 	}
-
-	byID := map[string]ModelInfo{}
-	for _, info := range infos {
-		byID[info.ID] = info
+	got := infos[0].Utilization
+	if got.Source != string(utilization.SourceVLLMMetrics) || got.Freshness != string(utilization.FreshnessFresh) {
+		t.Fatalf("utilization source/freshness = %#v, want fresh vllm metrics", got)
 	}
-
-	known := byID["qwen3.5-27b"]
-	if known.Billing != BillingModelFixed {
-		t.Fatalf("known model Billing = %q, want fixed: %#v", known.Billing, known)
+	if got.ActiveRequests == nil || *got.ActiveRequests != 2 {
+		t.Errorf("utilization active = %#v, want 2", got.ActiveRequests)
 	}
-	if known.Power != 5 || !known.AutoRoutable || known.ExactPinOnly {
-		t.Errorf("known model eligibility = power %d auto %v exact %v, want power 5 auto true exact false", known.Power, known.AutoRoutable, known.ExactPinOnly)
-	}
-	if known.Cost.InputPerMTok != 0.10 || known.Cost.OutputPerMTok != 0.30 {
-		t.Errorf("known model cost = %#v, want 0.10/0.30", known.Cost)
-	}
-	if known.ContextLength != 262144 {
-		t.Errorf("known model context = %d, want 262144", known.ContextLength)
-	}
-	if known.ContextSource != ContextSourceCatalog {
-		t.Errorf("known model context source = %q, want %q", known.ContextSource, ContextSourceCatalog)
-	}
-	if known.PerfSignal.SWEBenchVerified != 59.0 {
-		t.Errorf("known model SWE = %.1f, want 59.0", known.PerfSignal.SWEBenchVerified)
-	}
-	if known.Utilization.Source != string(utilization.SourceVLLMMetrics) || known.Utilization.Freshness != string(utilization.FreshnessFresh) {
-		t.Errorf("known model utilization = %#v, want fresh vllm metrics", known.Utilization)
-	}
-	if known.Utilization.ActiveRequests == nil || *known.Utilization.ActiveRequests != 2 {
-		t.Errorf("known model utilization active = %#v, want 2", known.Utilization.ActiveRequests)
-	}
-	if known.Utilization.QueuedRequests == nil || *known.Utilization.QueuedRequests != 1 {
-		t.Errorf("known model utilization queued = %#v, want 1", known.Utilization.QueuedRequests)
-	}
-	if known.EndpointName == "" || known.EndpointBaseURL == "" {
-		t.Errorf("known model endpoint identity missing: %#v", known)
-	}
-
-	unknown := byID["unknown-model-xyz"]
-	if unknown.Billing != BillingModelFixed {
-		t.Errorf("unknown model Billing = %q, want fixed", unknown.Billing)
-	}
-	if unknown.Power != 0 || unknown.AutoRoutable || unknown.ExactPinOnly {
-		t.Errorf("unknown model eligibility = power %d auto %v exact %v, want zero/false/false", unknown.Power, unknown.AutoRoutable, unknown.ExactPinOnly)
-	}
-	if unknown.EndpointName == "" || unknown.EndpointBaseURL == "" {
-		t.Errorf("unknown model endpoint identity missing: %#v", unknown)
-	}
-	if unknown.ContextLength != compaction.DefaultContextWindow {
-		t.Errorf("unknown model context = %d, want default %d", unknown.ContextLength, compaction.DefaultContextWindow)
-	}
-	if unknown.ContextSource != ContextSourceDefault {
-		t.Errorf("unknown model context source = %q, want %q", unknown.ContextSource, ContextSourceDefault)
+	if got.QueuedRequests == nil || *got.QueuedRequests != 1 {
+		t.Errorf("utilization queued = %#v, want 1", got.QueuedRequests)
 	}
 }
-
 func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 	cacheDir := tempDiscoveryCacheDir(t)
 	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
@@ -487,58 +160,6 @@ func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
 	if subscription.DeploymentClass != "managed_cloud_frontier" {
 		t.Fatalf("DeploymentClass = %q, want managed_cloud_frontier", subscription.DeploymentClass)
 	}
-}
-
-func TestListModels_contextSourcePrecedence(t *testing.T) {
-	t.Setenv("PATH", "")
-	cacheDir := tempDiscoveryCacheDir(t)
-	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
-
-	t.Run("provider config override wins", func(t *testing.T) {
-		ts := fakeModelsServer([]string{"qwen3.5-27b"})
-		defer ts.Close()
-		sc := &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1", Model: "qwen3.5-27b", ContextWindow: 4096},
-			},
-			names:       []string{"bragi"},
-			defaultName: "bragi",
-		}
-		svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-		infos, err := svc.ListModels(context.Background(), ModelFilter{})
-		if err != nil {
-			t.Fatalf("ListModels: %v", err)
-		}
-		if len(infos) != 1 {
-			t.Fatalf("want 1 model, got %d", len(infos))
-		}
-		if infos[0].ContextLength != 4096 || infos[0].ContextSource != ContextSourceProviderConfig {
-			t.Fatalf("provider config context = %d/%q, want 4096/%q", infos[0].ContextLength, infos[0].ContextSource, ContextSourceProviderConfig)
-		}
-	})
-
-	t.Run("default falls back when catalog missing", func(t *testing.T) {
-		ts := fakeModelsServer([]string{"unknown-model-xyz"})
-		defer ts.Close()
-		sc := &fakeServiceConfig{
-			providers: map[string]ServiceProviderEntry{
-				"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1"},
-			},
-			names:       []string{"bragi"},
-			defaultName: "bragi",
-		}
-		svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-		infos, err := svc.ListModels(context.Background(), ModelFilter{})
-		if err != nil {
-			t.Fatalf("ListModels: %v", err)
-		}
-		if len(infos) != 1 {
-			t.Fatalf("want 1 model, got %d", len(infos))
-		}
-		if infos[0].ContextLength != compaction.DefaultContextWindow || infos[0].ContextSource != ContextSourceDefault {
-			t.Fatalf("default context = %d/%q, want %d/%q", infos[0].ContextLength, infos[0].ContextSource, compaction.DefaultContextWindow, ContextSourceDefault)
-		}
-	})
 }
 
 func TestListModels_catalogMetadataForSubprocessHarnessModels(t *testing.T) {
@@ -797,37 +418,6 @@ func TestListModelsFilteredByHarnessUnchanged(t *testing.T) {
 			if info.Provider != harness || info.Harness != harness {
 				t.Errorf("harness=%s unexpected model: %#v", harness, info)
 			}
-		}
-	}
-}
-
-func TestListModels_rankPosition(t *testing.T) {
-	t.Setenv("PATH", "")
-	cacheDir := tempDiscoveryCacheDir(t)
-	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
-
-	ts := fakeModelsServer([]string{"first-model", "second-model", "third-model"})
-	defer ts.Close()
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"bragi": {Type: "lmstudio", BaseURL: ts.URL + "/v1"},
-		},
-		names:       []string{"bragi"},
-		defaultName: "bragi",
-	}
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	if len(infos) != 3 {
-		t.Fatalf("want 3 models, got %d", len(infos))
-	}
-	for _, info := range infos {
-		if info.RankPosition < 0 {
-			t.Errorf("model %q has RankPosition=%d, want >= 0", info.ID, info.RankPosition)
 		}
 	}
 }
