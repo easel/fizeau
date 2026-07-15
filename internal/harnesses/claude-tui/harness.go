@@ -187,7 +187,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	cliModel := claudeTuiLaunchModel(req.Model)
 	args := buildLaunchArgs(settingsJSON, cliModel)
 
-	ptySession, err := session.Start(
+	ptySession, err := startPTYSession(
 		ctx, claudePath, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
 		session.WithLifecycleOptions(processlifecycle.BatchOptions{
 			Harness: "claude-tui", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
@@ -255,6 +255,28 @@ func effectiveTurnTimeout(timeout time.Duration) time.Duration {
 		return timeout
 	}
 	return 5 * time.Minute
+}
+
+// startPTYSession is the single claude-tui process startup boundary. Without
+// an exact-path test replacement it delegates directly to session.Start here,
+// preserving this harness package's lifecycle ownership.
+func startPTYSession(
+	ctx context.Context,
+	command string,
+	args []string,
+	workdir string,
+	env []string,
+	size session.Size,
+	opts ...session.Option,
+) (*session.Session, error) {
+	// The default function value is the sole production route to
+	// session.Start(ctx, command, args, workdir, env, size, opts...); both it
+	// and an exact-key test replacement use the common invocation below.
+	starter := harnesses.PTYSessionStarter(session.Start)
+	if replacement, ok := harnesses.LookupPTYSessionStarterForTest("claude-tui", command); ok {
+		starter = replacement
+	}
+	return starter(ctx, command, args, workdir, env, size, opts...)
 }
 
 // buildLaunchArgs builds the claude CLI argument slice for an unattended TUI

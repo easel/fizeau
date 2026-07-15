@@ -244,6 +244,25 @@ func NewRegistry() *Registry {
 	return r
 }
 
+// NewRegistryForTest creates an isolated registry containing only the named
+// built-in harnesses. It lets cross-package composition tests constrain the
+// complete candidate trace without exposing registry mutation to product
+// callers (the harnesses package is internal).
+func NewRegistryForTest(names ...string) *Registry {
+	r := &Registry{
+		LookPath:  DefaultLookPath,
+		harnesses: make(map[string]HarnessConfig, len(names)),
+	}
+	for _, name := range names {
+		cfg, ok := builtinHarnesses[name]
+		if !ok {
+			panic("harnesses: unknown built-in test harness " + name)
+		}
+		r.harnesses[name] = cfg
+	}
+	return r
+}
+
 // Get returns a harness config by name.
 func (r *Registry) Get(name string) (HarnessConfig, bool) {
 	h, ok := r.harnesses[name]
