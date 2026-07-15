@@ -1,1 +1,2 @@
 {"actor":"","body":"","created_at":"2026-07-15T08:04:01.171993975Z","kind":"reopen","source":"","summary":""}
+{"actor":"","body":"","created_at":"2026-07-15T09:35:42.477478112Z","kind":"reopen","source":"","summary":"Provider endpoint fixture can alias a subsequently created healthy httptest server"}
