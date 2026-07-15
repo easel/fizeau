@@ -8,10 +8,10 @@ ddx:
   review:
     self_hash: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
     deps:
-      CONTRACT-003: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
-      helix.arch: ddade7651e73970cac4b3f7ef2094ff2a23fc155f5929515ea3adb26763ac6f4
+      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
+      helix.arch: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T05:49:25Z"
 ---
 # ADR-002: PTY Cassette Transport for Harness Golden Masters
 

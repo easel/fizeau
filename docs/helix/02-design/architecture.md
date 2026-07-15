@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - helix.prd
   review:
-    self_hash: ddade7651e73970cac4b3f7ef2094ff2a23fc155f5929515ea3adb26763ac6f4
+    self_hash: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
     deps:
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T05:24:31Z"
 ---
 # Architecture — Fizeau
 
@@ -81,7 +81,10 @@ events. It does not give callers a provider instance or harness-native stream.
 - `internal/transcript` owns transcript, progress, replay, and session-log
   rendering semantics.
 - `internal/routehealth` owns process-local attempt feedback, cooldown, TTL,
-  and provider/model reliability signals.
+  provider/model reliability signals, aliveness endpoint/evidence projection,
+  probe lifecycle concurrency, refresh single-flight state, and dispatch
+  feedback transactions. Root service files supply API-neutral configuration,
+  catalog, persistence, and harness callbacks only.
 - `internal/quota` owns normalized quota state and burn-rate prediction.
 - `internal/routingquality` owns routing-quality aggregation and override-class
   pivots; public metric structs remain in the root package.
@@ -116,7 +119,7 @@ fizeau/
 └── internal/
     ├── serviceimpl/             # execution and dispatch implementation
     ├── transcript/              # public-event/transcript semantics
-    ├── routehealth/             # route-attempt reliability state
+    ├── routehealth/             # route reliability, probes, lifecycle, feedback
     ├── quota/                   # quota normalization and prediction
     ├── routingquality/          # routing-quality aggregation
     ├── core/                    # reusable native agent loop

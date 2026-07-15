@@ -6,12 +6,12 @@ ddx:
     - FEAT-005
     - FEAT-006
   review:
-    self_hash: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
+    self_hash: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T05:49:18Z"
 ---
 # ADR-008: Service Package and Transcript Boundaries
 
@@ -90,6 +90,28 @@ that avoid import cycles. If an implementation move exposes a cycle, the fix
 is to introduce smaller implementation-local interfaces or adapter functions,
 not to make the root package absorb implementation code again.
 
+For route health, `internal/routehealth` owns endpoint/evidence normalization,
+probe signal reads, startup and route-time probing, the periodic refresh
+lifecycle, refresh single-flight state, route-attempt/final transactions,
+dispatch-feedback ordering, endpoint URL selection, and probe-store mutation.
+It accepts API-neutral projections and callbacks; it does not import the root
+package or `internal/serviceimpl`. The root `service_aliveness.go` retains the
+public `ProviderAlivenessProber` identity and ServiceConfig/ServiceOptions
+projection, while `service_dispatch_feedback.go` retains the public
+`RecordRouteAttempt` method, harness/public conversions, catalog-key callbacks,
+and narrow store/persistence adapters. Diagnostic reachability classification
+remains in `internal/serviceimpl` and is injected into the route-health
+transaction; stable failure-class extraction lives in `internal/routehealth`.
+
+This boundary is executable, not conventional: the root structural analyzer
+locks the exact adapters and protected internal entrypoint sites, rejects
+aliases and wrappers around those protected symbols, forbids the named legacy
+mechanic declarations and root-owned probe primitives, and permits lexical
+local shadows and unrelated package selectors. Newly named code that does not
+cross a locked declaration, entrypoint, import, timer, or concurrency boundary
+still requires ordinary review. `internal/routehealth` separately proves that
+its dependency graph cannot reach the root package.
+
 ### 3. Fizeau owns transcript and progress semantics
 
 Fizeau is the owner of:
@@ -162,10 +184,12 @@ must be removed in follow-on implementation beads.
 4. Migrate native and subprocess harness event paths onto the transcript
    package.
 5. Add conformance tests across supported execution paths.
-6. Move route status, route attempts, burn-rate, and quota health code out of
-   the root package.
-7. Audit the root package and keep only public facade code plus public API
-   smoke tests.
+6. Keep route-health lifecycle, state transitions, attempt/final transactions,
+   and dispatch-feedback mechanics in `internal/routehealth`; root retains only
+   public identities and neutral configuration/callback adapters.
+7. Audit the root package with import-path and lexical-scope-aware structural
+   tests, keeping public/composition integrations at root and pure white-box
+   mechanics beside their internal owners.
 8. Tag a Fizeau release before downstream DDx changes consume the new surface.
 
 ## Non-Goals

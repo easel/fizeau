@@ -17,11 +17,16 @@ hidden from this index.
 | [ADR-002](ADR-002) | Accepted, amended | 2026-04-20 | PTY Cassette Transport for Harness Golden Masters |
 | [ADR-003](ADR-003) | Accepted, amended | 2026-04-20 | PTY Terminal Rendering and Screen Model |
 | [ADR-004](ADR-004) | Accepted | 2026-04-20 | Terminal Harness Build-vs-Buy Boundary |
-| [ADR-005](ADR-005) | Proposed | 2026-04-25 | Power-Based Routing Replaces `model_routes` |
-| [ADR-006](ADR-006) | Proposed | 2026-04-25 | Manual Overrides Are Auto-Routing Failure Signals |
+| [ADR-005](ADR-005) | Accepted | 2026-04-25 | Power-Based Routing Replaces `model_routes` |
+| [ADR-006](ADR-006) | Accepted | 2026-04-25 | Manual Overrides Are Auto-Routing Failure Signals |
 | [ADR-007](ADR-007) | Accepted | 2026-04-27 | Sampling Profiles Belong in the Model Catalog |
 | [ADR-008](ADR-008) | Accepted | 2026-05-05 | Service Package and Transcript Boundaries |
-| [ADR-009](ADR-009) | Proposed | 2026-05-09 | Routing Surface Redesign |
+| [ADR-009](ADR-009) | Accepted | 2026-05-09 | Routing Surface Redesign |
 | [ADR-010](ADR-010) | Accepted | 2026-05-11 | Reasoning Wire Form Belongs in the Model Catalog |
-| [ADR-011](ADR-011) | Proposed | 2026-05-12 | Cost-Based Routing With Quota Pools |
+| [ADR-011](ADR-011) | Accepted | 2026-05-12 | Cost-Based Routing With Quota Pools |
 | [ADR-012](ADR-012) | Accepted | 2026-05-11 | Per-Source On-Disk Cache for Discovery + Runtime Signals |
+| [ADR-013](ADR-013) | Withdrawn pending CONTRACT-004 | 2026-05-14 | `claude-tui` PTY Harness as a Fork of `claude` |
+| [ADR-014](ADR-014) | Accepted | 2026-05-14 | Universal Harness Interface |
+| [ADR-015](ADR-015) | Accepted | 2026-05-15 | Browser Analytical Benchmark Workbench |
+| [ADR-016](ADR-016) | Accepted | 2026-05-16 | Cells Are Self-Describing Evidence |
+| [ADR-017](ADR-017) | Accepted | 2026-05-31 | Single Owner for middle→max Tier Escalation |

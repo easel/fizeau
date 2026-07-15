@@ -85,8 +85,7 @@ These files are the deliberate import boundary for `github.com/easel/fizeau`:
   `metadata_billing.go`, `service_models.go`, `service_providers.go`,
   `service_policies.go`, `service_status.go`, `service_snapshot.go`,
   `service_aliveness.go`, `service_capabilities.go`,
-  `service_execute_fanout.go`, `service_progress.go`,
-  `service_session_log.go`, `service_taillog.go`.
+  `service_execute_fanout.go`.
 - Build-tag and test-seam compatibility files:
   `options_prod.go`, `options_testseam.go`, `service_execute_seam_prod.go`,
   `service_execute_seam_testseam.go`, `testseam_types.go`.
@@ -99,10 +98,13 @@ than the old home of the implementation bulk:
 
 - Execution and harness dispatch:
   `service_execute.go`, `service_execute_dispatch.go`,
+  `service_execute_route.go`,
   `service_harness_instances.go`, `service_model_resolution.go`,
   `service_native_provider.go`, `service_override.go`,
-  `service_projection.go`, `service_reasoning.go`.
+  `service_projection.go`, `service_reasoning.go`,
+  `service_stale_harness_reaper.go`.
 - Routing and status adapters:
+  `service_dispatch_feedback.go`, `service_openrouter_credit.go`,
   `service_probe.go`, `service_routing.go`, `service_status.go`,
   `service_capabilities.go`.
   `service_status.go` retains only the public route-status projection; row
@@ -154,17 +156,20 @@ cache state, defaults, keying, classification, stale-refresh behavior, and
 tests live in `internal/serviceimpl`. There is no root cache delegate, root
 cache read, or transition-only snapshot API.
 
-`RecordRouteAttempt` and final-attempt feedback now enter through the narrow
-adapter in `service_dispatch_feedback.go`; classification and exact-success
-clearing are owned by `internal/routehealth`.
+Route-health extraction is complete. `service_aliveness.go` retains the public
+`ProviderAlivenessProber` identity, ServiceConfig/ServiceOptions projection,
+and three coordinator calls. `service_dispatch_feedback.go` retains
+`RecordRouteAttempt`, public/harness conversion, ServiceConfig and catalog-key
+callbacks, and narrow store-read/persistence adapters. Endpoint normalization,
+probe evidence and lifecycle concurrency, refresh single-flight state,
+attempt/final ordering, dispatch class extraction, base-URL selection, exact
+probe recording, and exact-success clearing are owned and tested by
+`internal/routehealth`. The internal package receives the
+`serviceimpl.IsDispatchReachabilityFailure` classifier and catalog callbacks;
+it does not import root or `internal/serviceimpl`.
 Sticky lease and utilization mechanics now enter through API-neutral
 `internal/routehealth.StickyState` operations at the routing and model
 projection boundaries; the former `service_route_leases.go` adapter is gone.
-
-- Platform-specific lifecycle adapters:
-  `service_stale_harness_reaper.go`,
-  `service_stale_harness_reaper_unix.go`,
-  `service_stale_harness_reaper_windows.go`.
 
 Anything outside this allowlist is drift and should fail the root-facade audit.
 
@@ -193,6 +198,7 @@ exercise the root import path.
   `service_power_bounds_test.go`, `service_progress_test.go`,
   `service_public_api_smoke_test.go`,
   `service_role_correlation_test.go`, `service_taillog_test.go`,
+  `service_routehealth_boundary_test.go`,
   `service_test.go`, `service_testmain_test.go`,
   `service_validation_test.go`, `testseam_test.go`,
   `no_viable_provider_for_now_test.go`.
@@ -279,8 +285,10 @@ session-log persistence, and replay/tail rendering.
 
 #### Owner: `internal/routehealth`
 
-These files own sticky-lease state, route-attempt feedback, cooldowns, and
-route-status assembly. The extraction is now complete for route-status:
+These files own sticky-lease state, route-attempt feedback, cooldowns,
+route-status assembly, aliveness endpoint/evidence projection, lifecycle
+concurrency, and dispatch-feedback transactions. The extraction is complete
+for route-status:
 `internal/routehealth.BuildStatusRows` owns filtering, ordering, cooldown
 matching, metric fallback, and neutral status rows, while the public
 `RouteStatus` receiver in `service_status.go` only gathers inputs and projects
@@ -293,14 +301,35 @@ Snapshot routing-health adaptation is complete as well. The root helper and
 metadata, while `internal/routehealth` owns and tests dispatchability and
 cooldown classification.
 
-- Source files:
-  `service_route_attempts.go`, `service_route_leases.go`,
-  `service_routestatus.go`.
-- Tests:
-  `service_aliveness_test.go`, `service_route_attempts_test.go`,
-  `service_route_evidence_test.go`, `service_route_leases_test.go`,
-  `service_routestatus_test.go`, `service_routing_errors_test.go`,
-  `service_routing_test.go`.
+The current route-health source/test boundary is:
+
+- Internal production owners: `internal/routehealth/aliveness.go`,
+  `aliveness_lifecycle.go`, `attempt_transaction.go`, `probe_store.go`,
+  `persist.go`, `store.go`, `routing_helpers.go`, `status_rows.go`,
+  `sticky_state.go`, and the focused decision/lease/utilization stores.
+- Internal white-box tests: `internal/routehealth/aliveness_test.go`,
+  `aliveness_lifecycle_test.go`, `attempt_transaction_test.go`,
+  `import_boundary_test.go`, `probe_store_test.go`, `persist_test.go`, `store_test.go`,
+  `routing_helpers_test.go`, `status_rows_test.go`, and the focused
+  lease/sticky/utilization tests beside their owners.
+- Root production adapters: `service_aliveness.go` and
+  `service_dispatch_feedback.go`, plus construction/projection call sites in
+  `service.go`, `service_routing.go`, and `service_status.go`.
+- Root public/composition integrations: `service_aliveness_test.go`,
+  `service_dispatch_feedback_test.go`, `service_route_attempts_test.go`,
+  `service_wrapped_route_observation_test.go`, and
+  `service_route_evidence_test.go`. Structural ownership is locked by
+  `service_routehealth_ownership_test.go` and the mutation-grade
+  `service_routehealth_boundary_test.go`.
+
+The deleted historical root implementations remain forbidden:
+`service_route_attempts.go`, `service_route_leases.go`, and
+`service_routestatus.go`. `TestResidualRouteHealthMechanicsStayInternal`
+rejects the named legacy declarations in any root file, aliases and wrappers
+around protected route-health symbols, moved or duplicate protected entrypoint
+calls, and root-owned network, timer, or goroutine probe mechanics. Arbitrary
+newly named code that avoids every locked structural boundary remains subject
+to ordinary review rather than a claim of complete semantic detection.
 
 #### Owner: `internal/quota`
 

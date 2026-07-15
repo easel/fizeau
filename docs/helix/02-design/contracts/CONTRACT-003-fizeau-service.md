@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 3848292ba06e3c78f496a40f8bb94204563efbd4f2266d8779d820e1590ca298
+    self_hash: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
     deps:
-      ADR-008: 478df30f7716244dd9b29425624cbe39eab51c589cde5e6610ef456b262c101f
+      ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T05:49:25Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -116,6 +116,8 @@ compatibility fallbacks for the new policy surface.
 ## Construction
 
 ```go
+type ProviderAlivenessProber func(ctx context.Context, provider, baseURL string) bool
+
 type ServiceOptions struct {
     ConfigPath string
     Logger io.Writer
@@ -134,6 +136,11 @@ type ServiceOptions struct {
     SessionLogDir string
     HarnessCleanupTimeout time.Duration
     StaleHarnessReaperGrace time.Duration
+
+    HealthProbeInterval time.Duration
+    HealthSignalTTL time.Duration
+    PersistRouteHealth string
+    AlivenessProber ProviderAlivenessProber
 }
 
 type ServiceConfig interface {
@@ -186,6 +193,15 @@ trigger cleanup, but they do not shorten this service-owned cleanup deadline.
 minimum age of a persisted non-terminal harness record before a later service
 startup may treat that record as stale and attempt recovery. Zero uses five
 minutes. The two options MUST remain semantically independent.
+
+`ProviderAlivenessProber` reports endpoint reachability: `true` means
+reachable and `false` means unreachable. Implementations MUST respect `ctx`
+cancellation. `HealthProbeInterval` controls background probes; a non-positive
+value uses 60 seconds. `HealthSignalTTL` is the maximum age of probe evidence
+used for routing and persisted-snapshot loading; a non-positive value uses 10
+minutes. Empty `PersistRouteHealth` disables route-attempt and probe-state
+persistence; a non-empty value is the persistence file path. A nil
+`AlivenessProber` uses the default TCP-connect prober.
 
 `IncludeByDefault` controls unpinned automatic routing participation. For
 pay-per-token providers, `IncludeByDefault=true` is necessary but not
@@ -666,6 +682,19 @@ must not infer provenance from amount or JSON field presence.
 ## Routing Types
 
 ```go
+type RouteAttempt struct {
+    Harness string
+    Provider string
+    Model string
+    Endpoint string
+    ServerInstance string
+    Status string
+    Reason string
+    Error string
+    Duration time.Duration
+    Timestamp time.Time
+}
+
 type RouteRequest struct {
     Policy string
     Model string
@@ -725,6 +754,14 @@ type RouteCandidate struct {
     Utilization RouteUtilizationState
 }
 ```
+
+`RecordRouteAttempt` requires at least one of `Harness` or `Provider` after
+whitespace normalization and requires a non-empty `Status`. Status matching is
+case-insensitive. `success`, `ok`, and `succeeded` clear only the identical
+normalized `(Harness, Provider, Model, Endpoint, ServerInstance)` failure key;
+empty endpoint and server-instance fields are identity values, not wildcards.
+Any other non-empty status records a failure. A zero `Timestamp` records the
+attempt at the current time.
 
 Raw `Model` constraints are normalized against provider-discovered model IDs
 before route selection. The resolver uses the canonical fuzzy matcher for

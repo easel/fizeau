@@ -742,9 +742,6 @@ parameter types, and field-level documentation, follow the
 | `ValidateRole` | func (func ValidateRole(role string) error) | ValidateRole returns nil when role is empty (unset) or already |
 | `ValidateUsageSince` | func (func ValidateUsageSince(spec string) error) | ValidateUsageSince returns nil when spec is a usage window value accepted by |
 | `adaptModelConstraintError` | func (func adaptModelConstraintError(err error) error) |  |
-| `alivenessEndpoint` | type (struct) | alivenessEndpoint describes one provider endpoint to probe |
-| `alivenessLoopSleep` | func (func alivenessLoopSleep(ctx context.Context, d time.Duration) bool) |  |
-| `alivenessRouteKeys` | func (func alivenessRouteKeys(ep alivenessEndpoint) []string) |  |
 | `appendUniqueModelIDs` | func (func appendUniqueModelIDs(values []string, additions ...string) []string) |  |
 | `applyCatalogPolicyResultToRoutingRequest` | func (func applyCatalogPolicyResultToRoutingRequest(req *routing.Request, result serviceimpl.CatalogPolicyResult)) |  |
 | `applyRouteSnapshotEvidence` | func (func applyRouteSnapshotEvidence(candidate *RouteCandidate, row modelsnapshot.KnownModel)) |  |
@@ -771,11 +768,8 @@ parameter types, and field-level documentation, follow the
 | `defaultCatalogReloadTimeout` | const |  |
 | `defaultHarnessCleanupTimeout` | const |  |
 | `defaultHarnessInstances` | func (func defaultHarnessInstances() map[string]harnesses.Harness) | defaultHarnessInstances returns the production map of registered |
-| `defaultHealthProbeInterval` | const |  |
-| `defaultHealthSignalTTL` | const |  |
 | `defaultStaleHarnessReaperGrace` | const |  |
 | `discoveryUnsupportedError` | type (struct) |  |
-| `dispatchFailureFromAttempt` | func (func dispatchFailureFromAttempt(attempt routehealth.Attempt) (string, string, error)) | dispatchFailureFromAttempt performs the class-level half of the two-stage |
 | `effectiveReasoningString` | func (func effectiveReasoningString(value Reasoning) string) |  |
 | `endpointDisplayName` | func (func endpointDisplayName(name, baseURL string) string) |  |
 | `endpointProviderRef` | func (func endpointProviderRef(providerName, endpointName string) string) |  |
@@ -795,7 +789,6 @@ parameter types, and field-level documentation, follow the
 | `executeOverridePayload` | func (func executeOverridePayload(ovr *overrideContext, sessionID string) json.RawMessage) | executeOverridePayload projects the root override record into the |
 | `executeRouteProviders` | func (func executeRouteProviders(config ServiceConfig) (map[string]serviceimpl.ProviderEntry, []string)) |  |
 | `explicitPolicyConstraint` | func (func explicitPolicyConstraint(policy string) (string, bool)) |  |
-| `extractHostPort` | func (func extractHostPort(baseURL string) string) | extractHostPort extracts host:port from a base URL, adding the scheme's |
 | `extractStatusCode` | func (func extractStatusCode(msg string) int) | extractStatusCode pulls the status code out of the "HTTP NNN:" prefix |
 | `generateSessionID` | func (func generateSessionID() string) | generateSessionID returns a unique session identifier for a new Execute |
 | `harnessDefaultModel` | func (func harnessDefaultModel(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) string) |  |
@@ -839,7 +832,6 @@ parameter types, and field-level documentation, follow the
 | `positiveScorePart` | func (func positiveScorePart(v float64) float64) |  |
 | `probeOpenAIModels` | func (func probeOpenAIModels(ctx context.Context, baseURL, apiKey string) ([]string, error)) | probeOpenAIModels calls GET /v1/models against baseURL and classifies |
 | `promptAssertionHookFn` | type (func) | promptAssertionHookFn / compactionAssertionHookFn / toolWiringHookFn |
-| `providerBaseURLsForEndpoint` | func (func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []string) | providerBaseURLsForEndpoint returns the configured base URLs for one |
 | `providerCapabilities` | func (func providerCapabilities(entry ServiceProviderEntry) []string) | providerCapabilities returns the capability set for a provider entry |
 | `providerTypeUsesFixedBilling` | func (func providerTypeUsesFixedBilling(providerType string) bool) |  |
 | `publicCatalogPolicyError` | func (func publicCatalogPolicyError(failure *serviceimpl.CatalogPolicyFailure) error) |  |
@@ -850,7 +842,6 @@ parameter types, and field-level documentation, follow the
 | `quotaStatus` | func (func quotaStatus(fresh bool, windows []harnesses.QuotaWindow) string) |  |
 | `reapStaleHarnessRecords` | func (func reapStaleHarnessRecords(dir string, grace time.Duration, now time.Time) error) |  |
 | `recordExecuteOverrideOutcome` | func (func recordExecuteOverrideOutcome(ovr *overrideContext, status string)) |  |
-| `recordRouteTimeProbeFailures` | func (func recordRouteTimeProbeFailures(store *routehealth.ProbeStore, endpoints []alivenessEndpoint, probeAt time.Time)) |  |
 | `requestedNativeProviderType` | func (func requestedNativeProviderType(req ServiceExecuteRequest) string) |  |
 | `resolveContextEvidence` | func (func resolveContextEvidence(ctx context.Context, entry ServiceProviderEntry, modelID string, cat *modelcatalog.Catalog) (int, string)) | resolveContextEvidence resolves the context window for a model using the |
 | `resolveSubprocessModelAlias` | var |  |
@@ -860,12 +851,8 @@ parameter types, and field-level documentation, follow the
 | `routeSnapshotCandidateIndex` | func (func routeSnapshotCandidateIndex(snapshot modelsnapshot.ModelSnapshot) map[routeSnapshotCandidateKey]modelsnapshot.KnownModel) |  |
 | `routeSnapshotCandidateKey` | type (struct) |  |
 | `routeSnapshotEvidenceForCandidate` | func (func routeSnapshotEvidenceForCandidate(candidate RouteCandidate, snapshot modelsnapshot.ModelSnapshot) (modelsnapshot.KnownModel, bool)) |  |
-| `routeTimeProbeTimeout` | const |  |
 | `routingHarnessEntryFromMetadata` | func (func routingHarnessEntryFromMetadata(name string, cfg harnesses.HarnessConfig, st harnesses.HarnessStatus) routing.HarnessEntry) |  |
 | `routingHarnessUsesAccountBilling` | func (func routingHarnessUsesAccountBilling(entry *routing.HarnessEntry) bool) |  |
-| `runAlivenessProbeLoop` | func (func runAlivenessProbeLoop( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, interval time.Duration, now func() time.Time, sleep func(ctx context.Context, d time.Duration) bool, persistPath string, )) | runAlivenessProbeLoop periodically re-probes each endpoint whose last probe |
-| `runRouteTimeAlivenessProbes` | func (func runRouteTimeAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, perProbeTimeout time.Duration, )) |  |
-| `runStartupAlivenessProbes` | func (func runStartupAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, totalTimeout time.Duration, )) | runStartupAlivenessProbes probes each endpoint sequentially within totalTimeout |
 | `scorePowerHintFit` | func (func scorePowerHintFit(candidate routing.Candidate, policy RoutePowerPolicy) float64) |  |
 | `seamOptions` | type (struct) | seamOptions is empty in production builds |
 | `service` | type (struct) | service is the concrete FizeauService implementation |
@@ -878,7 +865,6 @@ parameter types, and field-level documentation, follow the
 | `shouldAutoLoadServiceConfig` | func (func shouldAutoLoadServiceConfig(ServiceOptions) bool) |  |
 | `shouldEscalateOnError` | func (func shouldEscalateOnError(err error) bool) | shouldEscalateOnError gates ladder escalation to "no eligible candidate" |
 | `splitEndpointProviderRef` | func (func splitEndpointProviderRef(ref string) (string, string, bool)) |  |
-| `startupProbeTotalTimeout` | const |  |
 | `staticHarnessAliases` | func (func staticHarnessAliases(name string) []string) |  |
 | `statusErrorType` | func (func statusErrorType(status string) string) |  |
 | `statusViewProvider` | func (func statusViewProvider(entry ServiceProviderEntry) statusview.ServiceProvider) |  |
@@ -888,7 +874,6 @@ parameter types, and field-level documentation, follow the
 | `supportedModelsForHarness` | func (func supportedModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []string) |  |
 | `supportedPermissions` | func (func supportedPermissions(cfg harnesses.HarnessConfig) []string) | supportedPermissions extracts the permission levels from PermissionArgs keys, |
 | `supportedReasoning` | func (func supportedReasoning(cfg harnesses.HarnessConfig) []string) |  |
-| `tcpAlivenessProber` | func (func tcpAlivenessProber(ctx context.Context, _, baseURL string) bool) | tcpAlivenessProber tests endpoint reachability via a TCP connect probe |
 | `toRoutingQualityOverride` | func (func toRoutingQualityOverride(ov ServiceOverrideData) *routingquality.OverrideData) |  |
 | `toTranscriptRouteDecision` | func (func toTranscriptRouteDecision(decision RouteDecision) transcript.RouteProgressDecision) |  |
 | `toolWiringHookFn` | type (func) |  |

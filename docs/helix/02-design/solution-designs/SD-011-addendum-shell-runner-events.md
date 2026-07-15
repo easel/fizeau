@@ -9,7 +9,7 @@ ddx:
     deps:
       SD-011: be2debae8cab7ad3d66b0123c6ef7f240abaf9b4e99129288d4c203b96d1ebd2
       plan-2026-05-15-benchmark-runner-simplification: 18c1a107428efab189b5fd298ff898d195c3f70130ee856660f54c1f0e97bd40
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-15T05:49:26Z"
 ---
 
 # SD-011 Addendum: Shell-Runner Progress Event Taxonomy
