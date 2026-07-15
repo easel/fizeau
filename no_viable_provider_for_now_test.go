@@ -9,11 +9,11 @@ import (
 	"github.com/easel/fizeau/internal/routing"
 )
 
-// TestPublicRoutingErrorCopiesQuotaExhaustedProviders is the intentional
+// TestPublicRoutingErrorAdapterCopiesQuotaExhaustedProviders is the narrow
 // same-package seam for translating the private routing quota error into its
-// public typed counterpart. The public facade cannot construct the source
-// error, so this test owns both identity and caller-isolated slice copying.
-func TestPublicRoutingErrorCopiesQuotaExhaustedProviders(t *testing.T) {
+// public typed counterpart. Public identity and field behavior are covered
+// from package fizeau_test by TestPublicNoViableProviderForNowContract.
+func TestPublicRoutingErrorAdapterCopiesQuotaExhaustedProviders(t *testing.T) {
 	retry := time.Date(2026, 5, 2, 11, 0, 0, 0, time.UTC)
 	src := &routing.ErrAllProvidersQuotaExhausted{
 		RetryAfter:         retry,

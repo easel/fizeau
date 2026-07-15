@@ -1,8 +1,9 @@
-package fizeau
+package fizeau_test
 
 import (
 	"testing"
 
+	fizeau "github.com/easel/fizeau"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,7 +12,7 @@ import (
 // available without any binary lookup. The exact CLI subset depends on
 // what is installed in the test environment, so we only assert invariants.
 func TestAvailableHarnesses_AlwaysIncludesEmbedded(t *testing.T) {
-	got := AvailableHarnesses()
+	got := fizeau.AvailableHarnesses()
 	assert.NotEmpty(t, got)
 	assert.Contains(t, got, "fiz", "embedded fiz must always be reported as available")
 }
@@ -19,10 +20,10 @@ func TestAvailableHarnesses_AlwaysIncludesEmbedded(t *testing.T) {
 // TestDetectHarnesses_ReportsEveryBuiltin verifies DetectHarnesses returns
 // one row per builtin harness with stable shape.
 func TestDetectHarnesses_ReportsEveryBuiltin(t *testing.T) {
-	got := DetectHarnesses()
+	got := fizeau.DetectHarnesses()
 	assert.NotEmpty(t, got)
 
-	byName := make(map[string]HarnessAvailability, len(got))
+	byName := make(map[string]fizeau.HarnessAvailability, len(got))
 	for _, h := range got {
 		byName[h.Name] = h
 	}

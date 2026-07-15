@@ -136,3 +136,20 @@ func TestBurnRateConcurrentRecordSafe(t *testing.T) {
 		t.Errorf("Used after concurrent inserts = %d, want 800", got)
 	}
 }
+
+func TestObserveTokenUsageCascadesToQuotaState(t *testing.T) {
+	now := midUTC(12, 0)
+	burn := NewBurnRateTracker()
+	burn.SetBudget("openai", 100)
+	store := NewStateStore()
+
+	ObserveTokenUsage(burn, store, "openai", 200, now)
+
+	state, retryAt := store.State("openai", now)
+	if state != StateQuotaExhausted {
+		t.Fatalf("State = %q, want quota_exhausted", state)
+	}
+	if retryAt.IsZero() || !retryAt.After(now) {
+		t.Fatalf("retryAt = %v, want a future reset time", retryAt)
+	}
+}

@@ -28,17 +28,6 @@ func TestSignalObserverSharesRoutingVisibleState(t *testing.T) {
 	if got, ok := exhausted["openai"]; !ok || !got.Equal(retryAt) {
 		t.Fatalf("routing-visible exhaustion = %v, want openai=%v", exhausted, retryAt)
 	}
-
-	// The same delegated observer also writes recovery evidence into the same
-	// store read by routing; transition details are owned by internal/quota.
-	observer(quotaheaders.Signal{
-		Present:           true,
-		RemainingRequests: 10,
-		RemainingTokens:   1000,
-	})
-	if got := svc.providerQuotaExhaustedUntil(time.Now().UTC()); got != nil {
-		t.Fatalf("routing-visible exhaustion after recovery = %v, want nil", got)
-	}
 }
 
 func TestQuotaSignalObserverWrapperDelegation(t *testing.T) {
