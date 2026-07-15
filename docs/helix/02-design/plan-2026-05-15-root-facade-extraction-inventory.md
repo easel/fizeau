@@ -77,15 +77,16 @@ These files are the deliberate import boundary for `github.com/easel/fizeau`:
 
 - Contract types, constructors, and public metrics:
   `service.go`, `service_events.go`, `service_session_projection.go`,
-  `service_routing_quality.go`, `routing_errors.go`, `role_correlation.go`.
+  `service_routing_quality.go`, `service_catalog_cache.go`,
+  `routing_errors.go`, `role_correlation.go`.
 - Public aliases, wrappers, and CLI-facing compatibility seams:
   `public_api.go`, `public_cli_api.go`, `provider_quota_state.go`,
   `provider_burn_rate.go`, `service_catalog_impl_adapters.go`,
   `metadata_billing.go`, `service_models.go`, `service_providers.go`,
   `service_policies.go`, `service_status.go`, `service_snapshot.go`,
   `service_aliveness.go`, `service_capabilities.go`,
-  `service_catalog_cache.go`, `service_execute_fanout.go`,
-  `service_progress.go`, `service_session_log.go`, `service_taillog.go`.
+  `service_execute_fanout.go`, `service_progress.go`,
+  `service_session_log.go`, `service_taillog.go`.
 - Build-tag and test-seam compatibility files:
   `options_prod.go`, `options_testseam.go`, `service_execute_seam_prod.go`,
   `service_execute_seam_testseam.go`, `testseam_types.go`.
@@ -117,6 +118,14 @@ than the old home of the implementation bulk:
   `service_capabilities.go` retains the public capability types/constants and
   a field-for-field projection; status/detail classification lives in
   `internal/serviceimpl`.
+
+Catalog-cache extraction is complete. `service_catalog_cache.go` retains only
+the concrete public `CatalogProbeFunc`, six-field `CatalogResult`, and the
+root-owned discovery-unsupported error identity. The `service` constructor and
+dispatch-feedback seam use `internal/serviceimpl.CatalogCache` directly;
+cache state, defaults, keying, classification, stale-refresh behavior, and
+tests live in `internal/serviceimpl`. There is no root cache delegate, root
+cache read, or transition-only snapshot API.
 
 `RecordRouteAttempt` and final-attempt feedback now enter through the narrow
 adapter in `service_dispatch_feedback.go`; classification and exact-success
@@ -182,6 +191,12 @@ resides elsewhere.
 These files implement concrete service construction, dispatch, provider/model
 listing, status assembly, and service-local helpers. They should not remain in
 the public root once the split is complete.
+
+The catalog-cache slice is complete: `internal/serviceimpl/catalog_cache.go`
+owns its concrete mechanics and tests, while the root retains only public
+contract identity and the two narrow construction/dispatch-feedback wiring
+sites. The cache-test entry below is retained as historical inventory; it now
+lives at `internal/serviceimpl/catalog_cache_test.go`.
 
 - Source files:
   `metadata_billing.go`, `service_execute.go`,

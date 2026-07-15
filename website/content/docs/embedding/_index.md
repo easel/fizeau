@@ -755,10 +755,6 @@ parameter types, and field-level documentation, follow the
 | `axesOverridden` | func (func axesOverridden(req ServiceExecuteRequest) []string) | axesOverridden returns the canonical, ordered list of axes the caller |
 | `candidateBaseProviderName` | func (func candidateBaseProviderName(identity string) string) | candidateBaseProviderName strips any "@endpoint" suffix from a candidate |
 | `capabilityScoreForCostClass` | func (func capabilityScoreForCostClass(class string) float64) | capabilityScoreForCostClass maps the harness cost class to a coarse |
-| `catalogCache` | type (struct) |  |
-| `catalogCacheKey` | type (struct) |  |
-| `catalogCacheOptions` | type (struct) | The private types below form a temporary root delegate while the remaining |
-| `catalogCacheSnapshot` | type (struct) |  |
 | `catalogCostAndPerf` | func (func catalogCostAndPerf(cat *modelcatalog.Catalog, modelID string) (CostInfo, PerfSignal)) | catalogCostAndPerf extracts CostInfo and PerfSignal for a model from the catalog |
 | `catalogModelsForHarness` | func (func catalogModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) []string) |  |
 | `catalogPowerEligibility` | func (func catalogPowerEligibility(cat *modelcatalog.Catalog, modelID string) (int, bool, bool)) |  |

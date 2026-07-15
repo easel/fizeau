@@ -111,14 +111,13 @@ func (s *service) persistRouteHealthSnapshot() error {
 	return routehealth.SavePersistedState(s.opts.PersistRouteHealth, s.routeHealth, s.providerProbe)
 }
 
-// recordDispatchFailure feeds a chat-completions dispatch failure back into
-// both the catalog cache and the routehealth probe store so the next routing
-// pass treats the endpoint as unreachable instead of replaying the timeout.
+// recordDispatchFailure preserves a chat-completions reachability failure in
+// both the catalog cache and the routehealth probe store.
 //
-// The catalog cache update prevents the next /v1/models discovery within
-// FreshTTL from returning a stale "available" entry; the probe-store update
-// drives the routing engine's ProbeUnreachable map so the endpoint surfaces
-// with FilterReasonEndpointUnreachable in the next routing_decision.
+// The catalog cache receives endpoint-keyed write-side feedback. The
+// probe-store update drives the routing engine's ProbeUnreachable map so the
+// endpoint surfaces with FilterReasonEndpointUnreachable in the next
+// routing_decision.
 //
 // Errors that don't classify as a reachability failure (auth 401, malformed
 // body, etc.) are ignored — those signals don't indicate the endpoint is
@@ -150,7 +149,7 @@ func (s *service) recordDispatchFailure(provider, endpoint string, err error) {
 	if s.catalog != nil && providerName != "" && s.opts.ServiceConfig != nil {
 		if pcfg, ok := s.opts.ServiceConfig.Provider(providerName); ok {
 			for _, baseURL := range providerBaseURLsForEndpoint(pcfg, endpointName) {
-				key := newCatalogCacheKey(baseURL, pcfg.APIKey, pcfg.Headers)
+				key := serviceimpl.NewCatalogCacheKey(baseURL, pcfg.APIKey, pcfg.Headers)
 				s.catalog.RecordDispatchError(key, err)
 			}
 		}

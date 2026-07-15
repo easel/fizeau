@@ -409,37 +409,6 @@ func (c *CatalogCache) freshTTLFor(deploymentClass string) time.Duration {
 	return c.opts.FreshTTL
 }
 
-// CatalogSnapshot is a read-only copy of one cache entry. It exists as a
-// narrow transition seam for root integration tests while service.catalog is
-// still a temporary root delegate; cache state itself remains internal.
-type CatalogSnapshot struct {
-	IDs                []string
-	FetchedAt          time.Time
-	LastErr            error
-	UnreachableAt      time.Time
-	DiscoverySupported bool
-}
-
-// Snapshot returns a deep copy of one entry, if present.
-func (c *CatalogCache) Snapshot(key CatalogCacheKey) (CatalogSnapshot, bool) {
-	if c == nil {
-		return CatalogSnapshot{}, false
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	e, ok := c.mem[key]
-	if !ok {
-		return CatalogSnapshot{}, false
-	}
-	return CatalogSnapshot{
-		IDs:                append([]string(nil), e.IDs...),
-		FetchedAt:          e.FetchedAt,
-		LastErr:            e.LastErr,
-		UnreachableAt:      e.UnreachableAt,
-		DiscoverySupported: e.DiscoverySupported,
-	}, true
-}
-
 // IsServerError reports whether a discovery error message contains one of the
 // exact HTTP 500-505 markers historically classified as endpoint failures.
 func IsServerError(msg string) bool {

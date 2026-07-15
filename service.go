@@ -955,11 +955,10 @@ type service struct {
 	routeStatusCache *routehealth.DecisionStore[*RouteDecision]
 	routeSticky      *routehealth.StickyState
 
-	// catalog is the service-scope model-catalog cache. Populated lazily
-	// on first use by routing + chat paths; shared across requests so the
-	// same endpoint isn't probed per-dispatch during a drain. See
-	// service_catalog_cache.go.
-	catalog *catalogCache
+	// catalog records service-scoped dispatch reachability feedback for
+	// configured provider endpoints. Concrete cache state and classification
+	// mechanics live in internal/serviceimpl.
+	catalog *serviceimpl.CatalogCache
 
 	// routingQuality records routing-quality observations (ADR-006 §5).
 	// Populated by Execute on every request and read by RouteStatus and
@@ -1069,7 +1068,10 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		harnessInstances: defaultHarnessInstances(),
 		hub:              serviceimpl.NewSessionHub(),
 		runtime:          serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
-		catalog:          newCatalogCache(catalogCacheOptions{AsyncRefreshTimeout: opts.catalogRefreshTimeout()}),
+		catalog: serviceimpl.NewCatalogCache(serviceimpl.CatalogCacheOptions{
+			AsyncRefreshTimeout:  opts.catalogRefreshTimeout(),
+			DiscoveryUnsupported: ErrDiscoveryUnsupported(),
+		}),
 		routeHealth:      routehealth.NewStore(),
 		routeStatusCache: routehealth.NewDecisionStore[*RouteDecision](),
 		routeSticky:      routehealth.NewStickyState(),
