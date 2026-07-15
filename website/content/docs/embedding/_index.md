@@ -765,7 +765,6 @@ parameter types, and field-level documentation, follow the
 | `convertUsageWindow` | func (func convertUsageWindow(w *UsageReportWindow) *session.UsageWindow) |  |
 | `copyScoreComponents` | func (func copyScoreComponents(in map[string]float64) map[string]float64) |  |
 | `correlationIDMaxLen` | const | CorrelationID normalization bounds (CONTRACT-003) |
-| `credentialMissingForProvider` | func (func credentialMissingForProvider(name string, pcfg ServiceProviderEntry) (string, bool)) | credentialMissingForProvider returns (location, true) when the named |
 | `decodeServicePayload` | func (func decodeServicePayload(ev ServiceEvent, dst any) error) |  |
 | `defaultCatalogProbeTimeout` | const |  |
 | `defaultCatalogReloadTimeout` | const |  |
@@ -822,7 +821,6 @@ parameter types, and field-level documentation, follow the
 | `nativeProviderResolution` | type (struct) |  |
 | `nativeRouteCandidates` | func (func nativeRouteCandidates(in []RouteCandidate) []serviceimpl.NativeRouteCandidate) |  |
 | `normalizeServiceProviderType` | func (func normalizeServiceProviderType(t string) string) |  |
-| `openrouterAPIKeyWellFormed` | func (func openrouterAPIKeyWellFormed(s string) bool) | openrouterAPIKeyWellFormed reports whether s plausibly resembles a real |
 | `openrouterCreditFailureMode` | type | openrouterCreditFailureMode classifies why a credit probe attempt did not |
 | `openrouterCreditFreshnessSource` | const | openrouterCreditFreshnessSource labels candidate |
 | `openrouterCreditProbeResult` | type (struct) | openrouterCreditProbeResult is the classified outcome of one /api/v1/credits |
@@ -846,7 +844,6 @@ parameter types, and field-level documentation, follow the
 | `providerBaseURLsForEndpoint` | func (func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []string) | providerBaseURLsForEndpoint returns the configured base URLs for one |
 | `providerCapabilities` | func (func providerCapabilities(entry ServiceProviderEntry) []string) | providerCapabilities returns the capability set for a provider entry |
 | `providerCooldownsFromSnapshotErrors` | func (func providerCooldownsFromSnapshotErrors(snapshot modelsnapshot.ModelSnapshot, cfg ServiceConfigSource, now time.Time, ttl time.Duration) map[string]time.Time) | providerCooldownsFromSnapshotErrors walks snapshot |
-| `providerCredentialMissingMap` | func (func providerCredentialMissingMap(cfg ServiceConfigSource) map[string]string) | providerCredentialMissingMap inspects each configured provider that |
 | `providerPreferenceForPolicy` | func (func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error)) |  |
 | `providerPreferenceForPolicyName` | func (func providerPreferenceForPolicyName(name string) string) |  |
 | `providerTypeUsesFixedBilling` | func (func providerTypeUsesFixedBilling(providerType string) bool) |  |

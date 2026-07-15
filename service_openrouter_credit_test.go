@@ -104,6 +104,41 @@ func openrouterDecisionCandidates(t *testing.T, dec *RouteDecision, err error) *
 	return dec
 }
 
+func TestOpenrouterCreditProbeSkipsMalformedCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "empty"},
+		{name: "whitespace", key: " \t\n "},
+		{name: "wrong prefix", key: "not-or-v1-credential-test-key"},
+		{name: "short", key: "sk-or-x"},
+		{name: "bare placeholder", key: "${OPENROUTER_API_KEY}"},
+		{name: "long partial placeholder", key: "sk-or-v1-${KEY_SUFFIX_UNSET}-padding"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, hits := openrouterCreditGateService(t, func(provider *ServiceProviderEntry) {
+				provider.APIKey = tc.key
+			}, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(openrouterCreditFixtureResponse(25.0)))
+			})
+
+			projection := svc.openrouterProbeMaps(context.Background(), time.Now().UTC())
+			if got := hits.Load(); got != 0 {
+				t.Fatalf("credits probe hits=%d for malformed key %q, want zero", got, tc.key)
+			}
+			if _, ok := svc.openrouterCredit.Lookup("openrouter"); ok {
+				t.Fatalf("credit store recorded malformed key %q without a probe", tc.key)
+			}
+			if len(projection.CreditExhausted) != 0 || len(projection.CredentialInvalid) != 0 || len(projection.ProviderUnreachable) != 0 {
+				t.Fatalf("probe projection for malformed key %q = %#v, want empty", tc.key, projection)
+			}
+		})
+	}
+}
+
 func TestOpenrouterZeroBalanceMarksCreditExhausted(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "")
 

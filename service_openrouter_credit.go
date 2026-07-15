@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/routing"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 // openrouterCreditFailureMode classifies why a credit probe attempt did not
@@ -339,7 +340,7 @@ func (s *service) openrouterProbeMaps(ctx context.Context, now time.Time) openro
 			continue
 		}
 		apiKey := strings.TrimSpace(pcfg.APIKey)
-		if apiKey == "" || !openrouterAPIKeyWellFormed(apiKey) {
+		if !serviceimpl.OpenRouterAPIKeyWellFormed(apiKey) {
 			// Credential gate is responsible for these cases; do not probe.
 			continue
 		}
