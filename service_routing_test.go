@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -706,6 +707,57 @@ models:
 	}
 }
 
+func TestResolveRouteCatalogSmartAllowLocalProjection(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-15T00:00:00Z
+catalog_version: smart-allow-local-test
+policies:
+  default:
+    min_power: 5
+    max_power: 8
+    allow_local: true
+  smart:
+    min_power: 9
+    max_power: 10
+    allow_local: true
+models:
+  local-smart:
+    family: example
+    status: active
+    power: 9
+    surfaces:
+      agent.openai: local-smart
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+
+	svc := newTestService(t, ServiceOptions{
+		ServiceConfig: &fakeServiceConfig{
+			providers: map[string]ServiceProviderEntry{
+				"local": {
+					Type:    "test",
+					BaseURL: "http://127.0.0.1:9999/v1",
+					Model:   "local-smart",
+					Billing: BillingModelFixed,
+				},
+			},
+			names:       []string{"local"},
+			defaultName: "local",
+		},
+	})
+
+	decision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "smart"})
+	if err != nil {
+		t.Fatalf("ResolveRoute smart allow_local catalog policy: %v", err)
+	}
+	if decision == nil || decision.Provider != "local" || decision.Model != "local-smart" {
+		t.Fatalf("decision=%#v, want catalog-enabled local smart route", decision)
+	}
+	if decision.PowerPolicy != (RoutePowerPolicy{PolicyName: "smart", MinPower: 9, MaxPower: 10}) {
+		t.Fatalf("PowerPolicy=%#v, want smart 9..10", decision.PowerPolicy)
+	}
+}
+
 func TestResolveRoutePolicyReportsEffectivePowerPolicy(t *testing.T) {
 	catalog := loadRoutingFixtureCatalog(t, `
 version: 5
@@ -720,6 +772,10 @@ policies:
     min_power: 9
     max_power: 10
     allow_local: false
+  custom:
+    min_power: 6
+    max_power: 9
+    allow_local: true
 models:
   provider-default:
     family: example
@@ -761,6 +817,26 @@ models:
 	}
 	if dec.Model != "provider-default" {
 		t.Fatalf("Model=%q, want provider-default without treating policy as a model ref", dec.Model)
+	}
+
+	whitespaceDecision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: " default "})
+	if err != nil {
+		t.Fatalf("ResolveRoute whitespace default: %v", err)
+	}
+	if whitespaceDecision.RequestedPolicy != " default " || whitespaceDecision.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 7, MaxPower: 8}) {
+		t.Fatalf("whitespace decision=%#v, want raw request and canonical default power evidence", whitespaceDecision)
+	}
+
+	customDecision, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: " custom "})
+	if err == nil {
+		t.Fatal("custom catalog policy unexpectedly bypassed routing engine canonical-policy validation")
+	}
+	var unknown *ErrUnknownPolicy
+	if !errors.As(err, &unknown) || unknown.Policy != " custom " {
+		t.Fatalf("custom policy error=%T %v, want raw *ErrUnknownPolicy", err, err)
+	}
+	if customDecision == nil || customDecision.RequestedPolicy != " custom " || customDecision.PowerPolicy != (RoutePowerPolicy{PolicyName: "custom", MinPower: 6, MaxPower: 9}) {
+		t.Fatalf("custom decision=%#v, want preserved custom policy evidence", customDecision)
 	}
 }
 
@@ -854,6 +930,94 @@ models:
 	}
 	if !sawBelowTarget || !sawAboveTarget {
 		t.Fatalf("decision candidates did not cover the full power-policy trace: %#v", dec.Candidates)
+	}
+
+	pinned, err := svc.ResolveRoute(context.Background(), RouteRequest{
+		Policy:   "default",
+		Model:    "power-9",
+		MinPower: 1,
+		MaxPower: 10,
+	})
+	if err != nil {
+		t.Fatalf("ResolveRoute explicit power-9 model: %v", err)
+	}
+	if pinned == nil || pinned.Model != "power-9" {
+		t.Fatalf("pinned decision=%#v, want explicit power-9 model", pinned)
+	}
+	if pinned.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 7, MaxPower: 8}) {
+		t.Fatalf("pinned PowerPolicy=%#v, want default evidence 7..8 with caller bounds enforced internally", pinned.PowerPolicy)
+	}
+	var pinnedPower9 *RouteCandidate
+	for index := range pinned.Candidates {
+		if pinned.Candidates[index].Model == "power-9" {
+			pinnedPower9 = &pinned.Candidates[index]
+			break
+		}
+	}
+	if pinnedPower9 == nil {
+		t.Fatalf("pinned power-9 candidate missing: %#v", pinned.Candidates)
+	}
+	if got, ok := pinnedPower9.ScoreComponents["power"]; !ok || got != 0 {
+		t.Fatalf("pinned power component=%v present=%t, want raw caller-bound score 0", got, ok)
+	}
+
+	intersected, err := svc.ResolveRoute(context.Background(), RouteRequest{
+		Policy:   "default",
+		MinPower: 8,
+		MaxPower: 10,
+	})
+	if err != nil {
+		t.Fatalf("ResolveRoute intersected caller/catalog bounds: %v", err)
+	}
+	if intersected == nil || intersected.Model != "power-9" {
+		t.Fatalf("intersected decision=%#v, want power-9 winner under effective 8..8", intersected)
+	}
+	if intersected.PowerPolicy != (RoutePowerPolicy{PolicyName: "default", MinPower: 8, MaxPower: 8}) {
+		t.Fatalf("intersected PowerPolicy=%#v, want effective default 8..8", intersected.PowerPolicy)
+	}
+	var power7, power9 *RouteCandidate
+	for index := range intersected.Candidates {
+		switch intersected.Candidates[index].Model {
+		case "power-7":
+			power7 = &intersected.Candidates[index]
+		case "power-9":
+			power9 = &intersected.Candidates[index]
+		}
+	}
+	if power7 == nil || power9 == nil {
+		t.Fatalf("intersected candidates missing power-7 or power-9: %#v", intersected.Candidates)
+	}
+	if got := power7.ScoreComponents["power"]; got != -12 {
+		t.Fatalf("power-7 raw power component=%v, want -12 below effective min_power=8", got)
+	}
+	if got := power9.ScoreComponents["power"]; got != -1 {
+		t.Fatalf("power-9 raw power component=%v, want -1 above effective max_power=8", got)
+	}
+}
+
+func TestApplyCatalogPolicyResultToRoutingRequestCopiesOrderedRequirements(t *testing.T) {
+	requirements := []string{"policy-first", "request-second"}
+	result := serviceimpl.CatalogPolicyResult{
+		RoutingPolicy:      "air-gapped",
+		ProviderPreference: routing.ProviderPreferenceLocalOnly,
+		MinPower:           3,
+		MaxPower:           7,
+		AllowLocal:         true,
+		Require:            requirements,
+	}
+	request := routing.Request{}
+	applyCatalogPolicyResultToRoutingRequest(&request, result)
+
+	if request.Policy != "air-gapped" || request.ProviderPreference != routing.ProviderPreferenceLocalOnly ||
+		request.MinPower != 3 || request.MaxPower != 7 || !request.AllowLocal {
+		t.Fatalf("projected request=%#v, want complete catalog-policy projection", request)
+	}
+	if !slices.Equal(request.Require, []string{"policy-first", "request-second"}) {
+		t.Fatalf("Require=%v, want policy requirement before request requirement", request.Require)
+	}
+	requirements[0] = "mutated-source"
+	if !slices.Equal(request.Require, []string{"policy-first", "request-second"}) {
+		t.Fatalf("Require aliased evaluator result: %v", request.Require)
 	}
 }
 

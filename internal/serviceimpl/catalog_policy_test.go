@@ -156,24 +156,6 @@ func TestProviderPreferenceForPolicy(t *testing.T) {
 	})
 }
 
-func TestCatalogPolicyCompatibilityDelegatesShareOwner(t *testing.T) {
-	cat := loadCatalogPolicyTestCatalog(t)
-	result, failure := EvaluateCatalogPolicy(cat, CatalogPolicyRequest{Policy: " smart "})
-	if failure != nil {
-		t.Fatalf("failure=%#v, want nil", failure)
-	}
-	policy, policyName, ok := PolicyForName(cat, " smart ")
-	if !ok {
-		t.Fatal("PolicyForName did not resolve smart")
-	}
-	if policyName != result.RoutingPolicy || policy.MinPower != result.PowerPolicy.MinPower || policy.MaxPower != result.PowerPolicy.MaxPower {
-		t.Fatalf("compatibility lookup=(%#v, %q), evaluator=%#v", policy, policyName, result)
-	}
-	if got := ProviderPreferenceForPolicyName(" smart "); got != result.ProviderPreference {
-		t.Fatalf("compatibility preference=%q, evaluator=%q", got, result.ProviderPreference)
-	}
-}
-
 func TestRoutePowerPolicyForRequest(t *testing.T) {
 	cat := loadCatalogPolicyTestCatalog(t)
 

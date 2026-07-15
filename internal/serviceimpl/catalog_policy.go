@@ -194,16 +194,3 @@ func providerPreferenceForPolicyName(name string) string {
 		return routing.ProviderPreferenceLocalFirst
 	}
 }
-
-// PolicyForName remains temporarily for the root adapter. The root-wiring
-// child removes this compatibility entrypoint after migrating its callers.
-func PolicyForName(cat *modelcatalog.Catalog, name string) (modelcatalog.Policy, string, bool) {
-	return lookupCatalogPolicy(cat, name)
-}
-
-// ProviderPreferenceForPolicyName remains temporarily for the root adapter.
-// The root-wiring child removes this compatibility entrypoint after migrating
-// its caller.
-func ProviderPreferenceForPolicyName(name string) string {
-	return providerPreferenceForPolicyName(name)
-}

@@ -26,11 +26,3 @@ func (s *service) ListPolicies(_ context.Context) ([]PolicyInfo, error) {
 func policyInfoFromCatalog(policy modelcatalog.Policy, meta modelcatalog.Metadata) PolicyInfo {
 	return adaptServiceImplPolicyInfo(serviceimpl.PolicyInfoFromCatalog(policy, meta))
 }
-
-func policyForName(cat *modelcatalog.Catalog, name string) (modelcatalog.Policy, string, bool) {
-	return serviceimpl.PolicyForName(cat, name)
-}
-
-func providerPreferenceForPolicyName(name string) string {
-	return serviceimpl.ProviderPreferenceForPolicyName(name)
-}

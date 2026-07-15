@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
 func TestResolveRouteExplicitHarnessModelIncompatible(t *testing.T) {
@@ -259,21 +259,54 @@ func TestErrPolicyRequirementUnsatisfiedShape(t *testing.T) {
 }
 
 func TestResolveRouteUnknownPolicyIsTyped(t *testing.T) {
-	svc := testRoutingErrorService()
+	tests := []struct {
+		name       string
+		policy     string
+		minPower   int
+		maxPower   int
+		nilCatalog bool
+	}{
+		{name: "unknown", policy: "does-not-exist"},
+		{name: "raw whitespace", policy: " does-not-exist ", minPower: 2, maxPower: 9},
+		{name: "spaced deprecated name stays unknown", policy: " code-high ", minPower: 2, maxPower: 9},
+		{name: "nil catalog", policy: "default", minPower: 3, maxPower: 7, nilCatalog: true},
+	}
 
-	_, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: "does-not-exist"})
-	if err == nil {
-		t.Fatal("expected unknown policy error")
-	}
-	if !errors.Is(err, ErrUnknownPolicy{}) {
-		t.Fatalf("errors.Is should match ErrUnknownPolicy: %T %v", err, err)
-	}
-	var typed *ErrUnknownPolicy
-	if !errors.As(err, &typed) {
-		t.Fatalf("errors.As should extract ErrUnknownPolicy: %T %v", err, err)
-	}
-	if typed.Policy != "does-not-exist" {
-		t.Fatalf("Policy=%q, want does-not-exist", typed.Policy)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.nilCatalog {
+				t.Cleanup(replaceRoutingCatalogForTest(t, nil))
+			}
+			svc := testRoutingErrorService()
+			decision, err := svc.ResolveRoute(context.Background(), RouteRequest{
+				Policy:   test.policy,
+				MinPower: test.minPower,
+				MaxPower: test.maxPower,
+			})
+			if err == nil {
+				t.Fatal("expected unknown policy error")
+			}
+			if !errors.Is(err, ErrUnknownPolicy{}) {
+				t.Fatalf("errors.Is should match ErrUnknownPolicy: %T %v", err, err)
+			}
+			var typed *ErrUnknownPolicy
+			if !errors.As(err, &typed) {
+				t.Fatalf("errors.As should extract ErrUnknownPolicy: %T %v", err, err)
+			}
+			if typed.Policy != test.policy {
+				t.Fatalf("Policy=%q, want raw %q", typed.Policy, test.policy)
+			}
+			if decision == nil {
+				t.Fatal("ResolveRoute returned nil decision with policy error")
+			}
+			if decision.RequestedPolicy != test.policy {
+				t.Fatalf("RequestedPolicy=%q, want raw %q", decision.RequestedPolicy, test.policy)
+			}
+			wantPower := RoutePowerPolicy{PolicyName: test.policy, MinPower: test.minPower, MaxPower: test.maxPower}
+			if decision.PowerPolicy != wantPower {
+				t.Fatalf("PowerPolicy=%#v, want %#v", decision.PowerPolicy, wantPower)
+			}
+		})
 	}
 }
 
@@ -328,22 +361,70 @@ func TestResolveRouteLegacyCodePoliciesRejectWithReplacementGuidance(t *testing.
 	svc := testRoutingErrorService()
 
 	for policy, want := range map[string]string{
-		"code-medium": "--policy default",
-		"code-high":   "--policy smart",
+		"code-medium": `policy "code-medium" is deprecated; use --policy default or --min-power/--max-power`,
+		"code-high":   `policy "code-high" is deprecated; use --policy smart or --min-power/--max-power`,
 	} {
 		t.Run(policy, func(t *testing.T) {
-			_, err := svc.ResolveRoute(context.Background(), RouteRequest{Policy: policy})
+			decision, err := svc.ResolveRoute(context.Background(), RouteRequest{
+				Policy:   policy,
+				MinPower: 2,
+				MaxPower: 9,
+			})
 			if err == nil {
 				t.Fatalf("expected %s to be rejected", policy)
 			}
-			if !strings.Contains(err.Error(), want) {
-				t.Fatalf("error=%q, want replacement guidance %q", err.Error(), want)
+			if err.Error() != want {
+				t.Fatalf("error=%q, want exact %q", err.Error(), want)
 			}
-			if !strings.Contains(err.Error(), "--min-power/--max-power") {
-				t.Fatalf("error=%q, want numeric power guidance", err.Error())
+			if decision == nil {
+				t.Fatal("ResolveRoute returned nil decision with deprecated policy error")
+			}
+			wantPower := RoutePowerPolicy{PolicyName: policy, MinPower: 2, MaxPower: 9}
+			if decision.RequestedPolicy != policy || decision.PowerPolicy != wantPower {
+				t.Fatalf("decision=%#v, want RequestedPolicy=%q PowerPolicy=%#v", decision, policy, wantPower)
 			}
 		})
 	}
+}
+
+func TestPublicCatalogPolicyErrorProjection(t *testing.T) {
+	t.Run("unknown identity", func(t *testing.T) {
+		err := publicCatalogPolicyError(&serviceimpl.CatalogPolicyFailure{
+			Kind:   serviceimpl.CatalogPolicyFailureUnknownPolicy,
+			Policy: " raw-policy ",
+		})
+		if !errors.Is(err, ErrUnknownPolicy{}) {
+			t.Fatalf("errors.Is should match ErrUnknownPolicy: %T %v", err, err)
+		}
+		var typed *ErrUnknownPolicy
+		if !errors.As(err, &typed) || typed.Policy != " raw-policy " {
+			t.Fatalf("error=%#v, want raw *ErrUnknownPolicy", err)
+		}
+	})
+
+	t.Run("deprecated text", func(t *testing.T) {
+		err := publicCatalogPolicyError(&serviceimpl.CatalogPolicyFailure{
+			Kind:              serviceimpl.CatalogPolicyFailureDeprecatedPolicy,
+			Policy:            "code-high",
+			ReplacementPolicy: "smart",
+		})
+		want := `policy "code-high" is deprecated; use --policy smart or --min-power/--max-power`
+		if err == nil || err.Error() != want {
+			t.Fatalf("error=%v, want exact %q", err, want)
+		}
+	})
+
+	t.Run("unsupported preference text", func(t *testing.T) {
+		err := publicCatalogPolicyError(&serviceimpl.CatalogPolicyFailure{
+			Kind:               serviceimpl.CatalogPolicyFailureUnsupportedProviderPreference,
+			Policy:             "custom",
+			ProviderPreference: "sideways",
+		})
+		want := `policy "custom" has unsupported provider preference "sideways"`
+		if err == nil || err.Error() != want {
+			t.Fatalf("error=%v, want exact %q", err, want)
+		}
+	})
 }
 
 func TestResolveRouteAirGappedNoLocalCandidateIsTyped(t *testing.T) {

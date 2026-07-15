@@ -58,15 +58,24 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		}
 	}
 	cat := serviceRoutingCatalog()
-	requestedPolicy := req.Policy
-	policy := routingPolicyForName(cat, requestedPolicy)
-	powerPolicy := routePowerPolicyForRequest(cat, req)
-	providerPreference, err := providerPreferenceForPolicy(cat, requestedPolicy)
-	if err != nil {
+	policyResult, policyFailure := serviceimpl.EvaluateCatalogPolicy(cat, serviceimpl.CatalogPolicyRequest{
+		Policy:     req.Policy,
+		Model:      req.Model,
+		MinPower:   req.MinPower,
+		MaxPower:   req.MaxPower,
+		AllowLocal: req.AllowLocal,
+		Require:    req.Require,
+	})
+	powerPolicy := RoutePowerPolicy{
+		PolicyName: policyResult.PowerPolicy.PolicyName,
+		MinPower:   policyResult.PowerPolicy.MinPower,
+		MaxPower:   policyResult.PowerPolicy.MaxPower,
+	}
+	if policyFailure != nil {
 		return &RouteDecision{
 			RequestedPolicy: req.Policy,
 			PowerPolicy:     powerPolicy,
-		}, err
+		}, publicCatalogPolicyError(policyFailure)
 	}
 	in, snapshot := s.routingInputs(ctx, cat, modelsnapshot.RefreshBackground)
 
@@ -82,25 +91,17 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 	}
 
 	rReq := routing.Request{
-		Policy:                policy,
 		Model:                 resolvedModel,
 		Provider:              req.Provider,
 		Harness:               req.Harness,
 		Reasoning:             effectiveReasoningString(req.Reasoning),
 		Permissions:           req.Permissions,
-		ProviderPreference:    providerPreference,
 		EstimatedPromptTokens: req.EstimatedPromptTokens,
 		RequiresTools:         req.RequiresTools,
 		CorrelationID:         req.CorrelationID,
-		AllowLocal:            req.AllowLocal,
-		Require:               append([]string(nil), req.Require...),
 		ExcludedRoutes:        publicToRoutingExcludedRoutes(req.ExcludedRoutes),
 	}
-	if policyEntry, _, ok := policyForName(cat, requestedPolicy); ok {
-		rReq.AllowLocal = rReq.AllowLocal || policyEntry.AllowLocal
-		rReq.Require = append(append([]string(nil), policyEntry.Require...), rReq.Require...)
-	}
-	rReq.MinPower, rReq.MaxPower = routePowerBoundsForRequest(req, powerPolicy)
+	applyCatalogPolicyResultToRoutingRequest(&rReq, policyResult)
 	s.applyRouteAttemptCooldowns(&in)
 	dec, err := routing.Resolve(rReq, in)
 	if err != nil {
@@ -893,31 +894,37 @@ func serviceRoutingCatalog() *modelcatalog.Catalog {
 	return cat
 }
 
-func routingPolicyForName(cat *modelcatalog.Catalog, name string) string {
-	name = strings.TrimSpace(name)
-	switch name {
-	case "":
-		return ""
-	case "cheap", "default", "smart", "air-gapped":
-		return name
+func publicCatalogPolicyError(failure *serviceimpl.CatalogPolicyFailure) error {
+	if failure == nil {
+		return nil
 	}
-	if cat == nil {
-		return name
-	}
-	_, policyName, ok := policyForName(cat, name)
-	if !ok {
-		return name
-	}
-	switch policyName {
-	case "smart":
-		return "smart"
-	case "default":
-		return "default"
-	case "cheap":
-		return "cheap"
+	switch failure.Kind {
+	case serviceimpl.CatalogPolicyFailureUnknownPolicy:
+		return &ErrUnknownPolicy{Policy: failure.Policy}
+	case serviceimpl.CatalogPolicyFailureDeprecatedPolicy:
+		return fmt.Errorf(
+			"policy %q is deprecated; use --policy %s or --min-power/--max-power",
+			failure.Policy,
+			failure.ReplacementPolicy,
+		)
+	case serviceimpl.CatalogPolicyFailureUnsupportedProviderPreference:
+		return fmt.Errorf(
+			"policy %q has unsupported provider preference %q",
+			failure.Policy,
+			failure.ProviderPreference,
+		)
 	default:
-		return policyName
+		return fmt.Errorf("policy %q evaluation failed with kind %q", failure.Policy, failure.Kind)
 	}
+}
+
+func applyCatalogPolicyResultToRoutingRequest(req *routing.Request, result serviceimpl.CatalogPolicyResult) {
+	req.Policy = result.RoutingPolicy
+	req.ProviderPreference = result.ProviderPreference
+	req.MinPower = result.MinPower
+	req.MaxPower = result.MaxPower
+	req.AllowLocal = result.AllowLocal
+	req.Require = append([]string(nil), result.Require...)
 }
 
 // providerUsesLiveDiscovery remains root request-policy wiring until the
@@ -929,70 +936,4 @@ func providerUsesLiveDiscovery(providerType string) bool {
 	default:
 		return false
 	}
-}
-
-func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error) {
-	if policy == "" {
-		return routing.ProviderPreferenceLocalFirst, nil
-	}
-	switch policy {
-	case "code-medium":
-		return "", fmt.Errorf("policy %q is deprecated; use --policy default or --min-power/--max-power", policy)
-	case "code-high":
-		return "", fmt.Errorf("policy %q is deprecated; use --policy smart or --min-power/--max-power", policy)
-	}
-	if cat == nil {
-		return "", &ErrUnknownPolicy{Policy: policy}
-	}
-	if _, _, ok := policyForName(cat, policy); !ok {
-		return "", &ErrUnknownPolicy{Policy: policy}
-	}
-	preference := providerPreferenceForPolicyName(policy)
-	switch preference {
-	case routing.ProviderPreferenceLocalOnly, routing.ProviderPreferenceSubscriptionOnly,
-		routing.ProviderPreferenceLocalFirst, routing.ProviderPreferenceSubscriptionFirst:
-		return preference, nil
-	default:
-		return "", fmt.Errorf("policy %q has unsupported provider preference %q", policy, preference)
-	}
-}
-
-func routePowerPolicyForRequest(cat *modelcatalog.Catalog, req RouteRequest) RoutePowerPolicy {
-	internal := routehealth.EffectivePowerPolicy(routehealth.PowerRequest{
-		Policy:   req.Policy,
-		Model:    req.Model,
-		MinPower: req.MinPower,
-		MaxPower: req.MaxPower,
-	}, func(name string) (routehealth.PolicySpec, bool) {
-		if cat == nil {
-			return routehealth.PolicySpec{}, false
-		}
-		policy, policyName, ok := policyForName(cat, name)
-		if !ok {
-			return routehealth.PolicySpec{}, false
-		}
-		return routehealth.PolicySpec{
-			Name:     policyName,
-			MinPower: policy.MinPower,
-			MaxPower: policy.MaxPower,
-		}, true
-	})
-	return RoutePowerPolicy{
-		PolicyName: internal.PolicyName,
-		MinPower:   internal.MinPower,
-		MaxPower:   internal.MaxPower,
-	}
-}
-
-func routePowerBoundsForRequest(req RouteRequest, policy RoutePowerPolicy) (int, int) {
-	return routehealth.PowerBoundsForRequest(routehealth.PowerRequest{
-		Policy:   req.Policy,
-		Model:    req.Model,
-		MinPower: req.MinPower,
-		MaxPower: req.MaxPower,
-	}, routehealth.PowerPolicy{
-		PolicyName: policy.PolicyName,
-		MinPower:   policy.MinPower,
-		MaxPower:   policy.MaxPower,
-	})
 }
