@@ -7,13 +7,13 @@ ddx:
     - CONTRACT-003
     - ADR-008
   review:
-    self_hash: 9ceebbc1c312b61ed17dc4b827c626212291a3cbf801bbf2e4232c19df4e790d
+    self_hash: 09861f7103db1731b221dde6bdf3283f5f2992ae08fc920da1f3f07f7e825e99
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-15T05:49:26Z"
+    reviewed_at: "2026-07-15T12:46:58Z"
 ---
 # Solution Design: SD-002 — Mountable CLI and Standalone Binary
 
@@ -95,6 +95,15 @@ surfaces exist; remaining non-execution direct imports are constrained by
 uses `ServiceEvent`, `DecodeServiceEvent`, or `DrainExecute` rather than
 harness-native output or private session-log records.
 
+CONTRACT-003 v0.15 capacity reporting follows the same boundary. The CLI
+renders the additive `context_capacity` event and typed terminal/final capacity
+facts when present; it does not infer capacity from provider text or treat an
+accepted-session capacity rejection as an `Execute` return error. Unknown
+future event and terminal-cause values remain preservable in JSON output. The
+selected route's resolved context value and source are authoritative for
+execution and final routing attribution; a request-local compaction bound may
+only tighten that value.
+
 Routing intent uses the current ADR-009 vocabulary:
 
 - `Policy`, `MinPower`, and `MaxPower` express automatic-routing intent;
@@ -143,7 +152,14 @@ termination. Only `cmd/fiz` maps them to `os.Exit`.
    session-log persistence. It does not perform semantic cross-route failover.
 5. Per ADR-017, a semantic retry or stronger-route escalation is initiated by
    the embedding caller as a new request, not hidden inside the CLI or service.
+   Eligibility-time context rejection filters a candidate before selection and
+   may leave a better eligible survivor. Once a route is selected,
+   accepted-session capacity exhaustion never dispatches the next ranked
+   candidate in the same `Execute` call.
 6. Static boundary tests prevent the CLI from bypassing the public facade.
+7. The v0.15 Go migration requires keyed literals for public Fizeau structs
+   that gained fields. The CLI and embedding examples use keyed literals; JSON
+   capacity events and fields remain additive for tolerant consumers.
 
 ## Test Strategy
 
@@ -154,6 +170,11 @@ termination. Only `cmd/fiz` maps them to `os.Exit`.
   projections without importing internal execution packages.
 - Verify `cmd/fiz` maps `ExitError` to process status and owns all `os.Exit`
   calls.
+- Verify JSON and text rendering preserve the selected context value/source,
+  decode additive capacity events, and use the typed terminal fact for a main
+  capacity rejection without synthesizing a next-route retry.
+- Compile public CLI/embedding fixtures with keyed v0.15 request and projection
+  literals, and accept unknown future event and terminal-cause values.
 - Preserve explicit regression tests for supported compatibility flags.
 
 ## Technology Rationale

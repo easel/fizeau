@@ -7,13 +7,13 @@ ddx:
     - FEAT-006
     - SD-001
   review:
-    self_hash: c6778d97161b6c273a32a7b9c51483c613b10d8dd96a639ced9186cc4ad960c2
+    self_hash: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
     deps:
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
       FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-15T12:04:09Z"
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # Solution Design: SD-005 — Provider Sources, Model Catalog, and Power Routing
 
@@ -514,9 +514,12 @@ tool execution.
 components. `Execute` dispatches the top candidate once and returns the ranked
 trace plus attempted-route outcome. DDx or another caller owns any follow-up
 request with a stronger `MinPower`, capped `MaxPower`, or different hard pins.
-Same-route transient retries may repeat the provider call, but neither a
-route-time `context_too_small` rejection nor an execution-time context-capacity
-failure advances to the next candidate.
+An eligibility-time `context_too_small` rejection removes that candidate before
+selection, and the router may select the best surviving eligible candidate;
+that is filtering, not dispatch failover. An exact pin with no eligible
+survivor fails routing. Same-route transient retries may repeat a provider
+call, but once a route is selected, an execution-time context-capacity failure
+does not dispatch another candidate.
 Per-(harness, provider source, endpoint, model) availability/latency replaces
 coarser health memory.
 

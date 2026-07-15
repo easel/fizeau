@@ -9,17 +9,21 @@ ddx:
     - ADR-002
     - ADR-013
     - ADR-014
+    - SD-005
+    - SD-006
   review:
-    self_hash: 9daaf8bf68741cbb19fc8550eeedaf4215d155649bd39ce6dbdc9381137c1c4d
+    self_hash: a5b2978414aea6b4d0cb97e336a871ff2f3bde2606ab210f227e836a1738b2bc
     deps:
-      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
-      ADR-013: 0ebb6fbea7a9486f5d32c2c4ff795e3d917ee65d8b2d89a2906421177929c858
+      ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
+      ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
       ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
-      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
-      implementation-plan: 584580a6064b8866a3b72fd9bea7702d6fb2a99b035e101cdf40b163f712fc7d
-    reviewed_at: "2026-07-15T05:49:27Z"
+      SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
+      SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
+      implementation-plan: 01edf0d17161ebdf96abf8872c15f79496d973a06b7883c99720582ecc85be49
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # Release Checklist — Fizeau
 
@@ -29,9 +33,10 @@ ddx:
 - Version or commit: `v*` tag and its immutable commit SHA
 - Release owner: tag creator
 - Rollback owner: repository maintainer on duty
-- Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `ADR-002`, `ADR-013`,
-  `ADR-014`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`,
-  `install.sh`, and `tests/install_sh_acceptance.sh`
+- Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `SD-005`, `SD-006`,
+  `ADR-002`, `ADR-013`, `ADR-014`, `.github/workflows/ci.yml`,
+  `.github/workflows/release.yml`, `install.sh`, and
+  `tests/install_sh_acceptance.sh`
 
 ## Pre-Deploy Checks
 
@@ -48,8 +53,12 @@ ddx:
 | Continuation opacity | Public continuation and serialized events carry only Fizeau session lineage; service- or harness-derived route-native evidence never crosses the public or session-log boundary, while caller metadata remains opaque | `TestContinuationHarnessReceivesOnlyFizeauSessionRef`; `TestContinuationNativeReferenceIsNotSerialized`; public-field and JSON-tag structural searches | [ ] |
 | Continuation durability | The service-private locator uses the configured effective service session-log root; private evidence, terminal log, locator completion, and public success follow the contract order; pending recovery uses only the exact recorded path and full route key | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal`; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` | [ ] |
 | Continuation containment | Every resumed, `prefer_resume` fallback, and `fresh_session` continuation creates a new child session and acquires a fresh lifecycle lease | `TestContinuationDispatchAcquiresFreshLifecycleLease`; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease`; ADR-013 and ADR-014 conformance | [ ] |
+| Context evidence | Selected-route context comes from candidate/config, cached type-gated provider evidence, catalog metadata, or the documented default; route and execution hot paths make no synchronous limit probe | SD-005/SD-006 conformance evidence; structural probe-path review | [ ] |
+| Capacity enforcement | The selected context value/source is authoritative, a positive compaction bound only tightens it, and every provider-call path applies the canonical estimate and fixed capacity envelope | CONTRACT-003 obligations 17–20; focused route/core evidence | [ ] |
+| One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, accepted-session capacity failure never dispatches the next ranked candidate and semantic retry is a new caller request | CONTRACT-003 obligations 17, 20, and 21; service dispatch evidence | [ ] |
+| v0.15 capacity compatibility | Core-to-`internal/harnesses`-to-root mapping is exhaustive without treating harness-native streams as authoritative; additive capacity events/final values preserve unknown JSON enums; changed exported Go structs use keyed-literal migration fixtures | CONTRACT-003 obligations 21–23; public compile and JSON fixture evidence | [ ] |
 | Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
-| Governed documents | Lifecycle contracts and decisions are current | `ddx doc stale --json` omits `CONTRACT-003`, `CONTRACT-004`, `ADR-002`, `ADR-004`, `ADR-013`, and `ADR-014` | [ ] |
+| Governed documents | Lifecycle and capacity contracts, decisions, and designs are current | `ddx doc stale --json` omits `CONTRACT-003`, `CONTRACT-004`, `SD-005`, `SD-006`, `ADR-002`, `ADR-004`, `ADR-013`, and `ADR-014` | [ ] |
 | Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
 | Artifact names | Workflow emits only `fiz-<os>-<arch>` names | `go test . -run TestReleaseWorkflowArtifactNamesFiz -count=1` | [ ] |
 | Version | Tag starts with `v` and points at the intended commit | tag/SHA record | [ ] |
@@ -85,6 +94,9 @@ and arm64 until a separate artifact decision expands it.
 | Cleanup failure | `cleanup_failed` retains lifecycle ownership evidence for recovery | `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
 | Identity safety | Startup recovery never signals an identity-mismatched or reused process | `TestRecoveryRefusesReusedIdentity` | [ ] |
 | Continuation | Resumed, prefer-fallback, and explicitly fresh outcomes each create a new child Fizeau session with a fresh lease; implementation-derived native evidence is absent from public projections and logs | continuation conformance suite; public-field and serialized-tag structural searches | [ ] |
+| Context provenance | Routing event, execution handoff, capacity event, and final projection agree on selected context value/source; raw unknown candidate evidence remains distinguishable | CONTRACT-003 selected-context conformance evidence | [ ] |
+| Capacity event order | Clamp immediately precedes its request; planning skip prevents planning request/response/turn; main rejection precedes session end and typed terminal, with no provider call or next-route dispatch | CONTRACT-003 capacity event-order evidence | [ ] |
+| v0.15 migration | External keyed Go literals compile and additive capacity JSON accepts unknown future event/cause values | public compile/AST and JSON compatibility fixtures | [ ] |
 
 ## Rollback Triggers
 
@@ -102,6 +114,10 @@ and arm64 until a separate artifact decision expands it.
 | Continuation evidence leak | Any service- or harness-derived native session reference appears in a public type, event, projection, metadata field, or service-owned session log | Hold release; disable continuation for the route and remove the leaked evidence before a corrective release | Maintainer |
 | Continuation lease reuse | A resumed or fresh continuation reuses a live process, PTY, containment boundary, or lifecycle lease from its parent | Hold release; disable continuation and restore one-fresh-lease-per-invocation semantics | Maintainer |
 | Continuation durability/order failure | Successful continuation evidence is not durable before public success, locator recovery scans outside its recorded exact path, or Start can run before child lease acquisition | Hold release; disable continuation and restore prepare/persist/start ordering before a corrective release | Maintainer |
+| Context hot-path probe | Route resolution or execution synchronously contacts a provider only to fill missing context/output limits | Hold release; disable that probe and restore cached type-gated evidence with catalog/default fallback | Maintainer |
+| Capacity authority mismatch | Execution enlarges the selected route window, projections disagree on value/source, or a capacity failure advances to another candidate | Hold release; restore selected-route authority and one-route-per-`Execute` behavior | Maintainer |
+| Capacity projection regression | A capacity payload field is dropped between core, harness-neutral event, root decode, or final projection, or event order permits a prevented provider call | Hold release; restore exhaustive mapping and required event order | Maintainer |
+| v0.15 migration regression | Public examples use unkeyed changed structs or additive JSON/event values are rejected as unknown | Hold release; correct migration fixtures and tolerant decoding before publishing v0.15 | Maintainer |
 
 Published tags and DDx audit commits are immutable. Rollback means stopping use
 of the bad release and publishing a new corrective tag; it never means moving

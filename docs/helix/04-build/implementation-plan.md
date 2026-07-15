@@ -11,19 +11,23 @@ ddx:
     - ADR-004
     - ADR-013
     - ADR-014
+    - SD-005
+    - SD-006
   review:
-    self_hash: 584580a6064b8866a3b72fd9bea7702d6fb2a99b035e101cdf40b163f712fc7d
+    self_hash: 01edf0d17161ebdf96abf8872c15f79496d973a06b7883c99720582ecc85be49
     deps:
-      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
-      ADR-013: 0ebb6fbea7a9486f5d32c2c4ff795e3d917ee65d8b2d89a2906421177929c858
+      ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
       ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
-      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
+      SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
+      SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
       helix.arch: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T05:49:27Z"
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # Build Plan — Fizeau
 
@@ -38,6 +42,8 @@ close state; this document does not copy that queue or freeze a second backlog.
 - `docs/helix/00-discover/product-vision.md`
 - `docs/helix/01-frame/prd.md` and `FEAT-001` through `FEAT-008`
 - `docs/helix/02-design/architecture.md`, accepted ADRs, and contracts
+- `docs/helix/02-design/solution-designs/SD-005-provider-config.md` and
+  `SD-006-compaction.md`
 - `docs/helix/03-test/test-plan.md`
 
 ## Shared Constraints
@@ -60,6 +66,20 @@ close state; this document does not copy that queue or freeze a second backlog.
 - Durable recovery checks containment and process-birth identity before
   signalling. PID, PGID, job ID, process name, and command line alone are not
   ownership evidence.
+- Route and execution hot paths consume cached, type-gated context evidence;
+  they never synchronously probe a provider merely to fill a missing limit.
+- The service-selected route's resolved context value and source are
+  authoritative for native execution. A request-local compaction bound may
+  tighten, but never enlarge, that window.
+- Eligibility-time context rejection filters candidates before selection, so
+  routing may choose the best eligible survivor. One `Execute` call then
+  selects and dispatches one route. Same-route transport retries may repeat a
+  provider call, but accepted-session capacity failure never dispatches
+  another candidate. Semantic retry or escalation is a new caller-owned
+  request.
+- CONTRACT-003 v0.15 adds capacity JSON/events compatibly for tolerant
+  consumers but adds fields to exported Go structs. Public Go fixtures and
+  examples use keyed literals for the source-breaking migration.
 
 ## Implementation Slices
 
@@ -92,6 +112,20 @@ queue remains authoritative for claim, progress, and close state.
 No slice may substitute cassette evidence for OS containment evidence. Cassettes
 cover terminal/protocol projection; live subprocess fixtures cover process
 ownership, caller death, descendant cleanup, and platform behavior.
+
+### Selected-Route Capacity Sequence — v0.15
+
+This sequence defines build dependencies and proof for SD-005, SD-006, and
+CONTRACT-003. It does not duplicate live bead state.
+
+| Slice | Goal | Depends On | Validation Gate |
+|---|---|---|---|
+| C-0 Authority alignment | Align routing capacity, compaction, service event, build, and release artifacts | None | HELIX graph validation and freshness checks pass |
+| C-1 Route eligibility | Add the saturating prompt-plus-safety-plus-output gate while preserving raw unknown candidate evidence and exact-pin zero-requirement behavior | C-0 | Focused routing fixtures cover saturation, equality, output-only requests, unknown values, and pins |
+| C-2 Selected-context handoff | Resolve config/cache/catalog/default evidence once after selection and carry the selected value/source through serviceimpl without a hot-path provider probe | C-1 | Boundary fixtures prove candidate raw evidence and authoritative execution evidence remain distinct |
+| C-3 Core per-call enforcement | Use the shared non-enlarging working window, canonical estimator, fixed 95-percent envelope, and monotonic attempt state on every provider-call path | C-2 | Core fixtures cover planning, stream/non-stream, retry, compaction retry, no-stream rerun, clamp, skip, and rejection order |
+| C-4 Public projection and migration | Project the exhaustive capacity payload through core, serviceimpl-owned `internal/harnesses` events, and root decode/final types without making harness-native streams authoritative | C-3 | Public contract fixtures prove event/final ordering, unknown-value preservation, keyed Go literals, and no next-route dispatch |
+| C-5 Residual overflow evidence | Normalize only provider overflow that remains after preflight and keep it on the selected route | C-4 | Provider fixtures prove typed evidence without semantic rerouting |
 
 ## Issue Decomposition
 
@@ -130,6 +164,19 @@ evidence that prevents an unowned path from remaining.
       `internal/processlifecycle`, including PTY and auxiliary probe helpers.
 - [ ] Record the actual platform where each live containment test ran. Compile
       checks and mocked syscall ordering do not count as live Windows evidence.
+- [ ] Prove context limits are sourced from explicit config, cached
+      provider-API evidence, catalog metadata, or the documented default; route
+      and execution hot paths make no synchronous limit probe.
+- [ ] Prove the selected context value/source survives routing, execution
+      handoff, capacity events, and final projection, and that a positive
+      compaction override never enlarges it.
+- [ ] Exercise eligibility-time context rejection and eligible-survivor
+      selection, then per-call clamp/planning-skip/main rejection, every retry
+      path, and event order. After route selection, no capacity failure may
+      dispatch a second route candidate.
+- [ ] Compile external keyed-literal fixtures for changed v0.15 Go structs and
+      decode additive capacity events/terminal values while preserving unknown
+      future values.
 - [ ] Commit `.ddx/beads.jsonl` with tracker mutations and push each completed
       fix before starting the next one.
 
@@ -147,6 +194,9 @@ the commands above decide whether a bead can close.
 | Harness runs before containment is durable | High | Gate normal execution until boundary identity and recovery ownership are recorded | Reject the spawn and reap the gated process |
 | Cleanup record is deleted while membership is non-empty or indeterminate | High | Retain ownership through `cleanup_failed` and later identity-safe recovery | Disable the affected harness route; do not erase unresolved evidence |
 | Windows behavior is inferred from non-Windows tests | High | Separate adapter-ordering tests from required live Windows support evidence | Keep Windows execution unsupported until live evidence exists |
+| A missing context limit triggers a request-path probe | High | Keep discovery in explicit/background refresh and route from cached typed evidence | Disable the probing path and fall back to catalog/default evidence |
+| Capacity failure silently selects another route | High | Enforce one route per `Execute` and expose typed event/final evidence | Disable semantic fallback and require caller-owned retry |
+| v0.15 Go additions break unkeyed downstream literals | Medium | Publish keyed-literal migration guidance and compile external fixtures | Hold v0.15 until migration evidence is complete |
 
 ## Exit Criteria
 

@@ -4,14 +4,18 @@ ddx:
   depends_on:
     - FEAT-005
     - CONTRACT-003
+    - CONTRACT-004
+    - SD-006
     - ADR-008
   review:
-    self_hash: be2debae8cab7ad3d66b0123c6ef7f240abaf9b4e99129288d4c203b96d1ebd2
+    self_hash: 3fee0eeae9b07811de5ebd2c630ef88f21f003bc4203b8e14026727491b1cb08
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
       FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
-    reviewed_at: "2026-07-15T05:49:26Z"
+      SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # Solution Design: SD-011 — Canonical Progress Events
 
@@ -30,9 +34,11 @@ Opencode paths can drift into separate special cases.
 
 ADR-008 already assigns transcript and progress semantics to Fizeau. This
 design specifies the implementation contract that makes that decision
-actionable: all execution paths emit the same canonical progress event shape
-through one callback/sink boundary; loggers persist that shape; formatters
-render it without parsing harness-native events when canonical events exist.
+actionable: all execution paths project through one Fizeau-owned canonical
+event boundary; loggers persist that shape; formatters render it without
+parsing harness-native events when canonical events exist. Native provider and
+subprocess streams remain input evidence, not an authoritative consumer
+surface.
 
 ## Goals
 
@@ -40,8 +46,8 @@ render it without parsing harness-native events when canonical events exist.
   harnesses.
 - Preserve compact human progress lines while making action, target, turn,
   timing, throughput, and output summary structured fields.
-- Keep provider wrappers thin: parse native stream records, build canonical
-  events, and call the progress sink.
+- Keep provider and harness wrappers thin: parse native records and pass
+  normalized evidence into the Fizeau-owned event projection.
 - Keep loggers as subscribers: write canonical events without embedding display
   policy.
 - Keep formatters presentation-only for new logs, with isolated legacy
@@ -56,6 +62,8 @@ render it without parsing harness-native events when canonical events exist.
   events.
 - No DDx parsing of harness-native streams once a Fizeau canonical progress
   event is available.
+- No harness-owned capacity calculation, public event construction, terminal
+  classification, or next-candidate retry.
 
 ## Canonical Event Schema
 
@@ -140,12 +148,47 @@ must not open progress log files, truncate paths for display, compute terminal
 rendering, or call formatter helpers. Their job is:
 
 1. Decode the native stream record.
-2. Map provider-specific identifiers onto the canonical fields.
-3. Call `ProgressCallback`.
+2. Map provider-specific identifiers into API-neutral execution evidence.
+3. Deliver that evidence to service-owned transcript/progress projection.
 
 Fizeau service execution owns callback composition. The logger, live
 subscriber, session projection, and replay surface subscribe behind that
-boundary.
+boundary. A wrapper cannot make its native event stream canonical merely by
+matching the public JSON shape.
+
+## `context_capacity` Service Event
+
+`context_capacity` is a sibling Fizeau service event, not a
+`ProgressEvent.Type` value and not a harness-native event. CONTRACT-003 owns the
+exact public payload and CONTRACT-004 owns the API-neutral internal bridge:
+
+```text
+core.EventContextCapacity + primitive ContextCapacityEventData
+    -> internal/serviceimpl exhaustive mapping
+    -> internal/harnesses.EventTypeContextCapacity + ContextCapacityData
+    -> root exhaustive mapping
+    -> ServiceEventTypeContextCapacity + ServiceContextCapacityData
+```
+
+Core owns capacity estimation and decisions. Subprocess/native wrappers do not
+calculate, synthesize, reorder, or terminalize this event. The root facade owns
+the public event, decoded-event field, session-log projection, replay
+projection, and final capacity payload.
+
+Ordering is part of the canonical stream:
+
+- `clamped` immediately precedes the corresponding `llm.request`; the request
+  reports the same effective maximum sent to the provider.
+- `planning_skipped` emits no clamp, request, response, or planning-turn event
+  for that prevented call; main execution continues.
+- `rejected` emits no clamp or request, precedes `session.end` and the public
+  final, and terminates as
+  `failed / context_capacity_exceeded / tool_loop`. Fizeau does not dispatch a
+  next-ranked route.
+
+Loggers and replay preserve this order. Progress formatters may render the
+service event but MUST NOT infer it from prompt size, provider error text, or a
+harness-native stream.
 
 ## Summarization and Redaction
 
@@ -171,8 +214,9 @@ output when the output is long.
 
 ## Logger Contract
 
-The logger writes canonical progress events as structured JSONL. It does not
-infer action, target, turn, or output excerpts from raw provider payloads.
+The logger writes Fizeau-owned canonical events as structured JSONL. It does
+not infer action, target, turn, output excerpts, or capacity decisions from raw
+provider payloads.
 
 Example:
 
@@ -223,6 +267,14 @@ DDx may keep a compatibility parser for old logs. New DDx worker output must
 prefer Fizeau canonical progress events when present and treat harness-native
 records as fallback-only.
 
+The v0.15 `context_capacity` event, terminal cause, decoded-event field, and
+JSON payload fields are additive. Consumers preserve unknown event and enum
+values and may ignore non-terminal capacity telemetry. The corresponding
+fields added to exported Go structs are source-breaking for external unkeyed
+composite literals; the v0.15 migration requires keyed literals, as defined by
+CONTRACT-003. Legacy normalization does not fabricate capacity events for logs
+that lack authoritative Fizeau evidence.
+
 ## Implementation Plan
 
 ### Dependency Graph
@@ -253,7 +305,10 @@ DDx canonical consumer + legacy formatter isolation
 2. **Fizeau schema and callback boundary**
    - Add canonical progress event fields and a single progress sink/callback
      boundary.
-   - Preserve existing public event compatibility through additive fields.
+   - Add the CONTRACT-003/CONTRACT-004 context-capacity projection without
+     turning it into a progress or harness-native event.
+   - Preserve JSON/event compatibility through additive fields and ship Go
+     struct additions under the v0.15 keyed-literal migration.
 
 3. **Fizeau summarization and redaction**
    - Move action, target, output excerpt, byte/line count, timing, and
@@ -273,6 +328,8 @@ DDx canonical consumer + legacy formatter isolation
 6. **Fizeau conformance corpus**
    - Add fixture-backed conformance tests across native, Claude, Codex, and
      secondary harness paths without live provider access.
+   - Prove exhaustive core -> internal/harnesses -> root capacity mapping and
+     clamp/skip/reject order, including no next-candidate dispatch.
 
 7. **DDx canonical consumer**
    - Prefer Fizeau canonical progress records for worker logs and live output.
@@ -292,6 +349,7 @@ DDx canonical consumer + legacy formatter isolation
 |------|------|--------|------------|
 | Compatibility fields proliferate | M | M | Keep legacy normalization isolated and forbid new `turn`/`round` fields |
 | Wrapper migration changes event order | M | H | Add conformance tests for event order and tool call/result pairing |
+| Capacity events become harness-derived or progress-only | M | H | Enforce exhaustive service-owned projection and capacity ordering fixtures |
 | Output excerpts leak sensitive data | M | H | Redact before excerpting and add sensitive-pattern tests |
 | DDx and Fizeau implementations drift | M | H | DDx beads depend on a Fizeau release that contains this contract |
 | Lines become too terse again | M | M | Test practical 72-80 character display and preserve basenames |
@@ -307,6 +365,11 @@ DDx canonical consumer + legacy formatter isolation
   counter is maintained.
 - Golden samples include LLM timing and token usage so `tok/sec` appears when
   calculable and is omitted when the timing window is absent.
+- Capacity fixtures cover complete payload projection and ordering: clamp
+  immediately before request, planning skip without request, and rejection
+  before terminal without next-route dispatch.
+- Compatibility fixtures preserve unknown additive event/enum values and
+  require keyed external literals for v0.15 exported-struct additions.
 
 ## Shell-Runner Progress Events
 

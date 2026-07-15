@@ -6,12 +6,12 @@ ddx:
     - helix.arch
     - CONTRACT-003
   review:
-    self_hash: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+    self_hash: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
     deps:
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
       helix.arch: 04896a3d622c47a43bd9d130c2139ecdc6c4dd60bbb21cc8187aa1a829218054
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T05:49:25Z"
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # ADR-002: PTY Cassette Transport for Harness Golden Masters
 
@@ -133,17 +133,19 @@ harness-specific parsing.
 ```text
 internal/pty/session raw bytes and input events
   -> internal/pty/terminal frame derivation and screen normalization
-  -> internal/harnesses/<name> adapter parsing and service-event emission
+  -> internal/harnesses/<name> adapter parsing and harness-native facts
+  -> core/service-owned event projection (routing, tool, capacity, final)
   -> internal/pty/cassette CassetteTee writes raw output, timed input, frames,
      opaque service-event JSON, final metadata, and scrub reports
 ```
 
 `internal/pty/cassette` may store and replay opaque service-event JSON, but it
 must not import harness adapters or CONTRACT-003 typed-event decoders. Service
-assertions stay above the cassette library. Harness adapters hand timed opaque
-events to the cassette layer through a narrow `CassetteTee`-style interface so
-the dependency direction stays `internal/harnesses/<name>` -> `internal/pty`,
-never the reverse.
+assertions stay above the cassette library. Core and the service own event
+construction; harness adapters contribute only harness-native facts. The
+higher layer hands timed opaque events to the cassette through a narrow
+`CassetteTee`-style interface, so dependencies continue to point into
+`internal/pty`, never from the cassette library into event owners.
 
 ## Cassette Data Contract
 
@@ -164,7 +166,7 @@ append-only event streams. Version `1` contains:
 | `output.raw` | Yes | Raw output bytes from the PTY, exactly as observed after environment scrubbing. This is the byte-for-byte evidence stream. |
 | `output.jsonl` | Yes | Timed raw output chunks from the PTY. Every record includes monotonic `seq` and `t_ms`, byte offset into `output.raw`, chunk length, and optional chunk digest. Inline chunk bytes are forbidden in version `1`; replay reads bytes from `output.raw` by offset to avoid JSON byte-encoding ambiguity. |
 | `frames.jsonl` | Yes | Screen snapshots or frame diffs at monotonic `seq` and `t_ms` timestamps for human review and deterministic replay assertions. Frames are derived artifacts, not the byte-level evidence source. |
-| `service-events.jsonl` | Yes | Opaque service-event JSON emitted during the run, including routing, tool, final, and typed-drain-compatible payloads. Every record includes monotonic `seq` and `t_ms`. |
+| `service-events.jsonl` | Yes | Opaque service-event JSON emitted during the run, including routing, tool, context-capacity, final, and typed-drain-compatible payloads. Every record includes monotonic `seq` and `t_ms`. |
 | `final.json` | Yes | Exit status, signal, duration, final metadata, usage, cost, routing actual, session log path, and normalized final text. |
 | `quota.json` | When applicable | Scrubbed quota/status probe output and parsed quota windows used to accept or reject the record run. |
 | `scrub-report.json` | Yes | Redaction rules applied, environment values removed, secret-pattern hit counts, and fields intentionally preserved. |

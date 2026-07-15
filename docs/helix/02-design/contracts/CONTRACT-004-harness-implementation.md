@@ -3,12 +3,14 @@ ddx:
   id: CONTRACT-004
   depends_on:
     - CONTRACT-003
+    - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
+    self_hash: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
     deps:
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
-    reviewed_at: "2026-07-15T05:49:25Z"
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -42,6 +44,9 @@ In scope:
 - The Go interface set every `internal/harnesses/<name>/` package
   implements.
 - The universal types those interfaces return.
+- The API-neutral `Event` bridge used by serviceimpl, including the
+  service-owned `context_capacity` payload that passes through the neutral
+  `internal/harnesses` layer without becoming harness-owned behavior.
 - Cache and refresh ownership.
 - Optional harness-native conversation continuation behind a Fizeau-session-ID
   boundary, including completed-session resolution and private evidence
@@ -49,9 +54,9 @@ In scope:
 - Live subprocess containment, cleanup, and recovery obligations shared by
   normal execution, PTY sessions, and auxiliary probes.
 - Conformance evidence requirements.
-- Projection rules from internal harness types to the CONTRACT-003
-  public types (`QuotaState`, `AccountStatus`, `HarnessInfo`,
-  `ProviderInfo`).
+- Projection rules from internal harness types to the CONTRACT-003 public
+  types (`QuotaState`, `AccountStatus`, `HarnessInfo`, `ProviderInfo`, and
+  `ServiceContextCapacityData`).
 
 Out of scope:
 
@@ -59,6 +64,9 @@ Out of scope:
   primary-harness-capability-baseline.md and per-harness specs).
 - The cassette/replay transport contract (ADR-002).
 - The public service contract (CONTRACT-003).
+- Core capacity estimation, selected-route enforcement, and public capacity
+  terminal semantics (SD-006 and CONTRACT-003). This contract defines only the
+  neutral event bridge and its harness-side authority boundary.
 - Public continuation policy selection, fallback, child-lineage projection,
   and validation. CONTRACT-003 owns those service behaviors; this contract
   owns only the optional route capability and its private evidence boundary.
@@ -372,6 +380,39 @@ type AccountSnapshot struct {
     Detail          string         // free-form diagnostic detail
 }
 
+// EventType is an additive API-neutral union. Consumers preserve unknown
+// values. Not every native or subprocess backend originates every event type;
+// service-owned event types may pass through this neutral envelope.
+type EventType string
+
+// EventTypeContextCapacity is the API-neutral internal bridge for the
+// service-owned context-capacity decision defined by CONTRACT-003 and SD-006.
+// Harness-native parsers never originate this event type.
+const EventTypeContextCapacity EventType = "context_capacity"
+
+// ContextCapacityData preserves the complete core capacity decision while it
+// crosses internal/serviceimpl. Harness-native parsers do not construct it.
+type ContextCapacityData struct {
+    Action                 string `json:"action"`
+    CallKind               string `json:"call_kind"`
+    TurnIndex              int    `json:"turn_index"`
+    AttemptIndex           int    `json:"attempt_index"`
+    ContextWindow          int    `json:"context_window"`
+    EffectiveContextWindow int    `json:"effective_context_window"`
+    EstimatedInputTokens   int    `json:"estimated_input_tokens"`
+    RequestedMaxTokens     int    `json:"requested_max_tokens"`
+    EffectiveMaxTokens     int    `json:"effective_max_tokens"`
+    AvailableOutputTokens  int    `json:"available_output_tokens"`
+}
+
+const TerminalCauseContextCapacityExceeded TerminalCause = "context_capacity_exceeded"
+
+// Relevant additive FinalData field; all existing fields remain unchanged.
+type FinalData struct {
+    // ...existing fields...
+    ContextCapacity *ContextCapacityData `json:"context_capacity,omitempty"`
+}
+
 // Sentinel errors for interface methods. Note: absence of quota or
 // account evidence is NOT an error — it is reported via State or
 // Authenticated/Unauthenticated fields on a valid returned value.
@@ -398,9 +439,9 @@ other `PreparedContinuation.Start` failure belongs to the already-created child
 and MUST NOT trigger a second fresh attempt.
 
 `QuotaWindow`, `ModelDiscoverySnapshot`, `Event`, `ExecuteRequest`,
-`ContinuationRequest`, `PreparedContinuation`, `HarnessInfo`, and `EventType`
-retain or receive their definitions in `internal/harnesses/types.go` as
-specified here.
+`ContinuationRequest`, `PreparedContinuation`, `HarnessInfo`, `EventType`, and
+`ContextCapacityData` retain or receive their definitions in
+`internal/harnesses/types.go` as specified here.
 
 ## Cache and Refresh Ownership
 
@@ -670,9 +711,9 @@ non-terminal record.
 ## Projection to CONTRACT-003
 
 The service layer projects harness-level types onto CONTRACT-003 public
-types as follows. The projection is the only place service code converts
-between layers; nothing else in the service may read fields off
-`QuotaStatus` and re-emit them under different names.
+types as follows. Serviceimpl and the root facade are the only projection
+seams; nothing else may read an internal payload and re-emit it under different
+names.
 
 | CONTRACT-003 public field | CONTRACT-004 source |
 |---------------------------|---------------------|
@@ -695,6 +736,8 @@ between layers; nothing else in the service may read fields off
 | `service.HarnessInfo.Account` | Result of `AccountHarness.AccountStatus()` projected; nil when the harness does not implement `AccountHarness` |
 | `service.ProviderInfo.Quota` | Same projection as `HarnessInfo.Quota` for subscription-backed providers |
 | `service.ProviderInfo.Auth` | Same projection as `HarnessInfo.Account` |
+| `service.ServiceContextCapacityData` | Field-exhaustive root mapping from `ContextCapacityData`; every field and enum string is preserved |
+| `service.ServiceDecodedEvent.ContextCapacity` | Root `DecodeServiceEvent` decodes `ServiceEventTypeContextCapacity` as the public `ServiceContextCapacityData` payload; it does not consume the internal event type or DTO |
 
 Routing decisions inside the service consume `QuotaStatus.RoutingPreference`
 directly. The service MUST NOT project `RoutingPreference` into the public
@@ -704,6 +747,38 @@ contract; it remains an internal routing signal.
 backwards-compatible in JSON shape with the current CONTRACT-003 schema.
 Adding fields is allowed; removing or renaming existing public fields
 requires a CONTRACT-003 amendment.
+
+### `context_capacity` event ownership and order
+
+Core alone computes capacity. It emits primitive `core.ContextCapacityEventData`
+as `core.EventContextCapacity`; it MUST NOT import this package or a root/public
+DTO. `internal/serviceimpl` field-exhaustively maps that event to
+`ContextCapacityData` and `EventTypeContextCapacity`. The root facade performs
+the second exhaustive mapping into CONTRACT-003 `ServiceContextCapacityData`,
+constructs the public `ServiceEvent`, and owns session-log and replay
+projections. A subprocess harness MAY supply native records used to construct
+ordinary text, tool, progress, or implementation-final evidence, but it MUST
+NOT calculate, synthesize, reorder, or terminalize a `context_capacity` event.
+Harness-native streams are evidence, never an authoritative public event
+surface.
+
+Ordering is normative:
+
+- `clamped` is non-terminal and immediately precedes the corresponding
+  `llm.request`, whose effective maximum matches the capacity payload.
+- `planning_skipped` emits no `clamped`, `llm.request`, `llm.response`, or
+  `planning.turn` for the prevented call; main execution continues.
+- `rejected` emits no `clamped` or `llm.request`, precedes `session.end` and the
+  public final, and terminates as
+  `failed / context_capacity_exceeded / tool_loop`. The service does not try
+  another route candidate.
+
+The `context_capacity` event type and JSON payload are additive in v0.15.
+Adding their corresponding fields to exported root Go structs is
+source-breaking only for external unkeyed composite literals and therefore
+ships in the same v0.15 keyed-literal migration defined by CONTRACT-003.
+Consumers MUST preserve unknown event and enum values; they MAY ignore the new
+non-terminal event when capacity telemetry is not needed.
 
 ## Conformance Evidence
 
@@ -724,6 +799,7 @@ Every harness implementation MUST carry, at minimum:
 | Live subprocess lifecycle (every spawning path) | Platform subprocess tests cover normal completion, failure, timeout, cancellation, caller-signalled abandonment, and caller death with a grandchild in the containment boundary. Static enforcement proves production child creation routes through `internal/processlifecycle`. |
 | Recovery identity | Tests simulate PID reuse or a changed process-birth token and prove the recovery reaper does not signal the mismatched process. |
 | Projection | Service-level test asserting CONTRACT-003 JSON shape (e.g. `HarnessInfo.Quota`) is identical before and after the harness migration — pinned to a recorded fixture. |
+| Context-capacity bridge | Exhaustive mapping tests cover core -> `ContextCapacityData` -> root payload and decoder. Ordering fixtures prove clamp-before-request, skip-without-request, and reject-before-terminal without another route. Harness fixtures prove native streams cannot originate this service-owned event. |
 
 ## Invariants
 
@@ -819,6 +895,10 @@ by `go vet`-shaped tooling:
     evidence, the service terminal log, and completed locator become durable in
     that order. Pending-locator recovery validates the exact path and full
     route key rather than scanning.
+19. **The `context_capacity` event is service-owned.** Core decides it,
+    serviceimpl and the root facade map it exhaustively, and harness-native
+    streams never originate or terminalize it. The event order defined above
+    is preserved in live, logged, decoded, and replayed projections.
 
 ## Non-Goals
 
@@ -923,6 +1003,12 @@ by `go vet`-shaped tooling:
     `TestContinuationRecoversPendingLocatorAfterTerminalCommit` prove private
     evidence -> session log -> locator -> public-success ordering and exact-path,
     full-route-key recovery after an interrupted completion commit.
+23. `internal/harnesses/types.go` declares `EventTypeContextCapacity`,
+    `TerminalCauseContextCapacityExceeded`, the exact ten-field
+    `ContextCapacityData` payload, and `FinalData.ContextCapacity` above.
+    Exhaustive mapping and decoder fixtures fail if core, internal, or root
+    fields drift; ordering fixtures prove clamp, planning-skip, and rejection
+    behavior without native stream authority or next-candidate dispatch.
 
 ## References
 

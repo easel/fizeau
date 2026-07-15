@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 5b644d5b77a8ddcc8cdb3f9caaa9730931d0a2e2cee96521ed03279645c8b7f8
+    self_hash: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T12:04:09Z"
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -1153,9 +1153,12 @@ Core recomputes capacity before every actual native planning call, main
 streaming or non-streaming call, same-route transient retry,
 overflow-after-compaction retry, and service no-stream rerun. Each attempt
 starts from the original requested `MaxTokens`; it does not inherit a previous
-clamp. Compaction summarization calls are outside this contract. Neither a
-route-time `context_too_small` rejection nor an accepted-session capacity
-failure advances to the next route candidate.
+clamp. Compaction summarization calls are outside this contract. An
+eligibility-time `context_too_small` rejection removes that candidate before
+selection, after which routing may select the best eligible survivor; no
+provider call was attempted for the rejected candidate. Once a route is
+selected, an accepted-session capacity failure does not dispatch another route
+candidate.
 
 Index semantics are exact:
 
@@ -1335,7 +1338,7 @@ Compatibility rules after v0.15 are:
 |-----------|-----------------|-------|----------------------|
 | Request rejected before a session starts | Public validation error; no event channel | After correcting request | Caller fixes the request; no cleanup or terminal event is expected because Fizeau accepted no session. |
 | Negative `MaxTokens` or `CompactionContextWindow` | Public validation error; no event channel | After correcting request | Supply zero or a positive value. Direct-core callers receive the same rejection before `session.start`. |
-| Positive route requirement meets unknown or insufficient candidate context | Candidate rejected with `context_too_small`; no provider call for that candidate | With a corrected request or explicit caller-owned reroute | Inspect `RequiredContext` and raw candidate context evidence; exact pins do not bypass a positive requirement. With a zero requirement, a permitted exact pin may select raw unknown capacity and execution resolves the fallback in `RouteDecision`. |
+| Positive route requirement meets unknown or insufficient candidate context | Candidate is ineligible with `context_too_small`; routing may select the best eligible survivor, but makes no provider call for the rejected candidate. An exact pin with no survivor fails routing. | No retry when a survivor is selected; otherwise a corrected or new caller-owned request | Inspect `RequiredContext` and raw candidate context evidence; exact pins do not bypass a positive requirement. With a zero requirement, a permitted exact pin may select raw unknown capacity and execution resolves the fallback in `RouteDecision`. |
 | Accepted main call has no context headroom | `failed / context_capacity_exceeded / tool_loop` plus required capacity event and final payload | Caller policy | No `llm.request` was emitted for the prevented call and Fizeau does not try the next candidate. |
 | Planning call has no context headroom | Non-terminal `context_capacity` action `planning_skipped` | Main execution continues | No planning request, response, or planning-turn event is emitted. |
 | Unknown continuation policy | `ErrContinuationPolicyInvalid`; no session | No, without correction | Use one of the three declared policy values. |
@@ -1439,10 +1442,11 @@ that prove:
     ownership record until a later recovery confirms emptiness.
 17. Route-capacity fixtures cover prompt-plus-25-percent-safety-plus-output,
     `math.MaxInt` saturation, equality, output-only budgets, explicit pins, and
-    a single remaining route. Unknown and zero candidate windows reject only
-    for a positive requirement; a permitted exact pin with a zero requirement
-    survives and resolves execution context through config, cache, catalog, or
-    default while its candidate trace remains raw zero.
+    eligible-survivor selection before one route is dispatched. Unknown and
+    zero candidate windows reject only for a positive requirement; a permitted
+    exact pin with a zero requirement survives and resolves execution context
+    through config, cache, catalog, or default while its candidate trace
+    remains raw zero.
 18. Selected `ContextLength` and `ContextSource` survive route decision,
     execution handoff, routing event, and terminal projection. A positive
     `CompactionContextWindow` can only reduce the selected value; zero passes it

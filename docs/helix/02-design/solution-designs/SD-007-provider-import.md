@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - SD-005
   review:
-    self_hash: b4a35fa5d448338a7a6a60c0d4185d67c0ce5a9f95dedd5dcac69a70cc8a4e65
+    self_hash: 86409bb8c20bb697653c495f9c44b15070518356e06c5005e52616676827da67
     deps:
-      SD-005: f7fcaedf895c1336816b1d71229989746acc3364aed4cf958465ab8a98c2485e
-    reviewed_at: "2026-07-14T20:00:14Z"
+      SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # Solution Design: SD-007 — Provider Import from Pi and OpenCode
 
@@ -21,7 +21,7 @@ formats creates fragile dependencies and maintenance burden.
 ## Design: Import-Time Translation
 
 Fizeau reads other tools' configs at **import time** (explicit user action),
-translates them to agent-native `.fizeau/config.yaml` (per SD-005 schema),
+translates them to Fizeau-native `.fizeau/config.yaml` (per SD-005 schema),
 and records the import source so it can detect drift later.
 
 ### CLI Commands
@@ -29,7 +29,7 @@ and records the import source so it can detect drift later.
 ```
 fiz import pi              # import from ~/.pi/agent/{auth,settings,models}.json
 fiz import opencode         # import from ~/.local/share/opencode/auth.json + opencode.json
-fiz import pi --diff        # show what pi has that agent doesn't (dry run)
+fiz import pi --diff        # show what pi has that Fizeau doesn't (dry run)
 fiz import opencode --diff  # same for opencode
 fiz import pi --merge       # merge new providers without overwriting existing
 ```
@@ -69,21 +69,27 @@ The import merges them:
    `anthropic`, `openai-codex`, `openrouter`), create fiz providers using
    well-known defaults (built-in URL, type mapping)
 4. Apply settings.json `defaultProvider` + `defaultModel` for the `default:`
-   field, mapping pi provider names to the agent provider name
+   field, mapping pi provider names to the Fizeau provider name
 
-**Pi provider name → agent provider mapping:**
+**Pi provider name → Fizeau provider mapping:**
 
-| Pi auth name | Fizeau name | Type | Default URL | Notes |
+| Pi auth name | Fizeau name | Concrete type | Default URL | Notes |
 |-------------|------------|------|-------------|-------|
 | `anthropic` | `anthropic` | `anthropic` | (SDK default) | OAuth access token as API key |
-| `openai-codex` | `openai` | `openai-compat` | `https://api.openai.com/v1` | OAuth access token as bearer |
-| `openrouter` | `openrouter` | `openai-compat` | `https://openrouter.ai/api/v1` | API key from auth.json |
-| `qwen` / `dashscope` | `qwen` | `openai-compat` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen/DashScope cloud API; both aliases map to the same agent provider |
-| `minimax` | `minimax` | `openai-compat` | `https://api.minimaxi.chat/v1` | MiniMax cloud API |
-| `z.ai` / `zai` | `z.ai` | `openai-compat` | `https://api.z.ai/v1` | both aliases map to the same agent provider |
+| `openai-codex` | `openai` | `openai` | `https://api.openai.com/v1` | OAuth access token as bearer |
+| `openrouter` | `openrouter` | `openrouter` | `https://openrouter.ai/api/v1` | API key from auth.json |
+| `qwen` / `dashscope` | `qwen` | `qwen` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen/DashScope cloud API; both aliases map to the same Fizeau provider |
+| `minimax` | `minimax` | `minimax` | `https://api.minimaxi.chat/v1` | MiniMax cloud API |
+| `z.ai` / `zai` | `z.ai` | `zai` | `https://api.z.ai/v1` | both aliases map to the same Fizeau provider |
 | `google-gemini-cli` | skipped | — | — | Not yet supported |
 | `github-copilot` | skipped | — | — | Proprietary auth flow |
-| Custom (models.json) | pi provider name | mapped from `api` field | from `baseUrl` | `openai-completions` → `openai-compat` |
+| Custom (models.json) | pi provider name | concrete type from provider name or normalized `baseUrl` | from `baseUrl` | the `api` field selects a protocol reader but never becomes provider identity |
+
+`type: openai-compat` is not valid provider identity. For a custom source, the
+importer must resolve a concrete Fizeau type from explicit source identity or
+config-normalization rules. If it cannot, the importer skips the source with a
+warning that asks the operator to choose a concrete type; it does not emit a
+protocol name into routing, billing, telemetry, or cost evidence.
 
 **Output uses SD-005 field names exactly:**
 
@@ -95,7 +101,7 @@ providers:
     model: claude-sonnet-4-20250514
 
   vidar:
-    type: openai-compat      # SD-005: type field
+    type: lmstudio          # concrete SD-005 provider type
     base_url: http://vidar:1234/v1  # SD-005: base_url field
     api_key: lmstudio         # SD-005: api_key field (placeholder for local)
     model: qwen/qwen3-coder-next
@@ -106,13 +112,18 @@ default: anthropic
 **What gets skipped with warnings:**
 - `!command` API key values → warning: "provider X uses shell-resolved key,
   set FIZEAU_API_KEY or add api_key manually"
-- Providers with `api` field that doesn't map to `openai-compat` or `anthropic`
+- Providers whose source identity and `baseUrl` cannot resolve a concrete
+  Fizeau provider type
 - `headers` values that use `!command` resolution
 
-**Empty model lists:** When models.json has `models: []`, the import queries
-the provider's `/v1/models` endpoint to discover available models. If
-unreachable, omits the `model` field (agent will use whatever the provider
-defaults to).
+**Empty model lists:** When models.json has `models: []`, the explicit import
+action may make a bounded query to the concrete provider's model-listing
+endpoint to discover model identities. If unreachable, it omits the `model`
+field (Fizeau will use whatever the provider defaults to). This import-time
+listing is not context-window or output-limit evidence. Explicit config wins;
+otherwise type-gated limit discovery belongs to explicit refresh or background
+snapshot maintenance, and route resolution and execution consume the cached
+snapshot without a synchronous provider probe.
 
 #### OpenCode (`fiz import opencode`)
 
@@ -123,8 +134,12 @@ defaults to).
 **Translation uses SD-005 field names:**
 - `options.baseURL` → `base_url`
 - `options.apiKey` or auth.json key → `api_key`
-- `npm: "@ai-sdk/openai-compatible"` → `type: openai-compat`
+- `npm: "@ai-sdk/openai-compatible"` selects the protocol reader; provider key
+  and normalized `base_url` must still resolve a concrete Fizeau `type`
 - `options.headers` → `headers`
+
+Unknown OpenCode sources follow the same rule as custom Pi sources: warn and
+skip rather than persisting `openai-compat` as provider identity.
 
 ### Secret Handling
 
@@ -205,12 +220,28 @@ type is configured):
 | Env var | Provider name | Type | Default URL |
 |---------|--------------|------|-------------|
 | `ANTHROPIC_API_KEY` | `anthropic` | `anthropic` | (SDK default) |
-| `OPENAI_API_KEY` | `openai` | `openai-compat` | `https://api.openai.com/v1` |
-| `OPENROUTER_API_KEY` | `openrouter` | `openai-compat` | `https://openrouter.ai/api/v1` |
+| `OPENAI_API_KEY` | `openai` | `openai` | `https://api.openai.com/v1` |
+| `OPENROUTER_API_KEY` | `openrouter` | `openrouter` | `https://openrouter.ai/api/v1` |
 
 These implicit providers have lower precedence than any explicit config.
 They don't create a `default:` — the user must specify `--provider` or set
 `FIZEAU_PROVIDER` to use them.
+
+## Routing and Capacity Boundary
+
+Import produces provider transport, auth, concrete type, and optional model
+hints. It does not pre-resolve a route, create candidate order, or establish a
+fallback chain. Imported context/output limits are explicit evidence only when
+the source format carries authoritative numeric values; otherwise they remain
+zero/unknown and explicit or background refresh may populate the type-gated
+snapshot later. Ordinary route resolution and execution do not synchronously
+probe the imported provider merely to fill those limits.
+
+SD-005 and CONTRACT-003 remain authoritative after import: the service selects
+one route, resolves its execution context from candidate/config/cache/catalog/
+default evidence, and dispatches that route for the `Execute` call. A capacity
+failure does not advance through imported providers. The caller owns any new
+request with different pins or power intent.
 
 ### Config Schema Additions to SD-005
 
@@ -239,7 +270,7 @@ The config loader ignores `imported_from` — it's metadata, not provider config
 |---|------|---------|
 | 1 | Pi auth.json reader (picompat/auth.go) | — |
 | 2 | Pi models.json reader (picompat/models.go) | — |
-| 3 | Pi settings.json reader + translate to agent config | 1, 2 |
+| 3 | Pi settings.json reader + translate to Fizeau config | 1, 2 |
 | 4 | OpenCode auth + config reader (occompat/) | — |
 | 5 | `fiz import` CLI command with diff/merge/redaction | 3, 4 |
 | 6 | Zero-config discovery notice in CLI startup | 5 |
@@ -260,7 +291,7 @@ agent/
   occompat/           # opencode config readers
     auth.go           # reads auth.json
     config.go         # reads opencode.json
-    translate.go      # translates to agent config
+    translate.go      # translates to Fizeau config
     occompat_test.go
 ```
 
@@ -271,6 +302,6 @@ agent/
 | OAuth tokens stale after import | H | M | Warn on <24h expiry; drift detection; merge refreshes keys |
 | Pi models.json schema changes | M | L | Ignore unknown fields; only extract baseUrl/apiKey/models/api |
 | `!command` API keys unsupported | M | L | Skip with warning + guidance to set env var |
-| Empty model lists from local providers | M | L | Query /v1/models at import time; omit if unreachable |
+| Empty model lists from local providers | M | L | Query model identity only during explicit import; omit if unreachable and leave limits unknown |
 | Accidental key commit | M | H | Default to user config; warn on --project; 0600 permissions |
 | Large model lists from OpenRouter | L | L | Import all; user can prune |

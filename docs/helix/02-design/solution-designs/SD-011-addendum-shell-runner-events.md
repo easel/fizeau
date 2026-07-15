@@ -5,11 +5,11 @@ ddx:
     - SD-011
     - plan-2026-05-15-benchmark-runner-simplification
   review:
-    self_hash: 0b6b0bf3aaa0917ee71b1fe86b316e5ed27bf85eb4787542d00cd03be8e5e176
+    self_hash: b3a1e5ff4ebdf111cd6d9da9eaa30dff154551686b9c0148978b2b42febe8136
     deps:
-      SD-011: be2debae8cab7ad3d66b0123c6ef7f240abaf9b4e99129288d4c203b96d1ebd2
+      SD-011: 3fee0eeae9b07811de5ebd2c630ef88f21f003bc4203b8e14026727491b1cb08
       plan-2026-05-15-benchmark-runner-simplification: 18c1a107428efab189b5fd298ff898d195c3f70130ee856660f54c1f0e97bd40
-    reviewed_at: "2026-07-15T05:49:26Z"
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 
 # SD-011 Addendum: Shell-Runner Progress Event Taxonomy
@@ -296,8 +296,10 @@ The shell-runner progress events **are** canonical `ProgressEvent` instances wit
    (not LLM turns or tool calls), it does not populate `ProgressEvent.llm`, `ProgressEvent.tool`,
    or `ProgressEvent.usage`. Those fields remain empty or omitted.
    
-   *Rationale*: LLM and tool-level progress belongs in the cell's internal harness-native
-   streams (fiz.txt, session/), not in the runner's sweep-level events.
+   *Rationale*: LLM and tool-level progress belongs in the cell's Fizeau-owned
+   canonical service event/session projection, not in the runner's sweep-level
+   events. Harness-native streams remain private input evidence and are not a
+   collector contract.
 
 2. **Extension: `action` field required**: The canonical schema marks `action` as optional.
    For shell-runner events, `action` is required and provides the operator-facing intent
@@ -308,10 +310,20 @@ The shell-runner progress events **are** canonical `ProgressEvent` instances wit
    that have no LLM turn or tool counterpart. These follow the same JSON structure,
    omitting cell-specific fields.
 
-4. **Output shape**: Canonical events from Fizeau harnesses are consumed via a callback
-   sink (SD-011 §Progress Sink Boundary). Shell-runner events are **always** emitted as
-   JSONL to a file on disk (`progress.jsonl`), not via callback. This is practical for
-   long-running batch operations where no live callback consumer exists.
+4. **Output shape**: Fizeau-owned canonical service events for native and
+   subprocess routes are consumed through the service callback/sink boundary
+   (SD-011 §Progress Sink Boundary). Shell-runner events are **always** emitted
+   as JSONL to a file on disk (`progress.jsonl`), not via that callback. This is
+   practical for long-running batch operations where no live callback consumer
+   exists.
+
+5. **Service control-event boundary**: `context_capacity` is a sibling Fizeau
+   service event governed by CONTRACT-003/CONTRACT-004, not a shell-runner
+   `ProgressEvent` type. The runner and collector MUST NOT infer or synthesize
+   it from prompt size, provider errors, `report.json`, or harness-native
+   streams. When a cell's Fizeau event stream is retained, its service-owned
+   clamp/skip/reject event and terminal ordering remain unchanged and separate
+   from the shell orchestration log.
 
 ### Collector Contract
 
@@ -322,7 +334,8 @@ The Node collector (PR D) reads both progress events and cell reports:
 
 2. **Retroactive reconstruction**: After the sweep completes, cells carry terminal
    `report.json` with full metrics and grading. The collector reads these and
-   maps them to `cell.complete` / `cell.interrupt` events for storage or replay.
+   maps them only to shell-owned `cell.complete` / `cell.interrupt` events for
+   storage or replay. It never reconstructs a Fizeau `context_capacity` event.
    (This allows operator viewing even if progress.jsonl was lost or truncated.)
 
 3. **Resume auditing**: The collector cross-checks `cell.resume_skip` events against
@@ -340,7 +353,9 @@ The formatter consumes progress events from two sources:
 2. **Fallback to report.json**: When progress.jsonl is absent (historical runs, manual
    invocation outside this framework), reconstruct progress events from cell
    `report.json` using the SD-011 legacy-normalization helpers. Map `started_at` and
-   `finished_at` to synthetic `cell.start` and `cell.complete` events.
+   `finished_at` to synthetic `cell.start` and `cell.complete` events. Preserve
+   unknown recorded event and status values; do not fabricate service control
+   events or successful terminal facts.
 
 ### Logging on Disk
 
@@ -390,8 +405,9 @@ $ ./benchmark --profile vidar-ds4 --bench-set tb-2-1-canary --out ~/bench-run-1
 
 ### For Collectors and Analytics
 
-- Progress events are **structurally uniform** across all execution contexts (native harness,
-  LLM provider harnesses, shell orchestration). A single progress formatter handles all sources.
+- Progress events are **structurally uniform** across Fizeau-owned native and
+  subprocess projections plus shell orchestration. A single progress formatter
+  handles those canonical sources; it does not parse harness-native streams.
 - Shell-runner events provide **sweep-level metadata** (budget, concurrency, retry attempts)
   that cell reports alone do not capture, improving observability and auditability.
 - Progress.jsonl is **optional for correctness**: cells are self-describing (report.json
@@ -405,6 +421,9 @@ Shell-runner progress events may be extended with:
 - Per-cell resource usage snapshots (CPU, memory peak).
 - Harbor container image digest log events for reproducibility.
 These would be added as new event types without changing the existing taxonomy.
+Consumers preserve unknown additive event and status values. The shell schema
+does not weaken SD-011's v0.15 keyed-literal migration or its additive
+`context_capacity` JSON/event compatibility rules.
 
 ## Verification
 
@@ -416,5 +435,10 @@ These would be added as new event types without changing the existing taxonomy.
 - For each cell, there is at least one corresponding event (resume_skip, interrupt, or complete).
 - For cells with retries, there are ordered (cell.start, cell.retry[1..N], cell.complete)
   events.
+- Collector fixtures prove `report.json` fallback never synthesizes
+  `context_capacity`; retained Fizeau event streams preserve their original
+  service-owned capacity and terminal ordering.
+- Unknown additive shell and retained Fizeau event values survive collection
+  and formatting.
 - No `progress.jsonl` means the run was interrupted mid-setup; cells may be incomplete.
   Operator should inspect `report.json` directly to resume.

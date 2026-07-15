@@ -12,15 +12,15 @@ ddx:
     - CONTRACT-004
   child_of: fizeau-67f2d585
   review:
-    self_hash: 0ebb6fbea7a9486f5d32c2c4ff795e3d917ee65d8b2d89a2906421177929c858
+    self_hash: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
     deps:
-      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
-      CONTRACT-004: 30a00c6ddf38d065199b783e5ced42a929a2af9433245205d8caba25209fdb73
-    reviewed_at: "2026-07-15T05:49:27Z"
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 
@@ -365,9 +365,11 @@ type Harness interface {
 ```
 
 `HarnessInfo`, `ExecuteRequest`, `Event`, `FinalData`, `FinalUsage`,
-`RoutingActual`, `ReasoningActual`, and the `EventType` closed union are
-defined in the same file and are not extended by this ADR. CONTRACT-004 owns
-that internal adapter interface. CONTRACT-003 owns the public service stream,
+`RoutingActual`, `ReasoningActual`, and the additive, unknown-preserving
+`EventType` union are defined in the same file and are not extended by this
+ADR. Service-owned additions such as `context_capacity` do not become
+`claude-tui` parser responsibilities. CONTRACT-004 owns that internal adapter
+interface. CONTRACT-003 owns the public service stream,
 typed terminal fact, cleanup deadline, continuation, and process-lifecycle
 requirements. This ADR adds no public event type, request field, or metadata
 key.

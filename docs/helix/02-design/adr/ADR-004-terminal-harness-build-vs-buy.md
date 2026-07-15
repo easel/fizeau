@@ -8,10 +8,10 @@ ddx:
   review:
     self_hash: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
     deps:
-      ADR-002: 0d5923abe44d5b3558420fb80e094e996e22f67b406f011f6d0e080270e20d34
+      ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-003: e92a82cb3130952d3800c39674112f0ddeda09ede3c1f3a191580ce9d9f85b64
-      CONTRACT-003: f51d48b2ea45cfb485b308be753d40b932bc2344aed8d03775ea0f1943827d9b
-    reviewed_at: "2026-07-15T05:49:26Z"
+      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+    reviewed_at: "2026-07-15T12:46:06Z"
 ---
 # ADR-004: Terminal Harness Build-vs-Buy Boundary
 
