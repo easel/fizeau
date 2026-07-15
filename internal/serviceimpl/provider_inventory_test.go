@@ -3,11 +3,122 @@ package serviceimpl
 import (
 	"context"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/serverinstance"
 )
+
+func TestNormalizeProviderType(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "lmstudio", want: "lmstudio"},
+		{input: "openai", want: "openai"},
+		{input: "", want: "openai"},
+		{input: "anthropic", want: "anthropic"},
+		{input: "custom", want: "custom"},
+		{input: "  OpenRouter\t", want: "openrouter"},
+	}
+	for _, test := range tests {
+		if got := NormalizeProviderType(test.input); got != test.want {
+			t.Errorf("NormalizeProviderType(%q) = %q, want %q", test.input, got, test.want)
+		}
+	}
+}
+
+func TestServiceProviderMetadataHonorsExplicitConfigPrecedence(t *testing.T) {
+	tests := []struct {
+		name         string
+		entry        ProviderEntry
+		wantBilling  modelcatalog.BillingModel
+		wantIncluded bool
+	}{
+		{
+			name:         "type metadata supplies defaults",
+			entry:        ProviderEntry{Type: "lmstudio"},
+			wantBilling:  modelcatalog.BillingModelFixed,
+			wantIncluded: true,
+		},
+		{
+			name: "explicit billing overrides type metadata",
+			entry: ProviderEntry{
+				Type:    "lmstudio",
+				Billing: modelcatalog.BillingModelPerToken,
+			},
+			wantBilling:  modelcatalog.BillingModelPerToken,
+			wantIncluded: false,
+		},
+		{
+			name: "explicit exclusion overrides fixed billing default",
+			entry: ProviderEntry{
+				Type:                "lmstudio",
+				IncludeByDefault:    false,
+				IncludeByDefaultSet: true,
+			},
+			wantBilling:  modelcatalog.BillingModelFixed,
+			wantIncluded: false,
+		},
+		{
+			name: "explicit inclusion overrides metered billing default",
+			entry: ProviderEntry{
+				Type:                "anthropic",
+				IncludeByDefault:    true,
+				IncludeByDefaultSet: true,
+			},
+			wantBilling:  modelcatalog.BillingModelPerToken,
+			wantIncluded: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ServiceProviderBilling(test.entry); got != test.wantBilling {
+				t.Errorf("ServiceProviderBilling() = %q, want %q", got, test.wantBilling)
+			}
+			if got := ServiceProviderDefaultInclusion(test.entry); got != test.wantIncluded {
+				t.Errorf("ServiceProviderDefaultInclusion() = %t, want %t", got, test.wantIncluded)
+			}
+		})
+	}
+}
+
+func TestBuildProviderInventoryInvalidConfigSkipsProbe(t *testing.T) {
+	var probeCalls atomic.Int32
+	rows := BuildProviderInventory(context.Background(), ProviderInventoryInput{
+		ProviderNames: []string{"broken"},
+		Providers: map[string]ProviderEntry{
+			"broken": {
+				Type:        "not-a-provider",
+				BaseURL:     "http://broken.invalid/v1",
+				ConfigError: `unknown type "not-a-provider"`,
+			},
+		},
+		Probe: func(context.Context, ProviderEntry) ProviderProbeResult {
+			probeCalls.Add(1)
+			return ProviderProbeResult{Status: "connected"}
+		},
+	})
+
+	if got := probeCalls.Load(); got != 0 {
+		t.Fatalf("probe calls = %d, want 0 for invalid config", got)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	row := rows[0]
+	if row.Status != "error: invalid provider config" {
+		t.Fatalf("status = %q, want invalid provider config", row.Status)
+	}
+	if row.LastError == nil || row.LastError.Detail != `unknown type "not-a-provider"` {
+		t.Fatalf("LastError = %#v, want config detail", row.LastError)
+	}
+	if len(row.EndpointStatus) != 1 || row.EndpointStatus[0].LastError == nil {
+		t.Fatalf("EndpointStatus = %#v, want endpoint-level config error", row.EndpointStatus)
+	}
+}
 
 func TestBuildProviderInventoryPreservesEndpointStatus(t *testing.T) {
 	capturedAt := time.Date(2026, 7, 14, 16, 30, 0, 0, time.UTC)
