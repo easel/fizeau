@@ -1,6 +1,7 @@
 package safefs
 
 import (
+	"debug/elf"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,19 @@ import (
 // #nosec G304 -- callers intentionally operate on user-selected paths.
 func ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
+}
+
+// OpenRead opens a user-selected path for read-only streaming access.
+// #nosec G304 -- callers intentionally operate on user-selected paths.
+func OpenRead(name string) (*os.File, error) {
+	return os.Open(name)
+}
+
+// OpenELF opens an ELF image from a user-selected path. The returned ELF file
+// owns its descriptor and releases it from Close.
+// #nosec G304 -- callers intentionally inspect user-selected executable paths.
+func OpenELF(name string) (*elf.File, error) {
+	return elf.Open(name)
 }
 
 // WriteFile writes a file with an explicit mode.

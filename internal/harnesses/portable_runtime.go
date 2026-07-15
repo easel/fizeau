@@ -277,7 +277,8 @@ func validPortableRuntimeTargetPath(target string) bool {
 	if target == "" || target == "." || strings.ContainsRune(target, '\x00') || strings.ContainsRune(target, '\\') || strings.HasPrefix(target, "/") {
 		return false
 	}
-	return path.Clean(target) == target
+	cleaned := path.Clean(target)
+	return cleaned == target && cleaned != ".." && !strings.HasPrefix(cleaned, "../")
 }
 
 func validPortableRuntimeDigest(digest string) bool {
