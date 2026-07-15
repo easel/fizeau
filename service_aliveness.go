@@ -60,10 +60,6 @@ func (s *service) startupAlivenessProbe(ctx context.Context) {
 	s.aliveness.Startup(ctx, s.alivenessEndpoints(), 0)
 }
 
-func (s *service) persistProbeStore() {
-	_ = s.persistRouteHealthSnapshot()
-}
-
 // requestLocalHealthRefreshForRouting starts at most one asynchronous refresh
 // for stale or missing local provider aliveness evidence. Route hot paths use
 // cached probe evidence only; this method must not wait for provider IO.
