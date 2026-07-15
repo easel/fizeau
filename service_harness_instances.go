@@ -30,3 +30,11 @@ func defaultHarnessInstances() map[string]harnesses.Harness {
 	}
 	return instances
 }
+
+// portableRuntimeInventory joins registry metadata to this service's actual
+// runner-instance map. Preparation will consume this seam in a later bead;
+// keeping the join here prevents a second static runner registry from becoming
+// a competing authority.
+func (s *service) portableRuntimeInventory() ([]harnesses.PortableRuntimeSurface, error) {
+	return harnesses.BuildPortableRuntimeInventory(s.registry, s.harnessInstances)
+}

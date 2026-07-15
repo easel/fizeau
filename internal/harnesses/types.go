@@ -560,3 +560,132 @@ type ContextModelDiscoveryHarness interface {
 	// context, and must finish process cleanup before returning cancellation.
 	DefaultModelSnapshotWithContext(ctx context.Context) (ModelDiscoverySnapshot, error)
 }
+
+// PortableRuntimeTarget is the internal Linux same-platform preparation
+// target. Portable runtime v0.15 does not support cross-platform packaging.
+type PortableRuntimeTarget struct {
+	GOOS   string
+	GOARCH string
+}
+
+// PortableRuntimeTransport is the actual execution transport represented by a
+// portable-runtime inventory row. It is independent from historical registry
+// type labels.
+type PortableRuntimeTransport string
+
+// PortableRuntimeInclusion explains whether a registry row contributes a
+// subprocess closure to an unpinned portable runtime.
+type PortableRuntimeInclusion string
+
+// PortableRuntimeStructuralMode is the explicit route-shape capability of an
+// actual runner, independent of model discovery and registry defaults.
+type PortableRuntimeStructuralMode string
+
+const (
+	PortableRuntimeTransportSubprocess PortableRuntimeTransport = "subprocess"
+	PortableRuntimeTransportNative     PortableRuntimeTransport = "native"
+	PortableRuntimeTransportEmbedded   PortableRuntimeTransport = "embedded"
+	PortableRuntimeTransportHTTP       PortableRuntimeTransport = "http"
+
+	PortableRuntimeInclusionRequired      PortableRuntimeInclusion = "required"
+	PortableRuntimeInclusionNonSubprocess PortableRuntimeInclusion = "non_subprocess"
+	PortableRuntimeInclusionExactPinOnly  PortableRuntimeInclusion = "exact_pin_only"
+	PortableRuntimeInclusionTestOnly      PortableRuntimeInclusion = "test_only"
+
+	PortableRuntimeStructuralUnpinned      PortableRuntimeStructuralMode = "unpinned"
+	PortableRuntimeStructuralExactPinOnly  PortableRuntimeStructuralMode = "exact_pin_only"
+	PortableRuntimeStructuralNonSubprocess PortableRuntimeStructuralMode = "non_subprocess"
+)
+
+// PortableRuntimeSurface is one deterministic registry-to-instance join row.
+// Instance is the exact service-owned runner object for subprocess/native
+// harnesses; non-subprocess registry rows have a nil Instance.
+type PortableRuntimeSurface struct {
+	Name      string
+	Transport PortableRuntimeTransport
+	Inclusion PortableRuntimeInclusion
+	Instance  Harness
+}
+
+// PortableRuntimeStructure is the side-effect-free structural description of
+// one actual runner instance.
+type PortableRuntimeStructure struct {
+	Name      string
+	Transport PortableRuntimeTransport
+	Mode      PortableRuntimeStructuralMode
+}
+
+// PortableRuntimeStructuralHarness is implemented by every actual production
+// runner instance that participates in the registry join.
+type PortableRuntimeStructuralHarness interface {
+	PortableRuntimeStructure() PortableRuntimeStructure
+}
+
+type PortableRuntimeAssetKind string
+type PortableRuntimePathKind string
+type PortableRuntimeClosureClass string
+
+const (
+	PortableRuntimeAssetExecutable  PortableRuntimeAssetKind = "executable"
+	PortableRuntimeAssetInstallTree PortableRuntimeAssetKind = "install_tree"
+	PortableRuntimeAssetConfig      PortableRuntimeAssetKind = "config"
+	PortableRuntimeAssetCredential  PortableRuntimeAssetKind = "credential"
+	PortableRuntimeAssetQuota       PortableRuntimeAssetKind = "quota"
+	PortableRuntimeAssetCache       PortableRuntimeAssetKind = "cache"
+	PortableRuntimeAssetSupport     PortableRuntimeAssetKind = "runtime_support"
+
+	PortableRuntimePathFile PortableRuntimePathKind = "file"
+	PortableRuntimePathTree PortableRuntimePathKind = "tree"
+
+	PortableRuntimeClosureStatic      PortableRuntimeClosureClass = "static"
+	PortableRuntimeClosureDynamic     PortableRuntimeClosureClass = "dynamic"
+	PortableRuntimeClosureInterpreted PortableRuntimeClosureClass = "interpreted"
+)
+
+// PortableRuntimeAsset is one harness-owned member of a verified executable
+// or state closure. Source remains internal and may be sensitive. Target is a
+// clean slash-relative path below the portable runtime guest root.
+type PortableRuntimeAsset struct {
+	Kind          PortableRuntimeAssetKind
+	PathKind      PortableRuntimePathKind
+	Source        string
+	Target        string
+	ContentSHA256 string
+	Executable    bool
+}
+
+// PortableRuntimeLaunch is a guest-relative executable recipe. All targets
+// are slash-relative beneath the portable runtime guest root.
+type PortableRuntimeLaunch struct {
+	EntrypointTarget   string
+	InterpreterTarget  string
+	LoaderTarget       string
+	RuntimeArgs        []string
+	LibraryRootTargets []string
+}
+
+// PortableRuntimeEnvironment carries an inherited variable name only. It
+// cannot represent a value or a name=value assignment.
+type PortableRuntimeEnvironment struct {
+	Name string
+}
+
+type PortableRuntimeContribution struct {
+	ClosureClass PortableRuntimeClosureClass
+	Launch       PortableRuntimeLaunch
+	Assets       []PortableRuntimeAsset
+	Environment  []PortableRuntimeEnvironment
+}
+
+// PortableRuntimeHarness is the optional harness-owned asset-discovery
+// capability. It is read-only: it does not materialize files or start work.
+type PortableRuntimeHarness interface {
+	Harness
+
+	PortableRuntimeAssets(context.Context, PortableRuntimeTarget) (PortableRuntimeContribution, error)
+}
+
+var (
+	ErrPortableRuntimeTargetUnsupported = errors.New("portable runtime target unsupported")
+	ErrPortableRuntimeClosureIncomplete = errors.New("portable runtime asset closure incomplete")
+)

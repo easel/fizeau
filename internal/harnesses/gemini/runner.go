@@ -41,6 +41,15 @@ type Runner struct {
 	EventBuffer int
 }
 
+// PortableRuntimeStructure describes this actual runner without probing PATH.
+func (r *Runner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	return harnesses.PortableRuntimeStructure{
+		Name:      "gemini",
+		Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode:      harnesses.PortableRuntimeStructuralUnpinned,
+	}
+}
+
 // Info returns identity + capability metadata for this harness.
 func (r *Runner) Info() harnesses.HarnessInfo {
 	info := harnesses.HarnessInfo{

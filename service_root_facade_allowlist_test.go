@@ -115,6 +115,7 @@ func TestRootFacadeTestAllowlist(t *testing.T) {
 		"service_new_internal_test.go",
 		"service_openrouter_credit_test.go",
 		"service_override_internal_test.go",
+		"service_portable_runtime_inventory_test.go",
 		"service_probe_test.go",
 		"service_projection_internal_test.go",
 		"service_providers_test.go",

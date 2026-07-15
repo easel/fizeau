@@ -90,6 +90,23 @@ type Runner struct {
 	NativeMaxIterations int
 }
 
+// PortableRuntimeStructure reports the transport selected on this actual
+// runner instance without probing PATH or contacting Anthropic.
+func (r *Runner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	if r.NativeMode {
+		return harnesses.PortableRuntimeStructure{
+			Name:      "claude",
+			Transport: harnesses.PortableRuntimeTransportNative,
+			Mode:      harnesses.PortableRuntimeStructuralNonSubprocess,
+		}
+	}
+	return harnesses.PortableRuntimeStructure{
+		Name:      "claude",
+		Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode:      harnesses.PortableRuntimeStructuralUnpinned,
+	}
+}
+
 // Info returns identity + capability metadata for this harness.
 //
 // Path is best-effort: the runner reports Binary if set, otherwise looks

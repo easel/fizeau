@@ -46,6 +46,15 @@ type Runner struct {
 	DiscoveryCache *harnesses.ModelDiscoveryCache
 }
 
+// PortableRuntimeStructure describes this actual runner without probing PATH.
+func (r *Runner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	return harnesses.PortableRuntimeStructure{
+		Name:      "opencode",
+		Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode:      harnesses.PortableRuntimeStructuralUnpinned,
+	}
+}
+
 // Info returns identity + capability metadata for this harness.
 func (r *Runner) Info() harnesses.HarnessInfo {
 	info := harnesses.HarnessInfo{

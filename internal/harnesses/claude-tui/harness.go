@@ -67,6 +67,15 @@ var emptyModelSnapshot harnesses.ModelDiscoverySnapshot
 type Harness struct {
 }
 
+// PortableRuntimeStructure describes this actual runner without probing PATH.
+func (h *Harness) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	return harnesses.PortableRuntimeStructure{
+		Name:      "claude-tui",
+		Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode:      harnesses.PortableRuntimeStructuralUnpinned,
+	}
+}
+
 // Info implements harnesses.Harness.
 func (h *Harness) Info() harnesses.HarnessInfo {
 	return harnesses.HarnessInfo{
