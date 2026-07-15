@@ -3,6 +3,7 @@ package claudetui_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -1328,5 +1329,24 @@ func TestClaudeTuiHealthCheckCliNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error message: got %q, expected mention of 'not found'", err.Error())
+	}
+}
+
+func TestClaudeTuiHealthCheckValidatesConfiguredBinaryAndContext(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-claude")
+	if err := (&claudetui.Harness{Binary: missing}).HealthCheck(context.Background()); err == nil {
+		t.Fatal("HealthCheck accepted a missing configured binary")
+	}
+	nonExecutable := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(nonExecutable, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&claudetui.Harness{Binary: nonExecutable}).HealthCheck(context.Background()); err == nil {
+		t.Fatal("HealthCheck accepted a non-executable configured binary")
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := (&claudetui.Harness{Binary: missing}).HealthCheck(canceled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("HealthCheck cancellation error = %v, want context.Canceled", err)
 	}
 }

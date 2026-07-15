@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
+    self_hash: 40d2680ac1668ced16aac90efc28cec7e33aa015e13fbe6b279d29132ebb579e
     deps:
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-15T18:54:30Z"
+    reviewed_at: "2026-07-15T23:11:16Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -587,7 +587,7 @@ The supported v0.15 closure classes are mechanically distinct:
 | Class | Required discovery and evidence |
 |-------|---------------------------------|
 | `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
-| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. |
+| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. A recognized single-file runtime may instead use verified-exact lookup only when its contributor-owned offline probe proves that startup loads no executable or library code beyond the exact dependency assets and discovery rejects every enabled plugin, hook, helper, wrapper, MCP server, marketplace, workflow, or external-path setting. Declared credential, configuration, quota, and cache assets remain ordinary state reads and do not weaken that code-closure claim. |
 | `interpreted` | Include the launcher/script, interpreter, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
 
 Launch construction is exhaustive and does not use guest PATH, the copied
@@ -621,6 +621,49 @@ network-free probe in the same-target OCI conformance job. A contributor never
 invokes a package manager, downloads an artifact, contacts a provider, or
 starts an authenticated harness to discover its closure. Linux GOOS/GOARCH without
 the declared loader/interpreter closure is insufficient evidence.
+
+Verified-exact lookup is a narrow contributor evidence class, not a general
+escape from runtime-lookup analysis. It is valid only for exact-library dynamic
+closures with no runtime tree. It does not make an arbitrary ELF acceptable,
+does not permit `RPATH`, `RUNPATH`, audit/filter metadata, or unresolved
+`DT_NEEDED` entries, and becomes incomplete as soon as configuration can enable
+external execution or runtime-loaded code. Merely importing `dlopen` or `dlsym`
+is not proof that a recognized single-file runtime loads another file during
+the offline probe; without the contributor evidence above, those imports remain
+incomplete.
+
+A contributor using verified-exact lookup binds that claim to a named install
+form, publisher-authenticated release digest, and contributor-specific
+conformance test. Its fixture imports a runtime lookup symbol and executes the
+emitted loader recipe in a network namespace and isolated root containing only
+the emitted code assets. Removing a required emitted library must make that
+probe fail. A generic dynamic ELF without the product identity, exact release
+evidence, and probe evidence is not a recognized layout.
+
+Claude v0.15 recognizes only the resolved
+`$HOME/.local/share/claude/versions/<x.y.z>` native Linux ELF whose version,
+GOARCH, byte size, and SHA-256 match a checked-in row derived from Anthropic's
+signed release manifest after that exact release passed the isolated probe.
+Unknown and auto-updated digests fail closed until the evidence registry is
+reviewed. Shell wrappers, arbitrary ELFs, legacy interpreted launchers, and
+unrecognized package-manager layouts are incomplete. The configuration profile
+rejects enabled or installed plugins, hooks, MCP servers, workflows, helpers,
+wrappers, marketplaces, remote-refresh controls, external paths, unsupported
+provider chains, and unprojected loader controls. Host-indexed `.claude.json`
+project/trust state is re-digested after recursive inspection for executable
+configuration but is not copied into a guest whose workdir identity differs.
+Portable activation is separately responsible for regenerating the guest
+workdir and preventing uncopied project/local setting sources from entering the
+launch.
+
+The initial reviewed release row is Claude Code 2.1.210 for Linux arm64. The
+signed manifest's amd64 checksum is not treated as verified-exact evidence
+until that exact amd64 artifact passes the same-target isolated probe.
+
+Claude-TUI inherits operator `CLAUDE_*` plus locale/terminal names. It excludes
+`ANTHROPIC_*`; activation regenerates HOME, PATH, USER, LOGNAME, SHELL, and XDG
+path variables inside the guest. One classifier drives both the live PTY
+allowlist and this inherited-versus-generated projection.
 
 Asset-kind consistency is validated before any copy. `credential` is always a
 sensitive regular file. `config`, `quota`, and `cache` files and trees are

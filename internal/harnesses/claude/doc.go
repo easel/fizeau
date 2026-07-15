@@ -1,6 +1,11 @@
 // Package claude implements the CONTRACT-004 harness contracts for
 // Anthropic's claude CLI: Harness, QuotaHarness, AccountHarness, and
-// ModelDiscoveryHarness.
+// ModelDiscoveryHarness, and PortableRuntimeHarness. The portable capability
+// applies only to the subprocess transport and delegates shared Claude Code
+// binary/state ownership to internal/harnesses/anthropic; NativeMode remains an
+// explicit non-subprocess transport and contributes no synthetic CLI binary.
+// The subprocess portable form accepts only signed-manifest release digests
+// installed as $HOME/.local/share/claude/versions/<x.y.z> dynamic Linux ELFs.
 //
 // SupportedLimitIDs (emitted by Windows[].LimitID on QuotaStatus):
 //

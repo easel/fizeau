@@ -62,6 +62,11 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 			if row.Instance != instances[row.Name] {
 				t.Errorf("required row %q does not retain the actual runner instance", row.Name)
 			}
+			if row.Name == "claude" || row.Name == "claude-tui" {
+				if _, ok := row.Instance.(harnesses.PortableRuntimeHarness); !ok {
+					t.Errorf("required Anthropic row %q lacks PortableRuntimeHarness", row.Name)
+				}
+			}
 		}
 	}
 	if !reflect.DeepEqual(gotNames, wantNames) {
@@ -86,6 +91,14 @@ func TestPortableRuntimeInventoryUsesActualNativeTransport(t *testing.T) {
 	}
 	if rows[0].Instance != instances["claude"] {
 		t.Fatal("native Claude row does not retain the actual runner instance")
+	}
+	contributor, ok := rows[0].Instance.(harnesses.PortableRuntimeHarness)
+	if !ok {
+		t.Fatal("native Claude actual instance lacks the optional portable capability")
+	}
+	contribution, err := contributor.PortableRuntimeAssets(context.Background(), harnesses.PortableRuntimeTarget{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH})
+	if !errors.Is(err, harnesses.ErrPortableRuntimeTargetUnsupported) || !reflect.DeepEqual(contribution, harnesses.PortableRuntimeContribution{}) {
+		t.Fatalf("native Claude contribution = %#v, %v; want zero plus target unsupported", contribution, err)
 	}
 }
 

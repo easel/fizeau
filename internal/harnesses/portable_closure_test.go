@@ -203,6 +203,23 @@ func TestPortableRuntimeDynamicExactLibraryClosure(t *testing.T) {
 		t.Fatalf("exact loader recipe = %q %q", command, arguments)
 	}
 
+	verifiedExact := request
+	verifiedExact.RuntimeLookup = PortableRuntimeLookupVerifiedExact
+	if _, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, verifiedExact); err != nil {
+		t.Fatalf("verified-exact dynamic analysis error = %v", err)
+	}
+	verifiedWithTree := verifiedExact
+	verifiedWithTree.RuntimeTrees = []PortableRuntimeSourceTree{{Source: libraryRoot, Target: "exact/lib"}}
+	if _, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, verifiedWithTree); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("verified-exact runtime tree error = %v, want closure incomplete", err)
+	}
+	verifiedTreeMode := verifiedExact
+	verifiedTreeMode.LibraryRoots = []PortableRuntimeSourceTree{{Source: libraryRoot, Target: "exact/tree"}}
+	verifiedTreeMode.ExactLibraryRoots = nil
+	if _, err := AnalyzePortableRuntimeDynamicClosure(context.Background(), target, verifiedTreeMode); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("verified-exact tree-backed libraries error = %v, want closure incomplete", err)
+	}
+
 	assertRedactedFailure := func(t *testing.T, got error, forbidden ...string) {
 		t.Helper()
 		if !errors.Is(got, ErrPortableRuntimeClosureIncomplete) {

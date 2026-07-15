@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 990917e08305df61afc31821a38e4acc63a84d0ab204c7849d6f126391282d67
+    self_hash: cff6887a587b9be47062aefb27b2d0564d40b82fdf8619faf6fc10a640250584
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
-      CONTRACT-004: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
-    reviewed_at: "2026-07-15T18:54:32Z"
+      CONTRACT-004: 40d2680ac1668ced16aac90efc28cec7e33aa015e13fbe6b279d29132ebb579e
+    reviewed_at: "2026-07-15T23:11:16Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -566,6 +566,31 @@ registry to the actual registered instance so native/HTTP-backed transports are
 not mislabeled from a static row. Test-only and exact-pin-only surfaces do not
 become unpinned-capable through preparation.
 
+For a recognized single-file dynamic runtime that imports generic loader symbols,
+the owning contributor may declare verified-exact lookup only after its
+credential-free, network-disabled probe demonstrates that startup opens no
+runtime code outside the exact recursive library assets. That contributor must
+reject enabled plugins, hooks, helpers, wrappers, MCP servers, marketplaces, and
+external-path settings. This keeps exact closure small without treating an
+arbitrary `dlopen`-capable executable as closed; absent that evidence, the
+runtime must contribute the exercised lookup tree or fail incomplete.
+
+Claude binds that evidence to the publisher-signed manifest row for the exact
+`$HOME/.local/share/claude/versions/<x.y.z>` Linux binary: version, GOARCH,
+size, and SHA-256 all match an embedded reviewed record. Discovery stays
+offline and rejects a newer digest until its exact binary passes the isolated
+root/network-namespace probe. The probe has a missing-library negative case,
+and configuration inspection rejects installed plugin state even when no
+`enabledPlugins` map is present. Claude-TUI uses one classifier for its live
+PTY and portable environment policy: `CLAUDE_*` and locale/terminal names are
+inherited, `ANTHROPIC_*` is excluded, and host/platform path identities are
+regenerated during activation.
+
+The first Claude registry entry is 2.1.210 Linux arm64, which has durable local
+same-target probe evidence. A publisher-authenticated amd64 checksum alone does
+not claim verified-exact conformance; amd64 remains incomplete until its exact
+artifact passes the same gate.
+
 Configured native and HTTP provider instances remain service configuration,
 not harness capabilities. A complete route-neutral inventory combines
 CONTRACT-004 contributions with a field-exhaustive API-neutral projection of
@@ -620,5 +645,12 @@ owner.
 - Linux OCI fixtures execute static-symlink, dynamic-ELF, and
   interpreter/package-tree closures without credentials or network as a mapped
   non-root UID.
+- Claude contributor fixtures reject arbitrary dynamic ELF files, exercise
+  verified-exact lookup with `dlopen`/`dlsym` imports through the emitted loader
+  recipe inside a network-disabled isolated root, reject an unknown release
+  digest and a closure missing one required library, reject external
+  configuration/code-loading surfaces, prove shared
+  Claude/Claude-TUI assets deduplicate, and prove the TUI environment projection
+  matches its real `CLAUDE_*` boundary.
 - Static enforcement rejects service-side imports or calls to concrete
   harness path helpers for portable preparation.

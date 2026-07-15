@@ -65,6 +65,10 @@ var emptyModelSnapshot harnesses.ModelDiscoverySnapshot
 // harnesses.AccountHarness, and harnesses.ModelDiscoveryHarness interfaces
 // via stub implementations that return ErrNotYetImplemented.
 type Harness struct {
+	// Binary is the absolute path to the claude executable. When empty the
+	// harness resolves "claude" from PATH for both execution and portable
+	// runtime discovery.
+	Binary string
 }
 
 // PortableRuntimeStructure describes this actual runner without probing PATH.
@@ -92,11 +96,17 @@ func (h *Harness) Info() harnesses.HarnessInfo {
 
 // HealthCheck implements harnesses.Harness.
 func (h *Harness) HealthCheck(ctx context.Context) error {
-	_, err := exec.LookPath("claude")
+	if ctx == nil {
+		return errors.New("claude health check has nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	_, err := h.claudePath()
 	if err != nil {
 		return fmt.Errorf("claude binary not found in PATH: %w", err)
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Execute implements harnesses.Harness.
@@ -149,7 +159,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	startTime := time.Now()
 	seq := int64(0)
 
-	claudePath, err := exec.LookPath("claude")
+	claudePath, err := h.claudePath()
 	if err != nil {
 		seq++
 		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("claude binary not found: %v", err), 1)
@@ -257,6 +267,27 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		return
 	}
 	eventChan <- *final
+}
+
+func (h *Harness) claudePath() (string, error) {
+	if h.Binary != "" {
+		if !filepath.IsAbs(h.Binary) || filepath.Clean(h.Binary) != h.Binary {
+			return "", errors.New("configured claude binary is not an absolute normalized path")
+		}
+		resolved, err := filepath.EvalSymlinks(h.Binary)
+		if err != nil {
+			return "", err
+		}
+		info, err := os.Stat(resolved)
+		if err != nil {
+			return "", err
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			return "", errors.New("configured claude binary is not executable")
+		}
+		return resolved, nil
+	}
+	return exec.LookPath("claude")
 }
 
 func effectiveTurnTimeout(timeout time.Duration) time.Duration {
@@ -936,30 +967,44 @@ func appendUniqueString(values []string, value string) []string {
 	return append(values, value)
 }
 
+type claudeTUIEnvironmentDisposition uint8
+
+const (
+	claudeTUIEnvironmentExcluded claudeTUIEnvironmentDisposition = iota
+	claudeTUIEnvironmentInherited
+	claudeTUIEnvironmentActivationGenerated
+)
+
+func classifyClaudeTUIEnvironment(name string) claudeTUIEnvironmentDisposition {
+	switch name {
+	case "LANG", "LC_ALL", "TZ", "TERM":
+		return claudeTUIEnvironmentInherited
+	case "HOME", "PATH", "USER", "LOGNAME", "SHELL",
+		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR":
+		return claudeTUIEnvironmentActivationGenerated
+	default:
+		if strings.HasPrefix(name, "CLAUDE_") {
+			return claudeTUIEnvironmentInherited
+		}
+		return claudeTUIEnvironmentExcluded
+	}
+}
+
+func claudeTUIPortableInheritedEnvironmentNames() []string {
+	var names []string
+	for _, assignment := range os.Environ() {
+		name := strings.SplitN(assignment, "=", 2)[0]
+		if classifyClaudeTUIEnvironment(name) == claudeTUIEnvironmentInherited && !strings.HasPrefix(name, "CLAUDE_") {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // BuildEnvironmentAllowlist constructs the environment for the PTY session
-// according to ADR-013 §Environment Allowlist.
+// according to ADR-013 §Environment Allowlist. Portable preparation consumes
+// the same classifier but regenerates host-path platform keys in the guest.
 func BuildEnvironmentAllowlist() []string {
-	allowedKeys := map[string]bool{
-		"HOME":    true,
-		"PATH":    true,
-		"USER":    true,
-		"LOGNAME": true,
-		"SHELL":   true,
-		"LANG":    true,
-		"LC_ALL":  true,
-		"TZ":      true,
-		"TERM":    true,
-	}
-
-	// XDG_* variables are allowed
-	xdgAllowed := map[string]bool{
-		"XDG_CONFIG_HOME": true,
-		"XDG_DATA_HOME":   true,
-		"XDG_CACHE_HOME":  true,
-		"XDG_STATE_HOME":  true,
-		"XDG_RUNTIME_DIR": true,
-	}
-
 	var env []string
 	currentEnv := os.Environ()
 
@@ -967,22 +1012,8 @@ func BuildEnvironmentAllowlist() []string {
 	for _, kv := range currentEnv {
 		key := strings.SplitN(kv, "=", 2)[0]
 
-		// Check exact match
-		if allowedKeys[key] {
+		if classifyClaudeTUIEnvironment(key) != claudeTUIEnvironmentExcluded {
 			env = append(env, kv)
-			continue
-		}
-
-		// Check XDG_* prefix
-		if xdgAllowed[key] {
-			env = append(env, kv)
-			continue
-		}
-
-		// Check CLAUDE_* prefix (operator pre-existing variables)
-		if strings.HasPrefix(key, "CLAUDE_") {
-			env = append(env, kv)
-			continue
 		}
 	}
 

@@ -75,6 +75,11 @@ const (
 	// trees contain the runtime-only lookup surface exercised by the owning
 	// harness's offline layout probe.
 	PortableRuntimeLookupIncludedTrees PortableRuntimeLookupPolicy = "included_trees"
+	// PortableRuntimeLookupVerifiedExact means the contributor's offline probe
+	// verified that a recognized single-file runtime loads no executable or
+	// library code beyond the exact dependency files. It is valid only with
+	// ExactLibraryRoots and no runtime trees.
+	PortableRuntimeLookupVerifiedExact PortableRuntimeLookupPolicy = "verified_exact"
 )
 
 // PortableRuntimeStaticClosureRequest describes a recognized static Linux
@@ -128,6 +133,9 @@ func AnalyzePortableRuntimeStaticClosure(ctx context.Context, target PortableRun
 	}
 	if err := validatePortableRuntimeLookup(request.RuntimeLookup, request.RuntimeTrees); err != nil {
 		return PortableRuntimeContribution{}, err
+	}
+	if request.RuntimeLookup == PortableRuntimeLookupVerifiedExact {
+		return PortableRuntimeContribution{}, closureError("static layout cannot claim verified exact dynamic lookup")
 	}
 
 	entrypoint, info, executable, err := inspectPortableRuntimeELF(ctx, request.EntrypointSource, target, portableRuntimeELFExecutable)
@@ -188,6 +196,9 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 	roots, exact, err := inspectPortableRuntimeLibraryRoots(request.LibraryRoots, request.ExactLibraryRoots)
 	if err != nil {
 		return PortableRuntimeContribution{}, err
+	}
+	if request.RuntimeLookup == PortableRuntimeLookupVerifiedExact && !exact {
+		return PortableRuntimeContribution{}, closureError("verified exact lookup requires exact library roots")
 	}
 	if err := validatePortableRuntimeLookup(request.RuntimeLookup, request.RuntimeTrees); err != nil {
 		return PortableRuntimeContribution{}, err
@@ -337,6 +348,10 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	var loaderELF *portableRuntimeELFFile
 	var loaderInfo os.FileInfo
 	if elfInterpreter == "" {
+		if request.RuntimeLookup == PortableRuntimeLookupVerifiedExact {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, closureError("static interpreter cannot claim verified exact dynamic lookup")
+		}
 		if request.LoaderTarget != "" || len(request.LibraryRoots) != 0 || len(request.ExactLibraryRoots) != 0 {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("static interpreter layout declares dynamic loader state")
@@ -362,6 +377,10 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		if err != nil {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, err
+		}
+		if request.RuntimeLookup == PortableRuntimeLookupVerifiedExact && !exactLibraries {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, closureError("verified exact lookup requires exact library roots")
 		}
 		resolvedLibraries, err = resolvePortableRuntimeELFClosure(ctx, interpreterELF, target, roots, request.RuntimeLookup)
 		if err != nil {
@@ -1147,6 +1166,11 @@ func validatePortableRuntimeLookup(policy PortableRuntimeLookupPolicy, runtimeTr
 	case PortableRuntimeLookupIncludedTrees:
 		if len(runtimeTrees) == 0 {
 			return closureError("runtime lookup policy lacks an explicit coverage tree")
+		}
+		return nil
+	case PortableRuntimeLookupVerifiedExact:
+		if len(runtimeTrees) != 0 {
+			return closureError("verified exact runtime lookup declares runtime trees")
 		}
 		return nil
 	default:

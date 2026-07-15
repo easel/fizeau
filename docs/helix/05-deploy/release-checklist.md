@@ -12,18 +12,18 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 4bf8db3cd5220f56291016ce860c813eae5b4da4bd5e634c3bb27bc4624c3870
+    self_hash: 17394e852dd7aae3bf9f81b1422f9278b7dc75336271e3c3e6c9aca10ec83927
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
-      ADR-014: 990917e08305df61afc31821a38e4acc63a84d0ab204c7849d6f126391282d67
+      ADR-014: cff6887a587b9be47062aefb27b2d0564d40b82fdf8619faf6fc10a640250584
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
-      CONTRACT-004: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
+      CONTRACT-004: 40d2680ac1668ced16aac90efc28cec7e33aa015e13fbe6b279d29132ebb579e
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      implementation-plan: 7ed12733f4cfb90d87c0e7a1c9df3cf90ea13c3e0b691a162e16a2b129594307
-    reviewed_at: "2026-07-15T18:54:32Z"
+      implementation-plan: 346af9de94bd2bad4d8959322aead5e7aaf53fbb826394c6024c35b79c26dd62
+    reviewed_at: "2026-07-15T23:11:49Z"
 ---
 # Release Checklist — Fizeau
 
@@ -53,7 +53,7 @@ ddx:
 | Continuation opacity | Public continuation and serialized events carry only Fizeau session lineage; service- or harness-derived route-native evidence never crosses the public or session-log boundary, while caller metadata remains opaque | `TestContinuationHarnessReceivesOnlyFizeauSessionRef`; `TestContinuationNativeReferenceIsNotSerialized`; public-field and JSON-tag structural searches | [ ] |
 | Continuation durability | The service-private locator uses the configured effective service session-log root; private evidence, terminal log, locator completion, and public success follow the contract order; pending recovery uses only the exact recorded path and full route key | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal`; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` | [ ] |
 | Continuation containment | Every resumed, `prefer_resume` fallback, and `fresh_session` continuation creates a new child session and acquires a fresh lifecycle lease | `TestContinuationDispatchAcquiresFreshLifecycleLease`; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease`; ADR-013 and ADR-014 conformance | [ ] |
-| Portable-runtime contract and completeness | `PreparePortableRuntime` accepts only an empty destination and same-GOARCH Linux target; preparation selects no route, joins actual instances to registry classifications, and includes every installed structurally unpinned-capable subprocess closure/launch recipe plus every effective configured provider or fails atomically | `TestPreparePortableRuntimeOwnsHarnessFilesAndEnvironment`; `TestPortableRuntimePlanIsRouteNeutralAndOpaque`; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; registry/instance and provider field-parity fixtures | [ ] |
+| Portable-runtime contract and completeness | `PreparePortableRuntime` accepts only an empty destination and same-GOARCH Linux target; preparation selects no route, joins actual instances to registry classifications, and includes every installed structurally unpinned-capable subprocess closure/launch recipe plus every effective configured provider or fails atomically; verified-exact contributors accept only publisher-authenticated release digests with same-target isolated positive and missing-library-negative evidence | `TestPreparePortableRuntimeOwnsHarnessFilesAndEnvironment`; `TestPortableRuntimePlanIsRouteNeutralAndOpaque`; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; `TestClaudePortableRuntimeVerifiedReleaseEvidence`; registry/instance and provider field-parity fixtures | [ ] |
 | Portable-runtime security and cleanup | One sibling-staged tree commits as one `runtime` child and one fixed read-only guest mount; sensitive material has restrictive modes, no value/original source path reaches diagnostics or plan, partial failure/cancellation rolls back, and concurrent cleanup is retryable | `TestPortableRuntimeBundleRedactsSecretsFromDiagnostics`; `TestPortableRuntimeBundleCleanupRemovesCredentialCopies`; concurrent-preparer and focused race evidence | [ ] |
 | Portable-runtime activation and OCI conformance | A separate public-package process applies only the generic mount and inherited names, calls `NewFromPortableRuntime`, and reconstructs configured providers plus production dispatch; each static/dynamic/interpreted recipe executes through unpinned `Execute` as the mapped non-root UID; failed runtime/storage cleanup retains the bundle and forbids `Close` until ordered retry succeeds; the required Linux job never skips | `TestPortableRuntimeActivationFeedsProductionDispatch`; `TestPortableRuntimeExternalCleanupFailureRetainsBundle`; `FIZEAU_PORTABLE_RUNTIME_CONTAINER=1 go test . -run '^TestPortableRuntimeBundleRunsUnpinnedExecuteInContainer$' -count=1 -timeout=3m`; `TestPortableRuntimePublicCompileFixture` | [ ] |
 | Default Claude-TUI launch | An unpinned `Policy=default`, `Permissions=unrestricted` Claude request selects and dispatches `claude-tui`; the production launch boundary receives `--permission-mode bypassPermissions`, generated hook settings, and the resolved model without `--print` | `TestExecuteDefaultClaudeUnrestrictedLaunchesTUIYolo`; `TestExecuteDefaultClaudeUnrestrictedSelectsClaudeTUI`; `TestClaudeTuiDefaultSupportsUnrestrictedPermissions`; `TestExplicitClaudePinBeatsTuiDefault`; `TestRoutingSurfacePreference`; `TestDispatcherCallsClaudeTui`; `TestBuildLaunchArgsBypassPermissions` | [ ] |
