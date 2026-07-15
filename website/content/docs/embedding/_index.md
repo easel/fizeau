@@ -676,7 +676,7 @@ parameter types, and field-level documentation, follow the
 | `ScoredModel` | type (alias) |  |
 | `ServiceCompactionData` | type (struct) |  |
 | `ServiceConfig` | type (interface) | ServiceConfig provides provider and routing data to the service without |
-| `ServiceConfigSource` | type (interface) | ServiceConfigSource is the minimal interface providerCooldownsFromSnapshotErrors |
+| `ServiceConfigSource` | type (interface) | ServiceConfigSource is retained for source compatibility with consumers that |
 | `ServiceDecodedEvent` | type (struct) | ServiceDecodedEvent is a typed view of one ServiceEvent |
 | `ServiceEvent` | type (alias) | ServiceEvent is a contract-level event (mirrors harnesses |
 | `ServiceEventTypeCompaction` | const |  |
@@ -803,9 +803,7 @@ parameter types, and field-level documentation, follow the
 | `harnessSource` | func (func harnessSource(req ServiceExecuteRequest) string) |  |
 | `harnessType` | func (func harnessType(cfg harnesses.HarnessConfig) string) | harnessType returns "native" for HTTP/embedded harnesses, "subprocess" for CLI-invoked ones |
 | `internalRouteAttempt` | func (func internalRouteAttempt(attempt RouteAttempt) routehealth.Attempt) |  |
-| `isDispatchabilityFailure` | func (func isDispatchabilityFailure(errMsg string) bool) |  |
 | `isExplicitPinError` | func (func isExplicitPinError(err error) bool) |  |
-| `isSnapshotDialFailure` | func (func isSnapshotDialFailure(errMsg string) bool) | isSnapshotDialFailure preserved as a back-compat alias for the v0 |
 | `lastDecisionEntry` | type (struct) |  |
 | `loadRoutingCatalog` | var |  |
 | `loadServiceConfig` | var | loadServiceConfig, when non-nil, is called by New to load a ServiceConfig |
@@ -843,7 +841,6 @@ parameter types, and field-level documentation, follow the
 | `promptAssertionHookFn` | type (func) | promptAssertionHookFn / compactionAssertionHookFn / toolWiringHookFn |
 | `providerBaseURLsForEndpoint` | func (func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []string) | providerBaseURLsForEndpoint returns the configured base URLs for one |
 | `providerCapabilities` | func (func providerCapabilities(entry ServiceProviderEntry) []string) | providerCapabilities returns the capability set for a provider entry |
-| `providerCooldownsFromSnapshotErrors` | func (func providerCooldownsFromSnapshotErrors(snapshot modelsnapshot.ModelSnapshot, cfg ServiceConfigSource, now time.Time, ttl time.Duration) map[string]time.Time) | providerCooldownsFromSnapshotErrors walks snapshot |
 | `providerPreferenceForPolicy` | func (func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error)) |  |
 | `providerPreferenceForPolicyName` | func (func providerPreferenceForPolicyName(name string) string) |  |
 | `providerTypeUsesFixedBilling` | func (func providerTypeUsesFixedBilling(providerType string) bool) |  |

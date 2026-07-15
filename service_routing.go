@@ -733,7 +733,7 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 	// sources via ProviderUnreachable so the routing engine hard-gates known
 	// failures before any dispatch attempt.
 	healthCooldownTTL := s.routeAttemptTTL()
-	providerUnreachable := providerCooldownsFromSnapshotErrors(snapshot, s.opts.ServiceConfig, now, healthCooldownTTL)
+	providerUnreachable := serviceimpl.ProviderCooldownsFromSnapshotErrors(snapshot, providerNames, now, healthCooldownTTL)
 
 	// Proactive probe failures feed ProbeUnreachable (separate from
 	// ProviderUnreachable which is populated from dial failures). TTL is
@@ -794,50 +794,10 @@ func (s *service) routingInputs(ctx context.Context, cat *modelcatalog.Catalog, 
 	return inputs, snapshot
 }
 
-// isSnapshotDialFailure preserved as a back-compat alias for the v0.13.0
-// snapshot-side caller. Both now share the same broader predicate.
-func isSnapshotDialFailure(errMsg string) bool { return routehealth.IsDispatchabilityFailure(errMsg) }
-
-func isDispatchabilityFailure(errMsg string) bool {
-	return routehealth.IsDispatchabilityFailure(errMsg)
-}
-
-// providerCooldownsFromSnapshotErrors walks snapshot.Sources and returns a map
-// of providerName → failure-time for any provider whose most recent discovery
-// attempt failed with a dial-class error within the cooldown window. The map
-// feeds routing.Inputs.ProviderCooldowns so engine.go can hard-gate the
-// candidate before any dispatch attempt.
+// ServiceConfigSource is retained for source compatibility with consumers that
+// implemented the v0.13 routing-health configuration surface.
 //
-// Source names are produced by endpointSourceName: they start with the
-// provider name (optionally followed by "-<endpoint>-<hash>" or "-props").
-// We match by prefix against the configured provider name set so a source
-// name like "rg-bragi-club-3090-props" correctly maps to provider
-// "rg-bragi-club-3090".
-func providerCooldownsFromSnapshotErrors(snapshot modelsnapshot.ModelSnapshot, cfg ServiceConfigSource, now time.Time, ttl time.Duration) map[string]time.Time {
-	if len(snapshot.Sources) == 0 {
-		return nil
-	}
-	providerNames := []string{}
-	if cfg != nil {
-		providerNames = cfg.ProviderNames()
-	}
-	if len(providerNames) == 0 {
-		return nil
-	}
-	sources := make([]routehealth.SnapshotSource, 0, len(snapshot.Sources))
-	for name, meta := range snapshot.Sources {
-		sources = append(sources, routehealth.SnapshotSource{
-			Name:            name,
-			Error:           meta.Error,
-			LastRefreshedAt: meta.LastRefreshedAt,
-		})
-	}
-	return routehealth.ProviderCooldownsFromSnapshotErrors(sources, providerNames, now, ttl)
-}
-
-// ServiceConfigSource is the minimal interface providerCooldownsFromSnapshotErrors
-// needs from the service config. The real service.opts.ServiceConfig satisfies
-// it, and tests can pass a stub.
+// Deprecated: production routing no longer consumes this interface.
 type ServiceConfigSource interface {
 	ProviderNames() []string
 }

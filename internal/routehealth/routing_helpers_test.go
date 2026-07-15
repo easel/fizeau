@@ -249,27 +249,89 @@ func TestCandidateCooldownRejectsPartialAndNonFizRecords(t *testing.T) {
 	}
 }
 
-func TestProviderCooldownsFromSnapshotErrorsUsesLongestProviderPrefix(t *testing.T) {
-	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
-	got := ProviderCooldownsFromSnapshotErrors([]SnapshotSource{
-		{
-			Name:            "rg-bragi-club-3090-props",
-			Error:           `dial tcp 10.0.0.8:1234: i/o timeout`,
-			LastRefreshedAt: now.Add(-5 * time.Second),
-		},
-		{
-			Name:            "rg-bragi-metadata",
-			Error:           "authentication failed",
-			LastRefreshedAt: now.Add(-5 * time.Second),
-		},
-	}, []string{"rg-bragi", "rg-bragi-club-3090"}, now, 30*time.Second)
+func TestIsDispatchabilityFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		err  string
+		want bool
+	}{
+		{name: "empty"},
+		{name: "dial", err: "dial tcp 10.0.0.8:443: connection refused", want: true},
+		{name: "io timeout", err: "dial tcp 10.0.0.8:443: i/o timeout", want: true},
+		{name: "no route", err: "no route to host", want: true},
+		{name: "network unreachable", err: "network is unreachable", want: true},
+		{name: "dns", err: "no such host", want: true},
+		{name: "502", err: `POST "http://router/v1/models": 502 Bad Gateway`, want: true},
+		{name: "503", err: "upstream returned 503 Service Unavailable", want: true},
+		{name: "504", err: "504 gateway timeout", want: true},
+		{name: "credential", err: "unauthorized: invalid API key"},
+		{name: "deadline", err: "context deadline exceeded"},
+		{name: "reset", err: "connection reset by peer"},
+		{name: "rate limit", err: "429 too many requests"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsDispatchabilityFailure(tc.err); got != tc.want {
+				t.Fatalf("IsDispatchabilityFailure(%q) = %t, want %t", tc.err, got, tc.want)
+			}
+		})
+	}
+}
 
-	if len(got) != 1 {
-		t.Fatalf("cooldowns=%v, want one match", got)
-	}
-	if _, ok := got["rg-bragi-club-3090"]; !ok {
-		t.Fatalf("cooldowns=%v, want longest configured provider name", got)
-	}
+func TestProviderCooldownsFromSnapshotErrors(t *testing.T) {
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("longest configured provider prefix", func(t *testing.T) {
+		got := ProviderCooldownsFromSnapshotErrors([]SnapshotSource{
+			{
+				Name:            "rg-bragi-club-3090-props",
+				Error:           `dial tcp 10.0.0.8:1234: i/o timeout`,
+				LastRefreshedAt: now.Add(-5 * time.Second),
+			},
+			{
+				Name:            "rg-bragi-metadata",
+				Error:           "authentication failed",
+				LastRefreshedAt: now.Add(-5 * time.Second),
+			},
+		}, []string{"rg-bragi", "rg-bragi-club-3090"}, now, 30*time.Second)
+		if len(got) != 1 || !got["rg-bragi-club-3090"].Equal(now.Add(-5*time.Second)) {
+			t.Fatalf("cooldowns=%v, want longest configured provider name", got)
+		}
+	})
+
+	t.Run("latest failure", func(t *testing.T) {
+		latest := now.Add(-5 * time.Second)
+		got := ProviderCooldownsFromSnapshotErrors([]SnapshotSource{
+			{Name: "router-primary", Error: "dial tcp: connection refused", LastRefreshedAt: now.Add(-20 * time.Second)},
+			{Name: "router-secondary", Error: "dial tcp: i/o timeout", LastRefreshedAt: latest},
+		}, []string{"router"}, now, time.Minute)
+		if len(got) != 1 || !got["router"].Equal(latest) {
+			t.Fatalf("cooldowns=%v, want latest failure at %v", got, latest)
+		}
+	})
+
+	t.Run("ttl boundary", func(t *testing.T) {
+		ttl := 30 * time.Second
+		got := ProviderCooldownsFromSnapshotErrors([]SnapshotSource{
+			{Name: "expired", Error: "dial tcp: connection refused", LastRefreshedAt: now.Add(-ttl)},
+			{Name: "fresh", Error: "dial tcp: connection refused", LastRefreshedAt: now.Add(-ttl + time.Nanosecond)},
+		}, []string{"expired", "fresh"}, now, ttl)
+		if _, ok := got["expired"]; ok {
+			t.Fatalf("cooldowns=%v, exact TTL boundary must expire", got)
+		}
+		if !got["fresh"].Equal(now.Add(-ttl + time.Nanosecond)) {
+			t.Fatalf("cooldowns=%v, just-inside TTL failure must remain", got)
+		}
+	})
+
+	t.Run("zero refreshed time uses now", func(t *testing.T) {
+		got := ProviderCooldownsFromSnapshotErrors([]SnapshotSource{
+			{Name: "router-props", Error: "dial tcp: connection refused"},
+		}, []string{"router"}, now, time.Minute)
+		if len(got) != 1 || !got["router"].Equal(now) {
+			t.Fatalf("cooldowns=%v, want zero timestamp projected as now=%v", got, now)
+		}
+	})
 }
 
 func TestShouldEscalateOnErrorRejectsHardPinErrors(t *testing.T) {
