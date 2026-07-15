@@ -12,18 +12,18 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 09177ecb23f0c451f7d2206e85ac2bc8acc5767b2c18b84d19e51524905611e3
+    self_hash: 4bf8db3cd5220f56291016ce860c813eae5b4da4bd5e634c3bb27bc4624c3870
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
-      ADR-014: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
-      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
-      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
+      ADR-014: 990917e08305df61afc31821a38e4acc63a84d0ab204c7849d6f126391282d67
+      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
+      CONTRACT-004: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      implementation-plan: 01edf0d17161ebdf96abf8872c15f79496d973a06b7883c99720582ecc85be49
-    reviewed_at: "2026-07-15T13:47:22Z"
+      implementation-plan: 7ed12733f4cfb90d87c0e7a1c9df3cf90ea13c3e0b691a162e16a2b129594307
+    reviewed_at: "2026-07-15T18:54:32Z"
 ---
 # Release Checklist — Fizeau
 
@@ -53,11 +53,14 @@ ddx:
 | Continuation opacity | Public continuation and serialized events carry only Fizeau session lineage; service- or harness-derived route-native evidence never crosses the public or session-log boundary, while caller metadata remains opaque | `TestContinuationHarnessReceivesOnlyFizeauSessionRef`; `TestContinuationNativeReferenceIsNotSerialized`; public-field and JSON-tag structural searches | [ ] |
 | Continuation durability | The service-private locator uses the configured effective service session-log root; private evidence, terminal log, locator completion, and public success follow the contract order; pending recovery uses only the exact recorded path and full route key | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal`; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` | [ ] |
 | Continuation containment | Every resumed, `prefer_resume` fallback, and `fresh_session` continuation creates a new child session and acquires a fresh lifecycle lease | `TestContinuationDispatchAcquiresFreshLifecycleLease`; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease`; ADR-013 and ADR-014 conformance | [ ] |
+| Portable-runtime contract and completeness | `PreparePortableRuntime` accepts only an empty destination and same-GOARCH Linux target; preparation selects no route, joins actual instances to registry classifications, and includes every installed structurally unpinned-capable subprocess closure/launch recipe plus every effective configured provider or fails atomically | `TestPreparePortableRuntimeOwnsHarnessFilesAndEnvironment`; `TestPortableRuntimePlanIsRouteNeutralAndOpaque`; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; registry/instance and provider field-parity fixtures | [ ] |
+| Portable-runtime security and cleanup | One sibling-staged tree commits as one `runtime` child and one fixed read-only guest mount; sensitive material has restrictive modes, no value/original source path reaches diagnostics or plan, partial failure/cancellation rolls back, and concurrent cleanup is retryable | `TestPortableRuntimeBundleRedactsSecretsFromDiagnostics`; `TestPortableRuntimeBundleCleanupRemovesCredentialCopies`; concurrent-preparer and focused race evidence | [ ] |
+| Portable-runtime activation and OCI conformance | A separate public-package process applies only the generic mount and inherited names, calls `NewFromPortableRuntime`, and reconstructs configured providers plus production dispatch; each static/dynamic/interpreted recipe executes through unpinned `Execute` as the mapped non-root UID; failed runtime/storage cleanup retains the bundle and forbids `Close` until ordered retry succeeds; the required Linux job never skips | `TestPortableRuntimeActivationFeedsProductionDispatch`; `TestPortableRuntimeExternalCleanupFailureRetainsBundle`; `FIZEAU_PORTABLE_RUNTIME_CONTAINER=1 go test . -run '^TestPortableRuntimeBundleRunsUnpinnedExecuteInContainer$' -count=1 -timeout=3m`; `TestPortableRuntimePublicCompileFixture` | [ ] |
 | Default Claude-TUI launch | An unpinned `Policy=default`, `Permissions=unrestricted` Claude request selects and dispatches `claude-tui`; the production launch boundary receives `--permission-mode bypassPermissions`, generated hook settings, and the resolved model without `--print` | `TestExecuteDefaultClaudeUnrestrictedLaunchesTUIYolo`; `TestExecuteDefaultClaudeUnrestrictedSelectsClaudeTUI`; `TestClaudeTuiDefaultSupportsUnrestrictedPermissions`; `TestExplicitClaudePinBeatsTuiDefault`; `TestRoutingSurfacePreference`; `TestDispatcherCallsClaudeTui`; `TestBuildLaunchArgsBypassPermissions` | [ ] |
 | Context evidence | Selected-route context comes from candidate/config, cached type-gated provider evidence, catalog metadata, or the documented default; route and execution hot paths make no synchronous limit probe | SD-005/SD-006 conformance evidence; structural probe-path review | [ ] |
 | Capacity enforcement | The selected context value/source is authoritative, a positive compaction bound only tightens it, and every provider-call path applies the canonical estimate and fixed capacity envelope | CONTRACT-003 obligations 17–20; focused route/core evidence | [ ] |
 | One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, accepted-session capacity failure never dispatches the next ranked candidate and semantic retry is a new caller request | CONTRACT-003 obligations 17, 20, and 21; service dispatch evidence | [ ] |
-| v0.15 capacity compatibility | Core-to-`internal/harnesses`-to-root mapping is exhaustive without treating harness-native streams as authoritative; additive capacity events/final values preserve unknown JSON enums; changed exported Go structs use keyed-literal migration fixtures | CONTRACT-003 obligations 21–23; public compile and JSON fixture evidence | [ ] |
+| v0.15 public compatibility | Core-to-`internal/harnesses`-to-root capacity mapping is exhaustive; additive capacity events/final values preserve unknown JSON enums; changed exported structs use keyed literals; external mocks implement both new `Continue` and `PreparePortableRuntime` interface methods | CONTRACT-003 obligations 21–29; public compile, AST, and JSON fixture evidence | [ ] |
 | Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
 | Governed documents | Lifecycle and capacity contracts, decisions, and designs are current | `ddx doc stale --json` omits `CONTRACT-003`, `CONTRACT-004`, `SD-005`, `SD-006`, `ADR-002`, `ADR-004`, `ADR-013`, and `ADR-014` | [ ] |
 | Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
@@ -97,7 +100,8 @@ and arm64 until a separate artifact decision expands it.
 | Continuation | Resumed, prefer-fallback, and explicitly fresh outcomes each create a new child Fizeau session with a fresh lease; implementation-derived native evidence is absent from public projections and logs | continuation conformance suite; public-field and serialized-tag structural searches | [ ] |
 | Context provenance | Routing event, execution handoff, capacity event, and final projection agree on selected context value/source; raw unknown candidate evidence remains distinguishable | CONTRACT-003 selected-context conformance evidence | [ ] |
 | Capacity event order | Clamp immediately precedes its request; planning skip prevents planning request/response/turn; main rejection precedes session end and typed terminal, with no provider call or next-route dispatch | CONTRACT-003 capacity event-order evidence | [ ] |
-| v0.15 migration | External keyed Go literals compile and additive capacity JSON accepts unknown future event/cause values | public compile/AST and JSON compatibility fixtures | [ ] |
+| Portable runtime | Preparation is route-neutral and value-opaque; separate-process activation reproduces structural candidate identities, configured providers, and production dispatch; runtime destruction removes guest overlays and explicit Close leaves no host bundle credential copy | all six parent `TestPreparePortableRuntime*` / `TestPortableRuntime*` conformance tests; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; `TestPortableRuntimeActivationFeedsProductionDispatch`; required Linux OCI job | [ ] |
+| v0.15 migration | External keyed Go literals compile, additive capacity JSON accepts unknown future event/cause values, and third-party service mocks implement `Continue` plus `PreparePortableRuntime`; public consumers compile `NewFromPortableRuntime` | public compile/AST and JSON compatibility fixtures | [ ] |
 
 ## Rollback Triggers
 
@@ -119,6 +123,12 @@ and arm64 until a separate artifact decision expands it.
 | Capacity authority mismatch | Execution enlarges the selected route window, projections disagree on value/source, or a capacity failure advances to another candidate | Hold release; restore selected-route authority and one-route-per-`Execute` behavior | Maintainer |
 | Capacity projection regression | A capacity payload field is dropped between core, harness-neutral event, root decode, or final projection, or event order permits a prevented provider call | Hold release; restore exhaustive mapping and required event order | Maintainer |
 | v0.15 migration regression | Public examples use unkeyed changed structs or additive JSON/event values are rejected as unknown | Hold release; correct migration fixtures and tolerant decoding before publishing v0.15 | Maintainer |
+| Portable runtime narrows the structural set | Any installed structurally unpinned-capable subprocess or effective provider is silently omitted, actual transport is misclassified, or preparation chooses a route | Hold release; restore exhaustive registry/instance and provider inventory, then defer live eligibility to `Execute` | Maintainer |
+| Portable activation drifts | `NewFromPortableRuntime` cannot reconstruct provider/structural identity in a separate public-only process or falls back to host config | Hold release; disable portable execution until fixed-root manifest activation is authoritative | Maintainer |
+| Portable dispatch bypass | Activation updates only a scheduler/refresh map while production `Execute` constructs or selects an unconfigured runner | Hold release; wire activated launch recipes into production dispatch and prove them with distinguishable fixtures | Maintainer |
+| Portable executable closure is incomplete | A staged PATH launcher lacks its interpreter, package tree, loader, shared runtime, content identity, or same-target offline proof | Hold release; reject that preparation path until the owning contributor returns a conforming closure | Maintainer |
+| Portable secret or cleanup regression | A credential/environment value appears in an error, JSON, String, log, or plan; failed/cancelled preparation leaves material; guest writable storage survives runtime destruction; failed stop/storage destruction permits host `Close`; or any cleanup cannot be retried with both handles retained | Hold release; disable portable preparation and retain runtime, storage, and bundle cleanup ownership until every owned copy is removed | Maintainer |
+| Portable OCI proof skips | The required Linux job skips or passes without separate-process activation, configured-provider bootstrap, all three closure classes, and unpinned `Execute` | Hold release; restore the non-skipping public-consumer OCI gate | Maintainer |
 
 Published tags and DDx audit commits are immutable. Rollback means stopping use
 of the bad release and publishing a new corrective tag; it never means moving

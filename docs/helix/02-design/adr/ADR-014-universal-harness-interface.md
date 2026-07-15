@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 9138f43ef3546a70d66c155eae15946d21773af2c7d452ef4b12d110fad77ed0
+    self_hash: 990917e08305df61afc31821a38e4acc63a84d0ab204c7849d6f126391282d67
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
-      CONTRACT-004: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
-    reviewed_at: "2026-07-15T12:46:06Z"
+      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
+      CONTRACT-004: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
+    reviewed_at: "2026-07-15T18:54:32Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -530,3 +530,94 @@ remain caller data governed by the normal public contract.
   identity. Fresh fallbacks and `fresh_session` children also receive new
   leases. No child inherits a live process or PTY, and cleanup failure on one
   child cannot transfer ownership to another invocation.
+
+## Amendment — 2026-07-15: Optional Portable Runtime Asset Capability
+
+ADR-014's small-interface rule also applies when an embedding caller prepares
+Fizeau for Linux same-platform isolated execution. The base `Harness` interface does
+not gain binary, credential, cache-path, or container methods.
+`PortableRuntimeHarness` is an optional CONTRACT-004 capability asserted on the
+registered runner. It returns an API-neutral, content-addressed
+executable/install-tree closure, harness-owned state-file descriptors, and
+inherited environment names for a target GOOS/GOARCH. It returns no environment
+value and performs no copy, route selection, provider contact, session creation,
+or process start.
+
+This capability closes a boundary that a service-side path table would reopen.
+Codex, Claude, Gemini, and other harness packages already own their credential,
+quota, cache, and launcher semantics. The service therefore cannot copy those
+rules into another switch or call concrete exported helpers. A future harness
+becomes portable by implementing the optional interface and satisfying the
+registry conformance test, just as it adds quota, account, discovery, or
+continuation support through the corresponding capability.
+
+The current v0.15 target is intentionally narrow: preparation runs on Linux and
+packages only for the preparing process's Linux GOARCH. Darwin, Windows, and
+cross-target preparation are later decisions. A PATH result, resolved symlink,
+or platform label is not enough. Each contributor classifies one static,
+dynamic, or interpreted entrypoint, content-addresses the complete
+loader/interpreter, library, install-tree, and runtime-support closure, supplies
+a typed guest-relative launch recipe that bypasses copied `PT_INTERP`/shebang
+paths, and passes its offline same-target conformance probe. An installed non-test subprocess instance that
+is structurally capable of unpinned routing cannot be silently omitted because
+its layout is difficult. The authoritative decision joins the production
+registry to the actual registered instance so native/HTTP-backed transports are
+not mislabeled from a static row. Test-only and exact-pin-only surfaces do not
+become unpinned-capable through preparation.
+
+Configured native and HTTP provider instances remain service configuration,
+not harness capabilities. A complete route-neutral inventory combines
+CONTRACT-004 contributions with a field-exhaustive API-neutral projection of
+effective `ServiceConfig`. The neutral materializer owns restrictive copying,
+generated config, deterministic deduplication/conflict handling, staging,
+rollback, diagnostics redaction, and cleanup. The public root facade maps that
+result to CONTRACT-003's opaque generic bundle: one atomically committed host
+child, one fixed guest-root read-only mount, and inherited environment names
+without values. `NewFromPortableRuntime` is the public activation seam that
+verifies the mounted manifest and reconstructs the configured service in the
+new process without the application-only config loader. Activation installs the
+typed launch recipes into the production `Execute` dispatcher, not only a
+refresh/scheduler instance map. The embedding caller applies the opaque plan,
+orchestrates the external container as the mapped preparing UID, destroys its
+writable storage, and only then performs bundle cleanup; it never resolves a
+harness path or provider field.
+
+This opacity is a programming boundary, not a confidentiality boundary against
+the embedding caller. The caller owns the source environment and destination
+directory and can read both. The design prevents caller code from needing to
+interpret or serialize concrete semantics and prevents accidental exposure in
+plans/diagnostics; it does not claim owner-only modes hide bytes from their
+owner.
+
+### Alternatives considered
+
+| Option | Evaluation |
+|--------|------------|
+| Service-owned per-harness path switch | Rejected: recreates the concrete symbol/path leak ADR-014 exists to prevent and drifts when harnesses change. |
+| Add asset methods to base `Harness` | Rejected: HTTP, embedded, pinned-only, and test-only surfaces would return sentinel values on every call. |
+| Copy only the resolved PATH entry | Rejected: symlinked Node launchers, install trees, interpreters, and dynamic dependencies would produce an incomplete bundle. |
+| Return files without an in-runtime activation seam | Rejected: the public `ServiceConfig` is an in-memory interface, and external consumers cannot import the application-only config loader to reconstruct the prepared service. |
+| Optional harness-owned contribution plus exhaustive registry classification | Selected: ownership stays with the adapter while the service consumes one neutral route-runtime inventory. |
+
+### Validation additions
+
+- `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` fails for
+  an incomplete registry/actual-instance join, an unclassified transport, a
+  structurally included subprocess runner without the optional capability,
+  target mismatch, unknown layout, or incomplete content-addressed closure.
+- `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only names
+  cross the interface and that typed errors contain no credential value or
+  account-bearing source path.
+- Provider-field parity fixtures prove the combined inventory preserves every
+  execution-relevant configured-provider fact without selecting a route.
+- Public activation fixtures reconstruct the service in a new process from the
+  fixed read-only guest mount, reject host config overrides, and compare
+  structural candidate identities rather than transient health or reachability.
+- `TestPortableRuntimeActivationFeedsProductionDispatch` makes each closure
+  class the sole unpinned candidate in turn and proves `Execute` consumes the
+  activated launch recipe rather than constructing an unconfigured fresh runner.
+- Linux OCI fixtures execute static-symlink, dynamic-ELF, and
+  interpreter/package-tree closures without credentials or network as a mapped
+  non-root UID.
+- Static enforcement rejects service-side imports or calls to concrete
+  harness path helpers for portable preparation.

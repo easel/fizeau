@@ -10,8 +10,8 @@ ddx:
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-003: e92a82cb3130952d3800c39674112f0ddeda09ede3c1f3a191580ce9d9f85b64
-      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
-    reviewed_at: "2026-07-15T12:46:06Z"
+      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
+    reviewed_at: "2026-07-15T18:54:31Z"
 ---
 # ADR-004: Terminal Harness Build-vs-Buy Boundary
 

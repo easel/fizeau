@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 3c5588c6c9a872eb34b275a5a0dd248a01b5d06bdae3b55069c6240aa2c00994
+    self_hash: 0e19d06f34a0697f0f46fde18a66b4f66f074f840307978ffe3d66a0dff27c0e
     deps:
-      CONTRACT-003: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-15T12:46:06Z"
+    reviewed_at: "2026-07-15T18:54:30Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -51,6 +51,8 @@ In scope:
 - Optional harness-native conversation continuation behind a Fizeau-session-ID
   boundary, including completed-session resolution and private evidence
   ownership.
+- Optional harness-owned portable-runtime asset discovery behind an
+  API-neutral target and asset-closure boundary.
 - Live subprocess containment, cleanup, and recovery obligations shared by
   normal execution, PTY sessions, and auxiliary probes.
 - Conformance evidence requirements.
@@ -70,6 +72,9 @@ Out of scope:
 - Public continuation policy selection, fallback, child-lineage projection,
   and validation. CONTRACT-003 owns those service behaviors; this contract
   owns only the optional route capability and its private evidence boundary.
+- Public portable-runtime request/bundle types, destination materialization,
+  and OCI orchestration. CONTRACT-003 owns the public behavior; this contract
+  owns only per-harness asset and inherited-environment discovery.
 
 ## Interface Set
 
@@ -79,10 +84,12 @@ MAY additionally
 implement any of `QuotaHarness`, `AccountHarness`, and
 `ModelDiscoveryHarness`; a cancellation-aware discovery implementation MAY
 also implement `ContextModelDiscoveryHarness`. A route that can resume
-harness-native conversation state MAY implement `ContinuationHarness`. The
-service uses Go interface
-assertions to discover which optional contracts a harness satisfies and
-consumes them through the interface only.
+harness-native conversation state MAY implement `ContinuationHarness`. A
+subprocess harness instance that is structurally capable of unpinned execution
+within a portable runtime MUST implement `PortableRuntimeHarness`; other
+subprocess harnesses MAY implement it to support future inclusion. The service
+uses Go interface assertions to discover which optional contracts a harness
+satisfies and consumes them through the interface only.
 
 ```go
 package harnesses
@@ -241,6 +248,80 @@ type ContextModelDiscoveryHarness interface {
     // starts cleanup; the method returns only after cleanup succeeds or the
     // service-owned cleanup deadline is reached.
     DefaultModelSnapshotWithContext(ctx context.Context) (ModelDiscoverySnapshot, error)
+}
+
+// PortableRuntimeTarget is the internal Linux same-platform preparation target.
+// CONTRACT-003 v0.15 requires GOOS="linux" and both values to equal the
+// preparing process.
+type PortableRuntimeTarget struct {
+    GOOS   string
+    GOARCH string
+}
+
+type PortableRuntimeAssetKind string
+type PortableRuntimePathKind string
+type PortableRuntimeClosureClass string
+
+const (
+    PortableRuntimeAssetExecutable  PortableRuntimeAssetKind = "executable"
+    PortableRuntimeAssetInstallTree PortableRuntimeAssetKind = "install_tree"
+    PortableRuntimeAssetConfig      PortableRuntimeAssetKind = "config"
+    PortableRuntimeAssetCredential  PortableRuntimeAssetKind = "credential"
+    PortableRuntimeAssetQuota       PortableRuntimeAssetKind = "quota"
+    PortableRuntimeAssetCache       PortableRuntimeAssetKind = "cache"
+    PortableRuntimeAssetSupport     PortableRuntimeAssetKind = "runtime_support"
+
+    PortableRuntimePathFile PortableRuntimePathKind = "file"
+    PortableRuntimePathTree PortableRuntimePathKind = "tree"
+
+    PortableRuntimeClosureStatic      PortableRuntimeClosureClass = "static"
+    PortableRuntimeClosureDynamic     PortableRuntimeClosureClass = "dynamic"
+    PortableRuntimeClosureInterpreted PortableRuntimeClosureClass = "interpreted"
+)
+
+// PortableRuntimeAsset is one harness-owned member of a verified executable
+// or state closure. Source remains internal and may be sensitive. Target is a
+// clean slash-relative path below CONTRACT-003's platform-fixed guest root,
+// never a host path.
+type PortableRuntimeAsset struct {
+    Kind          PortableRuntimeAssetKind
+    PathKind      PortableRuntimePathKind
+    Source        string
+    Target        string
+    ContentSHA256 string
+    Executable    bool
+}
+
+// PortableRuntimeLaunch is a guest-relative executable recipe. Every target is
+// slash-relative beneath CONTRACT-003's fixed guest root.
+type PortableRuntimeLaunch struct {
+    EntrypointTarget   string
+    InterpreterTarget  string
+    LoaderTarget       string
+    RuntimeArgs        []string
+    LibraryRootTargets []string
+}
+
+// PortableRuntimeEnvironment carries an inherited variable name only. It
+// cannot represent a value or a name=value assignment.
+type PortableRuntimeEnvironment struct {
+    Name string
+}
+
+type PortableRuntimeContribution struct {
+    ClosureClass PortableRuntimeClosureClass
+    Launch       PortableRuntimeLaunch
+    Assets       []PortableRuntimeAsset
+    Environment  []PortableRuntimeEnvironment
+}
+
+// PortableRuntimeHarness is the optional harness-owned asset-discovery
+// capability. It is read-only: it does not copy files, select a route, create a
+// session, contact a provider, or start a process.
+type PortableRuntimeHarness interface {
+    Harness
+
+    PortableRuntimeAssets(context.Context, PortableRuntimeTarget) (PortableRuntimeContribution, error)
 }
 
 // ContinuationRequest asks the selected route-owned runner to resume the
@@ -422,6 +503,8 @@ var (
     ErrModelDiscoveryEvidenceMissing = errors.New("model discovery evidence missing")
     ErrContinuationRequestInvalid = errors.New("invalid continuation request")
     ErrContinuationEvidenceUnavailable = errors.New("continuation evidence unavailable")
+    ErrPortableRuntimeTargetUnsupported = errors.New("portable runtime target unsupported")
+    ErrPortableRuntimeClosureIncomplete = errors.New("portable runtime asset closure incomplete")
 )
 ```
 
@@ -438,9 +521,22 @@ After preparation succeeds, native rejection, evidence invalidation, or any
 other `PreparedContinuation.Start` failure belongs to the already-created child
 and MUST NOT trigger a second fresh attempt.
 
+`ErrPortableRuntimeTargetUnsupported` reports a target GOOS/GOARCH that the
+contributor cannot package; v0.15 contributors require Linux and reject any
+target different from the preparing process. `ErrPortableRuntimeClosureIncomplete` reports an
+installed launcher whose complete executable or install-tree dependency
+closure cannot be verified. Both errors are stable classes with redacted
+detail: error text MUST NOT contain credential contents, environment values,
+or account-bearing source paths. The service treats either error from an
+installed structurally included subprocess as an atomic preparation failure
+rather than silently omitting that structural candidate.
+
 `QuotaWindow`, `ModelDiscoverySnapshot`, `Event`, `ExecuteRequest`,
-`ContinuationRequest`, `PreparedContinuation`, `HarnessInfo`, `EventType`, and
-`ContextCapacityData` retain or receive their definitions in
+`ContinuationRequest`, `PreparedContinuation`, `PortableRuntimeTarget`,
+`PortableRuntimeAssetKind`, `PortableRuntimePathKind`,
+`PortableRuntimeClosureClass`, `PortableRuntimeAsset`, `PortableRuntimeLaunch`,
+`PortableRuntimeEnvironment`, `PortableRuntimeContribution`, `HarnessInfo`,
+`EventType`, and `ContextCapacityData` retain or receive their definitions in
 `internal/harnesses/types.go` as specified here.
 
 ## Cache and Refresh Ownership
@@ -460,6 +556,111 @@ directly. Operator-visible cache paths SHOULD be exposed through a single
 service-level diagnostic surface (e.g. `Service.DiagnosticPaths()`) that
 calls back into each harness via a documented method, rather than the
 service importing per-harness path functions.
+
+Portable preparation is the one additional neutral consumer of harness-owned
+paths. It obtains those paths only from `PortableRuntimeHarness` contributions;
+service and materializer code MUST NOT reproduce `~/.codex`, `~/.claude`,
+`~/.gemini`, XDG-state, or harness-specific cache rules. A contribution may
+classify an absent optional cache as absent, but it cannot hide a required
+credential or executable closure from an otherwise eligible surface.
+
+## Portable Runtime Asset Ownership
+
+`PortableRuntimeHarness` describes assets; it does not materialize them. The
+harness package owns discovery of its executable/install closure, credentials,
+config, quota state, cache state, required runtime support, and inherited
+environment names. The neutral materializer owns validation, copying,
+permissions, staging, rollback, public-plan projection, and cleanup.
+
+A PATH result or final symlink target is not automatically a complete
+executable closure. Each subprocess contribution declares one supported
+`ClosureClass`, one `Launch` recipe, and a content-addressed asset set. Every
+launch and asset target is slash-relative beneath CONTRACT-003's fixed Linux
+guest root and never repeats a discovered host path. `ContentSHA256` is the
+ordinary file digest for `PathKind=file`; for `PathKind=tree` it is the digest
+of a canonical sorted manifest of relative path, declared type, owner
+permission bits, and per-file content digest. The materializer recomputes these
+identities while copying and again before commit.
+
+The supported v0.15 closure classes are mechanically distinct:
+
+| Class | Required discovery and evidence |
+|-------|---------------------------------|
+| `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
+| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into the private target tree. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless the containing install tree is included and its offline probe passes. |
+| `interpreted` | Include the launcher/script, interpreter, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
+
+Launch construction is exhaustive and does not use guest PATH, the copied
+ELF `PT_INTERP`, an absolute shebang, or a shell wrapper:
+
+```text
+static:      <guest EntrypointTarget> + request argv
+dynamic:     <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest EntrypointTarget> + request argv
+interpreted, static interpreter:
+             <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + request argv
+interpreted, dynamic interpreter:
+             <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + request argv
+```
+
+Every target in `Launch` MUST resolve to a declared asset or declared directory
+within an asset tree. The static/dynamic entrypoint plus every loader and
+interpreter target are regular owner-executable files. An interpreted entrypoint may be a
+non-executable regular file because the bundled interpreter opens it directly.
+`RuntimeArgs` contains no placeholder, environment assignment, route selector,
+or secret. `NewFromPortableRuntime` must install this recipe into the actual
+execution dispatch path; a scheduler-only or refresh-only instance map is not
+enough.
+
+Every contributing package has layout fixtures for the installed forms it
+recognizes and rejects an unknown form with
+`ErrPortableRuntimeClosureIncomplete`. Static-symlink, dynamic-binary, and
+interpreter/package-tree fixtures must execute a deterministic, credential-free,
+network-free probe in the same-target OCI conformance job. A contributor never
+invokes a package manager, downloads an artifact, contacts a provider, or
+starts an authenticated harness to discover its closure. Linux GOOS/GOARCH without
+the declared loader/interpreter closure is insufficient evidence.
+
+Asset-kind consistency is validated before any copy. `credential` is always a
+sensitive regular file. `config`, `quota`, and `cache` files and trees are
+sensitive regardless of contents or contributor intent. Launch targets and
+asset executable bits must satisfy the class-specific rules above;
+non-executable state cannot declare owner execution bits. Directories are recreated as mode `0700`, sensitive
+regular files as `0600`, and hard links are copied into independent inodes.
+Contributions contain no secret value: credential-bearing bytes remain only in
+the named source asset, and environment output contains a validated name only.
+Original source paths never appear in public plans and are redacted from errors
+and logs when they reveal an account or home path.
+
+The authoritative surface inventory is a stable join of the production
+registry and the actual runner-instance map used by the configured service.
+The join records actual transport and structural inclusion; it does not infer
+subprocess behavior from a stale static row. Test-only and exact-pin-only
+surfaces are excluded from the unpinned structural set. Embedded and HTTP
+surfaces are explicit classifications that require no subprocess binary.
+Every installed, non-test, structurally unpinned-capable subprocess instance
+must implement this capability. A future registry or instance addition fails
+the conformance drift test until it contributes a closure or receives an
+explicit classification. Shared assets deduplicate only when normalized target,
+kind, path kind, content identity, executable state, and source identity all
+agree. Launch recipes deduplicate only when every target, runtime argument, and
+library root agrees. Any other target collision is an error.
+
+Configured native and HTTP provider instances are not harness capabilities.
+The service combines the stable harness contribution inventory with a
+field-exhaustive API-neutral projection of effective `ServiceConfig`. Parity
+means provider order, `DefaultProviderName`, every field of
+`ServiceProviderEntry` (`Type`, `BaseURL`, `ServerInstance`, `Endpoints`,
+`APIKey`, `Headers`, `Model`, `Billing`, both inclusion fields,
+`ContextWindow`, `ConfigError`, `DailyTokenBudget`,
+`CreditBalanceThresholdUSD`, and `CreditProbeTTL`), and `HealthCooldown`.
+`WorkDir` is remapped to guest-private state rather than copied as a host path.
+`SessionLogDir` is deliberately excluded because service session logs are not
+portable. Activation uses a new guest-private log directory unless
+`ServiceOptions.SessionLogDir` or a later public execution request supplies a
+valid in-runtime override. Provider secrets follow the same redaction and
+sensitive-materialization rules. Network reachability,
+fresh health, auth validity, and quota are evaluated by the later `Execute`,
+not frozen as portable structural parity.
 
 ## Continuation Evidence and Completed-Session Resolution
 
@@ -792,6 +993,7 @@ Every harness implementation MUST carry, at minimum:
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
 | `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
+| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names cross the interface. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline in required Linux OCI conformance. |
 | Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
 | Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
 | Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
@@ -899,6 +1101,18 @@ by `go vet`-shaped tooling:
     serviceimpl and the root facade map it exhaustively, and harness-native
     streams never originate or terminalize it. The event order defined above
     is preserved in live, logged, decoded, and replayed projections.
+20. **Portable asset discovery is harness-owned and value-opaque.** Service
+    code consumes only `PortableRuntimeHarness`; it does not reproduce concrete
+    path rules. Contributions contain content-addressed same-target dependency
+    closures, typed guest-relative launch recipes, and validated inherited
+    environment names, never values, route decisions, sessions, processes, or
+    public diagnostics.
+21. **Portable inventory is complete or fails.** Every installed non-test
+    structurally unpinned-capable subprocess instance contributes a closure.
+    Actual native/HTTP transports, explicitly pinned-only surfaces, and
+    test-only surfaces are exhaustively classified. Missing support never
+    silently narrows the structural candidate set; later live health remains a
+    separate `Execute` decision.
 
 ## Non-Goals
 
@@ -925,6 +1139,10 @@ by `go vet`-shaped tooling:
   capability is subprocess-harness-backed; native-provider routes report
   unsupported under CONTRACT-003 and require a separate neutral contract if
   support is added later.
+- Copying portable assets, creating a public bundle, or orchestrating a
+  container. Harnesses describe their owned assets through the optional
+  capability; the neutral materializer and embedding caller own those later
+  stages.
 
 ## Acceptance Criteria
 
@@ -1009,6 +1227,29 @@ by `go vet`-shaped tooling:
     Exhaustive mapping and decoder fixtures fail if core, internal, or root
     fields drift; ordering fixtures prove clamp, planning-skip, and rejection
     behavior without native stream authority or next-candidate dispatch.
+24. `internal/harnesses/types.go` declares `PortableRuntimeTarget`,
+    `PortableRuntimeAssetKind`, `PortableRuntimePathKind`,
+    `PortableRuntimeClosureClass`, `PortableRuntimeAsset`,
+    `PortableRuntimeLaunch`,
+    `PortableRuntimeEnvironment`, `PortableRuntimeContribution`, optional
+    `PortableRuntimeHarness`, `ErrPortableRuntimeTargetUnsupported`, and
+    `ErrPortableRuntimeClosureIncomplete` with the signatures, content
+    identities, closure classes, and value-opaque behavior above.
+25. `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` fails
+    if the production-registry/actual-instance join is incomplete; actual
+    transport or structural inclusion drifts; any installed non-test,
+    structurally unpinned-capable subprocess lacks a content-addressed
+    same-target closure; provider/config field parity drifts; or native, HTTP,
+    pinned-only, and test-only classifications drift. Package fixtures reject
+    unknown installed layouts, and required OCI fixtures execute static,
+    dynamic, and interpreted closures offline.
+26. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` and redaction
+    fixtures prove contributions contain unique valid inherited names only and
+    no secret value, empty/unset ambiguity, `name=value` assignment,
+    account-bearing diagnostic path, route selector, process start, provider
+    contact, or session/lifecycle record. Asset and launch validation rejects
+    inconsistent kind/path/executable/loader/interpreter combinations before
+    copying.
 
 ## References
 

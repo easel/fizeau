@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: a91944158b13a221f876ac237a3ece118a1a77f9a649e8e77b9c34fa52b2e483
+    self_hash: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T12:46:06Z"
+    reviewed_at: "2026-07-15T18:54:30Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -48,7 +48,8 @@ surface on a heartbeat to keep the snapshot warm.
 
 - **In scope:** the public root-package service facade; routing and inventory
   projections; execution, continuation, session events, terminal facts,
-  session-log projections, and wrapped-harness lifecycle ownership.
+  session-log projections, route-neutral portable-runtime preparation, and
+  wrapped-harness lifecycle ownership.
 - **Out of scope:** concrete adapter implementation, provider-native protocols,
   DDx worktree setup, gates, review, landing, preservation, tracker mutation,
   and bead closure policy.
@@ -77,6 +78,7 @@ import (
 type FizeauService interface {
     Execute(ctx context.Context, req ServiceExecuteRequest) (<-chan ServiceEvent, error)
     Continue(ctx context.Context, req ServiceContinuationRequest) (<-chan ServiceEvent, error)
+    PreparePortableRuntime(ctx context.Context, req PortableRuntimeRequest) (*PortableRuntimeBundle, error)
     TailSessionLog(ctx context.Context, sessionID string) (<-chan ServiceEvent, error)
 
     ListHarnesses(ctx context.Context) ([]HarnessInfo, error)
@@ -97,17 +99,22 @@ type FizeauService interface {
 }
 
 func New(opts ServiceOptions) (FizeauService, error)
+func NewFromPortableRuntime(opts ServiceOptions) (FizeauService, error)
 func ValidateUsageSince(spec string) error
 func ValidateCachePolicy(v string) error
 func ValidatePowerBounds(minPower, maxPower int) error
 ```
 
-Sixteen service methods are public. `Execute` is the primary verb and
+Seventeen service methods are public. `Execute` is the primary verb and
 `Continue` is its harness-neutral conversation-continuation companion. The list
 methods expose the live routing inventory and policy metadata. `HealthCheck`,
 `ResolveRoute`, `RecordRouteAttempt`, and `RouteStatus` are routing/status
 projections. The remaining methods project service-owned session logs for
-usage, listing, JSON rendering, and replay.
+usage, listing, JSON rendering, and replay. `PreparePortableRuntime` is the
+route-neutral preparation boundary for an embedding caller that will execute
+the configured service inside an isolated same-platform runtime.
+`NewFromPortableRuntime` is the matching constructor inside that runtime; it is
+a package function, not an eighteenth service method.
 
 The v0.11 interface has no removed route-introspection service methods and no
 separate model reference request field. Old route-reference names are not
@@ -166,6 +173,8 @@ type ServiceProviderEntry struct {
     ContextWindow int
     ConfigError string
     DailyTokenBudget int
+    CreditBalanceThresholdUSD float64
+    CreditProbeTTL time.Duration
 }
 ```
 
@@ -182,6 +191,210 @@ cannot be made usable. CONTRACT-004 defines its layout and crash recovery.
 The service may auto-load configuration when `ServiceConfig` is nil and the
 config package registered a loader. Embedders that need deterministic behavior
 should pass `ServiceConfig` explicitly.
+
+## Portable Runtime Preparation and Activation
+
+An embedding caller can ask its already-configured service to prepare the
+complete runtime needed for a later unpinned `Execute` inside an isolated
+runtime. Preparation is not routing and does not accept routing intent.
+
+```go
+type PortableRuntimeRequest struct {
+    DestinationRoot string
+    TargetGOOS      string
+    TargetGOARCH    string
+}
+
+type PortableRuntimeMount struct {
+    Source   string
+    Target   string
+    ReadOnly bool
+}
+
+type PortableRuntimeBundle struct {
+    // implementation state is unexported
+}
+
+var (
+    ErrPortableRuntimeRequestInvalid    = errors.New("invalid portable runtime request")
+    ErrPortableRuntimeClosureIncomplete = errors.New("portable runtime closure incomplete")
+    ErrPortableRuntimeActivationInvalid = errors.New("portable runtime activation invalid")
+    ErrPortableRuntimeCleanupIncomplete = errors.New("portable runtime cleanup incomplete")
+)
+
+func (b *PortableRuntimeBundle) RuntimeRoot() string
+func (b *PortableRuntimeBundle) Mounts() []PortableRuntimeMount
+func (b *PortableRuntimeBundle) EnvironmentNames() []string
+func (b *PortableRuntimeBundle) Close() error
+func PortableRuntimeGuestRoot() string
+```
+
+`PortableRuntimeRequest` has exactly the three fields above. It MUST NOT gain a
+`Harness`, `Provider`, `Model`, `Policy`, power bound, capability preference,
+or other route selector. Preparation MUST NOT resolve a route, create a
+session, emit a service event, contact a provider, or start a harness process.
+The later `Execute` call remains the only routing decision.
+
+`DestinationRoot` names an existing, caller-owned, empty real directory. A
+missing path, non-directory, non-empty directory, symbolic-link destination,
+or destination whose ancestry cannot be validated returns an error wrapping
+`ErrPortableRuntimeRequestInvalid`. `TargetGOOS` and `TargetGOARCH` are required.
+In v0.15, `TargetGOOS` MUST equal both `runtime.GOOS` and `linux`, and
+`TargetGOARCH` MUST equal `runtime.GOARCH`. A non-Linux preparing process or any
+cross-target request fails before materialization. Darwin and Windows portable
+activation require later platform-specific evidence; ordinary Fizeau execution
+on those platforms is unaffected.
+
+### Host and guest layout
+
+Fizeau commits exactly one child named `runtime` beneath `DestinationRoot`.
+`RuntimeRoot()` returns that child's clean absolute host path. The implementation
+creates a private sibling staging directory on the same filesystem, validates
+the caller directory by directory handle and identity, then performs exactly
+one no-replace rename of the staged tree to `<DestinationRoot>/runtime`. A
+concurrent preparer may win that name; every loser removes its staging tree,
+returns `ErrPortableRuntimeRequestInvalid`, and leaves the winner untouched.
+Failed preparation leaves `DestinationRoot` empty unless another preparer won.
+
+In v0.15, `Mounts()` returns exactly one mount. Its `Source` equals
+`RuntimeRoot()`, its `Target` equals the clean absolute guest path
+returned by `PortableRuntimeGuestRoot()`, and `ReadOnly` is always `true`.
+The function returns `/opt/fizeau/runtime` on Linux and the empty string on
+unsupported platforms in v0.15. Preparation and activation reject an empty
+guest root. Original discovered
+harness/provider paths never appear in that public mount. The caller-supplied
+destination path necessarily appears in `RuntimeRoot` and `Source`; that is not
+an internal source-path disclosure. Every executable, state seed, and generated
+manifest path is relative to the private mounted tree and is interpreted only
+by Fizeau after activation.
+
+The bundle is an opaque pointer with generic container-applicable data. Its
+accessors return defensive copies. `EnvironmentNames()` is a stably sorted,
+deduplicated list of valid non-empty environment variable names that the
+external runtime must inherit by name. It never contains a value, an empty
+assignment, or a `name=value` string. Preparation rejects an invalid name or a
+required inherited name that is unset; empty and unset are distinct. The caller
+MUST serialize environment mutation from preparation through runtime start and
+copy the current value for each returned name opaquely, without interpreting,
+logging, or persisting it. An orchestrator may perform an opaque lookup because
+most OCI APIs require `name=value` input. Fizeau-owned path variables and
+generated defaults such as portable HOME/PATH/XDG roots, TERM, and locale are
+not public inherited names; activation derives them inside the guest.
+
+### Complete route-neutral inventory
+
+Preparation covers the complete structural runtime, not a speculative winning
+route and not a snapshot of live health. The authoritative subprocess set is
+the stable join of the production registry and the registered runner instances
+used by this service. It includes every non-test, structurally
+unpinned-capable subprocess instance whose executable is installed at
+preparation entry. It classifies actual transports, so a configured native or
+HTTP-backed Claude instance is not mislabeled as a subprocess merely because a
+static registry row names a binary. Exact-pin-only and test-only instances are
+recorded as excluded; they do not become unpinned-capable through preparation.
+
+The inventory also preserves every effective configured provider instance,
+including instances that are pinned-only or currently unhealthy, so the
+in-runtime service receives the same configuration rather than a route-filtered
+subset. Structural candidate identity and inclusion policy must match after
+activation. Provider reachability, auth freshness, quota, and health are
+evaluated later inside `Execute` and may legitimately differ in the isolated
+runtime; preparation makes no promise of live eligibility parity.
+
+Subprocess surfaces contribute a verified same-target executable/install
+closure, including required interpreters, package trees, dynamic loaders,
+shared libraries, and runtime support. A PATH launcher, final symlink target,
+or GOOS/GOARCH label by itself is not a verified closure. CONTRACT-004 defines
+the closure classes, content identities, registry classifications, and
+contributor conformance. If a structurally included subprocess has an unknown
+layout or incomplete closure, preparation returns an error wrapping
+`ErrPortableRuntimeClosureIncomplete`; it never silently narrows the later
+candidate set.
+
+The generated private manifest records structural candidate identities,
+entrypoints relative to `PortableRuntimeGuestRoot()`, environment requirements,
+and a field-exhaustive effective provider projection. `NewFromPortableRuntime`
+is the only public activation entrypoint. It reads that manifest from the fixed
+guest root, verifies its version and content identities, reconstructs the
+service config and the production execution-dispatch launch mapping, creates
+owner-only guest-private writable overlays for mutable quota/cache seeds, and
+supplies Fizeau-owned path and locale variables to harness launches. A
+scheduler-only refresh map is insufficient: the later `Execute` must consume the
+activated launch recipe. Activation does not depend on the
+application-only `internal/config` loader. That overlay belongs to the external
+runtime namespace, never writes back into the read-only bundle, and must
+disappear when the caller destroys that runtime's writable storage.
+
+`NewFromPortableRuntime` rejects a non-empty `ServiceOptions.ConfigPath` or a
+non-nil `ServiceOptions.ServiceConfig`, ignores host configuration override
+variables, and returns an error wrapping
+`ErrPortableRuntimeActivationInvalid` for a missing, malformed, mismatched, or
+tampered manifest. Before constructing service state it calls `LookupEnv` for
+every manifest-required inherited name: missing is invalid, while present-empty
+remains distinct and valid. An omitted name wraps
+`ErrPortableRuntimeActivationInvalid` before any service activity. Other service
+options retain their documented meaning. Activation starts no session, resolves
+no route, contacts no provider, and starts no harness. A separately built
+public-package consumer can therefore construct the in-runtime service without
+importing an internal package or understanding a harness/provider path.
+
+The external runtime MUST map the preparing numeric UID as the guest execution
+UID, or provide an equivalent user-namespace identity that can read and execute
+the owner-only mounted tree without changing its modes. The required Linux OCI
+job runs the consumer as a mapped non-root UID. Broadening bundle permissions or
+running the conformance consumer as container root is not accepted evidence.
+
+### Materialization, secrecy, and cleanup
+
+Asset ordering and deduplication are deterministic. Identical normalized
+asset identities deduplicate; conflicting identities for one private target
+are an error. All materialized paths remain beneath the committed host runtime
+root. Directory traversal, copied symlinks, preserved hard links, source
+identity or content changes during copy, and undeclared file types are
+rejected. Fizeau never copies live process-lifecycle records or service session
+logs into the bundle.
+
+Runtime directories use mode `0700`. Credential, generated config, quota, and
+cache regular files use mode `0600`; those classes are sensitive regardless of
+contributor flags. Executable closures retain only required owner execution
+bits and are never group/world writable. All public mounts are read-only;
+activation copies mutable quota/cache seeds to a guest-private writable overlay
+rather than modifying the mounted bundle. Validation failure, copy failure,
+context cancellation, or commit failure removes every staging artifact.
+
+The caller applies the one mount and inherited environment names verbatim
+without interpreting provider or harness semantics, then calls
+`NewFromPortableRuntime` inside the isolated process. The caller owns external
+container or sandbox orchestration and MUST stop the runtime and destroy its
+writable storage before calling `Close`. If either external cleanup step fails,
+the caller MUST retain both the runtime/storage cleanup handle and the bundle,
+retry those steps in that order, and MUST NOT call `Close` until runtime stop
+and writable-storage destruction are confirmed. `Close` removes only Fizeau's
+committed child and staging remnants; it does not remove `DestinationRoot` or
+stop an external runtime. It is
+concurrency-safe and idempotent after success. A cleanup failure wraps
+`ErrPortableRuntimeCleanupIncomplete`; a later `Close` retries remaining
+cleanup rather than permanently suppressing it.
+
+The zero value of `PortableRuntimeBundle` is a closed empty bundle: its
+accessors return empty values and `Close` succeeds. This permits external
+interface mocks without exposing constructors for non-empty bundle state.
+Successful non-empty bundles are created only by Fizeau preparation.
+
+No returned error, JSON representation, `String` method, logger output, or
+generic plan value may contain credential contents, API keys, header values,
+environment values, or original harness/provider source paths. Diagnostics
+identify a stable asset class and operation, not secret data or a concrete
+home path. Caller-supplied `DestinationRoot`-derived values are allowed only in
+`RuntimeRoot`, mount `Source`, and errors that directly validate that argument.
+This is API opacity and accidental-disclosure prevention, not confidentiality
+from the embedding caller: that caller already owns the source environment and
+destination directory and can read their bytes. The contract ensures caller
+code need not discover, interpret, log, or persist concrete asset semantics; it
+does not claim filesystem modes can defend those assets from their owner.
+Wrapped processes started by the later in-runtime `Execute` remain subject to
+the independent containment and caller-death rules in this contract;
+portable-bundle cleanup does not replace them.
 
 `HarnessCleanupTimeout` is the v0.15 per-invocation deadline for stopping and
 reaping a wrapped harness containment boundary after normal completion,
@@ -1281,6 +1494,14 @@ changed by this routing contract.
 The typed session-lifecycle and continuation surface is introduced in product
 API v0.15. Adding `Continue` to `FizeauService` is a Go source-compatibility
 break for third-party implementations and mocks of that interface. Adding
+`PreparePortableRuntime` to `FizeauService` is the same class of v0.15 source
+break. The standalone portable-runtime types and methods on
+`PortableRuntimeBundle`, the `NewFromPortableRuntime` constructor, the
+platform-specific fixed guest-root function, and the four stable portable error
+sentinels are additive,
+but callers use keyed literals for `PortableRuntimeRequest` and
+`PortableRuntimeMount`. External interface mocks may return the documented
+closed zero-value bundle. Adding
 `HarnessCleanupTimeout` and typed terminal or primary-fact fields to exported
 structs also breaks external unkeyed composite literals, while their JSON
 fields are additive. These changes MUST ship only with the v0.15 API update and
@@ -1337,6 +1558,10 @@ Compatibility rules after v0.15 are:
 | Condition | Error / Outcome | Retry | Recovery Expectation |
 |-----------|-----------------|-------|----------------------|
 | Request rejected before a session starts | Public validation error; no event channel | After correcting request | Caller fixes the request; no cleanup or terminal event is expected because Fizeau accepted no session. |
+| Portable destination or target rejected | Error wraps `ErrPortableRuntimeRequestInvalid`; no session, process, event, or committed bundle | After correcting the destination/target | Prepare on Linux and supply an existing empty real directory plus the current Linux GOARCH. |
+| Structurally included subprocess lacks a complete portable closure | Redacted error wraps `ErrPortableRuntimeClosureIncomplete`; destination remains empty | After installing or fixing the contributing runtime | Fizeau does not omit the surface or preselect another route. |
+| In-runtime manifest or activation is invalid | `NewFromPortableRuntime` returns an error wrapping `ErrPortableRuntimeActivationInvalid`; no session or process starts | After restoring the exact prepared mount and inherited names | Do not fall back to host config or a narrowed service. |
+| Portable cleanup is incomplete | `Close` returns an error wrapping `ErrPortableRuntimeCleanupIncomplete` | Retry `Close` after resolving the filesystem condition | The bundle retains cleanup ownership; external runtime termination remains caller-owned. |
 | Negative `MaxTokens` or `CompactionContextWindow` | Public validation error; no event channel | After correcting request | Supply zero or a positive value. Direct-core callers receive the same rejection before `session.start`. |
 | Positive route requirement meets unknown or insufficient candidate context | Candidate is ineligible with `context_too_small`; routing may select the best eligible survivor, but makes no provider call for the rejected candidate. An exact pin with no survivor fails routing. | No retry when a survivor is selected; otherwise a corrected or new caller-owned request | Inspect `RequiredContext` and raw candidate context evidence; exact pins do not bypass a positive requirement. With a zero requirement, a permitted exact pin may select raw unknown capacity and execution resolves the fallback in `RouteDecision`. |
 | Accepted main call has no context headroom | `failed / context_capacity_exceeded / tool_loop` plus required capacity event and final payload | Caller policy | No `llm.request` was emitted for the prevented call and Fizeau does not try the next candidate. |
@@ -1387,6 +1612,41 @@ When resume is unsupported, Fizeau routes the fresh request normally and emits
 `parent_session_id` plus `continuation="fresh"`. A terminal
 `outcome="success"` proves only that this child Fizeau session completed; DDx
 still owns repository gates, landing, and bead closure.
+
+Portable preparation without route knowledge:
+
+```go
+bundle, err := svc.PreparePortableRuntime(ctx, fizeau.PortableRuntimeRequest{
+    DestinationRoot: "/tmp/ddx-runtime",
+    TargetGOOS:      runtime.GOOS,
+    TargetGOARCH:    runtime.GOARCH,
+})
+if err != nil {
+    return err
+}
+
+// The external runtime applies bundle.Mounts() and
+// bundle.EnvironmentNames() verbatim. Its public-package entrypoint calls
+// NewFromPortableRuntime before Execute; the caller interprets no asset.
+isolated, err := caller.Start(bundle.Mounts(), bundle.EnvironmentNames())
+if err != nil {
+    return errors.Join(err, bundle.Close())
+}
+runErr := isolated.Wait()
+if stopErr := isolated.Stop(); stopErr != nil {
+    cleanupQueue.RetainRuntimeAndBundle(isolated, bundle)
+    return errors.Join(runErr, stopErr)
+}
+if destroyErr := isolated.DestroyWritableStorage(); destroyErr != nil {
+    cleanupQueue.RetainStorageAndBundle(isolated, bundle)
+    return errors.Join(runErr, destroyErr)
+}
+closeErr := bundle.Close() // legal only after both external cleanup steps succeeded
+if closeErr != nil {
+    cleanupQueue.Retain(bundle) // retry Close without losing ownership
+}
+return errors.Join(runErr, closeErr)
+```
 
 ## Conformance-Test Obligations
 
@@ -1483,6 +1743,49 @@ that prove:
     structs added to in v0.15. JSON fixtures accept the additive capacity event,
     payload, decoded-event field, and terminal cause while preserving unknown
     future event and enum values.
+24. Public compile and AST fixtures call `PreparePortableRuntime` from
+    `package fizeau_test`, require the exact three-field request, use only the
+    generic bundle accessors and `Close`, call `NewFromPortableRuntime` in a
+    separate process, and reject route selectors or exported cleanup,
+    provider, harness, environment-value, or activation-manifest state.
+25. Inventory fixtures join the production registry to its actual registered
+    instances, classify every transport and structural inclusion state, and
+    preserve every `ServiceProviderEntry` field, provider order, default,
+    `HealthCooldown`, and the explicit portable treatment of `WorkDir` and
+    `SessionLogDir`. Every structurally included subprocess surface supplies a
+    verified same-target closure; missing or incompatible evidence fails
+    preparation instead of disappearing from the structural candidate set.
+26. Filesystem fixtures cover empty-root validation, directory-handle identity,
+    one-child no-replace commit, concurrent preparers, copied symlinks, hardlink
+    re-creation rather than preservation, traversal, source identity/content
+    changes, deterministic conflicts, `0700` directories, `0600` sensitive
+    regular files, owner-only executable permissions, cancellation, every
+    partial-failure point, and atomic rollback.
+27. Redaction fixtures seed recognizable file, API-key, header, and environment
+    values and prove they are absent from returned errors, JSON, `String`, logs,
+    and every public plan value. Environment output contains valid names only;
+    the caller-supplied destination is allowed only in `RuntimeRoot`, mount
+    `Source`, and direct request-validation errors. Activation fixtures prove a
+    manifest-required name omitted after preparation fails before service
+    activity, while a present-empty value remains valid.
+28. Cleanup fixtures cover normal, repeated, concurrent, and failed-then-retried
+    `Close`; they prove only the committed child and Fizeau staging remnants are
+    removed, the caller-owned destination becomes empty, and cleanup neither
+    stops an external container nor touches process-lifecycle ownership.
+29. A required Linux OCI job builds a public-package consumer without pulling
+    an image, applies the one read-only generic mount and inherited names, calls
+    `NewFromPortableRuntime`, and performs a credential-free unpinned `Execute`.
+    Hermetic fixtures cover static-symlink, dynamic-ELF, and
+    interpreter/package-tree closure classes, a sentinel inherited value, and
+    generated configured-provider bootstrap. Each closure class is the sole
+    structurally included subprocess in one table case, and
+    `TestPortableRuntimeActivationFeedsProductionDispatch` proves its unpinned
+    `Execute` consumes the activated typed launch recipe rather than a fresh
+    default runner. The consumer runs as the mapped preparing non-root UID. The
+    job proves preparation made no route decision and that in-runtime structural
+    candidate identities match the prepared set; it does not equate
+    network/quota health with structural parity. The opted-in job fails rather
+    than skips when OCI is unavailable.
 
 ## Validation Checklist
 
@@ -1496,8 +1799,12 @@ that prove:
   process-birth identity reuse, and lifecycle-record retention have named tests.
 - [ ] Compatibility fixtures cover legacy logs and unknown additive values.
 - [ ] Route capacity, selected-window precedence, canonical estimation,
-  overflow-safe scaling, compaction input, monotonic attempts, capacity event
-  order/mapping, keyed-literal migration, and direct-core error identity have
-  named tests.
+      overflow-safe scaling, compaction input, monotonic attempts, capacity event
+      order/mapping, keyed-literal migration, and direct-core error identity have
+      named tests.
+- [ ] Portable-runtime public opacity, complete harness/provider inventory,
+      same-target dependency closures, restrictive atomic materialization,
+      redaction, retryable cleanup, and non-skipping Linux OCI execution have
+      named tests.
 - [ ] The full repository test gate passes with the public conformance suite.
 - [ ] Non-normative implementation notes cannot override this contract.
