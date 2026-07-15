@@ -24,7 +24,7 @@ const (
 	claudePortableEntrypointTarget = "harnesses/anthropic/bin/claude"
 	claudePortableConfigTarget     = "home/.claude/settings.json"
 	claudePortableLocalTarget      = "home/.claude/settings.local.json"
-	claudePortableCredentialTarget = "home/.claude/.credentials.json"
+	claudePortableCredentialTarget = "home/.claude/.credentials.json" // #nosec G101 -- guest-relative path, not a credential value.
 	claudePortableCacheTarget      = "home/.claude/cache"
 	claudePortableStatsTarget      = "home/.claude/stats-cache.json"
 	claudePortableQuotaTarget      = "state/fizeau/claude-quota.json"

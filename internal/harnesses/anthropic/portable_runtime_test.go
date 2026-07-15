@@ -174,6 +174,12 @@ func TestClaudePortableRuntimeVerifiedReleaseEvidence(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Claude verified release evidence is Linux-only")
 	}
+	if runtime.GOARCH != "arm64" {
+		if _, exists := claudePortableVerifiedReleases["2.1.210"][runtime.GOARCH]; exists {
+			t.Fatalf("Claude 2.1.210 unexpectedly claims unprobed %s verified-exact evidence", runtime.GOARCH)
+		}
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("user home unavailable: %v", err)
