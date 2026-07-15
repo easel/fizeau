@@ -340,30 +340,6 @@ func PolicyInfoFromCatalog(policy modelcatalog.Policy, meta modelcatalog.Metadat
 	}
 }
 
-func PolicyForName(cat *modelcatalog.Catalog, name string) (modelcatalog.Policy, string, bool) {
-	if cat == nil {
-		return modelcatalog.Policy{}, "", false
-	}
-	name = strings.TrimSpace(name)
-	if policy, ok := cat.Policy(name); ok {
-		return policy, policy.Name, true
-	}
-	return modelcatalog.Policy{}, "", false
-}
-
-func ProviderPreferenceForPolicyName(name string) string {
-	switch strings.TrimSpace(name) {
-	case "air-gapped":
-		return routing.ProviderPreferenceLocalOnly
-	case "smart":
-		return routing.ProviderPreferenceSubscriptionFirst
-	case "default", "cheap":
-		return routing.ProviderPreferenceLocalFirst
-	default:
-		return routing.ProviderPreferenceLocalFirst
-	}
-}
-
 func NormalizeProviderType(providerType string) string {
 	providerType = strings.ToLower(strings.TrimSpace(providerType))
 	if providerType == "" {
