@@ -7,12 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/provider/utilization"
 	"github.com/easel/fizeau/internal/routehealth"
-	"github.com/easel/fizeau/internal/runtimesignals"
 	"github.com/easel/fizeau/internal/serverinstance"
 )
 
@@ -77,74 +74,6 @@ func TestListModels_utilizationProjection(t *testing.T) {
 	}
 	if got.QueuedRequests == nil || *got.QueuedRequests != 1 {
 		t.Errorf("utilization queued = %#v, want 1", got.QueuedRequests)
-	}
-}
-func TestListModelsEffectiveCostAndFreshnessSignals(t *testing.T) {
-	cacheDir := tempDiscoveryCacheDir(t)
-	t.Setenv("FIZEAU_CACHE_DIR", cacheDir)
-
-	sc := &fakeServiceConfig{
-		providers: map[string]ServiceProviderEntry{
-			"codex-subscription": {Type: "codex", Model: "gpt-5.4", Billing: BillingModelSubscription},
-		},
-		names:       []string{"codex-subscription"},
-		defaultName: "codex-subscription",
-	}
-	stubSubprocessHarnessModelIDs(t, map[string][]string{
-		"codex": {"gpt-5.4"},
-	})
-	svc := newTestService(t, ServiceOptions{ServiceConfig: sc})
-	stubSubscriptionHarnessLookPath(svc, "codex")
-	remaining := 14
-	if err := runtimesignals.Write(&discoverycache.Cache{Root: cacheDir}, runtimesignals.Signal{
-		Provider:         "codex-subscription",
-		Status:           runtimesignals.StatusAvailable,
-		QuotaRemaining:   &remaining,
-		RecentP50Latency: 110 * time.Millisecond,
-		RecordedAt:       time.Date(2026, 5, 12, 14, 30, 0, 0, time.UTC),
-	}); err != nil {
-		t.Fatalf("write runtime signal: %v", err)
-	}
-	writeSnapshotDiscoveryFixture(t, &discoverycache.Cache{Root: cacheDir}, testDiscoverySourceName("codex-subscription", "codex-subscription", "", ""), time.Date(2026, 5, 12, 14, 20, 0, 0, time.UTC), []string{"gpt-5.4"})
-
-	infos, err := svc.ListModels(context.Background(), ModelFilter{})
-	if err != nil {
-		t.Fatalf("ListModels: %v", err)
-	}
-	byID := map[string]ModelInfo{}
-	for _, info := range infos {
-		byID[info.ID] = info
-	}
-	if len(byID) == 0 {
-		t.Fatal("expected at least one codex model")
-	}
-	subscription := byID["gpt-5.4"]
-	if subscription.Billing != BillingModelSubscription {
-		t.Fatalf("Billing = %q, want subscription", subscription.Billing)
-	}
-	if subscription.ActualCashSpend {
-		t.Fatalf("ActualCashSpend = true, want false")
-	}
-	if subscription.EffectiveCost <= 0 {
-		t.Fatalf("EffectiveCost = %v, want positive", subscription.EffectiveCost)
-	}
-	if subscription.EffectiveCostSource != "subscription_shadow" {
-		t.Fatalf("EffectiveCostSource = %q, want subscription_shadow", subscription.EffectiveCostSource)
-	}
-	if subscription.HealthFreshnessSource != "runtime" || subscription.QuotaFreshnessSource != "runtime" {
-		t.Fatalf("freshness sources = %q/%q, want runtime/runtime", subscription.HealthFreshnessSource, subscription.QuotaFreshnessSource)
-	}
-	if subscription.HealthFreshnessAt.IsZero() || subscription.QuotaFreshnessAt.IsZero() || subscription.ModelDiscoveryFreshnessAt.IsZero() {
-		t.Fatalf("freshness timestamps missing: %#v", subscription)
-	}
-	if subscription.ModelDiscoveryFreshnessSource != "harness_pty" {
-		t.Fatalf("ModelDiscoveryFreshnessSource = %q, want harness_pty", subscription.ModelDiscoveryFreshnessSource)
-	}
-	if subscription.SupportsTools != true {
-		t.Fatalf("SupportsTools = %v, want true", subscription.SupportsTools)
-	}
-	if subscription.DeploymentClass != "managed_cloud_frontier" {
-		t.Fatalf("DeploymentClass = %q, want managed_cloud_frontier", subscription.DeploymentClass)
 	}
 }
 

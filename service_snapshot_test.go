@@ -5,115 +5,106 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/discoverycache"
-	"github.com/easel/fizeau/internal/modelcatalog"
-	"github.com/easel/fizeau/internal/modelsnapshot"
 )
 
-func TestServiceConfigSnapshotParity(t *testing.T) {
-	t.Setenv("PATH", "")
-	cache := &discoverycache.Cache{Root: t.TempDir()}
-	capturedAt := time.Date(2026, 5, 12, 15, 0, 0, 0, time.UTC)
-	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("studio", "alpha", "http://alpha.example/v1", "alpha"), capturedAt, []string{"qwen3.5-27b"})
-	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("studio", "beta", "http://beta.example/v1", "beta"), capturedAt, []string{"qwen3.5-27b"})
-	writeSnapshotDiscoveryFixture(t, cache, testDiscoverySourceName("claude-subscription", "claude-subscription", "", ""), capturedAt, []string{"claude-sonnet-4-20250514"})
-
-	sc := &snapshotServiceConfig{
-		defaultName: "studio",
-		providers: map[string]ServiceProviderEntry{
-			"studio": {
-				Type: "lmstudio",
-				Endpoints: []ServiceProviderEndpoint{
-					{Name: "alpha", BaseURL: "http://alpha.example/v1", ServerInstance: "alpha"},
-					{Name: "beta", BaseURL: "http://beta.example/v1", ServerInstance: "beta"},
-				},
-			},
-			"claude-subscription": {
-				Type:    "claude",
-				Billing: modelcatalog.BillingModelSubscription,
-			},
-		},
-		names: []string{"studio", "claude-subscription"},
-	}
-	cat := loadSnapshotTestCatalog(t)
-
-	got, err := assembleModelSnapshotFromServiceConfigWithOptions(context.Background(), sc, cat, cache.Root, modelsnapshot.AssembleOptions{Refresh: modelsnapshot.RefreshNone})
-	if err != nil {
-		t.Fatalf("assembleModelSnapshotFromServiceConfigWithOptions: %v", err)
-	}
-	wantCfg := serviceConfigToModelSnapshotConfig(sc)
-	want, err := modelsnapshot.AssembleWithOptions(context.Background(), wantCfg, cat, cache, modelsnapshot.AssembleOptions{Refresh: modelsnapshot.RefreshNone})
-	if err != nil {
-		t.Fatalf("modelsnapshot.AssembleWithOptions: %v", err)
+// TestServiceConfigToModelSnapshotConfigParity is the one narrow same-package
+// seam retained for the root facade's public ServiceConfig-to-internal adapter.
+// Snapshot assembly and enrichment mechanics are covered in internal/modelsnapshot.
+func TestServiceConfigToModelSnapshotConfigParity(t *testing.T) {
+	if got := serviceConfigToModelSnapshotConfig(nil); got != nil {
+		t.Fatalf("nil ServiceConfig mapped to %#v, want nil", got)
 	}
 
-	assertSnapshotRowsEqual(t, got.Models, want.Models)
-}
+	headers := map[string]string{
+		"Authorization": "Bearer adapter-secret",
+		"X-Trace":       "trace-a",
+	}
+	endpoints := []ServiceProviderEndpoint{
+		{Name: "primary", BaseURL: "https://primary.example/v1", ServerInstance: "primary-instance"},
+		{Name: "secondary", BaseURL: "https://secondary.example/v1", ServerInstance: "secondary-instance"},
+	}
+	entry := ServiceProviderEntry{
+		Type:                      "openrouter",
+		BaseURL:                   "https://default.example/v1",
+		ServerInstance:            "default-instance",
+		Endpoints:                 endpoints,
+		APIKey:                    "adapter-api-key",
+		Headers:                   headers,
+		Model:                     "gpt-5.4",
+		Billing:                   BillingModelSubscription,
+		IncludeByDefault:          false,
+		IncludeByDefaultSet:       true,
+		ContextWindow:             65536,
+		ConfigError:               "fixture config error",
+		DailyTokenBudget:          123456,
+		CreditBalanceThresholdUSD: 17.75,
+		CreditProbeTTL:            37 * time.Minute,
+	}
+	sc := &fakeServiceConfig{
+		providers:   map[string]ServiceProviderEntry{"primary": entry},
+		names:       []string{"primary", "missing"},
+		defaultName: "primary",
+	}
 
-func TestServiceConfigSnapshotRedactsSecrets(t *testing.T) {
-	cache := &discoverycache.Cache{Root: t.TempDir()}
-	sc := &snapshotServiceConfig{
-		defaultName: "openrouter",
-		providers: map[string]ServiceProviderEntry{
-			"openrouter": {
-				Type:    "openrouter",
-				BaseURL: "http://127.0.0.1:1/v1",
-				APIKey:  "super-secret-key",
-				Headers: map[string]string{
-					"Authorization": "Bearer super-secret-key",
-				},
-			},
-		},
-		names: []string{"openrouter"},
+	got := serviceConfigToModelSnapshotConfig(sc)
+	if got == nil {
+		t.Fatal("serviceConfigToModelSnapshotConfig returned nil")
 	}
-	cat := loadSnapshotTestCatalog(t)
-
-	snapshot, err := assembleModelSnapshotFromServiceConfigWithOptions(context.Background(), sc, cat, cache.Root, modelsnapshot.AssembleOptions{Refresh: modelsnapshot.RefreshForce})
-	if err != nil {
-		t.Fatalf("assembleModelSnapshotFromServiceConfigWithOptions: %v", err)
+	if got.Default != "primary" {
+		t.Fatalf("default provider = %q, want primary", got.Default)
 	}
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		t.Fatalf("marshal snapshot: %v", err)
+	if len(got.Providers) != 1 {
+		t.Fatalf("provider count = %d, want 1: %#v", len(got.Providers), got.Providers)
 	}
-	if strings.Contains(string(data), "super-secret-key") {
-		t.Fatalf("snapshot JSON leaked secret material: %s", data)
+	provider, ok := got.Providers["primary"]
+	if !ok {
+		t.Fatalf("primary provider missing: %#v", got.Providers)
 	}
-	for source, meta := range snapshot.Sources {
-		if strings.Contains(meta.Error, "super-secret-key") {
-			t.Fatalf("source %s error leaked secret material: %q", source, meta.Error)
+	if _, ok := got.Providers["missing"]; ok {
+		t.Fatalf("missing provider was projected: %#v", got.Providers["missing"])
+	}
+	if provider.Type != entry.Type || provider.BaseURL != entry.BaseURL || provider.ServerInstance != entry.ServerInstance ||
+		provider.APIKey != entry.APIKey || provider.Model != entry.Model || provider.Billing != string(entry.Billing) ||
+		provider.ContextWindow != entry.ContextWindow || provider.ConfigError != entry.ConfigError || provider.DailyTokenBudget != entry.DailyTokenBudget {
+		t.Fatalf("scalar projection = %#v, want fields from %#v", provider, entry)
+	}
+	if len(provider.Endpoints) != len(endpoints) {
+		t.Fatalf("endpoint count = %d, want %d", len(provider.Endpoints), len(endpoints))
+	}
+	for i, want := range endpoints {
+		gotEndpoint := provider.Endpoints[i]
+		if gotEndpoint.Name != want.Name || gotEndpoint.BaseURL != want.BaseURL || gotEndpoint.ServerInstance != want.ServerInstance {
+			t.Fatalf("endpoint %d = %#v, want %#v", i, gotEndpoint, want)
 		}
 	}
-}
+	if provider.IncludeByDefault == nil || *provider.IncludeByDefault || !provider.IncludeByDefaultSet {
+		t.Fatalf("include-by-default = %#v/set:%v, want false/set", provider.IncludeByDefault, provider.IncludeByDefaultSet)
+	}
+	if len(provider.Headers) != len(headers) || provider.Headers["Authorization"] != headers["Authorization"] || provider.Headers["X-Trace"] != headers["X-Trace"] {
+		t.Fatalf("headers = %#v, want %#v", provider.Headers, headers)
+	}
 
-type snapshotServiceConfig struct {
-	defaultName string
-	names       []string
-	providers   map[string]ServiceProviderEntry
-}
+	headers["Authorization"] = "changed-source"
+	if provider.Headers["Authorization"] != "Bearer adapter-secret" {
+		t.Fatalf("projected headers alias source: %#v", provider.Headers)
+	}
+	provider.Headers["X-Trace"] = "changed-projection"
+	if headers["X-Trace"] != "trace-a" {
+		t.Fatalf("source headers alias projection: %#v", headers)
+	}
+	endpoints[0].Name = "changed-source"
+	if provider.Endpoints[0].Name != "primary" {
+		t.Fatalf("projected endpoints alias source: %#v", provider.Endpoints)
+	}
 
-func (s *snapshotServiceConfig) ProviderNames() []string {
-	return append([]string(nil), s.names...)
+	// CreditBalanceThresholdUSD and CreditProbeTTL are routing/quota controls,
+	// not model-snapshot inputs, and intentionally have no ProviderConfig fields.
 }
-
-func (s *snapshotServiceConfig) DefaultProviderName() string {
-	return s.defaultName
-}
-
-func (s *snapshotServiceConfig) Provider(name string) (ServiceProviderEntry, bool) {
-	entry, ok := s.providers[name]
-	return entry, ok
-}
-
-func (s *snapshotServiceConfig) HealthCooldown() time.Duration { return 0 }
-func (s *snapshotServiceConfig) WorkDir() string               { return "" }
-func (s *snapshotServiceConfig) SessionLogDir() string         { return "" }
 
 func writeSnapshotDiscoveryFixture(t *testing.T, cache *discoverycache.Cache, source string, capturedAt time.Time, models []string) {
 	t.Helper()
@@ -184,90 +175,4 @@ func sanitizeDiscoveryName(name string) string {
 		return "discovery"
 	}
 	return out
-}
-
-func loadSnapshotTestCatalog(t *testing.T) *modelcatalog.Catalog {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "models.yaml")
-	data := []byte(`
-version: 5
-catalog_version: test
-policies:
-  default:
-    min_power: 1
-    max_power: 10
-providers:
-  studio:
-    type: lmstudio
-    include_by_default: true
-  claude-subscription:
-    type: claude
-    include_by_default: true
-models:
-  qwen3.5-27b:
-    family: qwen
-    status: active
-    provider_system: openai
-    power: 6
-    context_window: 32768
-  claude-sonnet-4-20250514:
-    family: claude
-    status: active
-    provider_system: anthropic
-    power: 8
-    context_window: 200000
-`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cat, err := modelcatalog.Load(modelcatalog.LoadOptions{ManifestPath: path, RequireExternal: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cat
-}
-
-func assertSnapshotRowsEqual(t *testing.T, got, want []modelsnapshot.KnownModel) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("row count = %d, want %d", len(got), len(want))
-	}
-	index := func(rows []modelsnapshot.KnownModel) map[string]modelsnapshot.KnownModel {
-		out := make(map[string]modelsnapshot.KnownModel, len(rows))
-		for _, row := range rows {
-			key := row.Provider + "|" + row.ID + "|" + row.EndpointName + "|" + row.EndpointBaseURL + "|" + row.ServerInstance
-			out[key] = row
-		}
-		return out
-	}
-	gotRows := index(got)
-	wantRows := index(want)
-	if len(gotRows) != len(wantRows) {
-		t.Fatalf("row key count = %d, want %d", len(gotRows), len(wantRows))
-	}
-	for key, wantRow := range wantRows {
-		gotRow, ok := gotRows[key]
-		if !ok {
-			t.Fatalf("missing row %s; got %#v", key, gotRows)
-		}
-		if gotRow.ProviderType != wantRow.ProviderType || gotRow.Harness != wantRow.Harness || gotRow.Billing != wantRow.Billing {
-			t.Fatalf("row %s mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-		if gotRow.ActualCashSpend != wantRow.ActualCashSpend || gotRow.EffectiveCost != wantRow.EffectiveCost || gotRow.EffectiveCostSource != wantRow.EffectiveCostSource {
-			t.Fatalf("row %s cost mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-		if gotRow.SupportsTools != wantRow.SupportsTools || gotRow.DeploymentClass != wantRow.DeploymentClass {
-			t.Fatalf("row %s support mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-		if gotRow.DiscoveredVia != wantRow.DiscoveredVia || !gotRow.DiscoveredAt.Equal(wantRow.DiscoveredAt) {
-			t.Fatalf("row %s discovery freshness mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-		if gotRow.HealthFreshnessSource != wantRow.HealthFreshnessSource || !gotRow.HealthFreshnessAt.Equal(wantRow.HealthFreshnessAt) {
-			t.Fatalf("row %s health freshness mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-		if gotRow.QuotaFreshnessSource != wantRow.QuotaFreshnessSource || !gotRow.QuotaFreshnessAt.Equal(wantRow.QuotaFreshnessAt) {
-			t.Fatalf("row %s quota freshness mismatch:\n got %#v\nwant %#v", key, gotRow, wantRow)
-		}
-	}
 }
