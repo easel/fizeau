@@ -25,6 +25,14 @@ import (
 
 const defaultRouteStatusOverridesWindow = 7 * 24 * time.Hour
 
+type routeStatusUsageReporter interface {
+	UsageReport(context.Context, rootfizeau.UsageReportOptions) (*rootfizeau.UsageReport, error)
+}
+
+var newRouteStatusUsageReporter = func(opts rootfizeau.ServiceOptions) (routeStatusUsageReporter, error) {
+	return rootfizeau.New(opts)
+}
+
 // routeStatusOverridesOutput is the stable JSON envelope emitted by
 // `route-status --overrides --json`. The shape is snapshot-tested in
 // TestRouteStatusOverridesJSONStable; new fields must be added at the end
@@ -67,9 +75,14 @@ func runRouteStatusOverrides(workDir, since, axis string, jsonOut bool, stdout, 
 		fmt.Fprintf(stderr, "error: %s\n", err)
 		return 1
 	}
-	svc, err := rootfizeau.New(rootfizeau.ServiceOptions{
-		ServiceConfig: agentConfig.NewServiceConfig(cfg, workDir),
-		SessionLogDir: sessionLogDir(workDir, cfg),
+	// This report is historical and read-only. Cancel before New so service
+	// startup cannot dispatch quota/account refresh work for this command.
+	refreshCtx, cancelRefresh := context.WithCancel(context.Background())
+	cancelRefresh()
+	svc, err := newRouteStatusUsageReporter(rootfizeau.ServiceOptions{
+		ServiceConfig:       agentConfig.NewServiceConfig(cfg, workDir),
+		SessionLogDir:       sessionLogDir(workDir, cfg),
+		QuotaRefreshContext: refreshCtx,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %s\n", err)

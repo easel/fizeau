@@ -2,6 +2,7 @@ package agentcli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -170,6 +171,38 @@ func TestRouteStatusOverridesEmptyWindow(t *testing.T) {
 	if !strings.Contains(stdout.String(), "No override events recorded") {
 		t.Errorf("text mode: missing empty-window marker:\n%s", stdout.String())
 	}
+}
+
+func TestRouteStatusOverridesDisablesRefreshWorkers(t *testing.T) {
+	isolateCatalogHome(t)
+	original := newRouteStatusUsageReporter
+	constructorCalls := 0
+	newRouteStatusUsageReporter = func(opts fizeau.ServiceOptions) (routeStatusUsageReporter, error) {
+		constructorCalls++
+		if opts.QuotaRefreshContext == nil {
+			t.Fatal("QuotaRefreshContext = nil, want an already-canceled context")
+		}
+		if err := opts.QuotaRefreshContext.Err(); err != context.Canceled {
+			t.Fatalf("QuotaRefreshContext.Err() = %v, want context.Canceled before construction", err)
+		}
+		return emptyRouteStatusUsageReporter{}, nil
+	}
+	t.Cleanup(func() { newRouteStatusUsageReporter = original })
+
+	var stdout, stderr bytes.Buffer
+	rc := runRouteStatusOverrides(t.TempDir(), "24h", "", true, &stdout, &stderr, time.Now().UTC())
+	if rc != 0 {
+		t.Fatalf("exit=%d, want 0 (stderr=%s)", rc, stderr.String())
+	}
+	if constructorCalls != 1 {
+		t.Fatalf("constructor calls = %d, want 1", constructorCalls)
+	}
+}
+
+type emptyRouteStatusUsageReporter struct{}
+
+func (emptyRouteStatusUsageReporter) UsageReport(context.Context, fizeau.UsageReportOptions) (*fizeau.UsageReport, error) {
+	return &fizeau.UsageReport{}, nil
 }
 
 // TestRouteStatusOverridesParseSinceErrors ensures invalid --since values
