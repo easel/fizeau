@@ -926,14 +926,3 @@ func applyCatalogPolicyResultToRoutingRequest(req *routing.Request, result servi
 	req.AllowLocal = result.AllowLocal
 	req.Require = append([]string(nil), result.Require...)
 }
-
-// providerUsesLiveDiscovery remains root request-policy wiring until the
-// catalog-policy extraction tracked by fizeau-4623caea.
-func providerUsesLiveDiscovery(providerType string) bool {
-	switch normalizeServiceProviderType(providerType) {
-	case "openai", "openrouter", "lmstudio", "llama-server", "ds4", "omlx", "rapid-mlx", "ollama", "lucebox", "vllm", "minimax", "qwen", "zai":
-		return true
-	default:
-		return false
-	}
-}

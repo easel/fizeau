@@ -129,10 +129,22 @@ Root `service_routing.go` reads process/service state and calls each internal
 projection once; `service_openrouter_credit.go` shares the same internal key
 validator. The shipped `ServiceConfigSource` declaration remains as a
 deprecated source-compatibility interface with no production consumer.
-`providerUsesLiveDiscovery` deliberately remains root request-policy wiring
-until downstream bead `fizeau-4623caea`. These boundaries are locked by
-`TestRootRoutingInputMechanicsStayInternal` and the external-package
-`TestServiceConfigSourcePublicCompatibility`.
+The unused root `providerUsesLiveDiscovery` helper has been deleted. These
+boundaries are locked by `TestRootRoutingInputMechanicsStayInternal` and the
+external-package `TestServiceConfigSourcePublicCompatibility`.
+
+Catalog-policy composition is complete. `internal/serviceimpl.EvaluateCatalogPolicy`
+owns catalog lookup, routing-policy normalization, provider preference,
+policy requirements, and request-bound composition. Root `ResolveRoute`
+calls that neutral evaluator once, projects its result into public decision
+evidence and `internal/routing.Request`, and translates neutral failures into
+root error identities. Generic effective-power and bounds math remains in
+`internal/routehealth`; root code must not call those primitives directly.
+`TestRootCatalogPolicyMechanicsStayInternal` locks the exact evaluator and
+projection sites with import-path and lexical-scope-aware mutation tests, and
+`TestResidualServiceImplMechanicsStayInternal` aggregates the final four
+residual serviceimpl ownership families without rejecting sanctioned public
+declarations or projections.
 
 Catalog-cache extraction is complete. `service_catalog_cache.go` retains only
 the concrete public `CatalogProbeFunc`, six-field `CatalogResult`, and the
@@ -220,6 +232,12 @@ mechanics; their focused tests live beside them. Snapshot failure marker,
 provider-prefix, latest-failure, and TTL semantics remain directly tested in
 `internal/routehealth/routing_helpers_test.go` rather than through root
 white-box helpers.
+
+The catalog-policy slice is complete as well:
+`internal/serviceimpl/catalog_policy.go` composes catalog policy, provider
+preference, requirements, and neutral power evidence for the root service
+adapter. The generic power-policy merge and request-bounds primitives remain
+owned by `internal/routehealth`; only serviceimpl invokes them.
 
 - Source files:
   `metadata_billing.go`, `service_execute.go`,

@@ -1,6 +1,7 @@
 package fizeau
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -91,15 +92,7 @@ func TestRootFacadeSourceAllowlist(t *testing.T) {
 // and OpenRouter key-shape validation belong to internal/serviceimpl.
 func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 	files := parseRootProductionFiles(t)
-	forbiddenDecls := map[string]bool{
-		"routingSurfacePreference":            true,
-		"providerCredentialMissingMap":        true,
-		"credentialMissingForProvider":        true,
-		"openrouterAPIKeyWellFormed":          true,
-		"providerCooldownsFromSnapshotErrors": true,
-		"isSnapshotDialFailure":               true,
-		"isDispatchabilityFailure":            true,
-	}
+	forbiddenDecls := rootRoutingInputMechanicNames()
 	targetInternalCalls := map[string]bool{
 		"RoutingSurfacePreference":            true,
 		"ProviderCredentialMissing":           true,
@@ -120,7 +113,7 @@ func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 	rootRefs := make(map[string]int)
 	publicTypes := make(map[string]*ast.TypeSpec)
 	publicTypeFiles := make(map[string]string)
-	providerUsesLiveDiscoveryDecls := 0
+	providerUsesLiveDiscoveryRefs := 0
 	serviceConfigSourceIdentifiers := 0
 	serviceConfigSourceDeclarationIdentifiers := 0
 
@@ -140,6 +133,11 @@ func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 				if forbiddenImportedSelector(current, routehealthBindings, forbiddenRoutehealthRefs) {
 					t.Errorf("root %s references forbidden direct routehealth seam %s", path, current.Sel.Name)
 				}
+			case *ast.Ident:
+				if current.Name == "providerUsesLiveDiscovery" {
+					providerUsesLiveDiscoveryRefs++
+					t.Errorf("root %s references dead routing-input mechanic providerUsesLiveDiscovery", path)
+				}
 			}
 			return true
 		})
@@ -148,12 +146,6 @@ func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 			case *ast.FuncDecl:
 				if forbiddenDecls[current.Name.Name] {
 					t.Errorf("root %s declares migrated routing-input mechanic %s", path, current.Name.Name)
-				}
-				if current.Name.Name == "providerUsesLiveDiscovery" {
-					providerUsesLiveDiscoveryDecls++
-					if path != "service_routing.go" {
-						t.Errorf("providerUsesLiveDiscovery declared in %s, want service_routing.go pending fizeau-4623caea", path)
-					}
 				}
 				if current.Body == nil {
 					continue
@@ -227,8 +219,8 @@ func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 	if !reflectIntMapEqual(rootRefs, wantRootCalls) {
 		t.Errorf("root routing-input internal references = %v, want only direct calls %v", rootRefs, wantRootCalls)
 	}
-	if providerUsesLiveDiscoveryDecls != 1 {
-		t.Errorf("root providerUsesLiveDiscovery declarations = %d, want 1 pending fizeau-4623caea", providerUsesLiveDiscoveryDecls)
+	if providerUsesLiveDiscoveryRefs != 0 {
+		t.Errorf("root providerUsesLiveDiscovery references = %d, want none", providerUsesLiveDiscoveryRefs)
 	}
 	if serviceConfigSourceIdentifiers != 1 || serviceConfigSourceDeclarationIdentifiers != 1 {
 		t.Errorf(
@@ -241,6 +233,570 @@ func TestRootRoutingInputMechanicsStayInternal(t *testing.T) {
 	assertRootRoutingPublicTypes(t, publicTypes, publicTypeFiles)
 	assertServiceConfigSourceDeprecated(t)
 	assertInternalRoutingCredentialValidationCall(t)
+}
+
+func rootRoutingInputMechanicNames() map[string]bool {
+	return map[string]bool{
+		"routingSurfacePreference":            true,
+		"providerCredentialMissingMap":        true,
+		"credentialMissingForProvider":        true,
+		"openrouterAPIKeyWellFormed":          true,
+		"providerCooldownsFromSnapshotErrors": true,
+		"isSnapshotDialFailure":               true,
+		"isDispatchabilityFailure":            true,
+		"providerUsesLiveDiscovery":           true,
+	}
+}
+
+// TestRootCatalogPolicyMechanicsStayInternal locks catalog lookup, policy
+// composition, and generic power math behind internal/serviceimpl. The root
+// keeps one evaluator call and the two projections needed to preserve public
+// error and request types.
+func TestRootCatalogPolicyMechanicsStayInternal(t *testing.T) {
+	for _, violation := range rootCatalogPolicyOwnershipViolations(parseRootProductionFiles(t)) {
+		t.Error(violation)
+	}
+}
+
+type rootCatalogPolicyOwnership struct {
+	violations     []string
+	evaluatorCalls map[string]int
+	evaluatorRefs  map[string]int
+	adapterDecls   map[string]int
+	adapterCalls   map[string]int
+	adapterRefs    map[string]int
+}
+
+func rootCatalogPolicyOwnershipViolations(files map[string]*ast.File) []string {
+	result := rootCatalogPolicyOwnership{
+		evaluatorCalls: make(map[string]int),
+		evaluatorRefs:  make(map[string]int),
+		adapterDecls:   make(map[string]int),
+		adapterCalls:   make(map[string]int),
+		adapterRefs:    make(map[string]int),
+	}
+	forbiddenServiceimplRefs := map[string]bool{
+		"PolicyForName":                   true,
+		"ProviderPreferenceForPolicyName": true,
+	}
+	forbiddenRoutehealthRefs := map[string]bool{
+		"EffectivePowerPolicy":  true,
+		"PowerBoundsForRequest": true,
+	}
+	adapters := map[string]bool{
+		"publicCatalogPolicyError":                 true,
+		"applyCatalogPolicyResultToRoutingRequest": true,
+	}
+
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	for _, path := range paths {
+		file := files[path]
+		serviceimplBindings, invalidServiceimplBindings := importBindingsForPath(file, serviceimplImportPath, "serviceimpl")
+		for _, binding := range invalidServiceimplBindings {
+			result.violations = append(result.violations, fmt.Sprintf(
+				"root %s imports %s with forbidden binding %q", path, serviceimplImportPath, binding,
+			))
+		}
+		routehealthBindings, invalidRoutehealthBindings := importBindingsForPath(file, routehealthImportPath, "routehealth")
+		for _, binding := range invalidRoutehealthBindings {
+			result.violations = append(result.violations, fmt.Sprintf(
+				"root %s imports %s with forbidden binding %q", path, routehealthImportPath, binding,
+			))
+		}
+
+		for _, decl := range file.Decls {
+			switch current := decl.(type) {
+			case *ast.FuncDecl:
+				result.recordCatalogPolicyPackageName(path, current.Name.Name)
+				if adapters[current.Name.Name] && current.Recv == nil {
+					result.adapterDecls[path+":"+current.Name.Name]++
+				}
+				result.scanCatalogPolicyNode(path, current.Name.Name, current.Body, serviceimplBindings, routehealthBindings, forbiddenServiceimplRefs, forbiddenRoutehealthRefs, adapters)
+			case *ast.GenDecl:
+				for _, spec := range current.Specs {
+					switch named := spec.(type) {
+					case *ast.TypeSpec:
+						result.recordCatalogPolicyPackageName(path, named.Name.Name)
+					case *ast.ValueSpec:
+						for _, name := range named.Names {
+							result.recordCatalogPolicyPackageName(path, name.Name)
+						}
+					}
+				}
+				result.scanCatalogPolicyNode(path, "package scope", current, serviceimplBindings, routehealthBindings, forbiddenServiceimplRefs, forbiddenRoutehealthRefs, adapters)
+			}
+		}
+	}
+
+	result.requireExactCatalogPolicySites(
+		"serviceimpl.EvaluateCatalogPolicy direct calls",
+		result.evaluatorCalls,
+		map[string]int{"service_routing.go:ResolveRoute": 1},
+	)
+	result.requireExactCatalogPolicySites(
+		"serviceimpl.EvaluateCatalogPolicy selector references",
+		result.evaluatorRefs,
+		map[string]int{"service_routing.go:ResolveRoute": 1},
+	)
+	result.requireExactCatalogPolicySites(
+		"catalog-policy adapter declarations",
+		result.adapterDecls,
+		map[string]int{
+			"service_routing.go:publicCatalogPolicyError":                 1,
+			"service_routing.go:applyCatalogPolicyResultToRoutingRequest": 1,
+		},
+	)
+	result.requireExactCatalogPolicySites(
+		"catalog-policy adapter direct calls",
+		result.adapterCalls,
+		map[string]int{
+			"service_routing.go:ResolveRoute:publicCatalogPolicyError":                 1,
+			"service_routing.go:ResolveRoute:applyCatalogPolicyResultToRoutingRequest": 1,
+		},
+	)
+	result.requireExactCatalogPolicySites(
+		"catalog-policy adapter references",
+		result.adapterRefs,
+		map[string]int{
+			"service_routing.go:ResolveRoute:publicCatalogPolicyError":                 1,
+			"service_routing.go:ResolveRoute:applyCatalogPolicyResultToRoutingRequest": 1,
+		},
+	)
+	return result.violations
+}
+
+func (result *rootCatalogPolicyOwnership) recordCatalogPolicyPackageName(path, name string) {
+	if rootCatalogPolicyMechanicNames()[name] {
+		result.violations = append(result.violations, fmt.Sprintf(
+			"root %s declares obsolete package-scope catalog-policy mechanic %s", path, name,
+		))
+	}
+}
+
+func (result *rootCatalogPolicyOwnership) scanCatalogPolicyNode(
+	path string,
+	owner string,
+	node ast.Node,
+	serviceimplBindings map[string]bool,
+	routehealthBindings map[string]bool,
+	forbiddenServiceimplRefs map[string]bool,
+	forbiddenRoutehealthRefs map[string]bool,
+	adapters map[string]bool,
+) {
+	if node == nil {
+		return
+	}
+	site := path + ":" + owner
+	ast.Inspect(node, func(node ast.Node) bool {
+		switch current := node.(type) {
+		case *ast.CallExpr:
+			if selector, ok := current.Fun.(*ast.SelectorExpr); ok &&
+				selectorUsesImport(selector, serviceimplBindings) && selector.Sel.Name == "EvaluateCatalogPolicy" {
+				result.evaluatorCalls[site]++
+			}
+			if name, ok := current.Fun.(*ast.Ident); ok && packageFunctionReference(name, adapters) {
+				result.adapterCalls[site+":"+name.Name]++
+			}
+		case *ast.SelectorExpr:
+			switch {
+			case selectorUsesImport(current, serviceimplBindings) && current.Sel.Name == "EvaluateCatalogPolicy":
+				result.evaluatorRefs[site]++
+			case forbiddenImportedSelector(current, serviceimplBindings, forbiddenServiceimplRefs):
+				result.violations = append(result.violations, fmt.Sprintf(
+					"root %s references obsolete serviceimpl.%s from %s", path, current.Sel.Name, owner,
+				))
+			case forbiddenImportedSelector(current, routehealthBindings, forbiddenRoutehealthRefs):
+				result.violations = append(result.violations, fmt.Sprintf(
+					"root %s references direct routehealth.%s power mechanic from %s", path, current.Sel.Name, owner,
+				))
+			}
+		case *ast.Ident:
+			if packageFunctionReference(current, adapters) {
+				result.adapterRefs[site+":"+current.Name]++
+			}
+		}
+		return true
+	})
+}
+
+func packageFunctionReference(ident *ast.Ident, names map[string]bool) bool {
+	if ident == nil || !names[ident.Name] || ident.Obj == nil || ident.Obj.Kind != ast.Fun {
+		return false
+	}
+	decl, ok := ident.Obj.Decl.(*ast.FuncDecl)
+	return ok && decl.Recv == nil && decl.Name.Name == ident.Name
+}
+
+func (result *rootCatalogPolicyOwnership) requireExactCatalogPolicySites(label string, got, want map[string]int) {
+	if reflectIntMapEqual(got, want) {
+		return
+	}
+	result.violations = append(result.violations, fmt.Sprintf("root %s = %v, want %v", label, got, want))
+}
+
+func rootCatalogPolicyMechanicNames() map[string]bool {
+	return map[string]bool{
+		"routingPolicyForName":            true,
+		"providerPreferenceForPolicy":     true,
+		"routePowerPolicyForRequest":      true,
+		"routePowerBoundsForRequest":      true,
+		"policyForName":                   true,
+		"providerPreferenceForPolicyName": true,
+	}
+}
+
+func TestRootCatalogPolicyOwnershipMutations(t *testing.T) {
+	const canonical = `package fizeau
+import (
+	serviceimpl "github.com/easel/fizeau/internal/serviceimpl"
+)
+type service struct{}
+func (*service) ResolveRoute() {
+	_, failure := serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})
+	if failure != nil { _ = publicCatalogPolicyError(failure) }
+	var request struct{}
+	applyCatalogPolicyResultToRoutingRequest(&request, nil)
+}
+func publicCatalogPolicyError(any) error { return nil }
+func applyCatalogPolicyResultToRoutingRequest(any, any) {}
+`
+
+	withImport := func(source, importLine string) string {
+		return strings.Replace(source, "import (\n", "import (\n\t"+importLine+"\n", 1)
+	}
+	renameServiceimpl := func(source string) string {
+		source = strings.Replace(source, `serviceimpl "github.com/easel/fizeau/internal/serviceimpl"`, `impl "github.com/easel/fizeau/internal/serviceimpl"`, 1)
+		return strings.ReplaceAll(source, "serviceimpl.", "impl.")
+	}
+
+	tests := []struct {
+		name            string
+		source          string
+		wantViolation   bool
+		violationNeedle string
+	}{
+		{name: "canonical site", source: canonical},
+		{name: "renamed serviceimpl import at canonical site", source: renameServiceimpl(canonical)},
+		{
+			name: "lexically shadowed serviceimpl qualifier",
+			source: canonical + `
+func shadowQualifier() {
+	serviceimpl := struct{ EvaluateCatalogPolicy, PolicyForName int }{}
+	_, _ = serviceimpl.EvaluateCatalogPolicy, serviceimpl.PolicyForName
+}
+`,
+		},
+		{
+			name: "unrelated package selectors",
+			source: withImport(canonical, `other "example.com/serviceimpl"`) + `
+var _, _, _, _ = other.EvaluateCatalogPolicy, other.PolicyForName, other.EffectivePowerPolicy, other.PowerBoundsForRequest
+`,
+		},
+		{
+			name: "local obsolete names",
+			source: canonical + `
+func localObsoleteNames() {
+	routingPolicyForName := func() {}
+	providerPreferenceForPolicyName := routingPolicyForName
+	routingPolicyForName()
+	providerPreferenceForPolicyName()
+}
+`,
+		},
+		{
+			name: "renamed wrapper evaluation site",
+			source: strings.Replace(canonical,
+				"serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})",
+				"evaluateCatalogPolicyForRoute()", 1,
+			) + `
+func evaluateCatalogPolicyForRoute() (any, any) {
+	return serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})
+}
+`,
+			wantViolation:   true,
+			violationNeedle: "EvaluateCatalogPolicy direct calls",
+		},
+		{
+			name:            "package function alias",
+			source:          canonical + "\nvar evaluateCatalogPolicy = serviceimpl.EvaluateCatalogPolicy\n",
+			wantViolation:   true,
+			violationNeedle: "EvaluateCatalogPolicy selector references",
+		},
+		{
+			name: "local function alias",
+			source: canonical + `
+func localEvaluatorAlias() {
+	evaluateCatalogPolicy := serviceimpl.EvaluateCatalogPolicy
+	_ = evaluateCatalogPolicy
+}
+`,
+			wantViolation:   true,
+			violationNeedle: "EvaluateCatalogPolicy selector references",
+		},
+		{
+			name: "second evaluator call",
+			source: strings.Replace(canonical,
+				"_, failure := serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})",
+				"_, failure := serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})\n\t_, _ = serviceimpl.EvaluateCatalogPolicy(nil, serviceimpl.CatalogPolicyRequest{})", 1,
+			),
+			wantViolation:   true,
+			violationNeedle: "EvaluateCatalogPolicy direct calls",
+		},
+		{
+			name: "projection call moved behind wrapper",
+			source: strings.Replace(canonical,
+				"applyCatalogPolicyResultToRoutingRequest(&request, nil)",
+				"projectCatalogPolicyResult(&request)", 1,
+			) + `
+func projectCatalogPolicyResult(request any) {
+	applyCatalogPolicyResultToRoutingRequest(request, nil)
+}
+`,
+			wantViolation:   true,
+			violationNeedle: "catalog-policy adapter direct calls",
+		},
+		{
+			name: "second projection call",
+			source: strings.Replace(canonical,
+				"applyCatalogPolicyResultToRoutingRequest(&request, nil)",
+				"applyCatalogPolicyResultToRoutingRequest(&request, nil)\n\tapplyCatalogPolicyResultToRoutingRequest(&request, nil)", 1,
+			),
+			wantViolation:   true,
+			violationNeedle: "catalog-policy adapter direct calls",
+		},
+		{
+			name: "renamed routehealth direct call",
+			source: withImport(canonical, `health "github.com/easel/fizeau/internal/routehealth"`) + `
+func directPowerMath() { health.EffectivePowerPolicy(nil, nil) }
+`,
+			wantViolation:   true,
+			violationNeedle: "direct routehealth.EffectivePowerPolicy",
+		},
+		{
+			name: "renamed routehealth function alias",
+			source: withImport(canonical, `health "github.com/easel/fizeau/internal/routehealth"`) + `
+var powerBounds = health.PowerBoundsForRequest
+`,
+			wantViolation:   true,
+			violationNeedle: "direct routehealth.PowerBoundsForRequest",
+		},
+		{
+			name: "dot serviceimpl import",
+			source: strings.Replace(canonical,
+				`serviceimpl "github.com/easel/fizeau/internal/serviceimpl"`,
+				`. "github.com/easel/fizeau/internal/serviceimpl"`, 1,
+			),
+			wantViolation:   true,
+			violationNeedle: `forbidden binding "."`,
+		},
+		{
+			name: "blank serviceimpl import",
+			source: strings.Replace(canonical,
+				`serviceimpl "github.com/easel/fizeau/internal/serviceimpl"`,
+				`_ "github.com/easel/fizeau/internal/serviceimpl"`, 1,
+			),
+			wantViolation:   true,
+			violationNeedle: `forbidden binding "_"`,
+		},
+		{
+			name:            "dot routehealth import",
+			source:          withImport(canonical, `. "github.com/easel/fizeau/internal/routehealth"`),
+			wantViolation:   true,
+			violationNeedle: `forbidden binding "."`,
+		},
+		{
+			name:            "blank routehealth import",
+			source:          withImport(canonical, `_ "github.com/easel/fizeau/internal/routehealth"`),
+			wantViolation:   true,
+			violationNeedle: `forbidden binding "_"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			violations := catalogPolicyMutationViolations(t, test.source)
+			if !test.wantViolation {
+				if len(violations) != 0 {
+					t.Fatalf("unexpected ownership violations: %v", violations)
+				}
+				return
+			}
+			if len(violations) == 0 {
+				t.Fatal("mutation passed catalog-policy ownership analysis")
+			}
+			if test.violationNeedle != "" && !strings.Contains(strings.Join(violations, "\n"), test.violationNeedle) {
+				t.Fatalf("ownership violations %v do not contain %q", violations, test.violationNeedle)
+			}
+		})
+	}
+
+	for name := range rootCatalogPolicyMechanicNames() {
+		name := name
+		t.Run("obsolete package function/"+name, func(t *testing.T) {
+			violations := catalogPolicyMutationViolations(t, canonical+"\nfunc "+name+"() {}\n")
+			assertCatalogPolicyMutationRejected(t, violations, "obsolete package-scope catalog-policy mechanic "+name)
+		})
+		t.Run("obsolete package value alias/"+name, func(t *testing.T) {
+			violations := catalogPolicyMutationViolations(t, canonical+"\nvar "+name+" = func() {}\n")
+			assertCatalogPolicyMutationRejected(t, violations, "obsolete package-scope catalog-policy mechanic "+name)
+		})
+		t.Run("local function shadow allowed/"+name, func(t *testing.T) {
+			source := canonical + "\nfunc local" + name + "() {\n\t" + name + " := func() {}\n\t" + name + "()\n}\n"
+			if violations := catalogPolicyMutationViolations(t, source); len(violations) != 0 {
+				t.Fatalf("local function-valued shadow produced ownership violations: %v", violations)
+			}
+		})
+	}
+
+	for _, protected := range []string{"PolicyForName", "ProviderPreferenceForPolicyName"} {
+		protected := protected
+		for _, importCase := range []struct {
+			name      string
+			qualifier string
+			source    string
+		}{
+			{name: "canonical import", qualifier: "serviceimpl", source: canonical},
+			{name: "renamed import", qualifier: "impl", source: renameServiceimpl(canonical)},
+		} {
+			importCase := importCase
+			forms := []struct {
+				name   string
+				suffix string
+			}{
+				{
+					name:   "direct call",
+					suffix: "\nfunc forbiddenServiceimplCall() { " + importCase.qualifier + "." + protected + "() }\n",
+				},
+				{
+					name:   "package reference",
+					suffix: "\nvar _ = " + importCase.qualifier + "." + protected + "\n",
+				},
+				{
+					name:   "local function-value alias",
+					suffix: "\nfunc forbiddenServiceimplAlias() {\n\tlookup := " + importCase.qualifier + "." + protected + "\n\t_ = lookup\n}\n",
+				},
+			}
+			for _, form := range forms {
+				form := form
+				t.Run("obsolete serviceimpl "+protected+"/"+importCase.name+"/"+form.name, func(t *testing.T) {
+					violations := catalogPolicyMutationViolations(t, importCase.source+form.suffix)
+					assertCatalogPolicyMutationRejected(t, violations, "obsolete serviceimpl."+protected)
+				})
+			}
+		}
+	}
+}
+
+func catalogPolicyMutationViolations(t *testing.T, source string) []string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "service_routing.go", source, 0)
+	if err != nil {
+		t.Fatalf("parse mutation source: %v", err)
+	}
+	return rootCatalogPolicyOwnershipViolations(map[string]*ast.File{"service_routing.go": file})
+}
+
+func assertCatalogPolicyMutationRejected(t *testing.T, violations []string, needle string) {
+	t.Helper()
+	if len(violations) == 0 {
+		t.Fatal("mutation passed catalog-policy ownership analysis")
+	}
+	if !strings.Contains(strings.Join(violations, "\n"), needle) {
+		t.Fatalf("ownership violations %v do not contain %q", violations, needle)
+	}
+}
+
+// TestResidualServiceImplMechanicsStayInternal provides one aggregate lock for
+// the four residual ADR-008 serviceimpl extraction families. It checks only
+// package-scope implementation names, leaving local names and the sanctioned
+// public declarations/projection adapters alone.
+func TestResidualServiceImplMechanicsStayInternal(t *testing.T) {
+	type family struct {
+		name  string
+		names map[string]bool
+	}
+	families := []family{
+		{name: "routing input", names: rootRoutingInputMechanicNames()},
+		{name: "catalog cache", names: rootCatalogCacheMechanicNames()},
+		{name: "harness capability", names: rootHarnessCapabilityMechanicNames()},
+		{name: "catalog policy", names: rootCatalogPolicyMechanicNames()},
+	}
+	owners := make(map[string]string)
+	for _, family := range families {
+		for name := range family.names {
+			if previous := owners[name]; previous != "" {
+				t.Fatalf("residual mechanic %s appears in both %s and %s families", name, previous, family.name)
+			}
+			owners[name] = family.name
+		}
+	}
+
+	wantAdapters := map[string]int{
+		"service_capabilities.go:publicHarnessCapabilityMatrix":       1,
+		"service_capabilities.go:publicHarnessCapability":             1,
+		"service_routing.go:publicCatalogPolicyError":                 1,
+		"service_routing.go:applyCatalogPolicyResultToRoutingRequest": 1,
+	}
+	wantPublicTypes := map[string]int{
+		"service.go:ServiceProviderEntry":                 1,
+		"service.go:RouteDecision":                        1,
+		"service.go:RouteCandidate":                       1,
+		"service_routing.go:ServiceConfigSource":          1,
+		"service_catalog_cache.go:CatalogProbeFunc":       1,
+		"service_catalog_cache.go:CatalogResult":          1,
+		"service_capabilities.go:HarnessCapabilityStatus": 1,
+		"service_capabilities.go:HarnessCapability":       1,
+		"service_capabilities.go:HarnessCapabilityMatrix": 1,
+	}
+	gotAdapters := make(map[string]int)
+	gotPublicTypes := make(map[string]int)
+
+	for path, file := range parseRootProductionFiles(t) {
+		for _, decl := range file.Decls {
+			switch current := decl.(type) {
+			case *ast.FuncDecl:
+				if family := owners[current.Name.Name]; family != "" {
+					t.Errorf("root %s declares residual %s mechanic %s", path, family, current.Name.Name)
+				}
+				key := path + ":" + current.Name.Name
+				if _, allowed := wantAdapters[key]; allowed && current.Recv == nil {
+					gotAdapters[key]++
+				}
+			case *ast.GenDecl:
+				for _, spec := range current.Specs {
+					switch named := spec.(type) {
+					case *ast.TypeSpec:
+						if family := owners[named.Name.Name]; family != "" {
+							t.Errorf("root %s declares residual %s type %s", path, family, named.Name.Name)
+						}
+						key := path + ":" + named.Name.Name
+						if _, allowed := wantPublicTypes[key]; allowed {
+							gotPublicTypes[key]++
+							if named.Assign.IsValid() {
+								t.Errorf("sanctioned root public type %s is an alias", key)
+							}
+						}
+					case *ast.ValueSpec:
+						for _, name := range named.Names {
+							if family := owners[name.Name]; family != "" {
+								t.Errorf("root %s declares residual %s value/alias %s", path, family, name.Name)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if !reflectIntMapEqual(gotAdapters, wantAdapters) {
+		t.Errorf("sanctioned root serviceimpl adapters = %v, want %v", gotAdapters, wantAdapters)
+	}
+	if !reflectIntMapEqual(gotPublicTypes, wantPublicTypes) {
+		t.Errorf("sanctioned root public declarations = %v, want %v", gotPublicTypes, wantPublicTypes)
+	}
 }
 
 func importBindingsForPath(file *ast.File, targetPath, defaultName string) (map[string]bool, []string) {
@@ -645,15 +1201,7 @@ func reflectIntMapEqual(got, want map[string]int) bool {
 // internal/serviceimpl.
 func TestRootCatalogCacheMechanicsStayInternal(t *testing.T) {
 	files := parseRootProductionFiles(t)
-	forbiddenDecls := map[string]bool{
-		"catalogCacheOptions":       true,
-		"catalogCacheKey":           true,
-		"catalogCache":              true,
-		"catalogCacheSnapshot":      true,
-		"newCatalogCache":           true,
-		"newCatalogCacheKey":        true,
-		"catalogResultFromInternal": true,
-	}
+	forbiddenDecls := rootCatalogCacheMechanicNames()
 	callSites := make(map[string]int)
 	serviceCatalogFields := 0
 
@@ -744,6 +1292,18 @@ func TestRootCatalogCacheMechanicsStayInternal(t *testing.T) {
 	}
 	if _, ok := ErrDiscoveryUnsupported().(*discoveryUnsupportedError); !ok {
 		t.Fatalf("ErrDiscoveryUnsupported() type = %T, want *discoveryUnsupportedError", ErrDiscoveryUnsupported())
+	}
+}
+
+func rootCatalogCacheMechanicNames() map[string]bool {
+	return map[string]bool{
+		"catalogCacheOptions":       true,
+		"catalogCacheKey":           true,
+		"catalogCache":              true,
+		"catalogCacheSnapshot":      true,
+		"newCatalogCache":           true,
+		"newCatalogCacheKey":        true,
+		"catalogResultFromInternal": true,
 	}
 }
 
@@ -1097,26 +1657,7 @@ func zeroArgMethodCall(expr ast.Expr, owner, method string) bool {
 // surface to public contract declarations and field-for-field projection.
 // Status/detail classification belongs to internal/serviceimpl.
 func TestRootHarnessCapabilityMechanicsStayInternal(t *testing.T) {
-	forbiddenDecls := map[string]bool{
-		"capRequired":              true,
-		"capOptional":              true,
-		"capUnsupported":           true,
-		"capNotApplicable":         true,
-		"harnessCapabilityMatrix":  true,
-		"serviceExecuteWired":      true,
-		"executePromptCapability":  true,
-		"modelDiscoveryCapability": true,
-		"modelPinningCapability":   true,
-		"workdirContextCapability": true,
-		"reasoningCapability":      true,
-		"permissionCapability":     true,
-		"progressEventsCapability": true,
-		"usageCaptureCapability":   true,
-		"finalTextCapability":      true,
-		"toolEventsCapability":     true,
-		"quotaStatusCapability":    true,
-		"recordReplayCapability":   true,
-	}
+	forbiddenDecls := rootHarnessCapabilityMechanicNames()
 	classifyCalls := 0
 	projectionCalls := 0
 	for path, file := range parseRootProductionFiles(t) {
@@ -1163,6 +1704,29 @@ func TestRootHarnessCapabilityMechanicsStayInternal(t *testing.T) {
 		if ok && !allowedAdapters[fn.Name.Name] {
 			t.Errorf("service_capabilities.go declares non-projection function %s", fn.Name.Name)
 		}
+	}
+}
+
+func rootHarnessCapabilityMechanicNames() map[string]bool {
+	return map[string]bool{
+		"capRequired":              true,
+		"capOptional":              true,
+		"capUnsupported":           true,
+		"capNotApplicable":         true,
+		"harnessCapabilityMatrix":  true,
+		"serviceExecuteWired":      true,
+		"executePromptCapability":  true,
+		"modelDiscoveryCapability": true,
+		"modelPinningCapability":   true,
+		"workdirContextCapability": true,
+		"reasoningCapability":      true,
+		"permissionCapability":     true,
+		"progressEventsCapability": true,
+		"usageCaptureCapability":   true,
+		"finalTextCapability":      true,
+		"toolEventsCapability":     true,
+		"quotaStatusCapability":    true,
+		"recordReplayCapability":   true,
 	}
 }
 

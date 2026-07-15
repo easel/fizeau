@@ -746,6 +746,7 @@ parameter types, and field-level documentation, follow the
 | `alivenessLoopSleep` | func (func alivenessLoopSleep(ctx context.Context, d time.Duration) bool) |  |
 | `alivenessRouteKeys` | func (func alivenessRouteKeys(ep alivenessEndpoint) []string) |  |
 | `appendUniqueModelIDs` | func (func appendUniqueModelIDs(values []string, additions ...string) []string) |  |
+| `applyCatalogPolicyResultToRoutingRequest` | func (func applyCatalogPolicyResultToRoutingRequest(req *routing.Request, result serviceimpl.CatalogPolicyResult)) |  |
 | `applyRouteSnapshotEvidence` | func (func applyRouteSnapshotEvidence(candidate *RouteCandidate, row modelsnapshot.KnownModel)) |  |
 | `applyServiceImplExecuteRouteDecision` | func (func applyServiceImplExecuteRouteDecision(result *RouteDecision, decision serviceimpl.ExecuteRouteDecision)) |  |
 | `assembleModelSnapshotFromServiceConfig` | func (func assembleModelSnapshotFromServiceConfig(ctx context.Context, sc ServiceConfig, cat *modelcatalog.Catalog, cacheRoot string) (modelsnapshot.ModelSnapshot, error)) |  |
@@ -835,16 +836,13 @@ parameter types, and field-level documentation, follow the
 | `overrideAxisProvider` | const | overrideAxis* enumerates the three independently-tracked override axes |
 | `overrideContext` | type (struct) | overrideContext carries the per-Execute override-event payload from the |
 | `overrideReasonHint` | func (func overrideReasonHint(req ServiceExecuteRequest) string) | overrideReasonHint returns the caller-supplied free-form reason from |
-| `policyForName` | func (func policyForName(cat *modelcatalog.Catalog, name string) (modelcatalog.Policy, string, bool)) |  |
 | `positiveScorePart` | func (func positiveScorePart(v float64) float64) |  |
 | `probeOpenAIModels` | func (func probeOpenAIModels(ctx context.Context, baseURL, apiKey string) ([]string, error)) | probeOpenAIModels calls GET /v1/models against baseURL and classifies |
 | `promptAssertionHookFn` | type (func) | promptAssertionHookFn / compactionAssertionHookFn / toolWiringHookFn |
 | `providerBaseURLsForEndpoint` | func (func providerBaseURLsForEndpoint(pcfg ServiceProviderEntry, endpoint string) []string) | providerBaseURLsForEndpoint returns the configured base URLs for one |
 | `providerCapabilities` | func (func providerCapabilities(entry ServiceProviderEntry) []string) | providerCapabilities returns the capability set for a provider entry |
-| `providerPreferenceForPolicy` | func (func providerPreferenceForPolicy(cat *modelcatalog.Catalog, policy string) (string, error)) |  |
-| `providerPreferenceForPolicyName` | func (func providerPreferenceForPolicyName(name string) string) |  |
 | `providerTypeUsesFixedBilling` | func (func providerTypeUsesFixedBilling(providerType string) bool) |  |
-| `providerUsesLiveDiscovery` | func (func providerUsesLiveDiscovery(providerType string) bool) | providerUsesLiveDiscovery remains root request-policy wiring until the |
+| `publicCatalogPolicyError` | func (func publicCatalogPolicyError(failure *serviceimpl.CatalogPolicyFailure) error) |  |
 | `publicExecuteRouteFailure` | func (func publicExecuteRouteFailure(failure *serviceimpl.ExecuteRouteFailure) error) |  |
 | `publicFilterReason` | func (func publicFilterReason(c routing.Candidate) string) | publicFilterReason maps the typed FilterReason emitted by the internal |
 | `publicRoutingError` | func (func publicRoutingError(err error, candidates []RouteCandidate, requestedPolicy ...string) error) |  |
@@ -859,14 +857,12 @@ parameter types, and field-level documentation, follow the
 | `resolveSubprocessModelAliasWithCatalog` | func (func resolveSubprocessModelAliasWithCatalog(harness, model string, cat *modelcatalog.Catalog) string) |  |
 | `roleMaxLen` | const | Role normalization bounds (CONTRACT-003) |
 | `routeDecisionError` | type (struct) |  |
-| `routePowerBoundsForRequest` | func (func routePowerBoundsForRequest(req RouteRequest, policy RoutePowerPolicy) (int, int)) |  |
 | `routeSnapshotCandidateIndex` | func (func routeSnapshotCandidateIndex(snapshot modelsnapshot.ModelSnapshot) map[routeSnapshotCandidateKey]modelsnapshot.KnownModel) |  |
 | `routeSnapshotCandidateKey` | type (struct) |  |
 | `routeSnapshotEvidenceForCandidate` | func (func routeSnapshotEvidenceForCandidate(candidate RouteCandidate, snapshot modelsnapshot.ModelSnapshot) (modelsnapshot.KnownModel, bool)) |  |
 | `routeTimeProbeTimeout` | const |  |
 | `routingHarnessEntryFromMetadata` | func (func routingHarnessEntryFromMetadata(name string, cfg harnesses.HarnessConfig, st harnesses.HarnessStatus) routing.HarnessEntry) |  |
 | `routingHarnessUsesAccountBilling` | func (func routingHarnessUsesAccountBilling(entry *routing.HarnessEntry) bool) |  |
-| `routingPolicyForName` | func (func routingPolicyForName(cat *modelcatalog.Catalog, name string) string) |  |
 | `runAlivenessProbeLoop` | func (func runAlivenessProbeLoop( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, interval time.Duration, now func() time.Time, sleep func(ctx context.Context, d time.Duration) bool, persistPath string, )) | runAlivenessProbeLoop periodically re-probes each endpoint whose last probe |
 | `runRouteTimeAlivenessProbes` | func (func runRouteTimeAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, perProbeTimeout time.Duration, )) |  |
 | `runStartupAlivenessProbes` | func (func runStartupAlivenessProbes( ctx context.Context, endpoints []alivenessEndpoint, store *routehealth.ProbeStore, prober ProviderAlivenessProber, totalTimeout time.Duration, )) | runStartupAlivenessProbes probes each endpoint sequentially within totalTimeout |

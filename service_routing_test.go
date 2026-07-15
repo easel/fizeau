@@ -1021,12 +1021,6 @@ func TestApplyCatalogPolicyResultToRoutingRequestCopiesOrderedRequirements(t *te
 	}
 }
 
-func TestProviderUsesLiveDiscovery_LlamaServer(t *testing.T) {
-	if !providerUsesLiveDiscovery("llama-server") {
-		t.Fatal("expected llama-server to use live discovery")
-	}
-}
-
 func TestProviderTypeUsesFixedBilling_LlamaServer(t *testing.T) {
 	if !providerTypeUsesFixedBilling("llama-server") {
 		t.Fatal("expected llama-server to count as a fixed-billing endpoint")
