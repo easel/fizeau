@@ -26,6 +26,7 @@ const (
 type openRouterCreditFailureMode string
 
 const (
+	// #nosec G101 -- stable failure-class vocabulary, not a credential.
 	openRouterCreditFailureCredentialInvalid   openRouterCreditFailureMode = "credential_invalid"
 	openRouterCreditFailureProviderUnreachable openRouterCreditFailureMode = "provider_unreachable"
 )
