@@ -2,21 +2,12 @@ package fizeau
 
 import (
 	"context"
-	"net"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/easel/fizeau/internal/routehealth"
 )
 
 const (
-	// defaultHealthProbeInterval is the interval between background aliveness
-	// probes when ServiceOptions.HealthProbeInterval is zero.
-	defaultHealthProbeInterval = 60 * time.Second
-	// defaultHealthSignalTTL is the maximum age of a probe result used to
-	// populate routing.Inputs.ProbeUnreachable when HealthSignalTTL is zero.
-	defaultHealthSignalTTL = 10 * time.Minute
 	// routeTimeProbeTimeout bounds one synchronous route-time aliveness probe
 	// before the provider is treated as unreachable for that route decision.
 	routeTimeProbeTimeout = 2 * time.Second
@@ -30,25 +21,17 @@ const (
 // cancellation.
 type ProviderAlivenessProber func(ctx context.Context, provider, baseURL string) bool
 
-// alivenessEndpoint describes one provider endpoint to probe.
-type alivenessEndpoint struct {
-	provider string
-	endpoint string
-	baseURL  string
-}
+// alivenessEndpoint is a transitional root spelling used by the lifecycle
+// functions that move in the next extraction slice. Endpoint identity and
+// evidence mechanics are owned by internal/routehealth.
+type alivenessEndpoint = routehealth.AlivenessEndpoint
 
 func (s *service) healthProbeInterval() time.Duration {
-	if s.opts.HealthProbeInterval > 0 {
-		return s.opts.HealthProbeInterval
-	}
-	return defaultHealthProbeInterval
+	return routehealth.ResolveAlivenessProbeInterval(s.opts.HealthProbeInterval)
 }
 
 func (s *service) healthSignalTTL() time.Duration {
-	if s.opts.HealthSignalTTL > 0 {
-		return s.opts.HealthSignalTTL
-	}
-	return defaultHealthSignalTTL
+	return routehealth.ResolveAlivenessSignalTTL(s.opts.HealthSignalTTL)
 }
 
 // alivenessEndpoints enumerates the non-cloud provider endpoints that
@@ -58,32 +41,27 @@ func (s *service) alivenessEndpoints() []alivenessEndpoint {
 	if s.opts.ServiceConfig == nil {
 		return nil
 	}
-	var endpoints []alivenessEndpoint
-	seen := make(map[string]struct{})
-	for _, name := range s.opts.ServiceConfig.ProviderNames() {
+	names := s.opts.ServiceConfig.ProviderNames()
+	providers := make([]routehealth.AlivenessProvider, 0, len(names))
+	for _, name := range names {
 		entry, ok := s.opts.ServiceConfig.Provider(name)
-		if !ok || entry.ConfigError != "" {
+		if !ok {
 			continue
 		}
-		if !providerTypeUsesFixedBilling(entry.Type) {
-			continue
+		provider := routehealth.AlivenessProvider{
+			Name:         name,
+			ConfigError:  entry.ConfigError,
+			FixedBilling: providerTypeUsesFixedBilling(entry.Type),
 		}
 		for _, endpoint := range modelDiscoveryEndpoints(entry) {
-			if endpoint.BaseURL == "" {
-				continue
-			}
-			key := name + "|" + endpoint.Name + "|" + endpoint.BaseURL
-			if _, dup := seen[key]; !dup {
-				seen[key] = struct{}{}
-				endpoints = append(endpoints, alivenessEndpoint{
-					provider: name,
-					endpoint: endpoint.Name,
-					baseURL:  endpoint.BaseURL,
-				})
-			}
+			provider.Endpoints = append(provider.Endpoints, routehealth.AlivenessEndpoint{
+				Endpoint: endpoint.Name,
+				BaseURL:  endpoint.BaseURL,
+			})
 		}
+		providers = append(providers, provider)
 	}
-	return endpoints
+	return routehealth.BuildAlivenessEndpoints(providers)
 }
 
 // startupAlivenessProbe probes all configured non-cloud providers synchronously.
@@ -99,7 +77,7 @@ func (s *service) startupAlivenessProbe(ctx context.Context) {
 	}
 	prober := s.opts.AlivenessProber
 	if prober == nil {
-		prober = tcpAlivenessProber
+		prober = ProviderAlivenessProber(routehealth.TCPAlivenessProber)
 	}
 	runStartupAlivenessProbes(ctx, endpoints, s.providerProbe, prober, startupProbeTotalTimeout)
 	s.persistProbeStore()
@@ -128,11 +106,11 @@ func runStartupAlivenessProbes(
 		if probeCtx.Err() != nil {
 			break
 		}
-		success := prober(probeCtx, ep.provider, ep.baseURL)
+		success := prober(probeCtx, ep.Provider, ep.BaseURL)
 		if probeCtx.Err() != nil {
 			success = false
 		}
-		store.RecordProbe(ep.provider, ep.endpoint, success, now)
+		store.RecordProbe(ep.Provider, ep.Endpoint, success, now)
 	}
 }
 
@@ -156,7 +134,7 @@ func (s *service) requestLocalHealthRefreshForRouting(_ context.Context) {
 	}
 	prober := s.opts.AlivenessProber
 	if prober == nil {
-		prober = tcpAlivenessProber
+		prober = ProviderAlivenessProber(routehealth.TCPAlivenessProber)
 	}
 	refreshCtx := context.Background()
 	go func() {
@@ -171,32 +149,7 @@ func (s *service) probeUnknownProviders(now time.Time) map[string]time.Time {
 		return nil
 	}
 	endpoints := s.alivenessEndpoints()
-	if len(endpoints) == 0 {
-		return nil
-	}
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	ttl := s.healthSignalTTL()
-	out := make(map[string]time.Time)
-	for _, ep := range endpoints {
-		record, ok := s.lastProbeForAlivenessEndpoint(ep)
-		if !ok {
-			for _, key := range alivenessRouteKeys(ep) {
-				out[key] = time.Time{}
-			}
-			continue
-		}
-		if ttl > 0 && now.Sub(record.LastProbeAt) > ttl {
-			for _, key := range alivenessRouteKeys(ep) {
-				out[key] = record.LastProbeAt
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return routehealth.AlivenessProbeSignals(s.providerProbe, endpoints, now, s.healthSignalTTL()).Unknown
 }
 
 func (s *service) routeTimeAlivenessEndpoints(now time.Time) []alivenessEndpoint {
@@ -204,33 +157,7 @@ func (s *service) routeTimeAlivenessEndpoints(now time.Time) []alivenessEndpoint
 		return nil
 	}
 	endpoints := s.alivenessEndpoints()
-	if len(endpoints) == 0 {
-		return nil
-	}
-	interval := s.healthProbeInterval()
-	out := make([]alivenessEndpoint, 0, len(endpoints))
-	for _, ep := range endpoints {
-		if s.probeNeededForAlivenessEndpoint(ep, now, interval) {
-			out = append(out, ep)
-		}
-	}
-	return out
-}
-
-func (s *service) probeNeededForAlivenessEndpoint(ep alivenessEndpoint, now time.Time, interval time.Duration) bool {
-	if s == nil || s.providerProbe == nil {
-		return false
-	}
-	if !s.providerProbe.ProbeNeeded(ep.provider, ep.endpoint, now, interval) {
-		return false
-	}
-	if ep.endpoint == "" {
-		return true
-	}
-	if r, ok := s.providerProbe.LastProbe(ep.provider, ""); ok {
-		return now.Sub(r.LastProbeAt) >= interval
-	}
-	return true
+	return routehealth.AlivenessDueEndpoints(s.providerProbe, endpoints, now, s.healthProbeInterval())
 }
 
 func (s *service) probeUnreachableProviders(now time.Time) map[string]time.Time {
@@ -238,61 +165,7 @@ func (s *service) probeUnreachableProviders(now time.Time) map[string]time.Time 
 		return nil
 	}
 	endpoints := s.alivenessEndpoints()
-	if len(endpoints) == 0 {
-		return nil
-	}
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	ttl := s.healthSignalTTL()
-	out := make(map[string]time.Time)
-	for _, ep := range endpoints {
-		record, ok := s.lastProbeForAlivenessEndpoint(ep)
-		if !ok || record.LastProbeSuccess {
-			continue
-		}
-		if ttl > 0 && now.Sub(record.LastProbeAt) > ttl {
-			continue
-		}
-		for _, key := range alivenessRouteKeys(ep) {
-			if existing, ok := out[key]; !ok || record.LastProbeAt.After(existing) {
-				out[key] = record.LastProbeAt
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func (s *service) lastProbeForAlivenessEndpoint(ep alivenessEndpoint) (routehealth.ProbeRecord, bool) {
-	if s == nil || s.providerProbe == nil {
-		return routehealth.ProbeRecord{}, false
-	}
-	if r, ok := s.providerProbe.LastProbe(ep.provider, ep.endpoint); ok {
-		return r, true
-	}
-	if ep.endpoint != "" {
-		return s.providerProbe.LastProbe(ep.provider, "")
-	}
-	return routehealth.ProbeRecord{}, false
-}
-
-func alivenessRouteKeys(ep alivenessEndpoint) []string {
-	provider := strings.TrimSpace(ep.provider)
-	if provider == "" {
-		return nil
-	}
-	endpoint := strings.TrimSpace(ep.endpoint)
-	if endpoint == "" {
-		return []string{provider}
-	}
-	ref := endpointProviderRef(provider, endpoint)
-	if ref == provider {
-		return []string{provider}
-	}
-	return []string{provider, ref}
+	return routehealth.AlivenessProbeSignals(s.providerProbe, endpoints, now, s.healthSignalTTL()).Unreachable
 }
 
 func runRouteTimeAlivenessProbes(
@@ -318,12 +191,12 @@ func runRouteTimeAlivenessProbes(
 		}
 		probeAt := time.Now().UTC()
 		probeCtx, cancel := context.WithTimeout(ctx, perProbeTimeout)
-		success := prober(probeCtx, ep.provider, ep.baseURL)
+		success := prober(probeCtx, ep.Provider, ep.BaseURL)
 		if probeCtx.Err() != nil {
 			success = false
 		}
 		cancel()
-		store.RecordProbe(ep.provider, ep.endpoint, success, probeAt)
+		store.RecordProbe(ep.Provider, ep.Endpoint, success, probeAt)
 		if ctx.Err() != nil {
 			recordRouteTimeProbeFailures(store, endpoints[i+1:], probeAt)
 			return
@@ -336,7 +209,7 @@ func recordRouteTimeProbeFailures(store *routehealth.ProbeStore, endpoints []ali
 		return
 	}
 	for _, ep := range endpoints {
-		store.RecordProbe(ep.provider, ep.endpoint, false, probeAt)
+		store.RecordProbe(ep.Provider, ep.Endpoint, false, probeAt)
 	}
 }
 
@@ -357,7 +230,7 @@ func (s *service) startAlivenessProbeLoop() {
 	}
 	prober := s.opts.AlivenessProber
 	if prober == nil {
-		prober = tcpAlivenessProber
+		prober = ProviderAlivenessProber(routehealth.TCPAlivenessProber)
 	}
 	store := s.providerProbe
 	interval := s.healthProbeInterval()
@@ -385,7 +258,7 @@ func runAlivenessProbeLoop(
 		sleep = alivenessLoopSleep
 	}
 	if interval <= 0 {
-		interval = defaultHealthProbeInterval
+		interval = routehealth.DefaultAlivenessProbeInterval
 	}
 	for {
 		t := now().UTC()
@@ -393,13 +266,13 @@ func runAlivenessProbeLoop(
 			if ctx.Err() != nil {
 				return
 			}
-			if !store.ProbeNeeded(ep.provider, ep.endpoint, t, interval) {
+			if !store.ProbeNeeded(ep.Provider, ep.Endpoint, t, interval) {
 				continue
 			}
 			probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			success := prober(probeCtx, ep.provider, ep.baseURL)
+			success := prober(probeCtx, ep.Provider, ep.BaseURL)
 			cancel()
-			store.RecordProbe(ep.provider, ep.endpoint, success, t)
+			store.RecordProbe(ep.Provider, ep.Endpoint, success, t)
 		}
 		if persistPath != "" {
 			_ = store.Save(persistPath)
@@ -422,48 +295,4 @@ func alivenessLoopSleep(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
-}
-
-// tcpAlivenessProber tests endpoint reachability via a TCP connect probe.
-func tcpAlivenessProber(ctx context.Context, _, baseURL string) bool {
-	addr := extractHostPort(baseURL)
-	if addr == "" {
-		return false
-	}
-	d := net.Dialer{}
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return false
-	}
-	_ = conn.Close()
-	return true
-}
-
-// extractHostPort extracts host:port from a base URL, adding the scheme's
-// default port when none is specified.
-func extractHostPort(baseURL string) string {
-	baseURL = strings.TrimSpace(baseURL)
-	if baseURL == "" {
-		return ""
-	}
-	if !strings.Contains(baseURL, "://") {
-		baseURL = "http://" + baseURL
-	}
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return ""
-	}
-	host := u.Host
-	if host == "" {
-		return ""
-	}
-	if !strings.Contains(host, ":") {
-		switch u.Scheme {
-		case "https":
-			host += ":443"
-		default:
-			host += ":80"
-		}
-	}
-	return host
 }

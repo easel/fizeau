@@ -435,16 +435,12 @@ func (s *service) annotateProbeEvidence(c *RouteCandidate) {
 			endpoint = ep
 		}
 	}
-	if r, ok := s.providerProbe.LastProbe(provider, endpoint); ok {
-		c.LastProbeAt = r.LastProbeAt
-		c.LastProbeSuccess = r.LastProbeSuccess
-		return
-	}
-	if endpoint != "" {
-		if r, ok := s.providerProbe.LastProbe(provider, ""); ok {
-			c.LastProbeAt = r.LastProbeAt
-			c.LastProbeSuccess = r.LastProbeSuccess
-		}
+	if record, ok := routehealth.AlivenessProbeRecord(s.providerProbe, routehealth.AlivenessEndpoint{
+		Provider: provider,
+		Endpoint: endpoint,
+	}); ok {
+		c.LastProbeAt = record.LastProbeAt
+		c.LastProbeSuccess = record.LastProbeSuccess
 	}
 }
 

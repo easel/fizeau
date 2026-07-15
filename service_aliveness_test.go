@@ -96,9 +96,9 @@ func TestServiceStartup_TotalTimeoutBoundsProbes(t *testing.T) {
 	})
 
 	targets := []alivenessEndpoint{
-		{provider: "a", baseURL: "http://a:1234"},
-		{provider: "b", baseURL: "http://b:1234"},
-		{provider: "c", baseURL: "http://c:1234"},
+		{Provider: "a", BaseURL: "http://a:1234"},
+		{Provider: "b", BaseURL: "http://b:1234"},
+		{Provider: "c", BaseURL: "http://c:1234"},
 	}
 
 	store := routehealth.NewProbeStore()
@@ -128,9 +128,9 @@ func TestServiceStartup_TotalTimeoutDoesNotRecordUnprobedProvidersAsFailed(t *te
 	})
 
 	targets := []alivenessEndpoint{
-		{provider: "a", baseURL: "http://a:1234"},
-		{provider: "b", baseURL: "http://b:1234"},
-		{provider: "c", baseURL: "http://c:1234"},
+		{Provider: "a", BaseURL: "http://a:1234"},
+		{Provider: "b", BaseURL: "http://b:1234"},
+		{Provider: "c", BaseURL: "http://c:1234"},
 	}
 
 	store := routehealth.NewProbeStore()
@@ -168,9 +168,9 @@ func TestServiceStartup_SkippedProvidersRemainAbsentFromProbeUnreachable(t *test
 	})
 
 	targets := []alivenessEndpoint{
-		{provider: "a", baseURL: "http://a:1234"},
-		{provider: "b", baseURL: "http://b:1234"},
-		{provider: "c", baseURL: "http://c:1234"},
+		{Provider: "a", BaseURL: "http://a:1234"},
+		{Provider: "b", BaseURL: "http://b:1234"},
+		{Provider: "c", BaseURL: "http://c:1234"},
 	}
 
 	store := routehealth.NewProbeStore()
@@ -311,7 +311,7 @@ func TestProbeLoop_RetriesDeadProvidersOnInterval(t *testing.T) {
 		t.Fatal("never-probed providers should be considered due for probing")
 	}
 	targets := []alivenessEndpoint{
-		{provider: "bragi", baseURL: "http://bragi:1234"},
+		{Provider: "bragi", BaseURL: "http://bragi:1234"},
 	}
 
 	iteration := 0
@@ -372,7 +372,7 @@ func TestProbeLoop_SkipsProvidersWithFreshProbes(t *testing.T) {
 	store.RecordProbe("bragi", "", true, baseTime.Add(-10*time.Second))
 
 	targets := []alivenessEndpoint{
-		{provider: "bragi", baseURL: "http://bragi:1234"},
+		{Provider: "bragi", BaseURL: "http://bragi:1234"},
 	}
 
 	iteration := 0
@@ -1036,25 +1036,5 @@ func makeOnlyCodexSubprocessAvailable(svc *service) {
 			return "/usr/bin/codex", nil
 		}
 		return "", exec.ErrNotFound
-	}
-}
-
-func TestExtractHostPort(t *testing.T) {
-	cases := []struct {
-		baseURL string
-		want    string
-	}{
-		{"http://bragi:1234", "bragi:1234"},
-		{"https://example.com", "example.com:443"},
-		{"http://localhost", "localhost:80"},
-		{"http://127.0.0.1:11434", "127.0.0.1:11434"},
-		{"", ""},
-		{"not a url ://", ""},
-	}
-	for _, tc := range cases {
-		got := extractHostPort(tc.baseURL)
-		if got != tc.want {
-			t.Errorf("extractHostPort(%q) = %q, want %q", tc.baseURL, got, tc.want)
-		}
 	}
 }
