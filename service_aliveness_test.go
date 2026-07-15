@@ -13,7 +13,6 @@ import (
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelsnapshot"
-	"github.com/easel/fizeau/internal/routehealth"
 )
 
 // TestServiceStartup_ProbesConfiguredProviders asserts that startupAlivenessProbe
@@ -50,7 +49,7 @@ func TestServiceStartup_ProbesConfiguredProviders(t *testing.T) {
 		ServiceConfig:   sc,
 		AlivenessProber: fakeProber,
 	})
-	svc.providerProbe = routehealth.NewProbeStore()
+	resetProviderProbeForTest(svc)
 
 	// New starts the background probe loop; test the synchronous diagnostic path
 	// directly here.
@@ -73,120 +72,6 @@ func TestServiceStartup_ProbesConfiguredProviders(t *testing.T) {
 	}
 	if r.LastProbeSuccess {
 		t.Error("expected probe failure recorded (prober returned false)")
-	}
-}
-
-// TestServiceStartup_TotalTimeoutBoundsProbes asserts that the total startup
-// probe time is bounded regardless of provider count.
-func TestServiceStartup_TotalTimeoutBoundsProbes(t *testing.T) {
-	// Three local providers; prober hangs for 100ms each.
-	blocked := make(chan struct{})
-	var probeCount int
-	var mu sync.Mutex
-	fakeProber := ProviderAlivenessProber(func(ctx context.Context, provider, _ string) bool {
-		mu.Lock()
-		probeCount++
-		mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return false
-		case <-blocked: // never unblocked in this test
-			return true
-		}
-	})
-
-	targets := []alivenessEndpoint{
-		{Provider: "a", BaseURL: "http://a:1234"},
-		{Provider: "b", BaseURL: "http://b:1234"},
-		{Provider: "c", BaseURL: "http://c:1234"},
-	}
-
-	store := routehealth.NewProbeStore()
-	start := time.Now()
-	runStartupAlivenessProbes(context.Background(), targets, store, fakeProber, 50*time.Millisecond)
-	elapsed := time.Since(start)
-
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("startup probe took %v, expected < 500ms (bounded by 50ms timeout)", elapsed)
-	}
-}
-
-func TestServiceStartup_TotalTimeoutDoesNotRecordUnprobedProvidersAsFailed(t *testing.T) {
-	blocked := make(chan struct{})
-	var probeCount int
-	var mu sync.Mutex
-	fakeProber := ProviderAlivenessProber(func(ctx context.Context, _, _ string) bool {
-		mu.Lock()
-		probeCount++
-		mu.Unlock()
-		select {
-		case <-ctx.Done():
-			return false
-		case <-blocked:
-			return true
-		}
-	})
-
-	targets := []alivenessEndpoint{
-		{Provider: "a", BaseURL: "http://a:1234"},
-		{Provider: "b", BaseURL: "http://b:1234"},
-		{Provider: "c", BaseURL: "http://c:1234"},
-	}
-
-	store := routehealth.NewProbeStore()
-	runStartupAlivenessProbes(context.Background(), targets, store, fakeProber, 20*time.Millisecond)
-
-	mu.Lock()
-	gotProbeCount := probeCount
-	mu.Unlock()
-	if gotProbeCount != 1 {
-		t.Fatalf("expected only the first probe to run before timeout, got %d probes", gotProbeCount)
-	}
-	record, ok := store.LastProbe("a", "")
-	if !ok {
-		t.Fatal("missing failed startup probe record for attempted provider")
-	}
-	if record.LastProbeSuccess {
-		t.Fatal("attempted provider recorded success, want failed")
-	}
-	for _, provider := range []string{"b", "c"} {
-		if _, ok := store.LastProbe(provider, ""); ok {
-			t.Fatalf("provider %q was never probed but has a startup probe record", provider)
-		}
-	}
-}
-
-func TestServiceStartup_SkippedProvidersRemainAbsentFromProbeUnreachable(t *testing.T) {
-	blocked := make(chan struct{})
-	fakeProber := ProviderAlivenessProber(func(ctx context.Context, _, _ string) bool {
-		select {
-		case <-ctx.Done():
-			return false
-		case <-blocked:
-			return true
-		}
-	})
-
-	targets := []alivenessEndpoint{
-		{Provider: "a", BaseURL: "http://a:1234"},
-		{Provider: "b", BaseURL: "http://b:1234"},
-		{Provider: "c", BaseURL: "http://c:1234"},
-	}
-
-	store := routehealth.NewProbeStore()
-	runStartupAlivenessProbes(context.Background(), targets, store, fakeProber, 20*time.Millisecond)
-
-	unreachable := store.UnreachableProviders(time.Now().UTC(), time.Minute)
-	if _, ok := unreachable["a"]; !ok {
-		t.Fatalf("attempted failed provider missing from ProbeUnreachable: %#v", unreachable)
-	}
-	for _, provider := range []string{"b", "c"} {
-		if _, ok := unreachable[provider]; ok {
-			t.Fatalf("skipped provider %q surfaced in ProbeUnreachable: %#v", provider, unreachable)
-		}
-		if _, ok := store.LastProbe(provider, ""); ok {
-			t.Fatalf("skipped provider %q has a probe record", provider)
-		}
 	}
 }
 
@@ -281,128 +166,6 @@ func TestServiceStartup_FailedProbeHardGatesRouting(t *testing.T) {
 	}
 	if !sawDown {
 		t.Fatalf("missing down provider candidate: %#v", dec.Candidates)
-	}
-}
-
-// TestProbeLoop_RetriesDeadProvidersOnInterval asserts that a provider marked
-// unreachable by probe is re-probed every HealthProbeInterval and recorded back
-// to reachable when it comes online (AC #2).
-func TestProbeLoop_RetriesDeadProvidersOnInterval(t *testing.T) {
-	baseTime := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
-	interval := 60 * time.Second
-
-	var mu sync.Mutex
-	probeResults := []bool{false, true} // first call fails, second succeeds
-	probeCount := 0
-
-	prober := ProviderAlivenessProber(func(_ context.Context, _ string, _ string) bool {
-		mu.Lock()
-		defer mu.Unlock()
-		idx := probeCount
-		probeCount++
-		if idx < len(probeResults) {
-			return probeResults[idx]
-		}
-		return true
-	})
-
-	store := routehealth.NewProbeStore()
-	if !store.ProbeNeeded("never-probed", "", baseTime, interval) {
-		t.Fatal("never-probed providers should be considered due for probing")
-	}
-	targets := []alivenessEndpoint{
-		{Provider: "bragi", BaseURL: "http://bragi:1234"},
-	}
-
-	iteration := 0
-	nowFn := func() time.Time {
-		return baseTime.Add(time.Duration(iteration) * interval)
-	}
-
-	loopsDone := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sleepFn := func(_ context.Context, _ time.Duration) bool {
-		loopsDone++
-		iteration++
-		if loopsDone >= 2 {
-			cancel()
-			return false
-		}
-		return true
-	}
-
-	runAlivenessProbeLoop(ctx, targets, store, prober, interval, nowFn, sleepFn, "")
-
-	mu.Lock()
-	gotCount := probeCount
-	mu.Unlock()
-
-	if gotCount != 2 {
-		t.Fatalf("expected 2 probes (one per loop iteration), got %d", gotCount)
-	}
-
-	r, ok := store.LastProbe("bragi", "")
-	if !ok {
-		t.Fatal("no probe record for bragi after loop")
-	}
-	if !r.LastProbeSuccess {
-		t.Fatal("expected bragi to be reachable after second probe (prober returned true)")
-	}
-}
-
-// TestProbeLoop_SkipsProvidersWithFreshProbes asserts that providers probed
-// recently are not re-probed until the interval elapses.
-func TestProbeLoop_SkipsProvidersWithFreshProbes(t *testing.T) {
-	baseTime := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
-	interval := 60 * time.Second
-
-	var mu sync.Mutex
-	probeCount := 0
-	prober := ProviderAlivenessProber(func(_ context.Context, _ string, _ string) bool {
-		mu.Lock()
-		probeCount++
-		mu.Unlock()
-		return true
-	})
-
-	store := routehealth.NewProbeStore()
-	// Pre-record a fresh probe — should skip re-probing in the first iteration.
-	store.RecordProbe("bragi", "", true, baseTime.Add(-10*time.Second))
-
-	targets := []alivenessEndpoint{
-		{Provider: "bragi", BaseURL: "http://bragi:1234"},
-	}
-
-	iteration := 0
-	nowFn := func() time.Time {
-		return baseTime.Add(time.Duration(iteration) * interval)
-	}
-
-	loopsDone := 0
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sleepFn := func(_ context.Context, _ time.Duration) bool {
-		loopsDone++
-		iteration++
-		if loopsDone >= 1 {
-			cancel()
-			return false
-		}
-		return true
-	}
-
-	runAlivenessProbeLoop(ctx, targets, store, prober, interval, nowFn, sleepFn, "")
-
-	mu.Lock()
-	gotCount := probeCount
-	mu.Unlock()
-
-	// Probe at T=0: elapsed = 10s < 60s → skip. So probeCount should be 0.
-	if gotCount != 0 {
-		t.Errorf("expected 0 probes (fresh probe within interval), got %d", gotCount)
 	}
 }
 
@@ -1009,7 +772,7 @@ func newResolveRouteProbeTestService(t *testing.T, sc *fakeServiceConfig, prober
 		HealthProbeInterval: time.Hour,
 		QuotaRefreshContext: canceledRefreshContext(),
 	})
-	svc.providerProbe = routehealth.NewProbeStore()
+	resetProviderProbeForTest(svc)
 	return svc
 }
 

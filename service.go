@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
@@ -978,8 +977,8 @@ type service struct {
 
 	// providerProbe stores aliveness probe results for configured non-cloud
 	// providers. Populated by explicit diagnostics and background probes.
-	providerProbe                *routehealth.ProbeStore
-	providerProbeRefreshInFlight atomic.Bool
+	providerProbe *routehealth.ProbeStore
+	aliveness     *routehealth.AlivenessCoordinator
 
 	// openrouterCredit caches per-provider openrouter account balance
 	// readings with a per-provider TTL so the routing-quality credit gate
@@ -1080,6 +1079,11 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		providerBurnRate: NewProviderBurnRateTracker(),
 	}
 	svc.providerProbe = routehealth.NewProbeStore()
+	svc.aliveness = routehealth.NewAlivenessCoordinator(routehealth.AlivenessCoordinatorOptions{
+		Store:   svc.providerProbe,
+		Prober:  routehealth.AlivenessProber(opts.AlivenessProber),
+		Persist: svc.persistRouteHealthSnapshot,
+	})
 	svc.openrouterCredit = newOpenrouterCreditStore()
 	// Hydrate per-provider daily_token_budget from ServiceConfig so the
 	// burn-rate tracker can predict exhaustion before the upstream quota

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/routehealth"
 )
 
 type testServiceOption func(*service)
@@ -29,6 +30,15 @@ func newTestService(t testing.TB, opts ServiceOptions, options ...testServiceOpt
 		option(svc)
 	}
 	return svc
+}
+
+func resetProviderProbeForTest(svc *service) {
+	svc.providerProbe = routehealth.NewProbeStore()
+	svc.aliveness = routehealth.NewAlivenessCoordinator(routehealth.AlivenessCoordinatorOptions{
+		Store:   svc.providerProbe,
+		Prober:  routehealth.AlivenessProber(svc.opts.AlivenessProber),
+		Persist: svc.persistRouteHealthSnapshot,
+	})
 }
 
 func canceledRefreshContext() context.Context {

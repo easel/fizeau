@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/discoverycache"
-	"github.com/easel/fizeau/internal/routehealth"
 )
 
 // TestRoutePicksAlternateAfterDispatchFailureFeedback verifies AC3 from
@@ -91,7 +90,7 @@ models:
 			return false
 		},
 	})
-	svc.providerProbe = routehealth.NewProbeStore()
+	resetProviderProbeForTest(svc)
 
 	// Seed both endpoints as alive so the first routing pass treats them
 	// equally — mirrors the start-of-day state where /v1/models probes

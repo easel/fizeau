@@ -20,7 +20,6 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
-	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/routing"
 	"github.com/easel/fizeau/internal/serviceimpl"
 	"gopkg.in/yaml.v3"
@@ -496,7 +495,7 @@ models:
 			return false
 		},
 	})
-	svc.providerProbe = routehealth.NewProbeStore()
+	resetProviderProbeForTest(svc)
 	now := time.Now().UTC()
 	svc.providerProbe.RecordProbe("aaa-down", "", false, now)
 	svc.providerProbe.RecordProbe("zzz-up", "", true, now)
