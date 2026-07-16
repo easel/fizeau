@@ -2,6 +2,7 @@ package termbench
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -207,6 +208,7 @@ func TestBuildPlan_PassesThroughTimeoutAndPrompt(t *testing.T) {
 }
 
 func TestCapture_FoldsTextAndFinal(t *testing.T) {
+	cost := 0.0012
 	ch := make(chan harnesses.Event, 4)
 	td, _ := json.Marshal(harnesses.TextDeltaData{Text: "Hello "})
 	ch <- harnesses.Event{Type: harnesses.EventTypeTextDelta, Data: td}
@@ -220,7 +222,8 @@ func TestCapture_FoldsTextAndFinal(t *testing.T) {
 			InputTokens:  harnesses.IntPtr(10),
 			OutputTokens: harnesses.IntPtr(7),
 		},
-		CostUSD: 0.0012,
+		FinalCostUSD:    &cost,
+		FinalCostSource: harnesses.CostSourceReported,
 	})
 	ch <- harnesses.Event{Type: harnesses.EventTypeFinal, Data: final}
 	close(ch)
@@ -252,6 +255,105 @@ func TestCapture_FoldsTextAndFinal(t *testing.T) {
 	if gotText != "Hello world." {
 		t.Errorf("agent text=%q want 'Hello world.'", gotText)
 	}
+}
+
+func TestCaptureFinalCostEvidence(t *testing.T) {
+	zero := 0.0
+	positive := 0.0012
+	negative := -0.0012
+	nan := math.NaN()
+	positiveInf := math.Inf(1)
+	negativeInf := math.Inf(-1)
+	const (
+		inputTokens  = 13
+		outputTokens = 8
+	)
+
+	representable := []struct {
+		name   string
+		amount *float64
+		source harnesses.CostSource
+		raw    string
+		want   float64
+	}{
+		{name: "reported zero", amount: &zero, source: harnesses.CostSourceReported},
+		{name: "configured positive", amount: &positive, source: harnesses.CostSourceConfigured, want: positive},
+		{name: "nil unknown", source: harnesses.CostSourceUnknown},
+		{
+			name: "present unknown",
+			raw:  `{"cost_usd":0.0012,"cost_source":"unknown","usage":{"input_tokens":13,"output_tokens":8}}`,
+		},
+		{
+			name: "present invalid source",
+			raw:  `{"cost_usd":0.0012,"cost_source":"vendor","usage":{"input_tokens":13,"output_tokens":8}}`,
+		},
+		{
+			name: "negative reported",
+			raw:  `{"cost_usd":-0.0012,"cost_source":"reported","usage":{"input_tokens":13,"output_tokens":8}}`,
+		},
+	}
+
+	for _, tt := range representable {
+		t.Run(tt.name, func(t *testing.T) {
+			final := []byte(tt.raw)
+			if tt.raw == "" {
+				var err error
+				final, err = json.Marshal(harnesses.FinalData{
+					FinalCostUSD:    tt.amount,
+					FinalCostSource: tt.source,
+					Usage: &harnesses.FinalUsage{
+						InputTokens:  harnesses.IntPtr(inputTokens),
+						OutputTokens: harnesses.IntPtr(outputTokens),
+					},
+				})
+				if err != nil {
+					t.Fatalf("marshal final event: %v", err)
+				}
+			}
+			ch := make(chan harnesses.Event, 1)
+			ch <- harnesses.Event{Type: harnesses.EventTypeFinal, Data: final}
+			close(ch)
+
+			traj := Capture(ch, CaptureOptions{})
+			if traj.FinalMetrics.Cost != tt.want {
+				t.Fatalf("ATIF final cost = %v, want %v", traj.FinalMetrics.Cost, tt.want)
+			}
+			if traj.FinalMetrics.InputTokens != inputTokens || traj.FinalMetrics.OutputTokens != outputTokens {
+				t.Fatalf("ATIF final tokens = (%d, %d), want (%d, %d)",
+					traj.FinalMetrics.InputTokens, traj.FinalMetrics.OutputTokens, inputTokens, outputTokens)
+			}
+		})
+	}
+
+	t.Run("normalization preserves validity before ATIF collapse", func(t *testing.T) {
+		direct := []struct {
+			name      string
+			amount    *float64
+			source    harnesses.CostSource
+			want      float64
+			wantValid bool
+		}{
+			{name: "reported zero is valid", amount: &zero, source: harnesses.CostSourceReported, wantValid: true},
+			{name: "unknown is invalid", amount: &positive, source: harnesses.CostSourceUnknown},
+			{name: "invalid source is invalid", amount: &positive, source: harnesses.CostSource("vendor")},
+			{name: "negative is invalid", amount: &negative, source: harnesses.CostSourceReported},
+			{name: "nan is invalid", amount: &nan, source: harnesses.CostSourceReported},
+			{name: "positive infinity is invalid", amount: &positiveInf, source: harnesses.CostSourceReported},
+			{name: "negative infinity is invalid", amount: &negativeInf, source: harnesses.CostSourceConfigured},
+		}
+
+		for _, tt := range direct {
+			t.Run(tt.name, func(t *testing.T) {
+				got, valid := normalizedFinalCost(harnesses.FinalData{
+					FinalCostUSD:    tt.amount,
+					FinalCostSource: tt.source,
+				})
+				if valid != tt.wantValid || got != tt.want {
+					t.Fatalf("normalized final cost = (%v, %v), want (%v, %v)", got, valid, tt.want, tt.wantValid)
+				}
+			})
+		}
+	})
 }
 
 func TestWriteHarnessOutput_ProducesExpectedLayout(t *testing.T) {

@@ -3,6 +3,7 @@ package termbench
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -157,15 +158,7 @@ func Capture(ch <-chan harnesses.Event, opts CaptureOptions) *Trajectory {
 				if fd.FinalText != "" {
 					addStep("agent", fd.FinalText, nil)
 				}
-				if fd.Usage != nil {
-					traj.FinalMetrics = TrajectoryStat{
-						InputTokens:  derefInt(fd.Usage.InputTokens),
-						OutputTokens: derefInt(fd.Usage.OutputTokens),
-						Cost:         fd.CostUSD,
-					}
-				} else {
-					traj.FinalMetrics.Cost = fd.CostUSD
-				}
+				traj.FinalMetrics = finalMetricsFromFinalData(fd)
 			}
 		default:
 			// Preserve unknown event payloads so debugging is possible.
@@ -176,6 +169,43 @@ func Capture(ch <-chan harnesses.Event, opts CaptureOptions) *Trajectory {
 	// Drain any trailing text the harness emitted without a final event.
 	flushAgentText()
 	return traj
+}
+
+// finalMetricsFromFinalData projects Fizeau's authoritative final measurement
+// into ATIF v1.4's scalar metrics shape. ATIF cannot distinguish unknown cost
+// from known zero, so invalid or unknown evidence remains the scalar zero
+// value without being promoted to authoritative evidence inside Fizeau.
+func finalMetricsFromFinalData(fd harnesses.FinalData) TrajectoryStat {
+	metrics := TrajectoryStat{}
+	if fd.Usage != nil {
+		metrics.InputTokens = derefInt(fd.Usage.InputTokens)
+		metrics.OutputTokens = derefInt(fd.Usage.OutputTokens)
+	}
+
+	if cost, valid := normalizedFinalCost(fd); valid {
+		metrics.Cost = cost
+	}
+	return metrics
+}
+
+// normalizedFinalCost keeps validity separate from the scalar amount so a
+// reported or configured zero remains distinguishable from unknown evidence
+// until the final projection into ATIF's scalar-only metrics shape.
+func normalizedFinalCost(fd harnesses.FinalData) (float64, bool) {
+	if fd.FinalCostUSD == nil {
+		return 0, false
+	}
+	switch fd.FinalCostSource {
+	case harnesses.CostSourceReported, harnesses.CostSourceConfigured:
+	default:
+		return 0, false
+	}
+
+	cost := *fd.FinalCostUSD
+	if cost < 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return 0, false
+	}
+	return cost, true
 }
 
 func derefInt(p *int) int {
