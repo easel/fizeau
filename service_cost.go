@@ -14,13 +14,6 @@ const (
 	CostSourceUnknown    CostSource = "unknown"
 )
 
-// CostMeasurement returns the source-backed final cost as a fresh pointer.
-// CostSource and pointer presence distinguish a known zero from an unknown
-// amount. The returned amount is cloned from the final payload.
-func (d ServiceFinalData) CostMeasurement() (*float64, CostSource) {
-	return normalizePublicCostPointer(d.CostUSD, d.CostSource)
-}
-
 func normalizePublicCostPointer(cost *float64, source CostSource) (*float64, CostSource) {
 	source = normalizePublicCostSource(source)
 	if cost == nil || source == CostSourceUnknown || *cost < 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0) {
@@ -39,7 +32,7 @@ func normalizePublicCostSource(source CostSource) CostSource {
 	}
 }
 
-func decodePublicCostMeasurement(costRaw, sourceRaw json.RawMessage) (*float64, CostSource, error) {
+func decodePublicCostFields(costRaw, sourceRaw json.RawMessage) (*float64, CostSource, error) {
 	if len(sourceRaw) == 0 || string(sourceRaw) == "null" {
 		return nil, CostSourceUnknown, nil
 	}
@@ -61,7 +54,7 @@ func decodePublicCostMeasurement(costRaw, sourceRaw json.RawMessage) (*float64, 
 // MarshalJSON emits the normalized optional amount and mandatory provenance.
 func (d ServiceFinalData) MarshalJSON() ([]byte, error) {
 	type serviceFinalDataAlias ServiceFinalData
-	cost, source := d.CostMeasurement()
+	cost, source := normalizePublicCostPointer(d.CostUSD, d.CostSource)
 	return json.Marshal(struct {
 		serviceFinalDataAlias
 		CostUSD    *float64   `json:"cost_usd,omitempty"`
@@ -88,7 +81,7 @@ func (d *ServiceFinalData) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	cost, source, err := decodePublicCostMeasurement(wire.CostUSD, wire.CostSource)
+	cost, source, err := decodePublicCostFields(wire.CostUSD, wire.CostSource)
 	if err != nil {
 		return err
 	}
@@ -131,7 +124,7 @@ func (o *ServiceOverrideOutcome) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	cost, source, err := decodePublicCostMeasurement(wire.CostUSD, wire.CostSource)
+	cost, source, err := decodePublicCostFields(wire.CostUSD, wire.CostSource)
 	if err != nil {
 		return err
 	}
@@ -172,7 +165,7 @@ func (d *SessionEndData) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	cost, source, err := decodePublicCostMeasurement(wire.CostUSD, wire.CostSource)
+	cost, source, err := decodePublicCostFields(wire.CostUSD, wire.CostSource)
 	if err != nil {
 		return err
 	}

@@ -32,12 +32,6 @@ func TestServiceFinalCostPresenceJSONRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			final := ServiceFinalData{Status: "success", CostUSD: tt.cost, CostSource: tt.source}
-			cost, source := final.CostMeasurement()
-			assertPublicCost(t, cost, source, tt.wantCost, tt.wantSource)
-			if cost != nil && cost == final.CostUSD {
-				t.Fatal("CostMeasurement returned the final's owned pointer")
-			}
-
 			raw, err := json.Marshal(final)
 			if err != nil {
 				t.Fatalf("MarshalJSON: %v", err)
@@ -58,11 +52,6 @@ func TestServiceFinalCostPresenceJSONRoundTrip(t *testing.T) {
 				t.Fatalf("UnmarshalJSON: %v", err)
 			}
 			assertPublicCost(t, decoded.CostUSD, decoded.CostSource, tt.wantCost, tt.wantSource)
-			decodedMeasurement, decodedSource := decoded.CostMeasurement()
-			assertPublicCost(t, decodedMeasurement, decodedSource, tt.wantCost, tt.wantSource)
-			if decodedMeasurement != nil && decodedMeasurement == decoded.CostUSD {
-				t.Fatal("CostMeasurement did not clone the decoded final amount")
-			}
 		})
 	}
 

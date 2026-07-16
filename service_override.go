@@ -213,7 +213,7 @@ func makeOverrideEvent(ovr *overrideContext, sessionID string, finalEv ServiceEv
 	payload := ovr.payload
 	payload.SessionID = sessionID
 	if final, ok := decodeFinalForOutcome(finalEv); ok {
-		cost, source := final.CostMeasurement()
+		cost, source := normalizePublicCostPointer(final.CostUSD, final.CostSource)
 		payload.Outcome = &ServiceOverrideOutcome{
 			Status:     final.Status,
 			CostUSD:    cost,

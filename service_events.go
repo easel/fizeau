@@ -704,7 +704,7 @@ func (r *DrainExecuteResult) append(ev ServiceDecodedEvent) {
 		r.FinalText = ev.Final.FinalText
 		r.Usage = ev.Final.Usage
 		r.Warnings = ev.Final.Warnings
-		cost, source := ev.Final.CostMeasurement()
+		cost, source := normalizePublicCostPointer(ev.Final.CostUSD, ev.Final.CostSource)
 		r.CostUSD = cost
 		r.CostSource = source
 		r.SessionLogPath = ev.Final.SessionLogPath

@@ -60,6 +60,44 @@ func TestServiceFinalTypedClassificationRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPublicFinalCostPointerFieldsCompile(t *testing.T) {
+	cost := 1.25
+	final := fizeau.ServiceFinalData{
+		CostUSD:    &cost,
+		CostSource: fizeau.CostSourceReported,
+	}
+	drain := fizeau.DrainExecuteResult{
+		CostUSD:    &cost,
+		CostSource: fizeau.CostSourceConfigured,
+	}
+	override := fizeau.ServiceOverrideOutcome{
+		CostUSD:    &cost,
+		CostSource: fizeau.CostSourceReported,
+	}
+
+	if final.CostUSD == nil || *final.CostUSD != cost || final.CostSource != fizeau.CostSourceReported {
+		t.Fatalf("final cost = %v/%q, want %v/reported", final.CostUSD, final.CostSource, cost)
+	}
+	if drain.CostUSD == nil || *drain.CostUSD != cost || drain.CostSource != fizeau.CostSourceConfigured {
+		t.Fatalf("drain cost = %v/%q, want %v/configured", drain.CostUSD, drain.CostSource, cost)
+	}
+	if override.CostUSD == nil || *override.CostUSD != cost || override.CostSource != fizeau.CostSourceReported {
+		t.Fatalf("override cost = %v/%q, want %v/reported", override.CostUSD, override.CostSource, cost)
+	}
+
+	unknownFinal := fizeau.ServiceFinalData{CostUSD: nil, CostSource: fizeau.CostSourceUnknown}
+	unknownDrain := fizeau.DrainExecuteResult{CostUSD: nil, CostSource: fizeau.CostSourceUnknown}
+	unknownOverride := fizeau.ServiceOverrideOutcome{CostUSD: nil, CostSource: fizeau.CostSourceUnknown}
+	if unknownFinal.CostUSD != nil || unknownDrain.CostUSD != nil || unknownOverride.CostUSD != nil {
+		t.Fatal("unknown public costs must preserve nil pointer presence")
+	}
+	if unknownFinal.CostSource != fizeau.CostSourceUnknown ||
+		unknownDrain.CostSource != fizeau.CostSourceUnknown ||
+		unknownOverride.CostSource != fizeau.CostSourceUnknown {
+		t.Fatal("unknown public costs must expose unknown provenance")
+	}
+}
+
 func TestPublicSessionEndTypedValuesDurableRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	cost := 0.0
