@@ -27,6 +27,7 @@ var analyzeGeminiPortableRuntime = harnesses.AnalyzePortableRuntimeInterpretedCl
 var selectGeminiPortableAddons = geminiPortableSelectedAddons
 var locateGeminiPortableLibraryRoot = geminiPortableRuntimeLibraryRoot
 var geminiPortableVerifiedTreeSHA256 = geminiPortablePackageTreeSHA256
+var inspectGeminiPortableRuntimeUserConfiguration = inspectGeminiPortableUserConfiguration
 
 type geminiPortableRuntimePaths struct {
 	packageInstallRoot string
@@ -65,10 +66,14 @@ func (r *Runner) PortableRuntimeAssets(ctx context.Context, target harnesses.Por
 	if err := validateGeminiPortableLaterArguments(r.BaseArgs); err != nil {
 		return harnesses.PortableRuntimeContribution{}, err
 	}
-	if err := inspectGeminiPortableUserConfiguration(home); err != nil {
+	if err := inspectGeminiPortableRuntimeUserConfiguration(home); err != nil {
 		return harnesses.PortableRuntimeContribution{}, err
 	}
 	if err := inspectGeminiPortableSystemSources(geminiPortableDefaultSystemSources()); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
+	state, err := discoverGeminiPortableState(ctx, home)
+	if err != nil {
 		return harnesses.PortableRuntimeContribution{}, err
 	}
 	paths := geminiPortableRuntimePathsForHome(home)
@@ -79,6 +84,8 @@ func (r *Runner) PortableRuntimeAssets(ctx context.Context, target harnesses.Por
 	if err != nil {
 		return harnesses.PortableRuntimeContribution{}, err
 	}
+	contribution.Assets = append(contribution.Assets, state.assets...)
+	contribution.StateProjections = append(contribution.StateProjections, state.stateProjections...)
 	return harnesses.NormalizePortableRuntimeContribution(target, contribution)
 }
 

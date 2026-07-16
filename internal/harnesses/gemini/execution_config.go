@@ -166,9 +166,9 @@ func geminiPortableRunnerEnvironment(environment []string) []string {
 	return append(result, prefix+"true")
 }
 
-// inspectGeminiPortableUserConfiguration validates only the settings and
-// executable-source boundary owned by this bead. The following mixed-state
-// bead owns the exact safe settings schema and state projection.
+// inspectGeminiPortableUserConfiguration validates the exact settings and
+// executable-source boundary before either ordinary dispatch or portable
+// state discovery may use it.
 func inspectGeminiPortableUserConfiguration(home string) error {
 	if !filepath.IsAbs(home) || filepath.Clean(home) != home {
 		return geminiPortableRuntimeError("generated-home source is invalid")

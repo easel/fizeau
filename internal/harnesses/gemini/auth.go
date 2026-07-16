@@ -158,11 +158,7 @@ func readOAuthEvidence(dir, authType string, settingsTime, now time.Time) authSn
 			Detail:     "Gemini OAuth credentials are malformed",
 		}
 	}
-	authenticated := creds.RefreshToken != "" || creds.AccessToken != ""
-	if creds.ExpiryDate > 0 && creds.RefreshToken == "" {
-		expires := time.UnixMilli(creds.ExpiryDate)
-		authenticated = authenticated && expires.After(now)
-	}
+	authenticated := geminiOAuthCredentialsAuthenticated(creds.AccessToken, creds.RefreshToken, creds.ExpiryDate, now)
 	capturedAt := maxTime(settingsTime, st.ModTime().UTC())
 	return authSnapshot{
 		Authenticated: authenticated,
@@ -173,6 +169,16 @@ func readOAuthEvidence(dir, authType string, settingsTime, now time.Time) authSn
 		Source:        oauthPath,
 		Detail:        oauthDetail(authenticated),
 	}
+}
+
+func geminiOAuthCredentialsAuthenticated(accessToken, refreshToken string, expiryDate int64, now time.Time) bool {
+	if refreshToken != "" {
+		return true
+	}
+	if accessToken == "" {
+		return false
+	}
+	return expiryDate <= 0 || time.UnixMilli(expiryDate).After(now)
 }
 
 func readGoogleAccount(dir string) *harnesses.AccountInfo {

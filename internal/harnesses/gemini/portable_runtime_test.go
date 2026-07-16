@@ -44,6 +44,10 @@ func TestGeminiPortableRuntimeContribution(t *testing.T) {
 		geminiPortableInterpreterTarget: harnesses.PortableRuntimeAssetSupport,
 		geminiPortableLoaderTarget:      harnesses.PortableRuntimeAssetSupport,
 		geminiPortablePackageTarget:     harnesses.PortableRuntimeAssetInstallTree,
+		geminiPortableSettingsTarget:    harnesses.PortableRuntimeAssetConfig,
+		geminiPortableOAuthTarget:       harnesses.PortableRuntimeAssetCredential,
+		geminiPortableAccountsTarget:    harnesses.PortableRuntimeAssetCache,
+		geminiPortableQuotaTarget:       harnesses.PortableRuntimeAssetQuota,
 	}
 	for _, asset := range contribution.Assets {
 		if kind, ok := wanted[asset.Target]; ok {
@@ -55,6 +59,9 @@ func TestGeminiPortableRuntimeContribution(t *testing.T) {
 	}
 	if len(wanted) != 0 {
 		t.Fatalf("missing exact closure assets: %#v", wanted)
+	}
+	if len(contribution.StateProjections) != 1 || contribution.StateProjections[0].Directory != (harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathHome, Target: geminiPortableStateDirectory}) {
+		t.Fatalf("mixed-state projection not integrated into contribution: %#v", contribution.StateProjections)
 	}
 	command, arguments, err := harnesses.BuildPortableRuntimeLaunchCommand("/portable", contribution, []string{"--version"})
 	if err != nil {
@@ -266,6 +273,7 @@ func requireGeminiPortableRuntimeInstall(t *testing.T) (harnesses.PortableRuntim
 			t.Fatal(err)
 		}
 	}
+	installGeminiPortableStateFixture(t)
 	return harnesses.PortableRuntimeTarget{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}, paths
 }
 
