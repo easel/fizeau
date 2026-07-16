@@ -62,9 +62,9 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 			if row.Instance != instances[row.Name] {
 				t.Errorf("required row %q does not retain the actual runner instance", row.Name)
 			}
-			if row.Name == "claude" || row.Name == "claude-tui" {
+			if row.Name == "claude" || row.Name == "claude-tui" || row.Name == "codex" || row.Name == "opencode" {
 				if _, ok := row.Instance.(harnesses.PortableRuntimeHarness); !ok {
-					t.Errorf("required Anthropic row %q lacks PortableRuntimeHarness", row.Name)
+					t.Errorf("required contributed row %q lacks PortableRuntimeHarness", row.Name)
 				}
 			}
 		}

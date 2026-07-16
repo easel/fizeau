@@ -14,20 +14,20 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 6f9b108ea195f5b5fbe06b328efd99a755c3167b2a4be1d646d2b748a74f255d
+    self_hash: 05629133d937569bb3cd655b514679c668aae17382e48df25e7ec6bf38204366
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
-      ADR-014: 699a2fd27c0d5e4f93266d79f7e36b6783f0eb287440ae24b238d241624dd438
-      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
-      CONTRACT-004: 56a72a7ad04dbf71b1ea292ce96b8976f2073dcddff63f2736a3cd5247b194d0
+      ADR-014: d9e7107a14144493dcd4037a8d869a218d541903f2a3dba963ce7dcaa4e4e3fc
+      CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
+      CONTRACT-004: b7daeef2361b78d88adbebb4ec1e3b43a5aa4f6d693ad012d0ec7299ea8865fd
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-16T00:51:21Z"
+    reviewed_at: "2026-07-16T02:02:08Z"
 ---
 # Build Plan — Fizeau
 
@@ -142,8 +142,8 @@ preselected route.
 |---|---|---|---|
 | P-0 Authority alignment | Align CONTRACT-003 public opacity/completeness, CONTRACT-004 harness ownership, ADR-014, this plan, and release gates | Lifecycle containment authority | HELIX graph validation and freshness checks pass; same-target and complete-or-error rules are unambiguous |
 | P-1 Complete runtime inventory | Join the production registry to actual service instances, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes and value-opaque execution constraints through `PortableRuntimeHarness`, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; launch recipes bypass copied loader/shebang paths; ordering, dedupe/conflict, target mismatch, inherited-name, typed environment/path constraint, and fixed-argument rules are deterministic without raw environment values |
-| P-2 Secure materialization | Stage one sibling tree, revalidate the empty caller directory by identity, commit one `runtime` child with no-replace rename, emit one fixed read-only guest mount, and retain retryable cleanup ownership | P-1 | Filesystem fixtures cover concurrent preparers, traversal, links, source identity/content races, partial failure, cancellation, modes, redaction, and failed-then-retried `Close` |
-| P-3 Public activation and OCI conformance | Add the opaque root facade plus `NewFromPortableRuntime`; reconstruct the configured service and production dispatch mapping in a separate public-only process from the fixed guest manifest before unpinned `Execute` | P-2 | `TestPortableRuntimeActivationFeedsProductionDispatch` and required non-root Linux OCI execute each static, dynamic, and interpreted recipe through unpinned `Execute`, plus opaque environment inheritance, configured-provider bootstrap, and structural candidate parity without skipping |
+| P-2 Secure materialization | Stage one sibling tree, revalidate the empty caller directory by identity, commit one `runtime` child with no-replace rename, emit one fixed read-only guest mount, mark target-prefixed credential/quota/cache state seeds for generated-scope activation, and retain retryable cleanup ownership | P-1 | Filesystem fixtures cover concurrent preparers, traversal, links, source identity/content races, partial failure, cancellation, modes, redaction, state-seed classification, and failed-then-retried `Close` |
+| P-3 Public activation and OCI conformance | Add the opaque root facade plus `NewFromPortableRuntime`; reconstruct the configured service and production dispatch mapping in a separate public-only process from the fixed guest manifest before unpinned `Execute`; copy credential/quota/cache seeds into owner-only writable generated data/state/cache scopes | P-2 | `TestPortableRuntimeActivationFeedsProductionDispatch` and required non-root Linux OCI execute each static, dynamic, and interpreted recipe through unpinned `Execute`, prove an OpenCode credential seed is readable while sibling data remains writable, and cover opaque environment inheritance, configured-provider bootstrap, and structural candidate parity without skipping |
 
 ## Issue Decomposition
 

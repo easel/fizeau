@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 699a2fd27c0d5e4f93266d79f7e36b6783f0eb287440ae24b238d241624dd438
+    self_hash: d9e7107a14144493dcd4037a8d869a218d541903f2a3dba963ce7dcaa4e4e3fc
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
-      CONTRACT-004: 56a72a7ad04dbf71b1ea292ce96b8976f2073dcddff63f2736a3cd5247b194d0
-    reviewed_at: "2026-07-16T00:51:21Z"
+      CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
+      CONTRACT-004: b7daeef2361b78d88adbebb4ec1e3b43a5aa4f6d693ad012d0ec7299ea8865fd
+    reviewed_at: "2026-07-16T02:02:08Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -608,7 +608,10 @@ caller-interpreted plan surface. `NewFromPortableRuntime` is the public
 activation seam that verifies the mounted manifest, reconstructs a closed-world
 child environment, enforces read-only/absent path rules, and reconstructs the
 configured service in the new process without the application-only config
-loader. Activation installs the typed launch recipes and ordered fixed argument
+loader. It also copies target-prefixed credential, quota, and cache state seeds
+into owner-only writable generated data/state/cache scopes; the read-only mount
+remains the source of truth and configuration trees remain immutable.
+Activation installs the typed launch recipes and ordered fixed argument
 prefixes into the production `Execute` dispatcher, not only a
 refresh/scheduler instance map. The embedding caller applies the opaque plan,
 orchestrates the external container as the mapped preparing UID, destroys its
@@ -659,5 +662,11 @@ owner.
   configuration/code-loading surfaces, prove shared
   Claude/Claude-TUI assets deduplicate, and prove the TUI environment projection
   matches its real `CLAUDE_*` boundary.
+- OpenCode fixtures bind the exact reviewed 1.14.33 Linux arm64 payload across
+  direct and npm layouts, run the emitted loader recipe in an isolated writable
+  generated-state environment, and fail when a required library is removed.
+  They reject legacy or executable configuration, remote `wellknown` auth, and
+  provider SDK selectors outside the audited bundled set; activation evidence
+  must seed `data/opencode/auth.json` without making configuration writable.
 - Static enforcement rejects service-side imports or calls to concrete
   harness path helpers for portable preparation.

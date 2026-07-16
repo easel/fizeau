@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 56a72a7ad04dbf71b1ea292ce96b8976f2073dcddff63f2736a3cd5247b194d0
+    self_hash: b7daeef2361b78d88adbebb4ec1e3b43a5aa4f6d693ad012d0ec7299ea8865fd
     deps:
-      CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
+      CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T00:51:15Z"
+    reviewed_at: "2026-07-16T02:01:23Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -644,6 +644,16 @@ remain absent.
 | `XDG_STATE_HOME` | Root of the generated `state` scope. |
 | `XDG_RUNTIME_DIR` | `runtime` child beneath the generated `tmp` scope. |
 | `TMPDIR` | Root of the generated `tmp` scope. |
+
+Credential, quota, and cache assets whose targets begin with `data/`, `state/`,
+or `cache/` are activation seeds for the matching generated scope. Activation
+copies them with owner-only permissions into its guest-private writable storage
+before process start; it never points an XDG variable at the read-only runtime
+mount merely to expose a seed. The target suffix after the scope prefix is
+preserved exactly. This lets a contributor declare, for example,
+`data/opencode/auth.json` while OpenCode remains free to create sibling log and
+database files under its generated data directory. Configuration trees remain
+read-only runtime assets and do not use this state-seed rule.
 
 Typed environment treatments have these exact meanings:
 

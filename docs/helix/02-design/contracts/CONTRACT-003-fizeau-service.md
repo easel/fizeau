@@ -317,7 +317,8 @@ and a field-exhaustive effective provider projection. `NewFromPortableRuntime`
 is the only public activation entrypoint. It reads that manifest from the fixed
 guest root, verifies its version and content identities, reconstructs the
 service config and the production execution-dispatch launch mapping, creates
-owner-only guest-private writable overlays for mutable quota/cache seeds, and
+owner-only guest-private writable overlays for credential, quota, and cache
+state seeds, and
 supplies Fizeau-owned path and locale variables to harness launches. A
 scheduler-only refresh map is insufficient: the later `Execute` must consume the
 activated launch recipe. Activation does not depend on the
@@ -358,8 +359,13 @@ Runtime directories use mode `0700`. Credential, generated config, quota, and
 cache regular files use mode `0600`; those classes are sensitive regardless of
 contributor flags. Executable closures retain only required owner execution
 bits and are never group/world writable. All public mounts are read-only;
-activation copies mutable quota/cache seeds to a guest-private writable overlay
-rather than modifying the mounted bundle. Validation failure, copy failure,
+activation copies credential, quota, and cache state seeds to guest-private
+writable overlays beneath the corresponding generated `data`, `state`, or
+`cache` scope rather than modifying the mounted bundle. This placement is
+generic and target-driven: a state asset such as `data/opencode/auth.json`
+becomes `auth.json` beneath the generated OpenCode data directory, so a harness
+may create sibling logs or databases without making the credential bundle
+writable. Configuration assets remain read-only. Validation failure, copy failure,
 context cancellation, or commit failure removes every staging artifact.
 
 The caller applies the one mount and inherited environment names verbatim
