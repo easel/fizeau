@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/easel/fizeau"
 )
 
 // RunCompare dispatches the same prompt to multiple harnesses,
@@ -45,9 +47,10 @@ func RunCompare(run RunFunc, opts CompareOptions) (*ComparisonRecord, error) {
 			wt, err := createCompareWorktree(baseDir, id, label)
 			if err != nil {
 				record.Arms[i] = ComparisonArm{
-					Harness:  label,
-					ExitCode: 1,
-					Error:    fmt.Sprintf("worktree: %s", err),
+					Harness:    label,
+					CostSource: fizeau.CostSourceUnknown,
+					ExitCode:   1,
+					Error:      fmt.Sprintf("worktree: %s", err),
 				}
 				continue
 			}
@@ -83,7 +86,7 @@ func runCompareArm(run RunFunc, opts CompareOptions, armIdx int, harnessName, ba
 	if l, ok := opts.ArmLabels[armIdx]; ok {
 		label = l
 	}
-	arm := ComparisonArm{Harness: label}
+	arm := ComparisonArm{Harness: label, CostSource: fizeau.CostSourceUnknown}
 
 	// Determine working directory.
 	workDir := baseDir
@@ -105,7 +108,7 @@ func runCompareArm(run RunFunc, opts CompareOptions, armIdx int, harnessName, ba
 	arm.Tokens = result.Tokens
 	arm.InputTokens = result.InputTokens
 	arm.OutputTokens = result.OutputTokens
-	arm.CostUSD = result.CostUSD
+	arm.CostUSD, arm.CostSource = normalizeRunResultCost(result)
 	arm.DurationMS = result.DurationMS
 	arm.ExitCode = result.ExitCode
 	arm.Error = result.Error

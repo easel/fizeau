@@ -64,20 +64,21 @@ type QuorumOptions struct {
 
 // ComparisonArm holds the result of one harness arm in a comparison.
 type ComparisonArm struct {
-	Harness      string          `json:"harness"`
-	Model        string          `json:"model,omitempty"`
-	Output       string          `json:"output"`
-	Diff         string          `json:"diff,omitempty"`         // git diff of side effects
-	ToolCalls    []ToolCallEntry `json:"tool_calls,omitempty"`   // agent tool call log
-	PostRunOut   string          `json:"post_run_out,omitempty"` // post-run command output
-	PostRunOK    *bool           `json:"post_run_ok,omitempty"`  // post-run pass/fail
-	Tokens       int             `json:"tokens,omitempty"`
-	InputTokens  int             `json:"input_tokens,omitempty"`
-	OutputTokens int             `json:"output_tokens,omitempty"`
-	CostUSD      float64         `json:"cost_usd,omitempty"`
-	DurationMS   int             `json:"duration_ms"`
-	ExitCode     int             `json:"exit_code"`
-	Error        string          `json:"error,omitempty"`
+	Harness      string            `json:"harness"`
+	Model        string            `json:"model,omitempty"`
+	Output       string            `json:"output"`
+	Diff         string            `json:"diff,omitempty"`         // git diff of side effects
+	ToolCalls    []ToolCallEntry   `json:"tool_calls,omitempty"`   // agent tool call log
+	PostRunOut   string            `json:"post_run_out,omitempty"` // post-run command output
+	PostRunOK    *bool             `json:"post_run_ok,omitempty"`  // post-run pass/fail
+	Tokens       int               `json:"tokens,omitempty"`
+	InputTokens  int               `json:"input_tokens,omitempty"`
+	OutputTokens int               `json:"output_tokens,omitempty"`
+	CostUSD      *float64          `json:"cost_usd,omitempty"`
+	CostSource   fizeau.CostSource `json:"cost_source"`
+	DurationMS   int               `json:"duration_ms"`
+	ExitCode     int               `json:"exit_code"`
+	Error        string            `json:"error,omitempty"`
 }
 
 // ComparisonRecord is the complete record of a comparison run.
@@ -131,13 +132,14 @@ type BenchmarkResult struct {
 
 // BenchmarkArmSummary aggregates stats for one arm across all prompts.
 type BenchmarkArmSummary struct {
-	Label         string  `json:"label"`
-	Completed     int     `json:"completed"`
-	Failed        int     `json:"failed"`
-	TotalTokens   int     `json:"total_tokens"`
-	TotalCostUSD  float64 `json:"total_cost_usd"`
-	AvgDurationMS int     `json:"avg_duration_ms"`
-	AvgScore      float64 `json:"avg_score,omitempty"`
+	Label         string            `json:"label"`
+	Completed     int               `json:"completed"`
+	Failed        int               `json:"failed"`
+	TotalTokens   int               `json:"total_tokens"`
+	TotalCostUSD  *float64          `json:"total_cost_usd,omitempty"`
+	CostSource    fizeau.CostSource `json:"cost_source"`
+	AvgDurationMS int               `json:"avg_duration_ms"`
+	AvgScore      float64           `json:"avg_score,omitempty"`
 }
 
 // BenchmarkSummary aggregates stats across all arms and prompts.

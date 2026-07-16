@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/easel/fizeau"
 	"github.com/easel/fizeau/internal/comparison"
 	"github.com/easel/fizeau/internal/safefs"
 )
@@ -77,11 +79,11 @@ func printSummaryTable(result *comparison.BenchmarkResult) {
 		strings.Repeat("-", 40), "-------", "-------",
 		"-----------", "-----------", "-----------")
 	for _, arm := range result.Summary.Arms {
-		fmt.Printf("%-40s %8d %8d %12d %12.6f %12d\n",
+		fmt.Printf("%-40s %8d %8d %12d %12s %12d\n",
 			truncate(arm.Label, 40),
 			arm.Completed, arm.Failed,
 			arm.TotalTokens,
-			arm.TotalCostUSD,
+			formatBenchmarkCost(arm.TotalCostUSD, arm.CostSource),
 			arm.AvgDurationMS,
 		)
 	}
@@ -163,9 +165,9 @@ func printMarkdownReport(result *comparison.BenchmarkResult) {
 	fmt.Println("| Arm | OK | Fail | Tokens | Cost USD | Avg ms |")
 	fmt.Println("|-----|---:|---:|---:|---:|---:|")
 	for _, arm := range result.Summary.Arms {
-		fmt.Printf("| %s | %d | %d | %d | %.6f | %d |\n",
+		fmt.Printf("| %s | %d | %d | %d | %s | %d |\n",
 			arm.Label, arm.Completed, arm.Failed,
-			arm.TotalTokens, arm.TotalCostUSD, arm.AvgDurationMS)
+			arm.TotalTokens, formatBenchmarkCost(arm.TotalCostUSD, arm.CostSource), arm.AvgDurationMS)
 	}
 
 	// Cost cap skips section.
@@ -208,6 +210,16 @@ func printMarkdownReport(result *comparison.BenchmarkResult) {
 		fmt.Printf("\n> **Note**: %s  \n", DeterministicSamplingNotice)
 		fmt.Printf("> Parity results for non-deterministic harnesses are advisory only.\n")
 	}
+}
+
+func formatBenchmarkCost(cost *float64, source fizeau.CostSource) string {
+	if cost == nil || *cost < 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0) {
+		return "n/a"
+	}
+	if source != fizeau.CostSourceReported && source != fizeau.CostSourceConfigured {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.6f", *cost)
 }
 
 func truncate(s string, n int) string {

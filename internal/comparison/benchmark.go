@@ -5,7 +5,41 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/easel/fizeau"
 )
+
+type benchmarkCostAggregate struct {
+	total    float64
+	source   fizeau.CostSource
+	count    int
+	allKnown bool
+}
+
+func (a *benchmarkCostAggregate) add(cost *float64, source fizeau.CostSource) {
+	if a.count == 0 {
+		a.allKnown = true
+	}
+	a.count++
+
+	amount, normalizedSource := normalizeComparisonCost(cost, source)
+	if amount == nil {
+		a.allKnown = false
+		return
+	}
+	a.total += *amount
+	if normalizedSource == fizeau.CostSourceReported || a.source == fizeau.CostSourceUnknown {
+		a.source = normalizedSource
+	}
+}
+
+func (a benchmarkCostAggregate) measurement() (*float64, fizeau.CostSource) {
+	if a.count == 0 || !a.allKnown {
+		return nil, fizeau.CostSourceUnknown
+	}
+	total := a.total
+	return &total, a.source
+}
 
 // LoadBenchmarkSuite reads a benchmark suite from a JSON file.
 func LoadBenchmarkSuite(path string) (*BenchmarkSuite, error) {
@@ -81,11 +115,13 @@ func summarizeBenchmark(result *BenchmarkResult) BenchmarkSummary {
 	}
 
 	armStats := make(map[string]*BenchmarkArmSummary)
+	armCosts := make(map[string]*benchmarkCostAggregate)
 	armOrder := make([]string, len(result.Arms))
 	for i, arm := range result.Arms {
 		label := arm.Label
 		armOrder[i] = label
-		armStats[label] = &BenchmarkArmSummary{Label: label}
+		armStats[label] = &BenchmarkArmSummary{Label: label, CostSource: fizeau.CostSourceUnknown}
+		armCosts[label] = &benchmarkCostAggregate{source: fizeau.CostSourceUnknown}
 	}
 
 	for _, cmp := range result.Comparisons {
@@ -100,13 +136,14 @@ func summarizeBenchmark(result *BenchmarkResult) BenchmarkSummary {
 				stats.Failed++
 			}
 			stats.TotalTokens += arm.Tokens
-			stats.TotalCostUSD += arm.CostUSD
+			armCosts[arm.Harness].add(arm.CostUSD, arm.CostSource)
 			stats.AvgDurationMS += arm.DurationMS
 		}
 	}
 
 	for _, label := range armOrder {
 		stats := armStats[label]
+		stats.TotalCostUSD, stats.CostSource = armCosts[label].measurement()
 		total := stats.Completed + stats.Failed
 		if total > 0 {
 			stats.AvgDurationMS = stats.AvgDurationMS / total

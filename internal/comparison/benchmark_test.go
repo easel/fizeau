@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/easel/fizeau"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -80,14 +81,14 @@ func TestSummarizeBenchmark(t *testing.T) {
 		Comparisons: []ComparisonRecord{
 			{
 				Arms: []ComparisonArm{
-					{Harness: "a", ExitCode: 0, Tokens: 100, CostUSD: 0.01, DurationMS: 5000},
-					{Harness: "b", ExitCode: 0, Tokens: 200, CostUSD: 0.05, DurationMS: 3000},
+					{Harness: "a", ExitCode: 0, Tokens: 100, CostUSD: testCostPointer(0.01), CostSource: fizeau.CostSourceReported, DurationMS: 5000},
+					{Harness: "b", ExitCode: 0, Tokens: 200, CostUSD: testCostPointer(0.05), CostSource: fizeau.CostSourceReported, DurationMS: 3000},
 				},
 			},
 			{
 				Arms: []ComparisonArm{
-					{Harness: "a", ExitCode: 0, Tokens: 150, CostUSD: 0.02, DurationMS: 4000},
-					{Harness: "b", ExitCode: 1, Tokens: 0, CostUSD: 0, DurationMS: 1000},
+					{Harness: "a", ExitCode: 0, Tokens: 150, CostUSD: testCostPointer(0.02), CostSource: fizeau.CostSourceReported, DurationMS: 4000},
+					{Harness: "b", ExitCode: 1, Tokens: 0, CostUSD: testCostPointer(0), CostSource: fizeau.CostSourceReported, DurationMS: 1000},
 				},
 			},
 		},
@@ -101,7 +102,9 @@ func TestSummarizeBenchmark(t *testing.T) {
 	assert.Equal(t, "a", a.Label)
 	assert.Equal(t, 2, a.Completed)
 	assert.Equal(t, 250, a.TotalTokens)
-	assert.InDelta(t, 0.03, a.TotalCostUSD, 0.001)
+	require.NotNil(t, a.TotalCostUSD)
+	assert.InDelta(t, 0.03, *a.TotalCostUSD, 0.001)
+	assert.Equal(t, fizeau.CostSourceReported, a.CostSource)
 	assert.Equal(t, 4500, a.AvgDurationMS)
 
 	b := summary.Arms[1]
