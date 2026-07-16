@@ -101,6 +101,27 @@ type PortableRuntimeConfiguredProvider struct {
 	CreditProbeTTL            time.Duration
 }
 
+func (p PortableRuntimeConfiguredProvider) String() string {
+	data, err := p.MarshalJSON()
+	if err != nil {
+		return "{portable configured provider: unavailable}"
+	}
+	return string(data)
+}
+
+func (p PortableRuntimeConfiguredProvider) GoString() string { return p.String() }
+
+// MarshalJSON keeps provider values on the explicit materializer bridge. A
+// row's generic representation is value-opaque because ConfigError and custom
+// endpoint fields can contain host-derived diagnostics.
+func (p PortableRuntimeConfiguredProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name               string `json:"name"`
+		EndpointCount      int    `json:"endpoint_count"`
+		ConfigErrorPresent bool   `json:"config_error_present"`
+	}{p.Name, len(p.Endpoints), p.ConfigError != ""})
+}
+
 // PortableRuntimeProviderSensitive is the internal sensitive record paired
 // with one structural provider. Its values are available only to the secure
 // materializer through explicit accessors. Generic formatting and JSON always
@@ -166,6 +187,17 @@ func (s PortableRuntimeConfiguredProviders) String() string {
 }
 
 func (s PortableRuntimeConfiguredProviders) GoString() string { return s.String() }
+
+// MarshalJSON keeps the structural snapshot available only to the explicit
+// materializer bridge. Generic diagnostics expose counts and names, never
+// provider diagnostics, endpoint values, or host-derived text.
+func (s PortableRuntimeConfiguredProviders) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ProviderNames       []string `json:"provider_names"`
+		DefaultProviderName string   `json:"default_provider_name"`
+		ProviderCount       int      `json:"provider_count"`
+	}{append([]string(nil), s.ProviderNames...), s.DefaultProviderName, len(s.Providers)})
+}
 
 // BuildPortableRuntimeConfiguredProviders produces a deterministic structural
 // snapshot without health, quota, network, model-discovery, or route probes.
