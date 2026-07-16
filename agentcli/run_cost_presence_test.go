@@ -14,28 +14,28 @@ import (
 func TestExecuteViaServicePreservesFinalCostPresence(t *testing.T) {
 	tests := []struct {
 		name       string
-		wireCost   float64
+		wireCost   *float64
 		wireSource fizeau.CostSource
 		wantCost   *float64
 		wantSource fizeau.CostSource
 	}{
 		{
 			name:       "source-less scalar remains unknown",
-			wireCost:   9.75,
+			wireCost:   costPointer(9.75),
 			wireSource: fizeau.CostSourceUnknown,
 			wantCost:   nil,
 			wantSource: fizeau.CostSourceUnknown,
 		},
 		{
 			name:       "reported zero remains present",
-			wireCost:   0,
+			wireCost:   costPointer(0),
 			wireSource: fizeau.CostSourceReported,
 			wantCost:   costPointer(0),
 			wantSource: fizeau.CostSourceReported,
 		},
 		{
 			name:       "configured positive remains present",
-			wireCost:   1.25,
+			wireCost:   costPointer(1.25),
 			wireSource: fizeau.CostSourceConfigured,
 			wantCost:   costPointer(1.25),
 			wantSource: fizeau.CostSourceConfigured,

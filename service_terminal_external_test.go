@@ -62,6 +62,7 @@ func TestServiceFinalTypedClassificationRoundTrip(t *testing.T) {
 
 func TestPublicSessionEndTypedValuesDurableRoundTrip(t *testing.T) {
 	dir := t.TempDir()
+	cost := 0.0
 	logger := fizeau.NewSessionLogger(dir, "public-terminal")
 	logger.Emit(fizeau.EventSessionEnd, fizeau.SessionEndData{
 		Status:         fizeau.StatusSuccess,
@@ -71,6 +72,8 @@ func TestPublicSessionEndTypedValuesDurableRoundTrip(t *testing.T) {
 		PrimaryOutcome: fizeau.SessionOutcomeSuccess,
 		PrimaryCause:   fizeau.TerminalCauseCompleted,
 		PrimaryStage:   fizeau.SessionStageHarness,
+		CostUSD:        &cost,
+		CostSource:     fizeau.CostSourceReported,
 	})
 	if err := logger.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -92,5 +95,8 @@ func TestPublicSessionEndTypedValuesDurableRoundTrip(t *testing.T) {
 	}
 	if got.PrimaryCause != fizeau.TerminalCauseCompleted || got.PrimaryStage != fizeau.SessionStageHarness {
 		t.Fatalf("root-only durable primary tuple = %q/%q/%q", got.PrimaryOutcome, got.PrimaryCause, got.PrimaryStage)
+	}
+	if got.CostUSD == nil || *got.CostUSD != 0 || got.CostSource != fizeau.CostSourceReported {
+		t.Fatalf("root-only durable cost = %v/%q, want 0/reported", got.CostUSD, got.CostSource)
 	}
 }

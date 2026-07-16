@@ -72,7 +72,7 @@ type ServiceOverridePromptFeatures struct {
 // final event. Always omitted on rejected_override events.
 type ServiceOverrideOutcome struct {
 	Status     string     `json:"status"`
-	CostUSD    float64    `json:"cost_usd,omitempty"`
+	CostUSD    *float64   `json:"cost_usd,omitempty"`
 	CostSource CostSource `json:"cost_source"`
 	DurationMS int64      `json:"duration_ms"`
 }
@@ -443,7 +443,7 @@ type ServiceFinalData struct {
 	DurationMS     int64                 `json:"duration_ms"`
 	Usage          *ServiceFinalUsage    `json:"usage,omitempty"`
 	Warnings       []ServiceFinalWarning `json:"warnings,omitempty"`
-	CostUSD        float64               `json:"cost_usd,omitempty"`
+	CostUSD        *float64              `json:"cost_usd,omitempty"`
 	CostSource     CostSource            `json:"cost_source"`
 	SessionLogPath string                `json:"session_log_path,omitempty"`
 	RoutingActual  *ServiceRoutingActual `json:"routing_actual,omitempty"`
@@ -642,7 +642,7 @@ type DrainExecuteResult struct {
 	FinalText      string
 	Usage          *ServiceFinalUsage
 	Warnings       []ServiceFinalWarning
-	CostUSD        float64
+	CostUSD        *float64
 	CostSource     CostSource
 	SessionLogPath string
 	RoutingActual  *ServiceRoutingActual
@@ -705,10 +705,7 @@ func (r *DrainExecuteResult) append(ev ServiceDecodedEvent) {
 		r.Usage = ev.Final.Usage
 		r.Warnings = ev.Final.Warnings
 		cost, source := ev.Final.CostMeasurement()
-		r.CostUSD = 0
-		if cost != nil {
-			r.CostUSD = *cost
-		}
+		r.CostUSD = cost
 		r.CostSource = source
 		r.SessionLogPath = ev.Final.SessionLogPath
 		r.RoutingActual = ev.Final.RoutingActual

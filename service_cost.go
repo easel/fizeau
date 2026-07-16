@@ -15,14 +15,10 @@ const (
 )
 
 // CostMeasurement returns the source-backed final cost as a fresh pointer.
-// During the v0.15 compatibility migration, CostSource is the presence bit
-// that distinguishes a known zero from an unknown scalar zero.
+// CostSource and pointer presence distinguish a known zero from an unknown
+// amount. The returned amount is cloned from the final payload.
 func (d ServiceFinalData) CostMeasurement() (*float64, CostSource) {
-	return normalizePublicCost(d.CostUSD, d.CostSource)
-}
-
-func normalizePublicCost(cost float64, source CostSource) (*float64, CostSource) {
-	return normalizePublicCostPointer(&cost, source)
+	return normalizePublicCostPointer(d.CostUSD, d.CostSource)
 }
 
 func normalizePublicCostPointer(cost *float64, source CostSource) (*float64, CostSource) {
@@ -43,14 +39,6 @@ func normalizePublicCostSource(source CostSource) CostSource {
 	}
 }
 
-func decodePublicCost(costRaw, sourceRaw json.RawMessage) (float64, CostSource, error) {
-	amount, source, err := decodePublicCostMeasurement(costRaw, sourceRaw)
-	if err != nil || amount == nil {
-		return 0, source, err
-	}
-	return *amount, source, nil
-}
-
 func decodePublicCostMeasurement(costRaw, sourceRaw json.RawMessage) (*float64, CostSource, error) {
 	if len(sourceRaw) == 0 || string(sourceRaw) == "null" {
 		return nil, CostSourceUnknown, nil
@@ -66,12 +54,11 @@ func decodePublicCostMeasurement(costRaw, sourceRaw json.RawMessage) (*float64, 
 	if err := json.Unmarshal(costRaw, &cost); err != nil {
 		return nil, CostSourceUnknown, err
 	}
-	amount, normalizedSource := normalizePublicCost(cost, source)
+	amount, normalizedSource := normalizePublicCostPointer(&cost, source)
 	return amount, normalizedSource, nil
 }
 
-// MarshalJSON keeps the temporary scalar Go field while emitting the
-// normative optional amount and mandatory provenance on the wire.
+// MarshalJSON emits the normalized optional amount and mandatory provenance.
 func (d ServiceFinalData) MarshalJSON() ([]byte, error) {
 	type serviceFinalDataAlias ServiceFinalData
 	cost, source := d.CostMeasurement()
@@ -101,7 +88,7 @@ func (d *ServiceFinalData) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	cost, source, err := decodePublicCost(wire.CostUSD, wire.CostSource)
+	cost, source, err := decodePublicCostMeasurement(wire.CostUSD, wire.CostSource)
 	if err != nil {
 		return err
 	}
@@ -112,7 +99,7 @@ func (d *ServiceFinalData) UnmarshalJSON(data []byte) error {
 }
 
 func (o ServiceOverrideOutcome) costMeasurement() (*float64, CostSource) {
-	return normalizePublicCost(o.CostUSD, o.CostSource)
+	return normalizePublicCostPointer(o.CostUSD, o.CostSource)
 }
 
 // MarshalJSON preserves known zero override costs and omits unknown amounts.
@@ -144,7 +131,7 @@ func (o *ServiceOverrideOutcome) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	cost, source, err := decodePublicCost(wire.CostUSD, wire.CostSource)
+	cost, source, err := decodePublicCostMeasurement(wire.CostUSD, wire.CostSource)
 	if err != nil {
 		return err
 	}

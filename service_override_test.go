@@ -521,8 +521,12 @@ func TestOverrideEventOutcomePopulatedFromFinal(t *testing.T) {
 	if payload.Outcome.DurationMS != finalPayload.DurationMS {
 		t.Fatalf("outcome.duration_ms: got %d, want %d", payload.Outcome.DurationMS, finalPayload.DurationMS)
 	}
-	if payload.Outcome.CostUSD != finalPayload.CostUSD {
+	if (payload.Outcome.CostUSD == nil) != (finalPayload.CostUSD == nil) ||
+		(payload.Outcome.CostUSD != nil && *payload.Outcome.CostUSD != *finalPayload.CostUSD) {
 		t.Fatalf("outcome.cost_usd: got %v, want %v", payload.Outcome.CostUSD, finalPayload.CostUSD)
+	}
+	if payload.Outcome.CostSource != finalPayload.CostSource {
+		t.Fatalf("outcome.cost_source: got %q, want %q", payload.Outcome.CostSource, finalPayload.CostSource)
 	}
 }
 
