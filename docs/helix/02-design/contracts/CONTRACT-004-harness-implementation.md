@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 40d2680ac1668ced16aac90efc28cec7e33aa015e13fbe6b279d29132ebb579e
+    self_hash: 4487661e9f9919f70cfcd5a2a6d35b4e39ae6b829e70885475b148f74bd72a70
     deps:
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-15T23:11:16Z"
+    reviewed_at: "2026-07-16T00:41:02Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -261,6 +261,8 @@ type PortableRuntimeTarget struct {
 type PortableRuntimeAssetKind string
 type PortableRuntimePathKind string
 type PortableRuntimeClosureClass string
+type PortableRuntimeGuestPathScope string
+type PortableRuntimeEnvironmentConstraintKind string
 
 const (
     PortableRuntimeAssetExecutable  PortableRuntimeAssetKind = "executable"
@@ -277,6 +279,20 @@ const (
     PortableRuntimeClosureStatic      PortableRuntimeClosureClass = "static"
     PortableRuntimeClosureDynamic     PortableRuntimeClosureClass = "dynamic"
     PortableRuntimeClosureInterpreted PortableRuntimeClosureClass = "interpreted"
+
+    PortableRuntimeGuestPathRuntime PortableRuntimeGuestPathScope = "runtime"
+    PortableRuntimeGuestPathHome    PortableRuntimeGuestPathScope = "home"
+    PortableRuntimeGuestPathConfig  PortableRuntimeGuestPathScope = "config"
+    PortableRuntimeGuestPathData    PortableRuntimeGuestPathScope = "data"
+    PortableRuntimeGuestPathCache   PortableRuntimeGuestPathScope = "cache"
+    PortableRuntimeGuestPathState   PortableRuntimeGuestPathScope = "state"
+    PortableRuntimeGuestPathTmp     PortableRuntimeGuestPathScope = "tmp"
+
+    PortableRuntimeEnvironmentFixedTrue  PortableRuntimeEnvironmentConstraintKind = "fixed_true"
+    PortableRuntimeEnvironmentFixedFalse PortableRuntimeEnvironmentConstraintKind = "fixed_false"
+    PortableRuntimeEnvironmentGuestPath  PortableRuntimeEnvironmentConstraintKind = "guest_path"
+    PortableRuntimeEnvironmentUnset      PortableRuntimeEnvironmentConstraintKind = "unset"
+    PortableRuntimeEnvironmentRuntimePath PortableRuntimeEnvironmentConstraintKind = "runtime_path"
 )
 
 // PortableRuntimeAsset is one harness-owned member of a verified executable
@@ -308,11 +324,36 @@ type PortableRuntimeEnvironment struct {
     Name string
 }
 
+// PortableRuntimeGuestPath identifies a path beneath one activation-owned
+// guest root. Target is slash-relative and never carries a host path.
+type PortableRuntimeGuestPath struct {
+    Scope  PortableRuntimeGuestPathScope
+    Target string
+}
+
+// PortableRuntimeEnvironmentConstraint declares one activation-owned
+// environment treatment without carrying a raw environment value.
+type PortableRuntimeEnvironmentConstraint struct {
+    Name      string
+    Kind      PortableRuntimeEnvironmentConstraintKind
+    GuestPath PortableRuntimeGuestPath
+}
+
+// PortableRuntimeExecutionConstraints is harness-declared execution evidence.
+// Activation interprets it generically after materialization persists it.
+type PortableRuntimeExecutionConstraints struct {
+    Environment         []PortableRuntimeEnvironmentConstraint
+    ReadOnlyPaths       []PortableRuntimeGuestPath
+    RequiredAbsentPaths []PortableRuntimeGuestPath
+    FixedArguments      []string
+}
+
 type PortableRuntimeContribution struct {
-    ClosureClass PortableRuntimeClosureClass
-    Launch       PortableRuntimeLaunch
-    Assets       []PortableRuntimeAsset
-    Environment  []PortableRuntimeEnvironment
+    ClosureClass         PortableRuntimeClosureClass
+    Launch               PortableRuntimeLaunch
+    Assets               []PortableRuntimeAsset
+    Environment          []PortableRuntimeEnvironment
+    ExecutionConstraints PortableRuntimeExecutionConstraints
 }
 
 // PortableRuntimeHarness is the optional harness-owned asset-discovery
@@ -535,7 +576,10 @@ rather than silently omitting that structural candidate.
 `ContinuationRequest`, `PreparedContinuation`, `PortableRuntimeTarget`,
 `PortableRuntimeAssetKind`, `PortableRuntimePathKind`,
 `PortableRuntimeClosureClass`, `PortableRuntimeAsset`, `PortableRuntimeLaunch`,
-`PortableRuntimeEnvironment`, `PortableRuntimeContribution`, `HarnessInfo`,
+`PortableRuntimeEnvironment`, `PortableRuntimeGuestPathScope`,
+`PortableRuntimeGuestPath`, `PortableRuntimeEnvironmentConstraintKind`,
+`PortableRuntimeEnvironmentConstraint`, `PortableRuntimeExecutionConstraints`,
+`PortableRuntimeContribution`, `HarnessInfo`,
 `EventType`, and `ContextCapacityData` retain or receive their definitions in
 `internal/harnesses/types.go` as specified here.
 
@@ -569,8 +613,90 @@ credential or executable closure from an otherwise eligible surface.
 `PortableRuntimeHarness` describes assets; it does not materialize them. The
 harness package owns discovery of its executable/install closure, credentials,
 config, quota state, cache state, required runtime support, and inherited
-environment names. The neutral materializer owns validation, copying,
-permissions, staging, rollback, public-plan projection, and cleanup.
+environment names. It also owns declaration of execution constraints required
+to keep that closure closed. The neutral materializer owns generic validation,
+canonical private persistence, copying, permissions, staging, rollback,
+public-plan projection, and cleanup. Activation owns generic enforcement of the
+persisted constraints. Service and activation code MUST NOT reproduce an
+OpenCode-, Claude-, Codex-, Gemini-, or other harness-specific rule.
+
+### Portable runtime execution constraints
+
+The portable process environment is closed-world. Activation starts from an
+empty environment, constructs the finite Fizeau baseline below, copies only the
+names in the contribution's inherited `Environment` allowlist, then applies
+`ExecutionConstraints.Environment`. A name has exactly one effective mode.
+An inherited name MUST NOT also have a typed constraint, and baseline names
+MUST NOT be inherited. Host variables absent from the allowlist and typed rules
+remain absent.
+
+| Baseline name | Activation-owned semantic value |
+|---|---|
+| `HOME` | Root of the generated `home` scope. |
+| `PATH` | `runtime_path`: the stable, deduplicated, lexical list of guest parent directories containing declared owner-executable assets, followed by the fixed guest tool directories `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. Arbitrary host PATH segments are never retained. |
+| `USER`, `LOGNAME` | The fixed non-secret runtime identity `fizeau`. |
+| `SHELL` | The fixed guest tool path `/bin/sh`. |
+| `XDG_CONFIG_HOME` | Root of the generated `config` scope. |
+| `XDG_DATA_HOME` | Root of the generated `data` scope. |
+| `XDG_CACHE_HOME` | Root of the generated `cache` scope. |
+| `XDG_STATE_HOME` | Root of the generated `state` scope. |
+| `XDG_RUNTIME_DIR` | `runtime` child beneath the generated `tmp` scope. |
+| `TMPDIR` | Root of the generated `tmp` scope. |
+
+Typed environment treatments have these exact meanings:
+
+| `Kind` | Required fields | Activation behavior |
+|---|---|---|
+| `fixed_true` | Valid `Name`; zero `GuestPath` | Generate the ASCII boolean `true`. |
+| `fixed_false` | Valid `Name`; zero `GuestPath` | Generate the ASCII boolean `false`. |
+| `guest_path` | Valid `Name` and typed `GuestPath` | Generate the absolute guest path for `Scope` plus `Target`. An empty `Target` means the scope root and is valid only here. |
+| `unset` | Valid `Name`; zero `GuestPath` | Ensure the name is absent. |
+| `runtime_path` | `Name` exactly `PATH`; zero `GuestPath` | Regenerate the baseline search path above without accepting a colon-delimited value. |
+
+For baseline overrides, `PATH` accepts only `runtime_path`;
+`USER`/`LOGNAME`/`SHELL` accept only `unset`; and `HOME`, the XDG names, and
+`TMPDIR` accept only `guest_path` or `unset`. Other valid names may use
+`fixed_true`, `fixed_false`, `guest_path`, or `unset`. The schema contains no
+environment value, raw assignment, source selector, or free-form absolute
+path. A `guest_path` in the `runtime` scope MUST name an exact declared asset
+or an ancestor of a declared asset tree or read-only tree. This permits, for example,
+`XDG_CONFIG_HOME={runtime,config}` only when a declared config tree such as
+`{runtime,config/opencode}` backs that path.
+
+`PortableRuntimeGuestPath.Scope` has exactly seven values:
+
+| Scope | Root owner and mutability |
+|---|---|
+| `runtime` | The immutable mounted portable-runtime tree. |
+| `home` | Activation-owned private home root. |
+| `config` | Activation-owned private configuration root. |
+| `data` | Activation-owned private data root. |
+| `cache` | Activation-owned private cache overlay root. |
+| `state` | Activation-owned private state overlay root. |
+| `tmp` | Activation-owned private temporary root. |
+
+Every non-empty `Target` is a clean slash-relative path: absolute paths,
+traversal, backslashes, NUL, and a work-directory scope are invalid.
+`ReadOnlyPaths` accepts only `runtime` paths backed by the exact target of a
+declared `Kind=config`, `PathKind=tree` asset. A file, cache/quota asset, or
+writable-state overlay cannot satisfy the rule. The declaration represents the
+required policy; it does not certify `W_OK` denial. Activation MUST enforce the
+read-only boundary generically, and required OCI conformance MUST prove that
+the runtime user cannot write it or run an installer through it.
+
+`RequiredAbsentPaths` accepts only the immutable/generated scopes above. Each
+path MUST be disjoint from every declared asset, read-only path, explicitly
+generated `guest_path`, and other required-absent path under exact,
+ancestor, and descendant comparison. Activation MUST verify absence before any
+service activity and MUST NOT create the path later.
+
+Environment constraints sort by `Name`; read-only and required-absent paths
+sort by `Scope`, then `Target`. Duplicate or conflicting rules fail with
+`ErrPortableRuntimeClosureIncomplete`. Errors identify only rule classes and
+indexes. `FixedArguments` remains in contributor order, contains unique,
+non-empty fixed non-secret arguments, and is inserted after the complete
+executable/loader/interpreter recipe but before registry and request arguments.
+No route selector, secret, environment assignment, or placeholder is valid.
 
 A PATH result or final symlink target is not automatically a complete
 executable closure. Each subprocess contribution declares one supported
@@ -594,12 +720,12 @@ Launch construction is exhaustive and does not use guest PATH, the copied
 ELF `PT_INTERP`, an absolute shebang, or a shell wrapper:
 
 ```text
-static:      <guest EntrypointTarget> + request argv
-dynamic:     <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest EntrypointTarget> + request argv
+static:      <guest EntrypointTarget> + FixedArguments + registry argv + request argv
+dynamic:     <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest EntrypointTarget> + FixedArguments + registry argv + request argv
 interpreted, static interpreter:
-             <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + request argv
+             <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + registry argv + request argv
 interpreted, dynamic interpreter:
-             <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + request argv
+             <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + registry argv + request argv
 ```
 
 Every target in `Launch` MUST resolve to a declared asset, a declared directory
@@ -609,7 +735,9 @@ recipe. The static/dynamic entrypoint plus every loader and
 interpreter target are regular owner-executable files. An interpreted entrypoint may be a
 non-executable regular file because the bundled interpreter opens it directly.
 `RuntimeArgs` contains no placeholder, environment assignment, route selector,
-or secret. `NewFromPortableRuntime` must install this recipe into the actual
+or secret. `FixedArguments` follows the complete executable recipe and precedes
+all registry/request arguments; neither the registry nor a request can move,
+replace, or interleave this prefix. `NewFromPortableRuntime` must install this recipe into the actual
 execution dispatch path; a scheduler-only or refresh-only instance map is not
 enough.
 
@@ -1038,7 +1166,7 @@ Every harness implementation MUST carry, at minimum:
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
 | `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
-| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names cross the interface. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline in required Linux OCI conformance. |
+| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints` proves the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, absence conflicts, ordered fixed arguments, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree denies writes and installer-created content. |
 | Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
 | Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
 | Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
@@ -1146,12 +1274,14 @@ by `go vet`-shaped tooling:
     serviceimpl and the root facade map it exhaustively, and harness-native
     streams never originate or terminalize it. The event order defined above
     is preserved in live, logged, decoded, and replayed projections.
-20. **Portable asset discovery is harness-owned and value-opaque.** Service
+20. **Portable asset and constraint discovery is harness-owned and value-opaque.** Service
     code consumes only `PortableRuntimeHarness`; it does not reproduce concrete
     path rules. Contributions contain content-addressed same-target dependency
-    closures, typed guest-relative launch recipes, and validated inherited
-    environment names, never values, route decisions, sessions, processes, or
-    public diagnostics.
+    closures, typed guest-relative launch recipes, validated inherited
+    environment names, and typed execution constraints, never raw environment
+    values/assignments, host paths, route decisions, sessions, processes, or
+    public diagnostics. The private materializer persists the normalized record;
+    activation enforces it generically.
 21. **Portable inventory is complete or fails.** Every installed non-test
     structurally unpinned-capable subprocess instance contributes a closure.
     Actual native/HTTP transports, explicitly pinned-only surfaces, and
@@ -1275,8 +1405,11 @@ by `go vet`-shaped tooling:
 24. `internal/harnesses/types.go` declares `PortableRuntimeTarget`,
     `PortableRuntimeAssetKind`, `PortableRuntimePathKind`,
     `PortableRuntimeClosureClass`, `PortableRuntimeAsset`,
-    `PortableRuntimeLaunch`,
-    `PortableRuntimeEnvironment`, `PortableRuntimeContribution`, optional
+    `PortableRuntimeLaunch`, `PortableRuntimeEnvironment`,
+    `PortableRuntimeGuestPathScope`, `PortableRuntimeGuestPath`,
+    `PortableRuntimeEnvironmentConstraintKind`,
+    `PortableRuntimeEnvironmentConstraint`,
+    `PortableRuntimeExecutionConstraints`, `PortableRuntimeContribution`, optional
     `PortableRuntimeHarness`, `ErrPortableRuntimeTargetUnsupported`, and
     `ErrPortableRuntimeClosureIncomplete` with the signatures, content
     identities, closure classes, and value-opaque behavior above.
@@ -1289,12 +1422,19 @@ by `go vet`-shaped tooling:
     unknown installed layouts, and required OCI fixtures execute static,
     dynamic, and interpreted closures offline.
 26. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` and redaction
-    fixtures prove contributions contain unique valid inherited names only and
-    no secret value, empty/unset ambiguity, `name=value` assignment,
+    fixtures prove contributions contain unique valid inherited names and
+    typed generated/unset rules only and no secret value, empty/unset ambiguity, `name=value` assignment,
     account-bearing diagnostic path, route selector, process start, provider
     contact, or session/lifecycle record. Asset and launch validation rejects
     inconsistent kind/path/executable/loader/interpreter combinations before
     copying.
+27. `TestPortableRuntimeExecutionConstraints` proves closed-world baseline,
+    inherited, and typed-rule name ownership; the exact enum/field shape;
+    runtime-backed environment paths; exact config-tree read-only backing;
+    required-absent disjointness; deterministic sorting and defensive copies;
+    ordered unique fixed arguments; raw assignment/path rejection; and
+    index-only redacted errors. Later activation and OCI tests prove actual
+    read-only enforcement and absence before process start.
 
 ## References
 

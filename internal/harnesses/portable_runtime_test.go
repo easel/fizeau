@@ -35,11 +35,27 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeEnvironment{}), []fieldContract{
 		{name: "Name", typ: reflect.TypeOf("")},
 	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeGuestPath{}), []fieldContract{
+		{name: "Scope", typ: reflect.TypeOf(PortableRuntimeGuestPathScope(""))},
+		{name: "Target", typ: reflect.TypeOf("")},
+	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeEnvironmentConstraint{}), []fieldContract{
+		{name: "Name", typ: reflect.TypeOf("")},
+		{name: "Kind", typ: reflect.TypeOf(PortableRuntimeEnvironmentConstraintKind(""))},
+		{name: "GuestPath", typ: reflect.TypeOf(PortableRuntimeGuestPath{})},
+	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeExecutionConstraints{}), []fieldContract{
+		{name: "Environment", typ: reflect.TypeOf([]PortableRuntimeEnvironmentConstraint{})},
+		{name: "ReadOnlyPaths", typ: reflect.TypeOf([]PortableRuntimeGuestPath{})},
+		{name: "RequiredAbsentPaths", typ: reflect.TypeOf([]PortableRuntimeGuestPath{})},
+		{name: "FixedArguments", typ: reflect.TypeOf([]string{})},
+	})
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeContribution{}), []fieldContract{
 		{name: "ClosureClass", typ: reflect.TypeOf(PortableRuntimeClosureClass(""))},
 		{name: "Launch", typ: reflect.TypeOf(PortableRuntimeLaunch{})},
 		{name: "Assets", typ: reflect.TypeOf([]PortableRuntimeAsset{})},
 		{name: "Environment", typ: reflect.TypeOf([]PortableRuntimeEnvironment{})},
+		{name: "ExecutionConstraints", typ: reflect.TypeOf(PortableRuntimeExecutionConstraints{})},
 	})
 
 	if got, want := []PortableRuntimeAssetKind{
@@ -64,6 +80,26 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 		PortableRuntimeClosureInterpreted,
 	}, []PortableRuntimeClosureClass{"static", "dynamic", "interpreted"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("closure classes = %q, want %q", got, want)
+	}
+	if got, want := []PortableRuntimeGuestPathScope{
+		PortableRuntimeGuestPathRuntime,
+		PortableRuntimeGuestPathHome,
+		PortableRuntimeGuestPathConfig,
+		PortableRuntimeGuestPathData,
+		PortableRuntimeGuestPathCache,
+		PortableRuntimeGuestPathState,
+		PortableRuntimeGuestPathTmp,
+	}, []PortableRuntimeGuestPathScope{"runtime", "home", "config", "data", "cache", "state", "tmp"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("guest path scopes = %q, want %q", got, want)
+	}
+	if got, want := []PortableRuntimeEnvironmentConstraintKind{
+		PortableRuntimeEnvironmentFixedTrue,
+		PortableRuntimeEnvironmentFixedFalse,
+		PortableRuntimeEnvironmentGuestPath,
+		PortableRuntimeEnvironmentUnset,
+		PortableRuntimeEnvironmentRuntimePath,
+	}, []PortableRuntimeEnvironmentConstraintKind{"fixed_true", "fixed_false", "guest_path", "unset", "runtime_path"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("environment constraint kinds = %q, want %q", got, want)
 	}
 
 	capability := reflect.TypeOf((*PortableRuntimeHarness)(nil)).Elem()
@@ -161,6 +197,263 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 		})
 	}
 
+}
+
+func TestPortableRuntimeExecutionConstraints(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 validation is Linux-only")
+	}
+
+	hostRoot := t.TempDir()
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	contribution := validPortableRuntimeExecutionContribution(hostRoot)
+	contribution.Assets = append(contribution.Assets,
+		portableRuntimeTestAsset(hostRoot, "other-config", "config/other", PortableRuntimeAssetConfig, PortableRuntimePathTree, false))
+	contribution.ExecutionConstraints.Environment = []PortableRuntimeEnvironmentConstraint{
+		{Name: "PATH", Kind: PortableRuntimeEnvironmentRuntimePath},
+		{Name: "XDG_CONFIG_HOME", Kind: PortableRuntimeEnvironmentGuestPath, GuestPath: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "config"}},
+		{Name: "FEATURE_ENABLED", Kind: PortableRuntimeEnvironmentFixedTrue},
+		{Name: "FEATURE_DISABLED", Kind: PortableRuntimeEnvironmentFixedFalse},
+		{Name: "USER", Kind: PortableRuntimeEnvironmentUnset},
+	}
+	contribution.ExecutionConstraints.ReadOnlyPaths = []PortableRuntimeGuestPath{
+		{Scope: PortableRuntimeGuestPathRuntime, Target: "config/other"},
+		{Scope: PortableRuntimeGuestPathRuntime, Target: "config/opencode"},
+	}
+	contribution.ExecutionConstraints.RequiredAbsentPaths = []PortableRuntimeGuestPath{
+		{Scope: PortableRuntimeGuestPathHome, Target: ".config/opencode.json"},
+		{Scope: PortableRuntimeGuestPathConfig, Target: "legacy/opencode.json"},
+		{Scope: PortableRuntimeGuestPathCache, Target: "installers/opencode"},
+	}
+	contribution.ExecutionConstraints.FixedArguments = []string{"--pure", "--disable-auto-update"}
+
+	normalized, err := NormalizePortableRuntimeContribution(target, contribution)
+	if err != nil {
+		t.Fatalf("NormalizePortableRuntimeContribution() error = %v", err)
+	}
+	if got, want := normalized.ExecutionConstraints.Environment, []PortableRuntimeEnvironmentConstraint{
+		{Name: "FEATURE_DISABLED", Kind: PortableRuntimeEnvironmentFixedFalse},
+		{Name: "FEATURE_ENABLED", Kind: PortableRuntimeEnvironmentFixedTrue},
+		{Name: "PATH", Kind: PortableRuntimeEnvironmentRuntimePath},
+		{Name: "USER", Kind: PortableRuntimeEnvironmentUnset},
+		{Name: "XDG_CONFIG_HOME", Kind: PortableRuntimeEnvironmentGuestPath, GuestPath: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "config"}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("environment constraints = %#v, want %#v", got, want)
+	}
+	if got, want := normalized.ExecutionConstraints.ReadOnlyPaths, []PortableRuntimeGuestPath{
+		{Scope: PortableRuntimeGuestPathRuntime, Target: "config/opencode"},
+		{Scope: PortableRuntimeGuestPathRuntime, Target: "config/other"},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("read-only paths = %#v, want %#v", got, want)
+	}
+	if got, want := normalized.ExecutionConstraints.RequiredAbsentPaths, []PortableRuntimeGuestPath{
+		{Scope: PortableRuntimeGuestPathCache, Target: "installers/opencode"},
+		{Scope: PortableRuntimeGuestPathConfig, Target: "legacy/opencode.json"},
+		{Scope: PortableRuntimeGuestPathHome, Target: ".config/opencode.json"},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("required-absent paths = %#v, want %#v", got, want)
+	}
+	if got, want := normalized.ExecutionConstraints.FixedArguments, []string{"--pure", "--disable-auto-update"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("fixed arguments = %#v, want ordered %#v", got, want)
+	}
+
+	contribution.ExecutionConstraints.Environment[0].Name = "MUTATED"
+	contribution.ExecutionConstraints.ReadOnlyPaths[0].Target = "mutated"
+	contribution.ExecutionConstraints.RequiredAbsentPaths[0].Target = "mutated"
+	contribution.ExecutionConstraints.FixedArguments[0] = "mutated"
+	if normalized.ExecutionConstraints.Environment[2].Name != "PATH" ||
+		normalized.ExecutionConstraints.ReadOnlyPaths[1].Target != "config/other" ||
+		normalized.ExecutionConstraints.RequiredAbsentPaths[2].Target != ".config/opencode.json" ||
+		normalized.ExecutionConstraints.FixedArguments[0] != "--pure" {
+		t.Fatal("normalized execution constraints alias contributor-owned slices")
+	}
+
+	const sensitive = "FIZEAU_PRIVATE_SENTINEL"
+	tests := []struct {
+		name   string
+		mutate func(*PortableRuntimeContribution)
+	}{
+		{
+			name: "inherited generated baseline name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Environment = append(candidate.Environment, PortableRuntimeEnvironment{Name: "HOME"})
+			},
+		},
+		{
+			name: "environment raw assignment",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0].Name = "FEATURE_ENABLED=" + sensitive
+			},
+		},
+		{
+			name: "environment duplicate name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment = append(candidate.ExecutionConstraints.Environment, candidate.ExecutionConstraints.Environment[0])
+			},
+		},
+		{
+			name: "environment conflicts with inherited name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0].Name = "API_KEY"
+			},
+		},
+		{
+			name: "unknown environment treatment",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0].Kind = "raw_value"
+			},
+		},
+		{
+			name: "fixed treatment with guest path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0].GuestPath = PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathHome, Target: sensitive}
+			},
+		},
+		{
+			name: "runtime path for non-PATH name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0].Kind = PortableRuntimeEnvironmentRuntimePath
+			},
+		},
+		{
+			name: "PATH with non-runtime-path treatment",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[0] = PortableRuntimeEnvironmentConstraint{Name: "PATH", Kind: PortableRuntimeEnvironmentFixedTrue}
+			},
+		},
+		{
+			name: "invalid guest path scope",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[1].GuestPath.Scope = "work_dir"
+			},
+		},
+		{
+			name: "absolute environment guest path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[1].GuestPath.Target = "/" + sensitive
+			},
+		},
+		{
+			name: "unbacked runtime environment guest path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[1].GuestPath.Target = sensitive
+			},
+		},
+		{
+			name: "runtime environment path is only a file ancestor",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[1] = PortableRuntimeEnvironmentConstraint{
+					Name:      "TOOL_BIN_DIR",
+					Kind:      PortableRuntimeEnvironmentGuestPath,
+					GuestPath: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "bin"},
+				}
+			},
+		},
+		{
+			name: "read-only path outside runtime",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.ReadOnlyPaths[0].Scope = PortableRuntimeGuestPathConfig
+			},
+		},
+		{
+			name: "read-only path lacks exact asset",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.ReadOnlyPaths[0].Target = sensitive
+			},
+		},
+		{
+			name: "read-only config is a file",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Assets[1].PathKind = PortableRuntimePathFile
+			},
+		},
+		{
+			name: "read-only tree is writable state kind",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Assets[1].Kind = PortableRuntimeAssetCache
+			},
+		},
+		{
+			name: "duplicate read-only path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.ReadOnlyPaths = append(candidate.ExecutionConstraints.ReadOnlyPaths, candidate.ExecutionConstraints.ReadOnlyPaths[0])
+			},
+		},
+		{
+			name: "required absent path is absolute",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.RequiredAbsentPaths[0].Target = "/" + sensitive
+			},
+		},
+		{
+			name: "required absent paths overlap",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.RequiredAbsentPaths = append(candidate.ExecutionConstraints.RequiredAbsentPaths,
+					PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathHome, Target: ".config/opencode/plugins"})
+			},
+		},
+		{
+			name: "required absent path overlaps asset",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.RequiredAbsentPaths[0] = PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "config"}
+			},
+		},
+		{
+			name: "required absent path overlaps read-only path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.RequiredAbsentPaths[0] = PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "config/opencode/plugins"}
+			},
+		},
+		{
+			name: "required absent path overlaps generated root",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.Environment[1] = PortableRuntimeEnvironmentConstraint{
+					Name:      "OTHER_CONFIG_DIR",
+					Kind:      PortableRuntimeEnvironmentGuestPath,
+					GuestPath: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathCache, Target: "generated"},
+				}
+				candidate.ExecutionConstraints.RequiredAbsentPaths[0] = PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathCache, Target: "generated/plugins"}
+			},
+		},
+		{
+			name: "empty fixed argument",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = ""
+			},
+		},
+		{
+			name: "duplicate fixed argument",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments = append(candidate.ExecutionConstraints.FixedArguments, candidate.ExecutionConstraints.FixedArguments[0])
+			},
+		},
+		{
+			name: "fixed argument raw assignment",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = "TOKEN=" + sensitive
+			},
+		},
+		{
+			name: "fixed argument route selector",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = "--provider=" + sensitive
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := clonePortableRuntimeTestContribution(validPortableRuntimeExecutionContribution(hostRoot))
+			tc.mutate(&candidate)
+			_, err := NormalizePortableRuntimeContribution(target, candidate)
+			if !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+				t.Fatalf("error = %v, want ErrPortableRuntimeClosureIncomplete", err)
+			}
+			if strings.Contains(err.Error(), sensitive) || strings.Contains(err.Error(), hostRoot) {
+				t.Fatalf("error reveals sensitive record data: %v", err)
+			}
+		})
+	}
 }
 
 func TestPortableRuntimeExactLibraryRootValidation(t *testing.T) {
@@ -568,11 +861,41 @@ func makeValidDynamicContribution(hostRoot string, contribution *PortableRuntime
 	)
 }
 
+func validPortableRuntimeExecutionContribution(hostRoot string) PortableRuntimeContribution {
+	return PortableRuntimeContribution{
+		ClosureClass: PortableRuntimeClosureStatic,
+		Launch:       PortableRuntimeLaunch{EntrypointTarget: "bin/tool"},
+		Assets: []PortableRuntimeAsset{
+			portableRuntimeTestAsset(hostRoot, "tool", "bin/tool", PortableRuntimeAssetExecutable, PortableRuntimePathFile, true),
+			portableRuntimeTestAsset(hostRoot, "config", "config/opencode", PortableRuntimeAssetConfig, PortableRuntimePathTree, false),
+		},
+		Environment: []PortableRuntimeEnvironment{{Name: "API_KEY"}},
+		ExecutionConstraints: PortableRuntimeExecutionConstraints{
+			Environment: []PortableRuntimeEnvironmentConstraint{
+				{Name: "FEATURE_ENABLED", Kind: PortableRuntimeEnvironmentFixedTrue},
+				{Name: "XDG_CONFIG_HOME", Kind: PortableRuntimeEnvironmentGuestPath, GuestPath: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: "config"}},
+				{Name: "PATH", Kind: PortableRuntimeEnvironmentRuntimePath},
+			},
+			ReadOnlyPaths: []PortableRuntimeGuestPath{
+				{Scope: PortableRuntimeGuestPathRuntime, Target: "config/opencode"},
+			},
+			RequiredAbsentPaths: []PortableRuntimeGuestPath{
+				{Scope: PortableRuntimeGuestPathHome, Target: ".config/opencode"},
+			},
+			FixedArguments: []string{"--pure"},
+		},
+	}
+}
+
 func clonePortableRuntimeTestContribution(in PortableRuntimeContribution) PortableRuntimeContribution {
 	out := in
 	out.Launch.RuntimeArgs = append([]string(nil), in.Launch.RuntimeArgs...)
 	out.Launch.LibraryRootTargets = append([]string(nil), in.Launch.LibraryRootTargets...)
 	out.Assets = append([]PortableRuntimeAsset(nil), in.Assets...)
 	out.Environment = append([]PortableRuntimeEnvironment(nil), in.Environment...)
+	out.ExecutionConstraints.Environment = append([]PortableRuntimeEnvironmentConstraint(nil), in.ExecutionConstraints.Environment...)
+	out.ExecutionConstraints.ReadOnlyPaths = append([]PortableRuntimeGuestPath(nil), in.ExecutionConstraints.ReadOnlyPaths...)
+	out.ExecutionConstraints.RequiredAbsentPaths = append([]PortableRuntimeGuestPath(nil), in.ExecutionConstraints.RequiredAbsentPaths...)
+	out.ExecutionConstraints.FixedArguments = append([]string(nil), in.ExecutionConstraints.FixedArguments...)
 	return out
 }

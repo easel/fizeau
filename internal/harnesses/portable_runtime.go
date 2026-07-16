@@ -34,9 +34,9 @@ func ValidatePortableRuntimeContribution(target PortableRuntimeTarget, contribut
 }
 
 // NormalizePortableRuntimeContribution validates and returns an owned,
-// deterministic contribution. Asset and environment ordering is canonical;
-// launch argument and library-root ordering is retained because it is part of
-// execution semantics.
+// deterministic contribution. Asset, environment, and execution-constraint
+// ordering is canonical; launch and fixed-argument ordering is retained because
+// it is part of execution semantics.
 func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribution PortableRuntimeContribution) (PortableRuntimeContribution, error) {
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
@@ -59,12 +59,21 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 		},
 		Assets:      append([]PortableRuntimeAsset(nil), contribution.Assets...),
 		Environment: append([]PortableRuntimeEnvironment(nil), contribution.Environment...),
+		ExecutionConstraints: PortableRuntimeExecutionConstraints{
+			Environment:         append([]PortableRuntimeEnvironmentConstraint(nil), contribution.ExecutionConstraints.Environment...),
+			ReadOnlyPaths:       append([]PortableRuntimeGuestPath(nil), contribution.ExecutionConstraints.ReadOnlyPaths...),
+			RequiredAbsentPaths: append([]PortableRuntimeGuestPath(nil), contribution.ExecutionConstraints.RequiredAbsentPaths...),
+			FixedArguments:      append([]string(nil), contribution.ExecutionConstraints.FixedArguments...),
+		},
 	}
 
 	if err := validatePortableRuntimeAssets(normalized.Assets); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
 	if err := validatePortableRuntimeEnvironment(normalized.Environment); err != nil {
+		return PortableRuntimeContribution{}, err
+	}
+	if err := validatePortableRuntimeExecutionConstraints(normalized); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
 	if err := validatePortableRuntimeLaunch(normalized); err != nil {
@@ -77,6 +86,11 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 	sort.Slice(normalized.Environment, func(i, j int) bool {
 		return normalized.Environment[i].Name < normalized.Environment[j].Name
 	})
+	sort.Slice(normalized.ExecutionConstraints.Environment, func(i, j int) bool {
+		return normalized.ExecutionConstraints.Environment[i].Name < normalized.ExecutionConstraints.Environment[j].Name
+	})
+	sortPortableRuntimeGuestPaths(normalized.ExecutionConstraints.ReadOnlyPaths)
+	sortPortableRuntimeGuestPaths(normalized.ExecutionConstraints.RequiredAbsentPaths)
 	return normalized, nil
 }
 
@@ -158,10 +172,116 @@ func validatePortableRuntimeEnvironment(environment []PortableRuntimeEnvironment
 		if !validPortableRuntimeEnvironmentName(inherited.Name) {
 			return closureErrorAt("environment", i, "has invalid variable name")
 		}
+		if portableRuntimeBaselineEnvironmentName(inherited.Name) {
+			return closureErrorAt("environment", i, "conflicts with the generated baseline")
+		}
 		if previous, exists := seen[inherited.Name]; exists {
 			return closureError("environment name is duplicated at indexes %d and %d", previous, i)
 		}
 		seen[inherited.Name] = i
+	}
+	return nil
+}
+
+func validatePortableRuntimeExecutionConstraints(contribution PortableRuntimeContribution) error {
+	constraints := contribution.ExecutionConstraints
+	inherited := make(map[string]struct{}, len(contribution.Environment))
+	for _, environment := range contribution.Environment {
+		inherited[environment.Name] = struct{}{}
+	}
+	seenEnvironment := make(map[string]int, len(constraints.Environment))
+	generatedPaths := make([]PortableRuntimeGuestPath, 0, len(constraints.Environment))
+	for i, environment := range constraints.Environment {
+		if !validPortableRuntimeEnvironmentName(environment.Name) {
+			return closureErrorAt("execution environment", i, "has invalid variable name")
+		}
+		if _, exists := inherited[environment.Name]; exists {
+			return closureErrorAt("execution environment", i, "conflicts with inherited environment")
+		}
+		if previous, exists := seenEnvironment[environment.Name]; exists {
+			return closureError("execution environment name is duplicated at indexes %d and %d", previous, i)
+		}
+		seenEnvironment[environment.Name] = i
+
+		switch environment.Kind {
+		case PortableRuntimeEnvironmentFixedTrue, PortableRuntimeEnvironmentFixedFalse, PortableRuntimeEnvironmentUnset:
+			if environment.GuestPath != (PortableRuntimeGuestPath{}) {
+				return closureErrorAt("execution environment", i, "has an irrelevant guest path")
+			}
+		case PortableRuntimeEnvironmentGuestPath:
+			if !validPortableRuntimeGuestPath(environment.GuestPath, true) {
+				return closureErrorAt("execution environment", i, "has an invalid guest path")
+			}
+			if environment.GuestPath.Scope == PortableRuntimeGuestPathRuntime &&
+				!portableRuntimeRuntimeGuestPathBacked(environment.GuestPath, contribution.Assets, constraints.ReadOnlyPaths) {
+				return closureErrorAt("execution environment", i, "has an unbacked runtime path")
+			}
+			generatedPaths = append(generatedPaths, environment.GuestPath)
+		case PortableRuntimeEnvironmentRuntimePath:
+			if environment.Name != "PATH" {
+				return closureErrorAt("execution environment", i, "uses runtime_path for a non-PATH name")
+			}
+			if environment.GuestPath != (PortableRuntimeGuestPath{}) {
+				return closureErrorAt("execution environment", i, "has an irrelevant guest path")
+			}
+		default:
+			return closureErrorAt("execution environment", i, "has unknown treatment")
+		}
+		if !validPortableRuntimeBaselineOverride(environment) {
+			return closureErrorAt("execution environment", i, "has an unsupported generated-baseline override")
+		}
+	}
+
+	seenArguments := make(map[string]int, len(constraints.FixedArguments))
+	for i, argument := range constraints.FixedArguments {
+		if argument == "" || !validPortableRuntimeArgument(argument) {
+			return closureErrorAt("fixed argument", i, "is not a fixed non-secret argument")
+		}
+		if previous, exists := seenArguments[argument]; exists {
+			return closureError("fixed argument is duplicated at indexes %d and %d", previous, i)
+		}
+		seenArguments[argument] = i
+	}
+
+	for i, readOnly := range constraints.ReadOnlyPaths {
+		if !validPortableRuntimeGuestPath(readOnly, false) || readOnly.Scope != PortableRuntimeGuestPathRuntime {
+			return closureErrorAt("read-only path", i, "is not an immutable runtime path")
+		}
+		asset, ok := portableRuntimeExactAsset(contribution.Assets, readOnly.Target)
+		if !ok || asset.Kind != PortableRuntimeAssetConfig || asset.PathKind != PortableRuntimePathTree {
+			return closureErrorAt("read-only path", i, "is not backed by an exact config tree asset")
+		}
+		for j := 0; j < i; j++ {
+			if portableRuntimeGuestPathsOverlap(readOnly, constraints.ReadOnlyPaths[j]) {
+				return closureError("read-only paths overlap at indexes %d and %d", j, i)
+			}
+		}
+	}
+
+	for i, absent := range constraints.RequiredAbsentPaths {
+		if !validPortableRuntimeGuestPath(absent, false) {
+			return closureErrorAt("required-absent path", i, "has an invalid guest path")
+		}
+		for j := 0; j < i; j++ {
+			if portableRuntimeGuestPathsOverlap(absent, constraints.RequiredAbsentPaths[j]) {
+				return closureError("required-absent paths overlap at indexes %d and %d", j, i)
+			}
+		}
+		for j, asset := range contribution.Assets {
+			if portableRuntimeGuestPathsOverlap(absent, PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathRuntime, Target: asset.Target}) {
+				return closureError("required-absent path at index %d overlaps asset index %d", i, j)
+			}
+		}
+		for j, readOnly := range constraints.ReadOnlyPaths {
+			if portableRuntimeGuestPathsOverlap(absent, readOnly) {
+				return closureError("required-absent path at index %d overlaps read-only path index %d", i, j)
+			}
+		}
+		for j, generated := range generatedPaths {
+			if portableRuntimeGuestPathsOverlap(absent, generated) {
+				return closureError("required-absent path at index %d overlaps generated path index %d", i, j)
+			}
+		}
 	}
 	return nil
 }
@@ -281,6 +401,54 @@ func validPortableRuntimeTargetPath(target string) bool {
 	return cleaned == target && cleaned != ".." && !strings.HasPrefix(cleaned, "../")
 }
 
+func validPortableRuntimeGuestPath(guestPath PortableRuntimeGuestPath, allowRoot bool) bool {
+	if !validPortableRuntimeGuestPathScope(guestPath.Scope) {
+		return false
+	}
+	if guestPath.Target == "" {
+		return allowRoot
+	}
+	return validPortableRuntimeTargetPath(guestPath.Target)
+}
+
+func validPortableRuntimeGuestPathScope(scope PortableRuntimeGuestPathScope) bool {
+	switch scope {
+	case PortableRuntimeGuestPathRuntime,
+		PortableRuntimeGuestPathHome,
+		PortableRuntimeGuestPathConfig,
+		PortableRuntimeGuestPathData,
+		PortableRuntimeGuestPathCache,
+		PortableRuntimeGuestPathState,
+		PortableRuntimeGuestPathTmp:
+		return true
+	default:
+		return false
+	}
+}
+
+func portableRuntimeBaselineEnvironmentName(name string) bool {
+	switch name {
+	case "HOME", "PATH", "USER", "LOGNAME", "SHELL",
+		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "TMPDIR":
+		return true
+	default:
+		return false
+	}
+}
+
+func validPortableRuntimeBaselineOverride(environment PortableRuntimeEnvironmentConstraint) bool {
+	switch environment.Name {
+	case "PATH":
+		return environment.Kind == PortableRuntimeEnvironmentRuntimePath
+	case "HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "TMPDIR":
+		return environment.Kind == PortableRuntimeEnvironmentGuestPath || environment.Kind == PortableRuntimeEnvironmentUnset
+	case "USER", "LOGNAME", "SHELL":
+		return environment.Kind == PortableRuntimeEnvironmentUnset
+	default:
+		return environment.Kind != PortableRuntimeEnvironmentRuntimePath
+	}
+}
+
 func validPortableRuntimeDigest(digest string) bool {
 	if len(digest) != 64 || strings.ToLower(digest) != digest {
 		return false
@@ -333,6 +501,50 @@ func portableRuntimeFileAsset(assets []PortableRuntimeAsset, target string) (Por
 		}
 	}
 	return PortableRuntimeAsset{}, false
+}
+
+func portableRuntimeExactAsset(assets []PortableRuntimeAsset, target string) (PortableRuntimeAsset, bool) {
+	for _, asset := range assets {
+		if asset.Target == target {
+			return asset, true
+		}
+	}
+	return PortableRuntimeAsset{}, false
+}
+
+func portableRuntimeGuestPathsOverlap(left, right PortableRuntimeGuestPath) bool {
+	if left.Scope != right.Scope {
+		return false
+	}
+	return left.Target == right.Target ||
+		left.Target == "" || right.Target == "" ||
+		strings.HasPrefix(left.Target, right.Target+"/") ||
+		strings.HasPrefix(right.Target, left.Target+"/")
+}
+
+func portableRuntimeRuntimeGuestPathBacked(guestPath PortableRuntimeGuestPath, assets []PortableRuntimeAsset, readOnlyPaths []PortableRuntimeGuestPath) bool {
+	for _, asset := range assets {
+		if asset.Target == guestPath.Target ||
+			(asset.PathKind == PortableRuntimePathTree && (guestPath.Target == "" || strings.HasPrefix(asset.Target, guestPath.Target+"/"))) {
+			return true
+		}
+	}
+	for _, readOnly := range readOnlyPaths {
+		if readOnly.Scope == PortableRuntimeGuestPathRuntime &&
+			(guestPath.Target == "" || readOnly.Target == guestPath.Target || strings.HasPrefix(readOnly.Target, guestPath.Target+"/")) {
+			return true
+		}
+	}
+	return false
+}
+
+func sortPortableRuntimeGuestPaths(paths []PortableRuntimeGuestPath) {
+	sort.Slice(paths, func(i, j int) bool {
+		if paths[i].Scope != paths[j].Scope {
+			return paths[i].Scope < paths[j].Scope
+		}
+		return paths[i].Target < paths[j].Target
+	})
 }
 
 func portableRuntimeExecutableFile(assets []PortableRuntimeAsset, target string) bool {

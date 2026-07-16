@@ -624,6 +624,8 @@ type PortableRuntimeStructuralHarness interface {
 type PortableRuntimeAssetKind string
 type PortableRuntimePathKind string
 type PortableRuntimeClosureClass string
+type PortableRuntimeGuestPathScope string
+type PortableRuntimeEnvironmentConstraintKind string
 
 const (
 	PortableRuntimeAssetExecutable  PortableRuntimeAssetKind = "executable"
@@ -640,6 +642,20 @@ const (
 	PortableRuntimeClosureStatic      PortableRuntimeClosureClass = "static"
 	PortableRuntimeClosureDynamic     PortableRuntimeClosureClass = "dynamic"
 	PortableRuntimeClosureInterpreted PortableRuntimeClosureClass = "interpreted"
+
+	PortableRuntimeGuestPathRuntime PortableRuntimeGuestPathScope = "runtime"
+	PortableRuntimeGuestPathHome    PortableRuntimeGuestPathScope = "home"
+	PortableRuntimeGuestPathConfig  PortableRuntimeGuestPathScope = "config"
+	PortableRuntimeGuestPathData    PortableRuntimeGuestPathScope = "data"
+	PortableRuntimeGuestPathCache   PortableRuntimeGuestPathScope = "cache"
+	PortableRuntimeGuestPathState   PortableRuntimeGuestPathScope = "state"
+	PortableRuntimeGuestPathTmp     PortableRuntimeGuestPathScope = "tmp"
+
+	PortableRuntimeEnvironmentFixedTrue   PortableRuntimeEnvironmentConstraintKind = "fixed_true"
+	PortableRuntimeEnvironmentFixedFalse  PortableRuntimeEnvironmentConstraintKind = "fixed_false"
+	PortableRuntimeEnvironmentGuestPath   PortableRuntimeEnvironmentConstraintKind = "guest_path"
+	PortableRuntimeEnvironmentUnset       PortableRuntimeEnvironmentConstraintKind = "unset"
+	PortableRuntimeEnvironmentRuntimePath PortableRuntimeEnvironmentConstraintKind = "runtime_path"
 )
 
 // PortableRuntimeAsset is one harness-owned member of a verified executable
@@ -670,11 +686,36 @@ type PortableRuntimeEnvironment struct {
 	Name string
 }
 
+// PortableRuntimeGuestPath identifies a path beneath one activation-owned
+// guest root. Target is slash-relative and never carries a host path.
+type PortableRuntimeGuestPath struct {
+	Scope  PortableRuntimeGuestPathScope
+	Target string
+}
+
+// PortableRuntimeEnvironmentConstraint declares one activation-owned
+// environment treatment without carrying a raw environment value.
+type PortableRuntimeEnvironmentConstraint struct {
+	Name      string
+	Kind      PortableRuntimeEnvironmentConstraintKind
+	GuestPath PortableRuntimeGuestPath
+}
+
+// PortableRuntimeExecutionConstraints is harness-declared execution evidence.
+// Activation interprets it generically after materialization persists it.
+type PortableRuntimeExecutionConstraints struct {
+	Environment         []PortableRuntimeEnvironmentConstraint
+	ReadOnlyPaths       []PortableRuntimeGuestPath
+	RequiredAbsentPaths []PortableRuntimeGuestPath
+	FixedArguments      []string
+}
+
 type PortableRuntimeContribution struct {
-	ClosureClass PortableRuntimeClosureClass
-	Launch       PortableRuntimeLaunch
-	Assets       []PortableRuntimeAsset
-	Environment  []PortableRuntimeEnvironment
+	ClosureClass         PortableRuntimeClosureClass
+	Launch               PortableRuntimeLaunch
+	Assets               []PortableRuntimeAsset
+	Environment          []PortableRuntimeEnvironment
+	ExecutionConstraints PortableRuntimeExecutionConstraints
 }
 
 // PortableRuntimeHarness is the optional harness-owned asset-discovery

@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: cff6887a587b9be47062aefb27b2d0564d40b82fdf8619faf6fc10a640250584
+    self_hash: 699a2fd27c0d5e4f93266d79f7e36b6783f0eb287440ae24b238d241624dd438
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
-      CONTRACT-004: 40d2680ac1668ced16aac90efc28cec7e33aa015e13fbe6b279d29132ebb579e
-    reviewed_at: "2026-07-15T23:11:16Z"
+      CONTRACT-004: 4487661e9f9919f70cfcd5a2a6d35b4e39ae6b829e70885475b148f74bd72a70
+    reviewed_at: "2026-07-16T00:41:02Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -539,9 +539,12 @@ not gain binary, credential, cache-path, or container methods.
 `PortableRuntimeHarness` is an optional CONTRACT-004 capability asserted on the
 registered runner. It returns an API-neutral, content-addressed
 executable/install-tree closure, harness-owned state-file descriptors, and
-inherited environment names for a target GOOS/GOARCH. It returns no environment
-value and performs no copy, route selection, provider contact, session creation,
-or process start.
+inherited environment names for a target GOOS/GOARCH. It also declares typed,
+value-opaque execution constraints: fixed boolean or guest-path environment
+treatments, explicit unsets, immutable config-tree and required-absent paths,
+and an ordered fixed argument prefix. It returns no raw environment value and
+performs no copy, route selection, provider contact, session creation, or
+process start.
 
 This capability closes a boundary that a service-side path table would reopen.
 Codex, Claude, Gemini, and other harness packages already own their credential,
@@ -596,17 +599,21 @@ not harness capabilities. A complete route-neutral inventory combines
 CONTRACT-004 contributions with a field-exhaustive API-neutral projection of
 effective `ServiceConfig`. The neutral materializer owns restrictive copying,
 generated config, deterministic deduplication/conflict handling, staging,
-rollback, diagnostics redaction, and cleanup. The public root facade maps that
-result to CONTRACT-003's opaque generic bundle: one atomically committed host
-child, one fixed guest-root read-only mount, and inherited environment names
-without values. `NewFromPortableRuntime` is the public activation seam that
-verifies the mounted manifest and reconstructs the configured service in the
-new process without the application-only config loader. Activation installs the
-typed launch recipes into the production `Execute` dispatcher, not only a
+rollback, diagnostics redaction, private persistence of the normalized
+constraints, and cleanup. The public root facade maps that result to
+CONTRACT-003's opaque generic bundle: one atomically committed host child, one
+fixed guest-root read-only mount, and inherited environment names without
+values. The typed constraints remain private manifest state rather than a new
+caller-interpreted plan surface. `NewFromPortableRuntime` is the public
+activation seam that verifies the mounted manifest, reconstructs a closed-world
+child environment, enforces read-only/absent path rules, and reconstructs the
+configured service in the new process without the application-only config
+loader. Activation installs the typed launch recipes and ordered fixed argument
+prefixes into the production `Execute` dispatcher, not only a
 refresh/scheduler instance map. The embedding caller applies the opaque plan,
 orchestrates the external container as the mapped preparing UID, destroys its
 writable storage, and only then performs bundle cleanup; it never resolves a
-harness path or provider field.
+harness path, execution constraint, or provider field.
 
 This opacity is a programming boundary, not a confidentiality boundary against
 the embedding caller. The caller owns the source environment and destination
