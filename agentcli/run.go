@@ -571,7 +571,12 @@ func executeViaService(ctx context.Context, req fizeau.ServiceExecuteRequest, se
 			result.Status = decoded.Final.Status
 			result.Output = decoded.Final.FinalText
 			result.Duration = time.Duration(decoded.Final.DurationMS) * time.Millisecond
-			result.CostUSD, result.CostSource = decoded.Final.CostMeasurement()
+			result.CostUSD = nil
+			if decoded.Final.CostUSD != nil {
+				costUSD := *decoded.Final.CostUSD
+				result.CostUSD = &costUSD
+			}
+			result.CostSource = decoded.Final.CostSource
 			result.Error = decoded.Final.Error
 			if decoded.Final.Usage != nil {
 				result.Tokens = cliTokenUsage{
