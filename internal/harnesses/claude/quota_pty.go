@@ -13,11 +13,12 @@ import (
 )
 
 type quotaPTYOptions struct {
-	binary      string
-	args        []string
-	workdir     string
-	env         []string
-	cassetteDir string
+	binary        string
+	binaryVersion string
+	args          []string
+	workdir       string
+	env           []string
+	cassetteDir   string
 }
 
 type QuotaPTYOption func(*quotaPTYOptions)
@@ -94,6 +95,7 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 	result, err := ptyquota.Run(ctx, ptyquota.Config{
 		HarnessName:   "claude",
 		Binary:        cfg.binary,
+		BinaryVersion: cfg.binaryVersion,
 		Args:          cfg.args,
 		Workdir:       cfg.workdir,
 		Env:           cfg.env,

@@ -90,7 +90,14 @@ sleep 1
 `), 0o700))
 	cassetteDir := filepath.Join(dir, "cassette")
 
-	_, _, err := readClaudeQuotaViaPTY(2*time.Second, WithQuotaPTYCommand(script), WithQuotaPTYCassetteDir(cassetteDir))
+	_, _, err := readClaudeQuotaViaPTY(
+		10*time.Second,
+		WithQuotaPTYCommand(script),
+		WithQuotaPTYCassetteDir(cassetteDir),
+		func(opts *quotaPTYOptions) {
+			opts.binaryVersion = "claude-test 1.2.3"
+		},
+	)
 	require.NoError(t, err)
 	reader, err := cassette.Open(cassetteDir)
 	require.NoError(t, err)
