@@ -606,20 +606,22 @@ func documentedRequestGaps(req harnesses.ExecuteRequest) []string {
 // emitFinalEvent is a helper to emit a final event on the channel.
 func emitFinalEvent(eventChan chan<- harnesses.Event, seq int64, startTime time.Time, status, errMsg string, exitCode int) {
 	emitFinalData(eventChan, seq, harnesses.FinalData{
-		Status:     status,
-		Error:      anthropic.SanitizeClaudeDiagnostic(errMsg),
-		DurationMS: time.Since(startTime).Milliseconds(),
-		ExitCode:   exitCode,
+		Status:          status,
+		Error:           anthropic.SanitizeClaudeDiagnostic(errMsg),
+		DurationMS:      time.Since(startTime).Milliseconds(),
+		ExitCode:        exitCode,
+		FinalCostSource: harnesses.CostSourceUnknown,
 	})
 }
 
 func emitClaudeFailureFinalEvent(eventChan chan<- harnesses.Event, seq int64, startTime time.Time, status, evidence string, exitCode int) {
 	failureClass, diagnostic := anthropic.ClassifyClaudeRouteFailure(evidence)
 	emitFinalData(eventChan, seq, harnesses.FinalData{
-		Status:     status,
-		Error:      diagnostic,
-		DurationMS: time.Since(startTime).Milliseconds(),
-		ExitCode:   exitCode,
+		Status:          status,
+		Error:           diagnostic,
+		DurationMS:      time.Since(startTime).Milliseconds(),
+		ExitCode:        exitCode,
+		FinalCostSource: harnesses.CostSourceUnknown,
 		RoutingActual: &harnesses.RoutingActual{
 			Harness:      "claude-tui",
 			FailureClass: failureClass,

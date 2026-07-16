@@ -345,9 +345,10 @@ func (t *TranscriptTailer) finalEvent() (harnesses.Event, bool) {
 	}
 	t.seqCounter++
 	fd := harnesses.FinalData{
-		Status:     mapStopReason(t.lastAssistantStop),
-		FinalText:  t.finalText.String(),
-		DurationMS: time.Since(t.startTime).Milliseconds(),
+		Status:          mapStopReason(t.lastAssistantStop),
+		FinalText:       t.finalText.String(),
+		DurationMS:      time.Since(t.startTime).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	if u := parseClaudeUsage(t.lastAssistantUsage); u != nil {
 		fd.Usage = u

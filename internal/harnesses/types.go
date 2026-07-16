@@ -143,26 +143,113 @@ const (
 	SessionStageCleanup      SessionStage = "cleanup"
 )
 
+// CostSource identifies the provenance of final cost data.
+type CostSource string
+
+const (
+	CostSourceReported   CostSource = "reported"
+	CostSourceConfigured CostSource = "configured"
+	CostSourceUnknown    CostSource = "unknown"
+)
+
 // FinalData is the payload for type=final events.
 type FinalData struct {
-	Status         string            `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
-	Outcome        SessionOutcome    `json:"outcome"`
-	Cause          TerminalCause     `json:"cause"`
-	Stage          SessionStage      `json:"stage"`
-	PrimaryOutcome SessionOutcome    `json:"primary_outcome,omitempty"`
-	PrimaryCause   TerminalCause     `json:"primary_cause,omitempty"`
-	PrimaryStage   SessionStage      `json:"primary_stage,omitempty"`
-	ExitCode       int               `json:"exit_code"`
-	Error          string            `json:"error,omitempty"`
-	FinalText      string            `json:"final_text,omitempty"`
-	DurationMS     int64             `json:"duration_ms"`
-	Usage          *FinalUsage       `json:"usage,omitempty"`
-	Warnings       []FinalWarning    `json:"warnings,omitempty"`
-	CostUSD        float64           `json:"cost_usd,omitempty"`
+	Status          string         `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
+	Outcome         SessionOutcome `json:"outcome"`
+	Cause           TerminalCause  `json:"cause"`
+	Stage           SessionStage   `json:"stage"`
+	PrimaryOutcome  SessionOutcome `json:"primary_outcome,omitempty"`
+	PrimaryCause    TerminalCause  `json:"primary_cause,omitempty"`
+	PrimaryStage    SessionStage   `json:"primary_stage,omitempty"`
+	ExitCode        int            `json:"exit_code"`
+	Error           string         `json:"error,omitempty"`
+	FinalText       string         `json:"final_text,omitempty"`
+	DurationMS      int64          `json:"duration_ms"`
+	Usage           *FinalUsage    `json:"usage,omitempty"`
+	Warnings        []FinalWarning `json:"warnings,omitempty"`
+	FinalCostUSD    *float64       `json:"cost_usd,omitempty"`
+	FinalCostSource CostSource     `json:"cost_source"`
+	// CostUSD is a temporary compatibility bridge for in-memory consumers.
+	// Deprecated: use FinalCostUSD and FinalCostSource.
+	CostUSD        float64           `json:"-"`
 	SessionLogPath string            `json:"session_log_path,omitempty"`
 	RoutingActual  *RoutingActual    `json:"routing_actual,omitempty"`
 	Reasoning      *ReasoningActual  `json:"reasoning,omitempty"`
 	Extra          map[string]string `json:"-"`
+}
+
+// MarshalJSON writes the authoritative final-cost wire contract while
+// retaining a non-zero scalar fallback for legacy in-memory producers.
+func (d FinalData) MarshalJSON() ([]byte, error) {
+	type finalDataAlias FinalData
+
+	cost := d.FinalCostUSD
+	if cost == nil && d.CostUSD != 0 {
+		legacyCost := d.CostUSD
+		cost = &legacyCost
+	}
+
+	return json.Marshal(struct {
+		finalDataAlias
+		CostUSD    *float64   `json:"cost_usd,omitempty"`
+		CostSource CostSource `json:"cost_source"`
+	}{
+		finalDataAlias: finalDataAlias(d),
+		CostUSD:        cost,
+		CostSource:     normalizeCostSource(d.FinalCostSource),
+	})
+}
+
+// UnmarshalJSON accepts both the authoritative cost_source-tagged contract
+// and legacy cost_usd-only payloads without inventing provenance.
+func (d *FinalData) UnmarshalJSON(data []byte) error {
+	type finalDataAlias FinalData
+	decoded := finalDataAlias(*d)
+	wire := struct {
+		*finalDataAlias
+		CostUSD    json.RawMessage `json:"cost_usd"`
+		CostSource json.RawMessage `json:"cost_source"`
+	}{
+		finalDataAlias: &decoded,
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	decoded.FinalCostUSD = nil
+	decoded.CostUSD = 0
+	decoded.FinalCostSource = CostSourceUnknown
+
+	if len(wire.CostSource) != 0 {
+		var source CostSource
+		if err := json.Unmarshal(wire.CostSource, &source); err == nil {
+			decoded.FinalCostSource = normalizeCostSource(source)
+		}
+		if len(wire.CostUSD) != 0 && string(wire.CostUSD) != "null" {
+			var cost float64
+			if err := json.Unmarshal(wire.CostUSD, &cost); err != nil {
+				return err
+			}
+			decoded.FinalCostUSD = &cost
+			decoded.CostUSD = cost
+		}
+	} else if len(wire.CostUSD) != 0 && string(wire.CostUSD) != "null" {
+		if err := json.Unmarshal(wire.CostUSD, &decoded.CostUSD); err != nil {
+			return err
+		}
+	}
+
+	*d = FinalData(decoded)
+	return nil
+}
+
+func normalizeCostSource(source CostSource) CostSource {
+	switch source {
+	case CostSourceReported, CostSourceConfigured, CostSourceUnknown:
+		return source
+	default:
+		return CostSourceUnknown
+	}
 }
 
 // FinalUsage carries token totals on a final event. Count fields are pointers

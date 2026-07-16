@@ -137,9 +137,10 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	agg, exitCode, stderr, runErr, status := r.runStreaming(ctx, binary, req, out, &seq)
 
 	final := harnesses.FinalData{
-		Status:     status,
-		ExitCode:   exitCode,
-		DurationMS: time.Since(start).Milliseconds(),
+		Status:          status,
+		ExitCode:        exitCode,
+		DurationMS:      time.Since(start).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	reasoningResolution := harnesses.ResolveRunnerReasoningWithCache(r.DiscoveryCache, "codex", req.Reasoning)
 	if harnesses.ShouldEmitRunnerReasoningResolution(reasoningResolution) {

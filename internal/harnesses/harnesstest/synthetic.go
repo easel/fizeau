@@ -315,7 +315,11 @@ func syntheticExecute(ctx context.Context) (<-chan harnesses.Event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	data, _ := json.Marshal(harnesses.FinalData{Status: "success", ExitCode: 0})
+	data, _ := json.Marshal(harnesses.FinalData{
+		Status:          "success",
+		ExitCode:        0,
+		FinalCostSource: harnesses.CostSourceUnknown,
+	})
 	ch := make(chan harnesses.Event, 1)
 	ch <- harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
