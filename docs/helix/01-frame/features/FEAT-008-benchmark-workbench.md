@@ -8,9 +8,9 @@ ddx:
   review:
     self_hash: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
     deps:
-      FEAT-005: 91bfec0fee89364d352de541dadd2414792b33930e70c44614ce96abf26abff7
+      FEAT-005: 5b479bd3a3b1dede6630f99fcc6a1d26da118eb8f891a1145b59cfa76d4c272b
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Feature Specification: FEAT-008 - Benchmark Workbench
 

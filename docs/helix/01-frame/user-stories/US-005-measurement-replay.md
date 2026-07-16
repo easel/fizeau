@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: a1c55221d28ebcf4415320a93c02126c8d27a782b0cb1917e8dce4415e1d8180
     deps:
-      FEAT-005: 91bfec0fee89364d352de541dadd2414792b33930e70c44614ce96abf26abff7
-    reviewed_at: "2026-07-16T07:15:29Z"
+      FEAT-005: 5b479bd3a3b1dede6630f99fcc6a1d26da118eb8f891a1145b59cfa76d4c272b
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # User Story: US-005 — Measure and Replay an Execution
 

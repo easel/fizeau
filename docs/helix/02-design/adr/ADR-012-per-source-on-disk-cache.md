@@ -8,7 +8,7 @@ ddx:
     self_hash: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
     deps:
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # ADR-012: Per-Source On-Disk Cache for Discovery + Runtime Signals
 

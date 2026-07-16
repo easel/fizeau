@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 5a45d7c4113eb487a73fad736dc867e8305d7ef6718c7752af2e80f922755138
+    self_hash: 46ca28e03ead881ed812c198f19d6d077fbafa2494f3a7716c704f0e360c0694
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -920,6 +920,16 @@ when no reported amount exists. If neither source exists, `CostSource` is
 reported or configured zero is a known zero, not an unknown value. Terminal
 service events always emit `cost_source`; callers must use amount presence and
 provenance together and must not infer provenance from the amount alone.
+
+For a session total, any contributing turn with unknown cost makes the total
+amount `nil` and the source `unknown`. When every contributing turn is known,
+the amount is their sum: the source is `reported` if any turn used provider- or
+gateway-reported billing, and `configured` only when every turn used exact
+configured pricing. The public three-value source does not invent a `mixed`
+state or discard an all-known amount. This public terminal classification does
+not replace CONTRACT-001 root-span provenance: an all-known root span whose
+turn-level provenance differs continues to emit the amount while omitting the
+root `ddx.cost.source` and `ddx.cost.pricing_ref` attributes.
 
 ## Routing Types
 

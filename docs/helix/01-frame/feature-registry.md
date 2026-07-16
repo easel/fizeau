@@ -7,7 +7,7 @@ ddx:
     self_hash: 61d08d6d5029ace1f3ae4d9fd6d7167f54c41573ed6b1e133d31b567384d9459
     deps:
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Feature Registry — Fizeau
 

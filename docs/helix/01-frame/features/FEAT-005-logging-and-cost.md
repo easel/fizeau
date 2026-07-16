@@ -6,12 +6,12 @@ ddx:
     - FEAT-001
     - FEAT-003
   review:
-    self_hash: 91bfec0fee89364d352de541dadd2414792b33930e70c44614ce96abf26abff7
+    self_hash: 5b479bd3a3b1dede6630f99fcc6a1d26da118eb8f891a1145b59cfa76d4c272b
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Feature Specification: FEAT-005 — Logging, Replay, and Cost Tracking
 
@@ -143,7 +143,10 @@ loop.
 22. Local inference runtimes are not implicitly free; `$0` cost must come from
     reported billing or explicit configuration
 23. Session totals are accumulated only when all contributing turn costs are
-    known; otherwise the session total is unknown
+    known; otherwise the session total is unknown. For an all-known total,
+    `reported` takes precedence when any contributing turn used reported
+    billing; `configured` means every contributing turn used configured
+    pricing.
 24. Public `DrainExecuteResult` and the terminal `ServiceFinalData` projection expose both
     `CostUSD` and the public `CostSource` classification defined by
     CONTRACT-003: `reported`, `configured`, or `unknown`. `CostUSD` is optional:
@@ -240,7 +243,7 @@ proceeds normally.
 |----|-----------|------------------------|
 | AC-FEAT-005-01 | JSONL session logs contain ordered `session.start`, `llm.request`, `llm.response`, `tool.call`, and `session.end` events with stable `session_id`, `seq`, timestamps, correlation metadata, and full prompt/response bodies subject only to documented truncation rules. | `go test ./session ./...` |
 | AC-FEAT-005-02 | Replay renders a human-readable transcript of prompts, assistant turns, tool calls, tokens, timing, workdir/model/provider metadata, and known-vs-unknown cost state without mutating the underlying log. | `go test ./session ./...` |
-| AC-FEAT-005-03 | Provider-reported cost wins over configured pricing, configured runtime pricing applies only on exact runtime/model matches, and mixed or unknown constituent costs force the session total to remain unknown rather than guessed. The four token streams (input, output, cache-read, cache-write) are tracked separately per turn and per session and never folded into one another. Pricing is never inferred from routing policy. | `go test ./session ./telemetry ./...` |
+| AC-FEAT-005-03 | Provider-reported cost wins over configured pricing, configured runtime pricing applies only on exact runtime/model matches, and any unknown constituent cost forces the session total to remain unknown rather than guessed. An all-known mixture of reported and configured turns remains known with reported provenance. The four token streams (input, output, cache-read, cache-write) are tracked separately per turn and per session and never folded into one another. Pricing is never inferred from routing policy. | `go test ./session ./telemetry ./...` |
 | AC-FEAT-005-08 | v0.11 session-log and usage projections preserve `policy` / `power_policy` routing attribution while replay remains tolerant of pre-v0.11 routing fields. | `go test ./internal/session ./telemetry ./...` |
 | AC-FEAT-005-07 | A configured per-run cost cap halts the loop before the next `llm.request` once the known running total meets or exceeds the cap, the `session.end` event records `process_outcome=budget_halted`, and `DrainExecuteResult` surfaces the halt; if cost is unknown the cap does not fire and the run proceeds. | `go test ./session ./...` |
 | AC-FEAT-005-04 | OTel export conforms to `CONTRACT-001`, including span taxonomy, identity fields, cost/timing attributes, tool error semantics, and throughput formulas derived only from valid timing windows. | `go test ./telemetry ./...` |

@@ -7,7 +7,7 @@ ddx:
     self_hash: f7d77406d905f1c80b62432b28060e560dc7c8d811124159f3650ff2ab914ebf
     deps:
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # User Story: US-007 — Install and Explicitly Update the Proof CLI
 

@@ -7,7 +7,7 @@ ddx:
     self_hash: 18c1a107428efab189b5fd298ff898d195c3f70130ee856660f54c1f0e97bd40
     deps:
       ADR-016: ac33068859c7d86a3e11b375abe0e2a1e37175db533918c48a449dd370b8df72
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Plan: Benchmark Runner Simplification
 

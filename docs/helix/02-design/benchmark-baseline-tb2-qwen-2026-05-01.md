@@ -11,7 +11,7 @@ ddx:
   review:
     self_hash: 7b641932d66e783dec26836d3af25e0b1f3f7373c75e2b4eb6a628c5992b3f2d
     deps: {}
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # TB-2 Baseline: Qwen3.6-27B via fizeau — 2026-05-01
 

@@ -7,7 +7,7 @@ ddx:
     self_hash: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
     deps:
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Feature Specification: FEAT-001 — Agent Loop
 

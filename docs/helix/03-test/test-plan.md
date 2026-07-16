@@ -12,7 +12,7 @@ ddx:
     - US-007
     - US-008
   review:
-    self_hash: 665b70e76dbe75ed81b56655b243d80a092d744690b57b2017c6eef2e7105d50
+    self_hash: 1db11eb064984a076f4a4faaff7e964f4ee4a992eb89cde1d63c875814f16e76
     deps:
       US-001: 83ee6bdfd89336cf77cb0dd2a1f6d8250baf1de494605112a56ef21b835c9b83
       US-002: 6d7fad544c6ba871e42c6b6b2b4926d9e2a78b7c1e69f294fd14d46cca157aff
@@ -23,7 +23,7 @@ ddx:
       US-007: f7d77406d905f1c80b62432b28060e560dc7c8d811124159f3650ff2ab914ebf
       US-008: ec847be580408d23190b47f052551b4f7638365ab373de68e57d8ee06fb2bc4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:15:29Z"
+    reviewed_at: "2026-07-16T07:25:15Z"
 ---
 # Test Plan — Fizeau
 
@@ -95,7 +95,7 @@ These desired contracts are intentionally not counted as passing evidence:
 | Contract | Missing implementation | Required proof before alignment |
 |---|---|---|
 | CONTRACT-001 timing classification | Chat spans lack required availability, source, and available-fields attributes. | Telemetry contract tests assert all classifications for present and absent timing windows. |
-| CONTRACT-003 final cost presence and provenance | `DrainExecuteResult` and `ServiceFinalData` collapse an absent amount and explicit zero into the same scalar value and do not expose the public `CostSource` classification. | Root facade and service-event tests cover omitted unknown cost, present known zero and positive amounts, and reported/configured/unknown provenance. |
+| CONTRACT-003 final cost presence and provenance | `DrainExecuteResult` and `ServiceFinalData` collapse an absent amount and explicit zero into the same scalar value and do not expose the public `CostSource` classification. | Root facade and service-event tests cover omitted unknown cost, present known zero and positive amounts, any unknown constituent, all-known mixed reported/configured provenance, and the three public source values. |
 | SD-011 progress usage | The internal progress payload still uses historical cached-input/retried-input fields instead of cache-read/cache-write. | Transcript tests assert the canonical four-stream payload and keep retry accounting separate. |
 | SD-010 benchmark pricing map | Benchmark profiles expose one historical cached-input rate instead of separate cache-read/cache-write rates. | Profile-schema and cost-reconciliation tests cover all four runtime streams without pricing retry accounting. |
 
