@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
+    self_hash: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T18:54:30Z"
+    reviewed_at: "2026-07-16T03:28:41Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -317,8 +317,10 @@ and a field-exhaustive effective provider projection. `NewFromPortableRuntime`
 is the only public activation entrypoint. It reads that manifest from the fixed
 guest root, verifies its version and content identities, reconstructs the
 service config and the production execution-dispatch launch mapping, creates
-owner-only guest-private writable overlays for credential, quota, and cache
-state seeds, and
+owner-only guest-private writable overlays for unprojected prefix-preserving
+credential, quota, and cache state seeds, assembles projection-consumed mixed
+native state directories through the immutable-member enforcement boundary
+defined by CONTRACT-004, and
 supplies Fizeau-owned path and locale variables to harness launches. A
 scheduler-only refresh map is insufficient: the later `Execute` must consume the
 activated launch recipe. Activation does not depend on the
@@ -358,14 +360,20 @@ logs into the bundle.
 Runtime directories use mode `0700`. Credential, generated config, quota, and
 cache regular files use mode `0600`; those classes are sensitive regardless of
 contributor flags. Executable closures retain only required owner execution
-bits and are never group/world writable. All public mounts are read-only;
-activation copies credential, quota, and cache state seeds to guest-private
-writable overlays beneath the corresponding generated `data`, `state`, or
-`cache` scope rather than modifying the mounted bundle. This placement is
-generic and target-driven: a state asset such as `data/opencode/auth.json`
-becomes `auth.json` beneath the generated OpenCode data directory, so a harness
-may create sibling logs or databases without making the credential bundle
-writable. Configuration assets remain read-only. Validation failure, copy failure,
+bits and are never group/world writable. All public mounts are read-only.
+Activation copies unprojected credential, quota, and cache seeds by their
+`data/`, `state/`, or `cache/` target prefix to guest-private writable overlays
+rather than modifying the mounted bundle. A projection-consumed seed does not
+also take that prefix-preserving path; activation maps it with exact referenced
+config assets into the declared activation-owned native directory. Projected
+configuration remains immutable under an enforcement boundary that prevents
+the harness UID from writing, unlinking, renaming, replacing, or shadowing it
+while permitting credential refresh, declared lock creation, and generated
+siblings. Ordinary mode bits on a config file inside a writable parent do not
+satisfy this contract. This placement is generic and target-driven: an
+unprojected state asset such as `data/opencode/auth.json` becomes `auth.json`
+beneath the generated OpenCode data directory, while a projected Gemini or Pi
+seed uses its exact projection entry. Validation failure, copy failure,
 context cancellation, or commit failure removes every staging artifact.
 
 The caller applies the one mount and inherited environment names verbatim

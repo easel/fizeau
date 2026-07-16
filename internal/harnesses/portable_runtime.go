@@ -34,9 +34,10 @@ func ValidatePortableRuntimeContribution(target PortableRuntimeTarget, contribut
 }
 
 // NormalizePortableRuntimeContribution validates and returns an owned,
-// deterministic contribution. Asset, environment, and execution-constraint
-// ordering is canonical; launch, fixed-argument, and fixed-option/value ordering
-// is retained because it is part of execution semantics.
+// deterministic contribution. Asset, environment, state-projection, and
+// execution-constraint ordering is canonical; launch, fixed-argument, and
+// fixed-option/value ordering is retained because it is part of execution
+// semantics.
 func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribution PortableRuntimeContribution) (PortableRuntimeContribution, error) {
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
@@ -66,6 +67,10 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 			FixedArguments:      append([]string(nil), contribution.ExecutionConstraints.FixedArguments...),
 			FixedOptionValues:   append([]PortableRuntimeFixedOptionValue(nil), contribution.ExecutionConstraints.FixedOptionValues...),
 		},
+		StateProjections: append([]PortableRuntimeStateProjection(nil), contribution.StateProjections...),
+	}
+	for i := range normalized.StateProjections {
+		normalized.StateProjections[i].Entries = append([]PortableRuntimeStateProjectionEntry(nil), contribution.StateProjections[i].Entries...)
 	}
 
 	if err := validatePortableRuntimeAssets(normalized.Assets); err != nil {
@@ -75,6 +80,9 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 		return PortableRuntimeContribution{}, err
 	}
 	if err := validatePortableRuntimeExecutionConstraints(normalized); err != nil {
+		return PortableRuntimeContribution{}, err
+	}
+	if err := validatePortableRuntimeStateProjections(normalized); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
 	if err := validatePortableRuntimeLaunch(normalized); err != nil {
@@ -92,7 +100,115 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 	})
 	sortPortableRuntimeGuestPaths(normalized.ExecutionConstraints.ReadOnlyPaths)
 	sortPortableRuntimeGuestPaths(normalized.ExecutionConstraints.RequiredAbsentPaths)
+	for i := range normalized.StateProjections {
+		sort.Slice(normalized.StateProjections[i].Entries, func(left, right int) bool {
+			if normalized.StateProjections[i].Entries[left].Target != normalized.StateProjections[i].Entries[right].Target {
+				return normalized.StateProjections[i].Entries[left].Target < normalized.StateProjections[i].Entries[right].Target
+			}
+			return normalized.StateProjections[i].Entries[left].AssetTarget < normalized.StateProjections[i].Entries[right].AssetTarget
+		})
+	}
+	sort.Slice(normalized.StateProjections, func(i, j int) bool {
+		if normalized.StateProjections[i].Directory.Scope != normalized.StateProjections[j].Directory.Scope {
+			return normalized.StateProjections[i].Directory.Scope < normalized.StateProjections[j].Directory.Scope
+		}
+		return normalized.StateProjections[i].Directory.Target < normalized.StateProjections[j].Directory.Target
+	})
 	return normalized, nil
+}
+
+func validatePortableRuntimeStateProjections(contribution PortableRuntimeContribution) error {
+	type projectionEntryIndex struct {
+		projection int
+		entry      int
+	}
+
+	directories := make([]PortableRuntimeGuestPath, 0, len(contribution.StateProjections))
+	outputs := make([]PortableRuntimeGuestPath, 0)
+	outputIndexes := make([]projectionEntryIndex, 0)
+	usedAssets := make(map[string]projectionEntryIndex)
+
+	for projectionIndex, projection := range contribution.StateProjections {
+		if !validPortableRuntimeStateProjectionDirectory(projection.Directory) {
+			return closureErrorAt("state projection", projectionIndex, "has an invalid activation-owned directory")
+		}
+		for previousIndex, previous := range directories {
+			if portableRuntimeGuestPathsOverlap(previous, projection.Directory) {
+				return closureError("state projection directories overlap at indexes %d and %d", previousIndex, projectionIndex)
+			}
+		}
+		directories = append(directories, projection.Directory)
+
+		hasConfig := false
+		hasWritableSeed := false
+		for entryIndex, entry := range projection.Entries {
+			if !validPortableRuntimeTargetPath(entry.Target) {
+				return closureError("state projection entry %d at projection %d has an invalid target", entryIndex, projectionIndex)
+			}
+			asset, ok := portableRuntimeExactAsset(contribution.Assets, entry.AssetTarget)
+			if !ok {
+				return closureError("state projection entry %d at projection %d references a missing asset", entryIndex, projectionIndex)
+			}
+			if asset.Executable {
+				return closureError("state projection entry %d at projection %d references an executable asset", entryIndex, projectionIndex)
+			}
+			switch asset.Kind {
+			case PortableRuntimeAssetConfig:
+				hasConfig = true
+			case PortableRuntimeAssetCredential, PortableRuntimeAssetQuota, PortableRuntimeAssetCache:
+				hasWritableSeed = true
+			default:
+				return closureError("state projection entry %d at projection %d references an unsupported asset kind", entryIndex, projectionIndex)
+			}
+
+			currentIndex := projectionEntryIndex{projection: projectionIndex, entry: entryIndex}
+			if previous, exists := usedAssets[entry.AssetTarget]; exists {
+				return closureError("state projection asset is reused at projection/entry indexes %d/%d and %d/%d", previous.projection, previous.entry, projectionIndex, entryIndex)
+			}
+			usedAssets[entry.AssetTarget] = currentIndex
+
+			output := PortableRuntimeGuestPath{
+				Scope:  projection.Directory.Scope,
+				Target: path.Join(projection.Directory.Target, entry.Target),
+			}
+			for absentIndex, absent := range contribution.ExecutionConstraints.RequiredAbsentPaths {
+				if portableRuntimeGuestPathsOverlap(absent, output) {
+					return closureError("state projection output at projection/entry indexes %d/%d overlaps required-absent path index %d", projectionIndex, entryIndex, absentIndex)
+				}
+			}
+			for i, previous := range outputs {
+				if portableRuntimeGuestPathsOverlap(previous, output) {
+					previousIndex := outputIndexes[i]
+					return closureError("state projection outputs overlap at projection/entry indexes %d/%d and %d/%d", previousIndex.projection, previousIndex.entry, projectionIndex, entryIndex)
+				}
+			}
+			outputs = append(outputs, output)
+			outputIndexes = append(outputIndexes, currentIndex)
+		}
+		if !hasConfig {
+			return closureErrorAt("state projection", projectionIndex, "has no immutable config member")
+		}
+		if !hasWritableSeed {
+			return closureErrorAt("state projection", projectionIndex, "has no credential, quota, or cache seed")
+		}
+	}
+	return nil
+}
+
+func validPortableRuntimeStateProjectionDirectory(directory PortableRuntimeGuestPath) bool {
+	if !validPortableRuntimeGuestPath(directory, false) {
+		return false
+	}
+	switch directory.Scope {
+	case PortableRuntimeGuestPathHome,
+		PortableRuntimeGuestPathConfig,
+		PortableRuntimeGuestPathData,
+		PortableRuntimeGuestPathCache,
+		PortableRuntimeGuestPathState:
+		return true
+	default:
+		return false
+	}
 }
 
 func validatePortableRuntimeAssets(assets []PortableRuntimeAsset) error {

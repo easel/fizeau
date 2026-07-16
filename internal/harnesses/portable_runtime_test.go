@@ -48,6 +48,14 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 		{name: "Option", typ: reflect.TypeOf("")},
 		{name: "Value", typ: reflect.TypeOf("")},
 	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeStateProjectionEntry{}), []fieldContract{
+		{name: "AssetTarget", typ: reflect.TypeOf("")},
+		{name: "Target", typ: reflect.TypeOf("")},
+	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeStateProjection{}), []fieldContract{
+		{name: "Directory", typ: reflect.TypeOf(PortableRuntimeGuestPath{})},
+		{name: "Entries", typ: reflect.TypeOf([]PortableRuntimeStateProjectionEntry{})},
+	})
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeExecutionConstraints{}), []fieldContract{
 		{name: "Environment", typ: reflect.TypeOf([]PortableRuntimeEnvironmentConstraint{})},
 		{name: "ReadOnlyPaths", typ: reflect.TypeOf([]PortableRuntimeGuestPath{})},
@@ -61,6 +69,7 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 		{name: "Assets", typ: reflect.TypeOf([]PortableRuntimeAsset{})},
 		{name: "Environment", typ: reflect.TypeOf([]PortableRuntimeEnvironment{})},
 		{name: "ExecutionConstraints", typ: reflect.TypeOf(PortableRuntimeExecutionConstraints{})},
+		{name: "StateProjections", typ: reflect.TypeOf([]PortableRuntimeStateProjection{})},
 	})
 
 	if got, want := []PortableRuntimeAssetKind{
@@ -498,6 +507,212 @@ func TestPortableRuntimeExecutionConstraints(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), sensitive) || strings.Contains(err.Error(), hostRoot) {
 				t.Fatalf("error reveals sensitive record data: %v", err)
+			}
+		})
+	}
+}
+
+func TestPortableRuntimeMixedStateProjection(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 validation is Linux-only")
+	}
+
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	contribution := validPortableRuntimeMixedStateContribution(filepath.Join(t.TempDir(), "fixture-secret"))
+	normalized, err := NormalizePortableRuntimeContribution(target, contribution)
+	if err != nil {
+		t.Fatalf("NormalizePortableRuntimeContribution() error = %v", err)
+	}
+	want := []PortableRuntimeStateProjection{
+		{
+			Directory: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathHome, Target: ".gemini"},
+			Entries: []PortableRuntimeStateProjectionEntry{
+				{AssetTarget: "state/gemini/quota.json", Target: "oauth_creds.json"},
+				{AssetTarget: "config/gemini/settings.json", Target: "settings.json"},
+			},
+		},
+		{
+			Directory: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathState, Target: "pi"},
+			Entries: []PortableRuntimeStateProjectionEntry{
+				{AssetTarget: "state/pi/auth.json", Target: "auth.json"},
+				{AssetTarget: "config/pi/settings.json", Target: "settings.json"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(normalized.StateProjections, want) {
+		t.Fatalf("state projections = %#v, want sorted %#v", normalized.StateProjections, want)
+	}
+	if got, wantAbsent := normalized.ExecutionConstraints.RequiredAbsentPaths, []PortableRuntimeGuestPath{{Scope: PortableRuntimeGuestPathHome, Target: ".gemini/extensions"}}; !reflect.DeepEqual(got, wantAbsent) {
+		t.Fatalf("required-absent sibling = %#v, want allowed %#v", got, wantAbsent)
+	}
+
+	contribution.StateProjections[0].Directory.Target = "mutated-input"
+	contribution.StateProjections[0].Entries[0] = PortableRuntimeStateProjectionEntry{AssetTarget: "mutated-input", Target: "mutated-input"}
+	if !reflect.DeepEqual(normalized.StateProjections, want) {
+		t.Fatal("normalized state projections alias contributor-owned outer or entry slices")
+	}
+
+	ownedInput := validPortableRuntimeMixedStateContribution(filepath.Join(t.TempDir(), "fixture-secret"))
+	ownedSnapshot := clonePortableRuntimeTestContribution(ownedInput)
+	ownedNormalized, err := NormalizePortableRuntimeContribution(target, ownedInput)
+	if err != nil {
+		t.Fatalf("second NormalizePortableRuntimeContribution() error = %v", err)
+	}
+	ownedNormalized.StateProjections[0].Directory.Target = "mutated-output"
+	ownedNormalized.StateProjections[0].Entries[0] = PortableRuntimeStateProjectionEntry{AssetTarget: "mutated-output", Target: "mutated-output"}
+	if !reflect.DeepEqual(ownedInput.StateProjections, ownedSnapshot.StateProjections) {
+		t.Fatal("mutating normalized state projections changed the contributor-owned input")
+	}
+}
+
+func TestPortableRuntimeStateProjectionValidation(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 validation is Linux-only")
+	}
+
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	hostRoot := filepath.Join(t.TempDir(), "fixture-secret")
+	tests := []struct {
+		name      string
+		wantClass string
+		mutate    func(*PortableRuntimeContribution)
+	}{
+		{
+			name: "empty directory", wantClass: "invalid activation-owned directory",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Directory.Target = ""
+			},
+		},
+		{
+			name: "runtime directory", wantClass: "invalid activation-owned directory",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Directory.Scope = PortableRuntimeGuestPathRuntime
+			},
+		},
+		{
+			name: "tmp directory", wantClass: "invalid activation-owned directory",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Directory.Scope = PortableRuntimeGuestPathTmp
+			},
+		},
+		{
+			name: "absolute entry target", wantClass: "invalid target",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].Target = "/settings.json"
+			},
+		},
+		{
+			name: "traversing entry target", wantClass: "invalid target",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].Target = "nested/../settings.json"
+			},
+		},
+		{
+			name: "backslash entry target", wantClass: "invalid target",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].Target = `nested\settings.json`
+			},
+		},
+		{
+			name: "empty entry target", wantClass: "invalid target",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].Target = ""
+			},
+		},
+		{
+			name: "missing asset reference", wantClass: "missing asset",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].AssetTarget = "state/missing.json"
+			},
+		},
+		{
+			name: "unsupported asset kind", wantClass: "unsupported asset kind",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Assets = append(candidate.Assets, portableRuntimeTestAsset(hostRoot, "support", "support/metadata", PortableRuntimeAssetSupport, PortableRuntimePathFile, false))
+				candidate.StateProjections[0].Entries[0].AssetTarget = "support/metadata"
+			},
+		},
+		{
+			name: "executable asset kind", wantClass: "executable asset",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries[0].AssetTarget = "bin/tool"
+			},
+		},
+		{
+			name: "no config member", wantClass: "no immutable config member",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				for i := range candidate.Assets {
+					if candidate.Assets[i].Target == "config/pi/settings.json" {
+						candidate.Assets[i].Kind = PortableRuntimeAssetCache
+					}
+				}
+			},
+		},
+		{
+			name: "no credential quota or cache seed", wantClass: "no credential, quota, or cache seed",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				for i := range candidate.Assets {
+					if candidate.Assets[i].Target == "state/pi/auth.json" {
+						candidate.Assets[i].Kind = PortableRuntimeAssetConfig
+					}
+				}
+			},
+		},
+		{
+			name: "duplicate outputs", wantClass: "outputs overlap",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Assets = append(candidate.Assets, portableRuntimeTestAsset(hostRoot, "extra-cache", "cache/extra.json", PortableRuntimeAssetCache, PortableRuntimePathFile, false))
+				candidate.StateProjections[0].Entries = append(candidate.StateProjections[0].Entries, PortableRuntimeStateProjectionEntry{AssetTarget: "cache/extra.json", Target: candidate.StateProjections[0].Entries[0].Target})
+			},
+		},
+		{
+			name: "ancestor descendant outputs", wantClass: "outputs overlap",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Assets = append(candidate.Assets, portableRuntimeTestAsset(hostRoot, "extra-cache", "cache/extra.json", PortableRuntimeAssetCache, PortableRuntimePathFile, false))
+				candidate.StateProjections[0].Entries = append(candidate.StateProjections[0].Entries, PortableRuntimeStateProjectionEntry{AssetTarget: "cache/extra.json", Target: candidate.StateProjections[0].Entries[0].Target + "/nested"})
+			},
+		},
+		{
+			name: "duplicate directories", wantClass: "directories overlap",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections = append(candidate.StateProjections, candidate.StateProjections[0])
+			},
+		},
+		{
+			name: "ancestor descendant directories", wantClass: "directories overlap",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				nested := candidate.StateProjections[0]
+				nested.Directory.Target += "/nested"
+				candidate.StateProjections = append(candidate.StateProjections, nested)
+			},
+		},
+		{
+			name: "required absent output overlap", wantClass: "overlaps required-absent path",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.RequiredAbsentPaths = append(candidate.ExecutionConstraints.RequiredAbsentPaths, PortableRuntimeGuestPath{Scope: candidate.StateProjections[0].Directory.Scope, Target: candidate.StateProjections[0].Directory.Target + "/settings.json"})
+			},
+		},
+		{
+			name: "reused asset reference", wantClass: "asset is reused",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.StateProjections[0].Entries = append(candidate.StateProjections[0].Entries, PortableRuntimeStateProjectionEntry{AssetTarget: candidate.StateProjections[0].Entries[0].AssetTarget, Target: "second.json"})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := clonePortableRuntimeTestContribution(validPortableRuntimeMixedStateContribution(hostRoot))
+			tc.mutate(&candidate)
+			_, err := NormalizePortableRuntimeContribution(target, candidate)
+			if !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+				t.Fatalf("error = %v, want ErrPortableRuntimeClosureIncomplete", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantClass) {
+				t.Fatalf("error = %v, want redacted class %q", err, tc.wantClass)
+			}
+			if strings.Contains(err.Error(), hostRoot) || strings.Contains(err.Error(), "fixture-secret") {
+				t.Fatalf("error reveals source path or fixture secret: %v", err)
 			}
 		})
 	}
@@ -1114,5 +1329,47 @@ func clonePortableRuntimeTestContribution(in PortableRuntimeContribution) Portab
 	out.ExecutionConstraints.RequiredAbsentPaths = append([]PortableRuntimeGuestPath(nil), in.ExecutionConstraints.RequiredAbsentPaths...)
 	out.ExecutionConstraints.FixedArguments = append([]string(nil), in.ExecutionConstraints.FixedArguments...)
 	out.ExecutionConstraints.FixedOptionValues = append([]PortableRuntimeFixedOptionValue(nil), in.ExecutionConstraints.FixedOptionValues...)
+	out.StateProjections = make([]PortableRuntimeStateProjection, len(in.StateProjections))
+	for i, projection := range in.StateProjections {
+		out.StateProjections[i] = PortableRuntimeStateProjection{
+			Directory: projection.Directory,
+			Entries:   append([]PortableRuntimeStateProjectionEntry(nil), projection.Entries...),
+		}
+	}
 	return out
+}
+
+func validPortableRuntimeMixedStateContribution(hostRoot string) PortableRuntimeContribution {
+	return PortableRuntimeContribution{
+		ClosureClass: PortableRuntimeClosureStatic,
+		Launch:       PortableRuntimeLaunch{EntrypointTarget: "bin/tool"},
+		Assets: []PortableRuntimeAsset{
+			portableRuntimeTestAsset(hostRoot, "tool", "bin/tool", PortableRuntimeAssetExecutable, PortableRuntimePathFile, true),
+			portableRuntimeTestAsset(hostRoot, "pi-settings", "config/pi/settings.json", PortableRuntimeAssetConfig, PortableRuntimePathFile, false),
+			portableRuntimeTestAsset(hostRoot, "pi-auth", "state/pi/auth.json", PortableRuntimeAssetCredential, PortableRuntimePathFile, false),
+			portableRuntimeTestAsset(hostRoot, "gemini-settings", "config/gemini/settings.json", PortableRuntimeAssetConfig, PortableRuntimePathFile, false),
+			portableRuntimeTestAsset(hostRoot, "gemini-quota", "state/gemini/quota.json", PortableRuntimeAssetQuota, PortableRuntimePathFile, false),
+		},
+		ExecutionConstraints: PortableRuntimeExecutionConstraints{
+			RequiredAbsentPaths: []PortableRuntimeGuestPath{
+				{Scope: PortableRuntimeGuestPathHome, Target: ".gemini/extensions"},
+			},
+		},
+		StateProjections: []PortableRuntimeStateProjection{
+			{
+				Directory: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathState, Target: "pi"},
+				Entries: []PortableRuntimeStateProjectionEntry{
+					{AssetTarget: "config/pi/settings.json", Target: "settings.json"},
+					{AssetTarget: "state/pi/auth.json", Target: "auth.json"},
+				},
+			},
+			{
+				Directory: PortableRuntimeGuestPath{Scope: PortableRuntimeGuestPathHome, Target: ".gemini"},
+				Entries: []PortableRuntimeStateProjectionEntry{
+					{AssetTarget: "config/gemini/settings.json", Target: "settings.json"},
+					{AssetTarget: "state/gemini/quota.json", Target: "oauth_creds.json"},
+				},
+			},
+		},
+	}
 }

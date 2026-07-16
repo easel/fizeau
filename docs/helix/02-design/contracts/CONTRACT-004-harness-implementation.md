@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: ba1180121e38a41b40ebdb9a6bdc971b1c8314cf56566486761ba4302b6540eb
+    self_hash: fe8cee3499465ce61e0043ca7e8a0c79979972a23253c86fee501a3d330ac259
     deps:
-      CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
+      CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T02:42:53Z"
+    reviewed_at: "2026-07-16T03:28:41Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -347,6 +347,22 @@ type PortableRuntimeFixedOptionValue struct {
     Value  string
 }
 
+// PortableRuntimeStateProjectionEntry maps one exact declared asset into a
+// member below an activation-owned directory. Neither field carries a value or
+// a host path.
+type PortableRuntimeStateProjectionEntry struct {
+    AssetTarget string
+    Target      string
+}
+
+// PortableRuntimeStateProjection assembles immutable configuration and
+// writable state seeds at one native harness directory. Activation owns the
+// enforcement boundary between those members.
+type PortableRuntimeStateProjection struct {
+    Directory PortableRuntimeGuestPath
+    Entries   []PortableRuntimeStateProjectionEntry
+}
+
 // PortableRuntimeExecutionConstraints is harness-declared execution evidence.
 // Activation interprets it generically after materialization persists it.
 type PortableRuntimeExecutionConstraints struct {
@@ -363,6 +379,7 @@ type PortableRuntimeContribution struct {
     Assets               []PortableRuntimeAsset
     Environment          []PortableRuntimeEnvironment
     ExecutionConstraints PortableRuntimeExecutionConstraints
+    StateProjections     []PortableRuntimeStateProjection
 }
 
 // PortableRuntimeHarness is the optional harness-owned asset-discovery
@@ -588,6 +605,7 @@ rather than silently omitting that structural candidate.
 `PortableRuntimeEnvironment`, `PortableRuntimeGuestPathScope`,
 `PortableRuntimeGuestPath`, `PortableRuntimeEnvironmentConstraintKind`,
 `PortableRuntimeEnvironmentConstraint`, `PortableRuntimeExecutionConstraints`,
+`PortableRuntimeStateProjectionEntry`, `PortableRuntimeStateProjection`,
 `PortableRuntimeContribution`, `HarnessInfo`,
 `EventType`, and `ContextCapacityData` retain or receive their definitions in
 `internal/harnesses/types.go` as specified here.
@@ -654,15 +672,51 @@ remain absent.
 | `XDG_RUNTIME_DIR` | `runtime` child beneath the generated `tmp` scope. |
 | `TMPDIR` | Root of the generated `tmp` scope. |
 
-Credential, quota, and cache assets whose targets begin with `data/`, `state/`,
-or `cache/` are activation seeds for the matching generated scope. Activation
-copies them with owner-only permissions into its guest-private writable storage
-before process start; it never points an XDG variable at the read-only runtime
-mount merely to expose a seed. The target suffix after the scope prefix is
-preserved exactly. This lets a contributor declare, for example,
-`data/opencode/auth.json` while OpenCode remains free to create sibling log and
-database files under its generated data directory. Configuration trees remain
-read-only runtime assets and do not use this state-seed rule.
+An unprojected credential, quota, or cache asset is a prefix-preserving seed.
+Its target MUST begin with `data/`, `state/`, or `cache/`; activation copies it
+with owner-only permissions into the matching generated scope before process
+start and preserves the suffix after that prefix exactly. It never points an
+XDG variable at the read-only runtime mount merely to expose a seed. This lets
+a contributor declare `data/opencode/auth.json` while OpenCode remains free to
+create sibling log and database files under its generated data directory.
+
+`StateProjections` governs the distinct case where a harness's native directory
+must contain both immutable configuration and writable credential, quota, or
+cache state. `Directory` MUST have a non-empty clean target in exactly one of
+the activation-owned `home`, `config`, `data`, `cache`, or `state` scopes;
+`runtime` and `tmp` are invalid. Each entry maps one exact declared
+`AssetTarget` to one non-empty clean slash-relative member `Target` below that
+directory. A projection MUST contain at least one `config` asset and at least
+one `credential`, `quota`, or `cache` asset. Asset `Kind` is the sole
+mutability authority: executable, install-tree, and runtime-support assets are
+invalid projection members. One asset target may be consumed by at most one
+projection entry and is not also copied by the prefix-preserving seed rule.
+
+Projection directories MUST be pairwise disjoint under exact, ancestor, and
+descendant comparison. Concrete projected outputs MUST separately be pairwise
+disjoint under the same comparison. A
+`RequiredAbsentPaths` entry may name a generated sibling inside a projection
+directory, but it MUST remain disjoint from every concrete projected output.
+Normalization deep-copies the projection and entry slices, sorts projections
+by `Directory.Scope` then `Directory.Target`, and sorts entries by `Target`
+then `AssetTarget`. It is metadata-only: it MUST NOT inspect, follow, or stat
+an asset source. Contributor discovery verifies the original source, and the
+materializer revalidates source identity, content, file type, and symlink
+absence while copying and persists the normalized projection.
+
+Activation MUST assemble each projection through a filesystem or mount-
+namespace enforcement boundary. The projection directory's identity MUST
+resist unlink, rename, replacement, and shadowing by the harness UID. Every
+`config` member MUST resist write, unlink, rename, replacement, and shadowing,
+while credential/quota/cache members remain refreshable and declared lock files
+plus unprojected siblings remain creatable in the directory. Owner-only or
+read-only mode bits on ordinary files inside a writable parent are
+insufficient: that parent would still permit unlink, rename, replacement, or
+shadowing. Activation therefore MUST make the projection root and immutable
+members namespace-owned boundaries while selectively exposing writable state
+members and sibling space; it MUST verify these properties before process
+start. Configuration assets outside a state projection remain read-only
+runtime assets and do not use either state-seed rule.
 
 Typed environment treatments have these exact meanings:
 
@@ -707,8 +761,10 @@ the runtime user cannot write it or run an installer through it.
 
 `RequiredAbsentPaths` accepts only the immutable/generated scopes above. Each
 path MUST be disjoint from every declared asset, read-only path, explicitly
-generated `guest_path`, and other required-absent path under exact,
-ancestor, and descendant comparison. Activation MUST verify every declared path
+generated `guest_path`, concrete state-projection output, and other
+required-absent path under exact, ancestor, and descendant comparison. The
+containing writable state-projection directory is not itself a conflict, so a
+contributor can forbid an undeclared generated sibling. Activation MUST verify every declared path
 immediately before every harness process start, including the first; an earlier
 launch creating a path in a writable generated scope therefore prevents every
 later launch until the runtime is destroyed. Fizeau's activation and service
@@ -1207,7 +1263,7 @@ Every harness implementation MUST carry, at minimum:
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
 | `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
-| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints` and `TestPortableRuntimeFixedOptionValues` prove the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, absence conflicts, ordered standalone fixed flags and typed option/value pairs, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree denies writes and installer-created content. |
+| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints`, `TestPortableRuntimeFixedOptionValues`, and `TestPortableRuntimeMixedStateProjection` prove the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, mixed immutable/writable native-directory projection, absence conflicts, ordered standalone fixed flags and typed option/value pairs, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree and projected config members deny write, unlink, rename, replacement, and shadowing while writable seeds can refresh and create locks/siblings. |
 | Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
 | Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
 | Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
@@ -1450,7 +1506,8 @@ by `go vet`-shaped tooling:
     `PortableRuntimeGuestPathScope`, `PortableRuntimeGuestPath`,
     `PortableRuntimeEnvironmentConstraintKind`,
     `PortableRuntimeEnvironmentConstraint`,
-    `PortableRuntimeExecutionConstraints`, `PortableRuntimeContribution`, optional
+    `PortableRuntimeExecutionConstraints`, `PortableRuntimeStateProjectionEntry`,
+    `PortableRuntimeStateProjection`, `PortableRuntimeContribution`, optional
     `PortableRuntimeHarness`, `ErrPortableRuntimeTargetUnsupported`, and
     `ErrPortableRuntimeClosureIncomplete` with the signatures, content
     identities, closure classes, and value-opaque behavior above.
@@ -1480,6 +1537,16 @@ by `go vet`-shaped tooling:
     duplicate/conflicting-option, and secret-like value rejection; and index-
     only redacted errors. Later activation and OCI tests prove actual
     read-only enforcement and absence before process start.
+28. `TestPortableRuntimeMixedStateProjection` and
+    `TestPortableRuntimeStateProjectionValidation` prove exact config plus
+    credential/quota/cache asset references, activation-owned non-empty
+    directories, deterministic two-level sorting, bidirectional deep ownership,
+    prefix-seed versus projection-consumed classification, concrete-output-only
+    absence conflicts, no reused asset or overlapping output/directory, and
+    typed redacted failures. Materialization tests separately revalidate source
+    identity and symlinks. Activation/OCI tests prove projected config cannot be
+    written, unlinked, renamed, replaced, or shadowed while credential refresh,
+    lock creation, and sibling state creation succeed.
 
 ## References
 

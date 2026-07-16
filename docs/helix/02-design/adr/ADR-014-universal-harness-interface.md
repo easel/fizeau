@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 3924a8e18b73d81ecf5331627b78d255e38422db9d62393a6dd8ee3c10e5081d
+    self_hash: 4124536e5e2452793a45d8b47b38e261a33c29d88ef67dad8e2b035ca78eac98
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
-      CONTRACT-004: 37064b7b952d5027252aa31e2eb7d8fde0fb0139dd7195d5e72658a96c4b77e8
-    reviewed_at: "2026-07-16T02:53:06Z"
+      CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
+      CONTRACT-004: fe8cee3499465ce61e0043ca7e8a0c79979972a23253c86fee501a3d330ac259
+    reviewed_at: "2026-07-16T03:28:41Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -547,6 +547,14 @@ by typed non-secret option/value pairs. It returns no raw environment value and
 performs no copy, route selection, provider contact, session creation, or
 process start.
 
+Mixed native state remains inside this optional neutral capability. A
+`StateProjection` maps exact declared config plus credential/quota/cache asset
+targets into one activation-owned home/config/data/cache/state directory. An
+unreferenced credential/quota/cache asset keeps the prefix-preserving
+data/state/cache seed behavior; a projection-consumed asset is assembled only
+through its projection. Normalization is metadata-only, and contributor plus
+materializer layers retain source identity, content, and symlink checks.
+
 This capability closes a boundary that a service-side path table would reopen.
 Codex, Claude, Gemini, and other harness packages already own their credential,
 quota, cache, and launcher semantics. The service therefore cannot copy those
@@ -609,9 +617,15 @@ caller-interpreted plan surface. `NewFromPortableRuntime` is the public
 activation seam that verifies the mounted manifest, reconstructs a closed-world
 child environment, enforces read-only/absent path rules, and reconstructs the
 configured service in the new process without the application-only config
-loader. It also copies target-prefixed credential, quota, and cache state seeds
-into owner-only writable generated data/state/cache scopes; the read-only mount
-remains the source of truth and configuration trees remain immutable.
+loader. It also copies unprojected target-prefixed credential, quota, and cache
+state seeds into owner-only writable generated data/state/cache scopes and
+assembles projection-consumed mixed directories generically. For a mixed
+directory, activation makes the directory root identity and config members
+mount/filesystem-owned boundaries. The root identity denies unlink, rename,
+replacement, and shadowing; config members additionally deny writes. Writable
+member refresh, locks, and generated siblings remain permitted. Chmod on
+ordinary files inside a writable parent is not sufficient. The read-only mount
+remains the source of truth.
 Activation installs the typed launch recipes and ordered fixed flag plus
 option/value prefixes into the production `Execute` dispatcher, not only a
 refresh/scheduler instance map. The embedding caller applies the opaque plan,
@@ -669,5 +683,9 @@ owner.
   They reject legacy or executable configuration, remote `wellknown` auth, and
   provider SDK selectors outside the audited bundled set; activation evidence
   must seed `data/opencode/auth.json` without making configuration writable.
+- Mixed-state conformance uses `TestPortableRuntimeMixedStateProjection` for
+  exact value-opaque mapping and activation tests that deny projected config
+  write/unlink/rename/replacement/shadow operations while allowing credential
+  refresh, lock creation, and sibling state creation.
 - Static enforcement rejects service-side imports or calls to concrete
   harness path helpers for portable preparation.

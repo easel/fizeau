@@ -709,6 +709,23 @@ type PortableRuntimeFixedOptionValue struct {
 	Value  string
 }
 
+// PortableRuntimeStateProjectionEntry maps one exact declared asset into a
+// member below an activation-owned state projection directory. Both fields are
+// slash-relative private manifest metadata; neither carries a host path or a
+// value from the referenced asset.
+type PortableRuntimeStateProjectionEntry struct {
+	AssetTarget string
+	Target      string
+}
+
+// PortableRuntimeStateProjection assembles immutable configuration and
+// writable state seeds at one native harness directory. Activation, rather
+// than file mode bits, owns the enforcement boundary between those members.
+type PortableRuntimeStateProjection struct {
+	Directory PortableRuntimeGuestPath
+	Entries   []PortableRuntimeStateProjectionEntry
+}
+
 // PortableRuntimeExecutionConstraints is harness-declared execution evidence.
 // Activation interprets it generically after materialization persists it.
 type PortableRuntimeExecutionConstraints struct {
@@ -725,6 +742,7 @@ type PortableRuntimeContribution struct {
 	Assets               []PortableRuntimeAsset
 	Environment          []PortableRuntimeEnvironment
 	ExecutionConstraints PortableRuntimeExecutionConstraints
+	StateProjections     []PortableRuntimeStateProjection
 }
 
 // PortableRuntimeHarness is the optional harness-owned asset-discovery
