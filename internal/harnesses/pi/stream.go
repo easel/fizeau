@@ -24,7 +24,7 @@ type piUsage struct {
 	Input  int `json:"input"`
 	Output int `json:"output"`
 	Cost   struct {
-		Total float64 `json:"total"`
+		Total *float64 `json:"total"`
 	} `json:"cost"`
 }
 
@@ -64,7 +64,11 @@ type streamAggregate struct {
 	HasUsage     bool
 	InputTokens  int
 	OutputTokens int
-	CostUSD      float64
+	FinalCostUSD *float64
+	CostSource   harnesses.CostSource
+	// CostUSD remains an in-memory compatibility mirror. FinalCostUSD and
+	// CostSource are authoritative, including for an explicitly reported zero.
+	CostUSD float64
 }
 
 // parsePiStream reads newline-delimited pi --mode json events from r and
@@ -77,7 +81,7 @@ type streamAggregate struct {
 // so only text_delta events are emitted during the stream. Usage is captured
 // from the last line with usage fields, per DDx behavior.
 func parsePiStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event, metadata map[string]string, seq *int64) (*streamAggregate, error) {
-	agg := &streamAggregate{}
+	agg := &streamAggregate{CostSource: harnesses.CostSourceUnknown}
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
 
@@ -110,17 +114,11 @@ func parsePiStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event,
 			continue
 		}
 		if ev.Message.Usage != nil {
-			agg.HasUsage = true
-			agg.InputTokens = ev.Message.Usage.Input
-			agg.OutputTokens = ev.Message.Usage.Output
-			agg.CostUSD = ev.Message.Usage.Cost.Total
+			agg.recordUsage(ev.Message.Usage)
 			break
 		}
 		if ev.Partial.Usage != nil {
-			agg.HasUsage = true
-			agg.InputTokens = ev.Partial.Usage.Input
-			agg.OutputTokens = ev.Partial.Usage.Output
-			agg.CostUSD = ev.Partial.Usage.Cost.Total
+			agg.recordUsage(ev.Partial.Usage)
 			break
 		}
 	}
@@ -178,4 +176,22 @@ func parsePiStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event,
 	}
 
 	return agg, nil
+}
+
+func (a *streamAggregate) recordUsage(usage *piUsage) {
+	a.HasUsage = true
+	a.InputTokens = usage.Input
+	a.OutputTokens = usage.Output
+	a.FinalCostUSD = nil
+	a.CostSource = harnesses.CostSourceUnknown
+	a.CostUSD = 0
+
+	if usage.Cost.Total == nil || *usage.Cost.Total < 0 {
+		return
+	}
+
+	value := *usage.Cost.Total
+	a.FinalCostUSD = &value
+	a.CostSource = harnesses.CostSourceReported
+	a.CostUSD = value
 }

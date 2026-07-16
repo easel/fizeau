@@ -414,6 +414,66 @@ EOF
 	}
 }
 
+func TestRunner_Execute_FinalCostPresence(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	tests := []struct {
+		name      string
+		costJSON  string
+		wantKnown bool
+		wantCost  float64
+	}{
+		{name: "absent"},
+		{name: "negative", costJSON: `,"cost":{"total":-0.01}`},
+		{name: "zero", costJSON: `,"cost":{"total":0}`, wantKnown: true},
+		{name: "positive", costJSON: `,"cost":{"total":0.0123}`, wantKnown: true, wantCost: 0.0123},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			binary := filepath.Join(dir, "fake-pi")
+			payload := `{"type":"text_end","message":{"usage":{"input":7,"output":3` + tt.costJSON + `}},"response":"ok"}`
+			script := "#!/bin/sh\ncat <<'EOF'\n" + payload + "\nEOF\n"
+			if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			r := &Runner{Binary: binary, BaseArgs: []string{}}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test prompt"})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+
+			var raw json.RawMessage
+			for ev := range ch {
+				if ev.Type == harnesses.EventTypeFinal {
+					raw = append(raw[:0], ev.Data...)
+				}
+			}
+			if len(raw) == 0 {
+				t.Fatal("no final event received")
+			}
+
+			wantSource := harnesses.CostSourceUnknown
+			if tt.wantKnown {
+				wantSource = harnesses.CostSourceReported
+			}
+			assertPiFinalCostJSON(t, raw, tt.wantKnown, tt.wantCost, wantSource)
+
+			var final harnesses.FinalData
+			if err := json.Unmarshal(raw, &final); err != nil {
+				t.Fatalf("unmarshal final event: %v", err)
+			}
+			assertPiCostState(t, final.FinalCostUSD, final.FinalCostSource, final.CostUSD, tt.wantKnown, tt.wantCost)
+		})
+	}
+}
+
 // Regression for agent-195bb183: when SessionLogDir is set, the mirror
 // goroutine forwards events from parser → out. If the runner closed `out`
 // before the mirror goroutine drained, an in-flight send panicked with

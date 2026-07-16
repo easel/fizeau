@@ -134,9 +134,10 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	agg, exitCode, stderr, runErr, status := r.runStreaming(ctx, binary, req, out, &seq)
 
 	final := harnesses.FinalData{
-		Status:     status,
-		ExitCode:   exitCode,
-		DurationMS: time.Since(start).Milliseconds(),
+		Status:          status,
+		ExitCode:        exitCode,
+		DurationMS:      time.Since(start).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	if runErr != nil && status != "success" {
 		final.Error = runErr.Error()
@@ -154,9 +155,9 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 				Fresh:        harnesses.BoolPtr(true),
 			}
 		}
-		if agg.CostUSD > 0 {
-			final.CostUSD = agg.CostUSD
-		}
+		final.FinalCostUSD = agg.FinalCostUSD
+		final.FinalCostSource = agg.CostSource
+		final.CostUSD = agg.CostUSD
 	}
 
 	finalRaw, err := json.Marshal(final)
