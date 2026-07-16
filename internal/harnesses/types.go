@@ -701,6 +701,14 @@ type PortableRuntimeEnvironmentConstraint struct {
 	GuestPath PortableRuntimeGuestPath
 }
 
+// PortableRuntimeFixedOptionValue declares one fixed option followed by one
+// fixed, non-secret literal value. It cannot represent a free positional
+// argument or an option=value assignment.
+type PortableRuntimeFixedOptionValue struct {
+	Option string
+	Value  string
+}
+
 // PortableRuntimeExecutionConstraints is harness-declared execution evidence.
 // Activation interprets it generically after materialization persists it.
 type PortableRuntimeExecutionConstraints struct {
@@ -708,6 +716,7 @@ type PortableRuntimeExecutionConstraints struct {
 	ReadOnlyPaths       []PortableRuntimeGuestPath
 	RequiredAbsentPaths []PortableRuntimeGuestPath
 	FixedArguments      []string
+	FixedOptionValues   []PortableRuntimeFixedOptionValue
 }
 
 type PortableRuntimeContribution struct {

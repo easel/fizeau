@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: d9e7107a14144493dcd4037a8d869a218d541903f2a3dba963ce7dcaa4e4e3fc
+    self_hash: 3924a8e18b73d81ecf5331627b78d255e38422db9d62393a6dd8ee3c10e5081d
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
-      CONTRACT-004: b7daeef2361b78d88adbebb4ec1e3b43a5aa4f6d693ad012d0ec7299ea8865fd
-    reviewed_at: "2026-07-16T02:02:08Z"
+      CONTRACT-004: 37064b7b952d5027252aa31e2eb7d8fde0fb0139dd7195d5e72658a96c4b77e8
+    reviewed_at: "2026-07-16T02:53:06Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -542,7 +542,8 @@ executable/install-tree closure, harness-owned state-file descriptors, and
 inherited environment names for a target GOOS/GOARCH. It also declares typed,
 value-opaque execution constraints: fixed boolean or guest-path environment
 treatments, explicit unsets, immutable config-tree and required-absent paths,
-and an ordered fixed argument prefix. It returns no raw environment value and
+and an ordered fixed launch prefix made from standalone boolean flags followed
+by typed non-secret option/value pairs. It returns no raw environment value and
 performs no copy, route selection, provider contact, session creation, or
 process start.
 
@@ -611,8 +612,8 @@ configured service in the new process without the application-only config
 loader. It also copies target-prefixed credential, quota, and cache state seeds
 into owner-only writable generated data/state/cache scopes; the read-only mount
 remains the source of truth and configuration trees remain immutable.
-Activation installs the typed launch recipes and ordered fixed argument
-prefixes into the production `Execute` dispatcher, not only a
+Activation installs the typed launch recipes and ordered fixed flag plus
+option/value prefixes into the production `Execute` dispatcher, not only a
 refresh/scheduler instance map. The embedding caller applies the opaque plan,
 orchestrates the external container as the mapped preparing UID, destroys its
 writable storage, and only then performs bundle cleanup; it never resolves a

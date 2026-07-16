@@ -44,11 +44,16 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 		{name: "Kind", typ: reflect.TypeOf(PortableRuntimeEnvironmentConstraintKind(""))},
 		{name: "GuestPath", typ: reflect.TypeOf(PortableRuntimeGuestPath{})},
 	})
+	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeFixedOptionValue{}), []fieldContract{
+		{name: "Option", typ: reflect.TypeOf("")},
+		{name: "Value", typ: reflect.TypeOf("")},
+	})
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeExecutionConstraints{}), []fieldContract{
 		{name: "Environment", typ: reflect.TypeOf([]PortableRuntimeEnvironmentConstraint{})},
 		{name: "ReadOnlyPaths", typ: reflect.TypeOf([]PortableRuntimeGuestPath{})},
 		{name: "RequiredAbsentPaths", typ: reflect.TypeOf([]PortableRuntimeGuestPath{})},
 		{name: "FixedArguments", typ: reflect.TypeOf([]string{})},
+		{name: "FixedOptionValues", typ: reflect.TypeOf([]PortableRuntimeFixedOptionValue{})},
 	})
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeContribution{}), []fieldContract{
 		{name: "ClosureClass", typ: reflect.TypeOf(PortableRuntimeClosureClass(""))},
@@ -498,6 +503,175 @@ func TestPortableRuntimeExecutionConstraints(t *testing.T) {
 	}
 }
 
+func TestPortableRuntimeFixedOptionValues(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 validation is Linux-only")
+	}
+
+	hostRoot := t.TempDir()
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	contribution := validPortableRuntimeExecutionContribution(hostRoot)
+	contribution.ExecutionConstraints.FixedArguments = []string{"--pure", "--disable-auto-update"}
+	contribution.ExecutionConstraints.FixedOptionValues = []PortableRuntimeFixedOptionValue{
+		{Option: "-e", Value: "none"},
+		{Option: "--color", Value: "disabled"},
+	}
+
+	normalized, err := NormalizePortableRuntimeContribution(target, contribution)
+	if err != nil {
+		t.Fatalf("NormalizePortableRuntimeContribution() error = %v", err)
+	}
+	if got, want := normalized.ExecutionConstraints.FixedArguments, []string{"--pure", "--disable-auto-update"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("fixed arguments = %#v, want ordered %#v", got, want)
+	}
+	if got, want := normalized.ExecutionConstraints.FixedOptionValues, []PortableRuntimeFixedOptionValue{
+		{Option: "-e", Value: "none"},
+		{Option: "--color", Value: "disabled"},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("fixed option/values = %#v, want ordered %#v", got, want)
+	}
+
+	contribution.ExecutionConstraints.FixedArguments[0] = "mutated"
+	contribution.ExecutionConstraints.FixedOptionValues[0] = PortableRuntimeFixedOptionValue{Option: "--mutated", Value: "mutated"}
+	if normalized.ExecutionConstraints.FixedArguments[0] != "--pure" ||
+		normalized.ExecutionConstraints.FixedOptionValues[0] != (PortableRuntimeFixedOptionValue{Option: "-e", Value: "none"}) {
+		t.Fatal("normalized fixed launch prefix aliases contributor-owned slices")
+	}
+
+	tests := []struct {
+		name     string
+		rejected string
+		mutate   func(*PortableRuntimeContribution)
+	}{
+		{
+			name: "empty option", rejected: "",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Option = ""
+			},
+		},
+		{
+			name: "empty value", rejected: "",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = ""
+			},
+		},
+		{
+			name: "unsupported option spelling", rejected: "-Extensions",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Option = "-Extensions"
+			},
+		},
+		{
+			name: "unsupported short option", rejected: "-x",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Option = "-x"
+			},
+		},
+		{
+			name: "option assignment", rejected: "--extensions=none",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Option = "--extensions=none"
+			},
+		},
+		{
+			name: "value assignment", rejected: "mode=none",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "mode=none"
+			},
+		},
+		{
+			name: "absolute path value", rejected: "/private/runtime-config",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "/private/runtime-config"
+			},
+		},
+		{
+			name: "relative path value", rejected: "private/runtime-config",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "private/runtime-config"
+			},
+		},
+		{
+			name: "secret-like value", rejected: "private-token",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "private-token"
+			},
+		},
+		{
+			name: "trailing hyphen value", rejected: "none-",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "none-"
+			},
+		},
+		{
+			name: "repeated hyphen value", rejected: "none--x",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0].Value = "none--x"
+			},
+		},
+		{
+			name: "short model selector", rejected: "-m",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0] = PortableRuntimeFixedOptionValue{Option: "-m", Value: "sonnet"}
+			},
+		},
+		{
+			name: "long route selector", rejected: "--route",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0] = PortableRuntimeFixedOptionValue{Option: "--route", Value: "default"}
+			},
+		},
+		{
+			name: "long endpoint selector", rejected: "--endpoint",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0] = PortableRuntimeFixedOptionValue{Option: "--endpoint", Value: "remote"}
+			},
+		},
+		{
+			name: "duplicate option and value", rejected: "-e",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues = append(candidate.ExecutionConstraints.FixedOptionValues,
+					PortableRuntimeFixedOptionValue{Option: "-e", Value: "none"})
+			},
+		},
+		{
+			name: "conflicting option values", rejected: "-e",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues = append(candidate.ExecutionConstraints.FixedOptionValues,
+					PortableRuntimeFixedOptionValue{Option: "-e", Value: "disabled"})
+			},
+		},
+		{
+			name: "short and long spelling conflict", rejected: "--e",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues = append(candidate.ExecutionConstraints.FixedOptionValues,
+					PortableRuntimeFixedOptionValue{Option: "--e", Value: "disabled"})
+			},
+		},
+		{
+			name: "option conflicts with fixed flag", rejected: "--pure",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedOptionValues[0] = PortableRuntimeFixedOptionValue{Option: "--pure", Value: "disabled"}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := clonePortableRuntimeTestContribution(validPortableRuntimeExecutionContribution(hostRoot))
+			candidate.ExecutionConstraints.FixedOptionValues = []PortableRuntimeFixedOptionValue{{Option: "-e", Value: "none"}}
+			tc.mutate(&candidate)
+			_, err := NormalizePortableRuntimeContribution(target, candidate)
+			if !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+				t.Fatalf("error = %v, want ErrPortableRuntimeClosureIncomplete", err)
+			}
+			if tc.rejected != "" && strings.Contains(err.Error(), tc.rejected) {
+				t.Fatalf("error reveals rejected option/value: %v", err)
+			}
+		})
+	}
+}
+
 func TestPortableRuntimeExactLibraryRootValidation(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("portable runtime v0.15 is Linux-only")
@@ -939,5 +1113,6 @@ func clonePortableRuntimeTestContribution(in PortableRuntimeContribution) Portab
 	out.ExecutionConstraints.ReadOnlyPaths = append([]PortableRuntimeGuestPath(nil), in.ExecutionConstraints.ReadOnlyPaths...)
 	out.ExecutionConstraints.RequiredAbsentPaths = append([]PortableRuntimeGuestPath(nil), in.ExecutionConstraints.RequiredAbsentPaths...)
 	out.ExecutionConstraints.FixedArguments = append([]string(nil), in.ExecutionConstraints.FixedArguments...)
+	out.ExecutionConstraints.FixedOptionValues = append([]PortableRuntimeFixedOptionValue(nil), in.ExecutionConstraints.FixedOptionValues...)
 	return out
 }

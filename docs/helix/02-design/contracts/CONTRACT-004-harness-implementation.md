@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: b7daeef2361b78d88adbebb4ec1e3b43a5aa4f6d693ad012d0ec7299ea8865fd
+    self_hash: ba1180121e38a41b40ebdb9a6bdc971b1c8314cf56566486761ba4302b6540eb
     deps:
       CONTRACT-003: e3da1c8ba3972a5d8af244b267fee8c20e03b5f221409484bf4dc1bb52709939
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T02:01:23Z"
+    reviewed_at: "2026-07-16T02:42:53Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -339,6 +339,14 @@ type PortableRuntimeEnvironmentConstraint struct {
     GuestPath PortableRuntimeGuestPath
 }
 
+// PortableRuntimeFixedOptionValue declares one fixed option followed by one
+// fixed, non-secret literal value. It cannot represent a free positional
+// argument or an option=value assignment.
+type PortableRuntimeFixedOptionValue struct {
+    Option string
+    Value  string
+}
+
 // PortableRuntimeExecutionConstraints is harness-declared execution evidence.
 // Activation interprets it generically after materialization persists it.
 type PortableRuntimeExecutionConstraints struct {
@@ -346,6 +354,7 @@ type PortableRuntimeExecutionConstraints struct {
     ReadOnlyPaths       []PortableRuntimeGuestPath
     RequiredAbsentPaths []PortableRuntimeGuestPath
     FixedArguments      []string
+    FixedOptionValues   []PortableRuntimeFixedOptionValue
 }
 
 type PortableRuntimeContribution struct {
@@ -711,9 +720,25 @@ sort by `Scope`, then `Target`. Duplicate or conflicting rules fail with
 indexes. `FixedArguments` remains in contributor order and contains unique
 boolean long-option tokens with the exact grammar
 `--[a-z][a-z0-9]*(?:-[a-z0-9]+)*`. It carries no positional value, option
-value, assignment, or path. The prefix is inserted after the complete
-executable/loader/interpreter recipe but before registry and request arguments.
-No route selector, secret, environment assignment, or placeholder is valid.
+value, assignment, or path. `FixedOptionValues` is a distinct contributor-
+ordered sequence of typed `{Option, Value}` pairs. In v0.15 the only governed
+short option is Gemini's `-e`; other short options fail closed because their
+semantics cannot be distinguished from route selectors. A long option uses the
+same grammar as `FixedArguments`; a value is a lowercase non-secret literal with the grammar
+`[a-z][a-z0-9]*(?:-[a-z0-9]+)*`. Assignments, slashes, backslashes, path-like
+values, account/model/policy/provider/route/endpoint/surface selectors,
+secret-like values, duplicate options, and an option
+that conflicts with a fixed flag fail closed. Short and long forms with the
+same name, such as `-e` and `--e`, conflict. Validation never includes either
+the rejected option or value in diagnostics.
+
+The fixed launch prefix is constructed deterministically after the complete
+executable/loader/interpreter recipe: first every `FixedArguments` token in
+contributor order, then each `FixedOptionValues` entry as adjacent `Option`,
+`Value` tokens in contributor order, then registry arguments and request-
+derived harness arguments. Neither a registry nor request can move, replace,
+or interleave any part of that prefix. No free positional argument, route
+selector, secret, environment assignment, or placeholder is valid.
 
 A PATH result or final symlink target is not automatically a complete
 executable closure. Each subprocess contribution declares one supported
@@ -737,12 +762,12 @@ Launch construction is exhaustive and does not use guest PATH, the copied
 ELF `PT_INTERP`, an absolute shebang, or a shell wrapper:
 
 ```text
-static:      <guest EntrypointTarget> + FixedArguments + registry argv + request argv
-dynamic:     <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest EntrypointTarget> + FixedArguments + registry argv + request argv
+static:      <guest EntrypointTarget> + FixedArguments + flattened FixedOptionValues + registry argv + request argv
+dynamic:     <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest EntrypointTarget> + FixedArguments + flattened FixedOptionValues + registry argv + request argv
 interpreted, static interpreter:
-             <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + registry argv + request argv
+             <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + flattened FixedOptionValues + registry argv + request argv
 interpreted, dynamic interpreter:
-             <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + registry argv + request argv
+             <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + flattened FixedOptionValues + registry argv + request argv
 ```
 
 Every target in `Launch` MUST resolve to a declared asset, a declared directory
@@ -752,9 +777,8 @@ recipe. The static/dynamic entrypoint plus every loader and
 interpreter target are regular owner-executable files. An interpreted entrypoint may be a
 non-executable regular file because the bundled interpreter opens it directly.
 `RuntimeArgs` contains no placeholder, environment assignment, route selector,
-or secret. `FixedArguments` follows the complete executable recipe and precedes
-all registry/request arguments; neither the registry nor a request can move,
-replace, or interleave this prefix. `NewFromPortableRuntime` must install this recipe into the actual
+or secret. The fixed launch prefix follows the complete executable recipe and
+precedes all registry/request arguments. `NewFromPortableRuntime` must install this recipe into the actual
 execution dispatch path; a scheduler-only or refresh-only instance map is not
 enough.
 
@@ -1183,7 +1207,7 @@ Every harness implementation MUST carry, at minimum:
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
 | `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
-| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints` proves the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, absence conflicts, ordered fixed arguments, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree denies writes and installer-created content. |
+| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints` and `TestPortableRuntimeFixedOptionValues` prove the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, absence conflicts, ordered standalone fixed flags and typed option/value pairs, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree denies writes and installer-created content. |
 | Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
 | Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
 | Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
@@ -1445,13 +1469,16 @@ by `go vet`-shaped tooling:
     contact, or session/lifecycle record. Asset and launch validation rejects
     inconsistent kind/path/executable/loader/interpreter combinations before
     copying.
-27. `TestPortableRuntimeExecutionConstraints` proves closed-world baseline,
+27. `TestPortableRuntimeExecutionConstraints` and
+    `TestPortableRuntimeFixedOptionValues` prove closed-world baseline,
     inherited, and typed-rule name ownership; the exact enum/field shape;
     runtime-backed environment paths; exact config-tree read-only backing;
     required-absent disjointness; deterministic sorting and defensive copies;
-    ordered unique flag-only fixed arguments; positional value, assignment, and
-    path rejection; and
-    index-only redacted errors. Later activation and OCI tests prove actual
+    ordered unique flag-only fixed arguments; contributor-ordered typed fixed
+    option/value pairs including `-e none`; exact fixed-prefix ordering before
+    registry/request arguments; positional, assignment, path-bearing,
+    duplicate/conflicting-option, and secret-like value rejection; and index-
+    only redacted errors. Later activation and OCI tests prove actual
     read-only enforcement and absence before process start.
 
 ## References

@@ -35,8 +35,8 @@ func ValidatePortableRuntimeContribution(target PortableRuntimeTarget, contribut
 
 // NormalizePortableRuntimeContribution validates and returns an owned,
 // deterministic contribution. Asset, environment, and execution-constraint
-// ordering is canonical; launch and fixed-argument ordering is retained because
-// it is part of execution semantics.
+// ordering is canonical; launch, fixed-argument, and fixed-option/value ordering
+// is retained because it is part of execution semantics.
 func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribution PortableRuntimeContribution) (PortableRuntimeContribution, error) {
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
@@ -64,6 +64,7 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 			ReadOnlyPaths:       append([]PortableRuntimeGuestPath(nil), contribution.ExecutionConstraints.ReadOnlyPaths...),
 			RequiredAbsentPaths: append([]PortableRuntimeGuestPath(nil), contribution.ExecutionConstraints.RequiredAbsentPaths...),
 			FixedArguments:      append([]string(nil), contribution.ExecutionConstraints.FixedArguments...),
+			FixedOptionValues:   append([]PortableRuntimeFixedOptionValue(nil), contribution.ExecutionConstraints.FixedOptionValues...),
 		},
 	}
 
@@ -232,15 +233,34 @@ func validatePortableRuntimeExecutionConstraints(contribution PortableRuntimeCon
 		}
 	}
 
-	seenArguments := make(map[string]int, len(constraints.FixedArguments))
+	seenArguments := make(map[string]int, len(constraints.FixedArguments)+len(constraints.FixedOptionValues))
 	for i, argument := range constraints.FixedArguments {
 		if !validPortableRuntimeFixedArgument(argument) || !validPortableRuntimeArgument(argument) {
 			return closureErrorAt("fixed argument", i, "is not a fixed non-secret argument")
 		}
-		if previous, exists := seenArguments[argument]; exists {
+		key := portableRuntimeFixedOptionKey(argument)
+		if previous, exists := seenArguments[key]; exists {
 			return closureError("fixed argument is duplicated at indexes %d and %d", previous, i)
 		}
-		seenArguments[argument] = i
+		seenArguments[key] = i
+	}
+
+	seenOptions := make(map[string]int, len(constraints.FixedOptionValues))
+	for i, pair := range constraints.FixedOptionValues {
+		if !validPortableRuntimeFixedOption(pair.Option) || !validPortableRuntimeArgument(pair.Option) {
+			return closureErrorAt("fixed option/value", i, "has an invalid option")
+		}
+		if !validPortableRuntimeFixedOptionLiteral(pair.Value) {
+			return closureErrorAt("fixed option/value", i, "has an invalid non-secret value")
+		}
+		key := portableRuntimeFixedOptionKey(pair.Option)
+		if previous, exists := seenArguments[key]; exists {
+			return closureError("fixed option/value at index %d conflicts with fixed argument index %d", i, previous)
+		}
+		if previous, exists := seenOptions[key]; exists {
+			return closureError("fixed option/value option is duplicated at indexes %d and %d", previous, i)
+		}
+		seenOptions[key] = i
 	}
 
 	for i, readOnly := range constraints.ReadOnlyPaths {
@@ -488,7 +508,7 @@ func validPortableRuntimeArgument(argument string) bool {
 	}
 	normalized := strings.ToLower(strings.TrimLeft(argument, "-"))
 	for _, forbidden := range []string{
-		"api-key", "apikey", "authorization", "credential", "harness", "model", "password", "profile", "provider", "secret", "server-instance", "token",
+		"account", "api-key", "apikey", "authorization", "credential", "endpoint", "harness", "model", "password", "policy", "profile", "provider", "route", "secret", "server-instance", "surface", "token",
 	} {
 		if normalized == forbidden || strings.HasPrefix(normalized, forbidden+"=") {
 			return false
@@ -521,6 +541,56 @@ func validPortableRuntimeFixedArgument(argument string) bool {
 		previousHyphen = false
 	}
 	return true
+}
+
+func validPortableRuntimeFixedOption(option string) bool {
+	if len(option) == 2 && option[0] == '-' {
+		// v0.15 governs only Gemini's extension selector in short-option
+		// form. Other short options are semantically opaque and could select
+		// a route (for example -m), so they fail closed until reviewed.
+		return option == "-e"
+	}
+	return validPortableRuntimeFixedArgument(option)
+}
+
+func validPortableRuntimeFixedOptionLiteral(value string) bool {
+	if value == "" || !validPortableRuntimeArgument(value) || strings.ContainsAny(value, "=/\\") {
+		return false
+	}
+	previousHyphen := false
+	for i := range len(value) {
+		c := value[i]
+		if i == 0 {
+			if c < 'a' || c > 'z' {
+				return false
+			}
+			continue
+		}
+		if c == '-' {
+			if i == len(value)-1 || previousHyphen {
+				return false
+			}
+			previousHyphen = true
+			continue
+		}
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+			return false
+		}
+		previousHyphen = false
+	}
+	normalized := strings.ReplaceAll(value, "-", "")
+	for _, forbidden := range []string{
+		"apikey", "authorization", "credential", "harness", "model", "password", "profile", "provider", "secret", "serverinstance", "token",
+	} {
+		if strings.Contains(normalized, forbidden) {
+			return false
+		}
+	}
+	return true
+}
+
+func portableRuntimeFixedOptionKey(option string) string {
+	return strings.TrimLeft(option, "-")
 }
 
 func portableRuntimeFileAsset(assets []PortableRuntimeAsset, target string) (PortableRuntimeAsset, bool) {
