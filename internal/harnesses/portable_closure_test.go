@@ -375,33 +375,21 @@ func TestPortableRuntimeDynamicExactLibraryClosure(t *testing.T) {
 	})
 }
 
-func TestPortableRuntimeInterpretedClosure(t *testing.T) {
+func TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH(t *testing.T) {
 	requirePortableRuntimeLinux(t)
 	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
-	packageTree := t.TempDir()
-	if err := os.WriteFile(filepath.Join(packageTree, "package.json"), []byte(`{"name":"portable-fixture"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	script := filepath.Join(t.TempDir(), "tool.js")
-	absoluteShebang := "#!/account-bearing/host/path/node\nfixture\n"
-	if err := os.WriteFile(script, []byte(absoluteShebang), 0o700); err != nil {
-		t.Fatal(err)
-	}
 	staticInterpreter := buildPortableRuntimeStaticFixture(t)
-
-	staticRequest := PortableRuntimeInterpretedClosureRequest{
-		EntrypointSource:  script,
-		EntrypointTarget:  "interpreted/script/tool.js",
-		InterpreterSource: staticInterpreter,
-		InterpreterTarget: "interpreted/bin/node",
-		PackageTrees: []PortableRuntimeSourceTree{{
-			Source: packageTree,
-			Target: "interpreted/package",
-		}},
-		RuntimeTrees:  []PortableRuntimeSourceTree{{Source: packageTree, Target: "interpreted/package"}},
-		RuntimeArgs:   []string{"--no-warnings"},
-		RuntimeLookup: PortableRuntimeLookupIncludedTrees,
+	dynamicInterpreter, loader := findPortableRuntimeDynamicFixture(t)
+	libraryRoot := collectPortableRuntimeLibraries(t, dynamicInterpreter, loader)
+	poisonedPath := t.TempDir()
+	poisonedNode := filepath.Join(poisonedPath, "node")
+	if err := os.WriteFile(poisonedNode, []byte("poisoned-path-node"), 0o700); err != nil {
+		t.Fatal(err)
 	}
+	t.Setenv("PATH", poisonedPath)
+
+	absoluteScript := writePortableRuntimeNodeScript(t, "#!/account-bearing/host/path/node\nfixture\n")
+	staticRequest := portableRuntimeNodeInterpretedRequest(t, absoluteScript, staticInterpreter)
 	staticContribution, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, staticRequest)
 	if err != nil {
 		t.Fatalf("static-interpreter analysis error = %v", err)
@@ -417,14 +405,15 @@ func TestPortableRuntimeInterpretedClosure(t *testing.T) {
 		t.Fatalf("deduplicated interpreted/package tree count = %d, want 1", got)
 	}
 	wantStaticArgs := []string{"--no-warnings", "/opt/fizeau/runtime/interpreted/script/tool.js", "request"}
-	if !reflect.DeepEqual(arguments, wantStaticArgs) || strings.Contains(strings.Join(append([]string{command}, arguments...), " "), "/account-bearing/") {
+	if staticContribution.Launch.InterpreterTarget != staticRequest.InterpreterTarget ||
+		!reflect.DeepEqual(arguments, wantStaticArgs) ||
+		strings.Contains(strings.Join(append([]string{command}, arguments...), " "), "/account-bearing/") ||
+		strings.Contains(strings.Join(append([]string{command}, arguments...), " "), poisonedNode) {
 		t.Fatalf("static interpreter recipe followed host shebang: %q %q", command, arguments)
 	}
 
-	dynamicInterpreter, loader := findPortableRuntimeDynamicFixture(t)
-	libraryRoot := collectPortableRuntimeLibraries(t, dynamicInterpreter, loader)
-	dynamicRequest := staticRequest
-	dynamicRequest.InterpreterSource = dynamicInterpreter
+	envScript := writePortableRuntimeNodeScript(t, "#!/usr/bin/env node\nfixture\n")
+	dynamicRequest := portableRuntimeNodeInterpretedRequest(t, envScript, dynamicInterpreter)
 	dynamicRequest.LoaderTarget = "interpreted/loader/" + filepath.Base(loader)
 	dynamicRequest.LibraryRoots = []PortableRuntimeSourceTree{{Source: libraryRoot, Target: "interpreted/lib"}}
 	dynamicContribution, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, dynamicRequest)
@@ -443,9 +432,220 @@ func TestPortableRuntimeInterpretedClosure(t *testing.T) {
 		"/opt/fizeau/runtime/interpreted/bin/node", "--no-warnings",
 		"/opt/fizeau/runtime/interpreted/script/tool.js", "request",
 	}
-	if !reflect.DeepEqual(arguments, wantDynamicArgs) || strings.Contains(strings.Join(append([]string{command}, arguments...), " "), "/account-bearing/") {
+	if dynamicContribution.Launch.InterpreterTarget != dynamicRequest.InterpreterTarget ||
+		!reflect.DeepEqual(arguments, wantDynamicArgs) ||
+		strings.Contains(strings.Join(append([]string{command}, arguments...), " "), "/usr/bin/env") ||
+		strings.Contains(strings.Join(append([]string{command}, arguments...), " "), poisonedNode) {
 		t.Fatalf("dynamic interpreter recipe followed PT_INTERP or shebang: %q %q", command, arguments)
 	}
+}
+
+func TestPortableRuntimeNodeInterpreterIdentity(t *testing.T) {
+	requirePortableRuntimeLinux(t)
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	staticInterpreter := buildPortableRuntimeStaticFixture(t)
+	script := writePortableRuntimeNodeScript(t, "#!/usr/bin/env node\nfixture\n")
+	exactIdentity := portableRuntimeFixtureFileIdentity(t, staticInterpreter)
+
+	t.Run("exact regular source", func(t *testing.T) {
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		contribution, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		if err != nil {
+			t.Fatalf("exact identity analysis error = %v", err)
+		}
+		assertPortableRuntimeInterpreterAsset(t, contribution, request.InterpreterTarget, staticInterpreter, exactIdentity)
+	})
+
+	t.Run("exact resolved symlink", func(t *testing.T) {
+		link := filepath.Join(t.TempDir(), "account-interpreter-link")
+		if err := os.Symlink(staticInterpreter, link); err != nil {
+			t.Fatal(err)
+		}
+		request := portableRuntimeNodeInterpretedRequest(t, script, link)
+		contribution, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		if err != nil {
+			t.Fatalf("symlink identity analysis error = %v", err)
+		}
+		assertPortableRuntimeInterpreterAsset(t, contribution, request.InterpreterTarget, staticInterpreter, exactIdentity)
+	})
+
+	validDigest := exactIdentity.ContentSHA256
+	for _, test := range []struct {
+		name     string
+		identity PortableRuntimeFileIdentity
+	}{
+		{name: "zero", identity: PortableRuntimeFileIdentity{}},
+		{name: "zero size", identity: PortableRuntimeFileIdentity{ContentSHA256: validDigest}},
+		{name: "negative size", identity: PortableRuntimeFileIdentity{Size: -1, ContentSHA256: validDigest}},
+		{name: "empty digest", identity: PortableRuntimeFileIdentity{Size: exactIdentity.Size}},
+		{name: "short digest", identity: PortableRuntimeFileIdentity{Size: exactIdentity.Size, ContentSHA256: validDigest[:63]}},
+		{name: "uppercase digest", identity: PortableRuntimeFileIdentity{Size: exactIdentity.Size, ContentSHA256: strings.ToUpper(validDigest)}},
+		{name: "nonhex digest", identity: PortableRuntimeFileIdentity{Size: exactIdentity.Size, ContentSHA256: strings.Repeat("z", 64)}},
+	} {
+		t.Run("malformed "+test.name, func(t *testing.T) {
+			source := filepath.Join(t.TempDir(), "account-secret-must-not-be-inspected")
+			_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, PortableRuntimeInterpretedClosureRequest{
+				InterpreterSource:   source,
+				InterpreterIdentity: test.identity,
+			})
+			if err == nil || !strings.Contains(err.Error(), "invalid interpreter identity") {
+				t.Fatalf("malformed identity error = %v, want pre-inspection identity rejection", err)
+			}
+			assertPortableRuntimeNodeInterpreterFailure(t, err, source, test.identity.ContentSHA256)
+		})
+	}
+
+	t.Run("size mismatch", func(t *testing.T) {
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		request.InterpreterIdentity.Size++
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, staticInterpreter, validDigest, fmt.Sprint(exactIdentity.Size), fmt.Sprint(request.InterpreterIdentity.Size))
+	})
+
+	t.Run("digest mismatch", func(t *testing.T) {
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		request.InterpreterIdentity.ContentSHA256 = strings.Repeat("0", 64)
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, staticInterpreter, validDigest, request.InterpreterIdentity.ContentSHA256)
+	})
+
+	t.Run("dangling symlink", func(t *testing.T) {
+		link := filepath.Join(t.TempDir(), "account-secret-dangling")
+		missing := filepath.Join(t.TempDir(), "missing-interpreter")
+		if err := os.Symlink(missing, link); err != nil {
+			t.Fatal(err)
+		}
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		request.InterpreterSource = link
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, link, missing, validDigest)
+	})
+
+	t.Run("cyclic symlink", func(t *testing.T) {
+		directory := t.TempDir()
+		first := filepath.Join(directory, "account-secret-cycle-a")
+		second := filepath.Join(directory, "account-secret-cycle-b")
+		if err := os.Symlink(second, first); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(first, second); err != nil {
+			t.Fatal(err)
+		}
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		request.InterpreterSource = first
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, first, second, validDigest)
+	})
+
+	t.Run("replacement between resolution and open", func(t *testing.T) {
+		installed := copyPortableRuntimeELFFixture(t, staticInterpreter)
+		replacement, replacementSecret := portableRuntimeReplacementELFFixture(t, staticInterpreter)
+		replacementIdentity := portableRuntimeFixtureFileIdentity(t, replacement)
+		request := portableRuntimeNodeInterpretedRequest(t, script, installed)
+		_, err := analyzePortableRuntimeInterpretedClosure(context.Background(), target, request, portableRuntimeInterpretedClosureHooks{
+			afterInterpreterResolution: func() {
+				if renameErr := os.Rename(replacement, installed); renameErr != nil {
+					t.Fatal(renameErr)
+				}
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "changed before it could be inspected") {
+			t.Fatalf("pre-open replacement error = %v, want descriptor/path mismatch", err)
+		}
+		assertPortableRuntimeNodeInterpreterFailure(t, err,
+			installed, replacement, request.InterpreterIdentity.ContentSHA256, replacementIdentity.ContentSHA256,
+			fmt.Sprint(request.InterpreterIdentity.Size), fmt.Sprint(replacementIdentity.Size), replacementSecret)
+	})
+
+	t.Run("replacement after open", func(t *testing.T) {
+		installed := copyPortableRuntimeELFFixture(t, staticInterpreter)
+		replacement, replacementSecret := portableRuntimeReplacementELFFixture(t, staticInterpreter)
+		replacementIdentity := portableRuntimeFixtureFileIdentity(t, replacement)
+		request := portableRuntimeNodeInterpretedRequest(t, script, installed)
+		_, err := analyzePortableRuntimeInterpretedClosure(context.Background(), target, request, portableRuntimeInterpretedClosureHooks{
+			beforeInterpreterIdentityVerification: func() {
+				if renameErr := os.Rename(replacement, installed); renameErr != nil {
+					t.Fatal(renameErr)
+				}
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "changed during identity verification") {
+			t.Fatalf("post-open replacement error = %v, want final descriptor/path mismatch", err)
+		}
+		assertPortableRuntimeNodeInterpreterFailure(t, err,
+			installed, replacement, request.InterpreterIdentity.ContentSHA256, replacementIdentity.ContentSHA256,
+			fmt.Sprint(request.InterpreterIdentity.Size), fmt.Sprint(replacementIdentity.Size), replacementSecret)
+	})
+
+	t.Run("wrong architecture with matching identity", func(t *testing.T) {
+		wrongArchitecture := copyPortableRuntimeELFFixture(t, staticInterpreter)
+		mutatePortableRuntimeELFHeader(t, wrongArchitecture, func(header []byte, order binary.ByteOrder) {
+			machine := elf.EM_X86_64
+			if portableRuntimeELFMachine(runtime.GOARCH) == machine {
+				machine = elf.EM_AARCH64
+			}
+			order.PutUint16(header[18:20], uint16(machine))
+		})
+		request := portableRuntimeNodeInterpretedRequest(t, script, wrongArchitecture)
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		if err == nil || !strings.Contains(err.Error(), "architecture") {
+			t.Fatalf("wrong-architecture error = %v, want architecture rejection", err)
+		}
+		assertPortableRuntimeNodeInterpreterFailure(t, err, wrongArchitecture, request.InterpreterIdentity.ContentSHA256)
+	})
+
+	t.Run("not owner executable", func(t *testing.T) {
+		nonExecutable := copyPortableRuntimeELFFixture(t, staticInterpreter)
+		if err := os.Chmod(nonExecutable, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		request := portableRuntimeNodeInterpretedRequest(t, script, nonExecutable)
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, nonExecutable, request.InterpreterIdentity.ContentSHA256)
+	})
+
+	t.Run("not regular", func(t *testing.T) {
+		directory := filepath.Join(t.TempDir(), "account-secret-interpreter-directory")
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		request := portableRuntimeNodeInterpretedRequest(t, script, staticInterpreter)
+		request.InterpreterSource = directory
+		_, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+		assertPortableRuntimeNodeInterpreterFailure(t, err, directory, validDigest)
+	})
+}
+
+func TestPortableRuntimeNodeInterpreterRejectsRPATH(t *testing.T) {
+	requirePortableRuntimeLinux(t)
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	homebrewRPATH := "/home/linuxbrew/.linuxbrew/opt/node/lib"
+	interpreter := buildPortableRuntimeRPATHFixtureAt(t, homebrewRPATH)
+	file, err := elf.Open(interpreter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpaths, rpathErr := file.DynString(elf.DT_RPATH)
+	runpaths, runpathErr := file.DynString(elf.DT_RUNPATH)
+	loader, loaderErr := portableRuntimeELFInterpreter(file)
+	_ = file.Close()
+	if rpathErr != nil || runpathErr != nil || loaderErr != nil {
+		t.Fatalf("inspect Homebrew-like RPATH fixture: rpath=%v runpath=%v loader=%v", rpathErr, runpathErr, loaderErr)
+	}
+	if !reflect.DeepEqual(rpaths, []string{homebrewRPATH}) || len(runpaths) != 0 {
+		t.Fatalf("dynamic search metadata = RPATH %q RUNPATH %q, want exact RPATH only", rpaths, runpaths)
+	}
+
+	libraryRoot := collectPortableRuntimeLibraries(t, interpreter, loader)
+	script := writePortableRuntimeNodeScript(t, "#!/usr/bin/env node\nfixture\n")
+	request := portableRuntimeNodeInterpretedRequest(t, script, interpreter)
+	request.LoaderTarget = "interpreted/loader/" + filepath.Base(loader)
+	request.LibraryRoots = []PortableRuntimeSourceTree{{Source: libraryRoot, Target: "interpreted/lib"}}
+	_, err = AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+	if err == nil || !strings.Contains(err.Error(), "runtime search path") {
+		t.Fatalf("Homebrew-like RPATH error = %v, want DT_RPATH rejection", err)
+	}
+	assertPortableRuntimeNodeInterpreterFailure(t, err, interpreter, homebrewRPATH, request.InterpreterIdentity.ContentSHA256)
 }
 
 func TestPortableRuntimeClosureCanonicalDigestAndFailures(t *testing.T) {
@@ -656,6 +856,99 @@ func TestPortableRuntimeClosureELFPlatformAndTypes(t *testing.T) {
 	}
 }
 
+func writePortableRuntimeNodeScript(t *testing.T, contents string) string {
+	t.Helper()
+	script := filepath.Join(t.TempDir(), "tool.js")
+	if err := os.WriteFile(script, []byte(contents), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return script
+}
+
+func portableRuntimeNodeInterpretedRequest(t *testing.T, script, interpreter string) PortableRuntimeInterpretedClosureRequest {
+	t.Helper()
+	packageTree := t.TempDir()
+	if err := os.WriteFile(filepath.Join(packageTree, "package.json"), []byte(`{"name":"portable-fixture"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return PortableRuntimeInterpretedClosureRequest{
+		EntrypointSource:    script,
+		EntrypointTarget:    "interpreted/script/tool.js",
+		InterpreterSource:   interpreter,
+		InterpreterIdentity: portableRuntimeFixtureFileIdentity(t, interpreter),
+		InterpreterTarget:   "interpreted/bin/node",
+		PackageTrees: []PortableRuntimeSourceTree{{
+			Source: packageTree,
+			Target: "interpreted/package",
+		}},
+		RuntimeTrees:  []PortableRuntimeSourceTree{{Source: packageTree, Target: "interpreted/package"}},
+		RuntimeArgs:   []string{"--no-warnings"},
+		RuntimeLookup: PortableRuntimeLookupIncludedTrees,
+	}
+}
+
+func portableRuntimeFixtureFileIdentity(t *testing.T, source string) PortableRuntimeFileIdentity {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(contents)
+	return PortableRuntimeFileIdentity{Size: info.Size(), ContentSHA256: fmt.Sprintf("%x", digest)}
+}
+
+func assertPortableRuntimeInterpreterAsset(t *testing.T, contribution PortableRuntimeContribution, target, source string, identity PortableRuntimeFileIdentity) {
+	t.Helper()
+	for _, asset := range contribution.Assets {
+		if asset.Target != target {
+			continue
+		}
+		if asset.Source != source || asset.ContentSHA256 != identity.ContentSHA256 || !asset.Executable || asset.PathKind != PortableRuntimePathFile {
+			t.Fatalf("interpreter asset = %#v, want exact descriptor-derived identity", asset)
+		}
+		return
+	}
+	t.Fatalf("interpreter asset target %q is absent", target)
+}
+
+func assertPortableRuntimeNodeInterpreterFailure(t *testing.T, err error, forbidden ...string) {
+	t.Helper()
+	if !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("error = %v, want ErrPortableRuntimeClosureIncomplete", err)
+	}
+	for _, value := range forbidden {
+		if value != "" && strings.Contains(err.Error(), value) {
+			t.Fatalf("error leaked %q: %v", value, err)
+		}
+	}
+}
+
+func portableRuntimeReplacementELFFixture(t *testing.T, source string) (string, string) {
+	t.Helper()
+	replacement := copyPortableRuntimeELFFixture(t, source)
+	secret := "seeded-replacement-binary-contents"
+	file, err := os.OpenFile(replacement, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(secret); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return replacement, secret
+}
+
 func buildPortableRuntimeStaticFixture(t *testing.T) string {
 	t.Helper()
 	directory := t.TempDir()
@@ -677,6 +970,10 @@ func buildPortableRuntimeStaticFixture(t *testing.T) string {
 }
 
 func buildPortableRuntimeRPATHFixture(t *testing.T) string {
+	return buildPortableRuntimeRPATHFixtureAt(t, "/account-secret-rpath")
+}
+
+func buildPortableRuntimeRPATHFixtureAt(t *testing.T, rpath string) string {
 	t.Helper()
 	directory := t.TempDir()
 	source := filepath.Join(directory, "main.c")
@@ -684,7 +981,7 @@ func buildPortableRuntimeRPATHFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	executable := filepath.Join(directory, "fixture")
-	command := exec.Command("cc", "-Wl,-rpath,/account-secret-rpath", "-o", executable, source)
+	command := exec.Command("cc", "-Wl,--disable-new-dtags,-rpath,"+rpath, "-o", executable, source)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build RPATH ELF fixture: %v: %s", err, output)
 	}

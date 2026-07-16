@@ -112,17 +112,23 @@ type PortableRuntimeDynamicClosureRequest struct {
 // interpreter, and package-tree layout. RuntimeArgs are fixed interpreter
 // arguments; request arguments are appended only when the recipe is activated.
 type PortableRuntimeInterpretedClosureRequest struct {
-	EntrypointSource  string
-	EntrypointTarget  string
-	InterpreterSource string
-	InterpreterTarget string
-	LoaderTarget      string
-	LibraryRoots      []PortableRuntimeSourceTree
-	ExactLibraryRoots []PortableRuntimeLibrarySearchRoot
-	PackageTrees      []PortableRuntimeSourceTree
-	RuntimeArgs       []string
-	RuntimeLookup     PortableRuntimeLookupPolicy
-	RuntimeTrees      []PortableRuntimeSourceTree
+	EntrypointSource    string
+	EntrypointTarget    string
+	InterpreterSource   string
+	InterpreterIdentity PortableRuntimeFileIdentity
+	InterpreterTarget   string
+	LoaderTarget        string
+	LibraryRoots        []PortableRuntimeSourceTree
+	ExactLibraryRoots   []PortableRuntimeLibrarySearchRoot
+	PackageTrees        []PortableRuntimeSourceTree
+	RuntimeArgs         []string
+	RuntimeLookup       PortableRuntimeLookupPolicy
+	RuntimeTrees        []PortableRuntimeSourceTree
+}
+
+type portableRuntimeInterpretedClosureHooks struct {
+	afterInterpreterResolution            func()
+	beforeInterpreterIdentityVerification func()
 }
 
 // AnalyzePortableRuntimeStaticClosure resolves a symlinked launcher, verifies
@@ -310,8 +316,15 @@ func AnalyzePortableRuntimeDynamicClosure(ctx context.Context, target PortableRu
 // interpreter's complete static or dynamic ELF closure. Its launch recipe
 // invokes the bundled interpreter directly and never follows the shebang.
 func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target PortableRuntimeTarget, request PortableRuntimeInterpretedClosureRequest) (PortableRuntimeContribution, error) {
+	return analyzePortableRuntimeInterpretedClosure(ctx, target, request, portableRuntimeInterpretedClosureHooks{})
+}
+
+func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target PortableRuntimeTarget, request PortableRuntimeInterpretedClosureRequest, hooks portableRuntimeInterpretedClosureHooks) (PortableRuntimeContribution, error) {
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
+	}
+	if !validPortableRuntimeFileIdentity(request.InterpreterIdentity) {
+		return PortableRuntimeContribution{}, closureError("interpreted layout has an invalid interpreter identity")
 	}
 	if len(request.PackageTrees) == 0 {
 		return PortableRuntimeContribution{}, closureError("interpreted layout lacks a package tree")
@@ -327,7 +340,7 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		return PortableRuntimeContribution{}, closureError("interpreted entrypoint is not a regular file")
 	}
 
-	interpreter, interpreterInfo, interpreterELF, err := inspectPortableRuntimeELF(ctx, request.InterpreterSource, target, portableRuntimeELFExecutable)
+	interpreter, interpreterInfo, interpreterELF, err := inspectPortableRuntimeELFWithHook(ctx, request.InterpreterSource, target, portableRuntimeELFExecutable, hooks.afterInterpreterResolution)
 	if err != nil {
 		return PortableRuntimeContribution{}, err
 	}
@@ -426,15 +439,19 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			}
 		}
 	}
+	if hooks.beforeInterpreterIdentityVerification != nil {
+		hooks.beforeInterpreterIdentityVerification()
+	}
+	interpreterDigest, err := verifyPortableRuntimeInterpreterIdentity(interpreter, interpreterInfo, interpreterELF, request.InterpreterIdentity)
+	if err != nil {
+		closePortableRuntimeELF(interpreterELF)
+		return PortableRuntimeContribution{}, err
+	}
 	if err := interpreterELF.Close(); err != nil {
 		return PortableRuntimeContribution{}, closureError("could not finish inspecting interpreter")
 	}
 
 	entryDigest, err := portableRuntimeDigestInspectedFile(entrypoint, entryInfo)
-	if err != nil {
-		return PortableRuntimeContribution{}, err
-	}
-	interpreterDigest, err := portableRuntimeDigestInspectedFile(interpreter, interpreterInfo)
 	if err != nil {
 		return PortableRuntimeContribution{}, err
 	}
@@ -480,6 +497,10 @@ func AnalyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		},
 		Assets: assets,
 	})
+}
+
+func validPortableRuntimeFileIdentity(identity PortableRuntimeFileIdentity) bool {
+	return identity.Size > 0 && validPortableRuntimeDigest(identity.ContentSHA256)
 }
 
 // BuildPortableRuntimeLaunchCommand expands a typed launch recipe below one
@@ -1286,6 +1307,35 @@ func portableRuntimeFileDigestWithHook(source string, afterOpen func()) (string,
 		return "", err
 	}
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func verifyPortableRuntimeInterpreterIdentity(source string, inspected os.FileInfo, file *portableRuntimeELFFile, expected PortableRuntimeFileIdentity) (string, error) {
+	if file == nil || file.descriptor == nil {
+		return "", closureError("interpreter identity cannot be inspected")
+	}
+	descriptorInfo, descriptorErr := file.descriptor.Stat()
+	pathInfo, pathErr := os.Lstat(source)
+	if descriptorErr != nil || pathErr != nil ||
+		!samePortableRuntimeFile(inspected, descriptorInfo) ||
+		!samePortableRuntimeFile(descriptorInfo, pathInfo) {
+		return "", closureError("interpreter changed during identity verification")
+	}
+
+	hasher := sha256.New()
+	read, err := io.Copy(hasher, io.NewSectionReader(file.descriptor, 0, descriptorInfo.Size()))
+	afterDescriptor, afterDescriptorErr := file.descriptor.Stat()
+	afterPath, afterPathErr := os.Lstat(source)
+	if err != nil || read != descriptorInfo.Size() || afterDescriptorErr != nil || afterPathErr != nil ||
+		!samePortableRuntimeFile(descriptorInfo, afterDescriptor) ||
+		!samePortableRuntimeFile(afterDescriptor, afterPath) {
+		return "", closureError("interpreter changed during identity verification")
+	}
+
+	digest := hex.EncodeToString(hasher.Sum(nil))
+	if afterDescriptor.Size() != expected.Size || digest != expected.ContentSHA256 {
+		return "", closureError("interpreter does not match its declared identity")
+	}
+	return digest, nil
 }
 
 func portableRuntimeDigestInspectedFile(source string, inspected os.FileInfo) (string, error) {

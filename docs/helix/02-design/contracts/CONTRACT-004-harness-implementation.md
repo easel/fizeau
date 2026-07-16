@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: fe8cee3499465ce61e0043ca7e8a0c79979972a23253c86fee501a3d330ac259
+    self_hash: 3b5c5a15a83d6f5fa145e645162a72fbd1805262d4362b38b6001b1504f2e7c5
     deps:
       CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T03:28:41Z"
+    reviewed_at: "2026-07-16T04:37:11Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -256,6 +256,15 @@ type ContextModelDiscoveryHarness interface {
 type PortableRuntimeTarget struct {
     GOOS   string
     GOARCH string
+}
+
+// PortableRuntimeFileIdentity is the exact content identity supplied by a
+// harness contributor for one regular runtime file. Publisher, release,
+// build, package-integrity, and offline-probe evidence remain contributor-
+// owned and do not cross this neutral helper boundary.
+type PortableRuntimeFileIdentity struct {
+    Size          int64
+    ContentSHA256 string
 }
 
 type PortableRuntimeAssetKind string
@@ -812,7 +821,37 @@ The supported v0.15 closure classes are mechanically distinct:
 |-------|---------------------------------|
 | `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
 | `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. A recognized single-file runtime may instead use verified-exact lookup only when its contributor-owned offline probe proves that startup loads no executable or library code beyond the exact dependency assets and discovery rejects every enabled plugin, hook, helper, wrapper, MCP server, marketplace, workflow, or external-path setting. Declared credential, configuration, quota, and cache assets remain ordinary state reads and do not weaken that code-closure claim. |
-| `interpreted` | Include the launcher/script, interpreter, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
+| `interpreted` | Include the launcher/script, the contributor-selected interpreter with its required `PortableRuntimeFileIdentity`, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
+
+`PortableRuntimeInterpretedClosureRequest.InterpreterIdentity` has type
+`PortableRuntimeFileIdentity` and is required. `Size` MUST be greater than
+zero. `ContentSHA256` MUST contain exactly 64 lowercase hexadecimal
+characters. A zero or malformed identity fails with
+`ErrPortableRuntimeClosureIncomplete` before interpreter filesystem
+inspection.
+
+The neutral interpreted-closure analyzer selects an interpreter exclusively
+from the caller-supplied `InterpreterSource`. It MUST NOT search `PATH`, run a
+command, or use the launcher's shebang to select an interpreter. It still
+traverses the selected interpreter's `PT_INTERP` loader and contributor-
+declared library roots when the selected ELF is dynamic.
+
+An initially supplied symlink chain resolves to one regular final target. The
+analyzer opens that resolved target once, verifies path metadata against
+`descriptor.Stat`, and parses the same-target owner-executable ELF from that
+descriptor. It retains the descriptor through closure traversal, computes
+`Size` and SHA-256 from the same still-open descriptor, then re-stats the
+descriptor and resolved path. Identity, file mode, size, and modification time
+MUST remain unchanged. The emitted interpreter asset uses the
+descriptor-derived digest. A mismatch fails with
+`ErrPortableRuntimeClosureIncomplete` without exposing the expected or actual
+path, size, digest, or file bytes.
+
+The exact file identity is necessary but not sufficient contributor evidence.
+The contributing harness separately binds the accepted identity to the named
+install form, publisher-authenticated release, version, build, package
+integrity, and offline probe. The neutral analyzer MUST NOT infer or create
+that evidence from the locally installed interpreter.
 
 Launch construction is exhaustive and does not use guest PATH, the copied
 ELF `PT_INTERP`, an absolute shebang, or a shell wrapper:
@@ -1263,7 +1302,7 @@ Every harness implementation MUST carry, at minimum:
 | `ModelDiscoveryHarness` (all six) | Unit tests prove `DefaultModelSnapshot` returns a non-empty model list with nil error or returns `ErrModelDiscoveryEvidenceMissing`, never an empty successful fallback. Conformance asserts that `ResolveModelAlias` resolves every family returned by `SupportedAliases()` and returns `ErrAliasNotResolvable` for an out-of-set family. Package documentation MUST enumerate the same set returned by `SupportedAliases()`. |
 | `ContextModelDiscoveryHarness` (implementers) | Cancellation reaches the live probe, no background context replaces it, and the method waits for containment cleanup or the service-owned cleanup deadline before returning. |
 | `ContinuationHarness` (implementers) | `TestContinuationHarnessReceivesOnlyFizeauSessionRef` proves `ParentSessionID` is the only conversation identifier and `Request` contains no native evidence; `TestContinuationPrepareOrdersChildAndSpawn` proves prepare has no child, lease, spawn, or events and Start occurs only after child plus fresh lease; `TestContinuationEvidenceUnavailableBeforeSpawn` proves missing evidence returns the sentinel without a child or event stream. |
-| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints`, `TestPortableRuntimeFixedOptionValues`, and `TestPortableRuntimeMixedStateProjection` prove the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, mixed immutable/writable native-directory projection, absence conflicts, ordered standalone fixed flags and typed option/value pairs, and redacted rejection. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree and projected config members deny write, unlink, rename, replacement, and shadowing while writable seeds can refresh and create locks/siblings. |
+| `PortableRuntimeHarness` (structurally unpinned-capable subprocess implementers) | `TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness` proves exhaustive registry/actual-instance joining, actual-transport classification, same-target content-addressed closures and launch recipes, deterministic shared-asset deduplication, typed failure for unknown/incomplete layouts, and no route selection or process start. `TestPortableRuntimeInventoryContainsNoEnvironmentValues` proves only validated inherited names and typed value-opaque execution rules cross the interface. `TestPortableRuntimeExecutionConstraints`, `TestPortableRuntimeFixedOptionValues`, and `TestPortableRuntimeMixedStateProjection` prove the exact value-opaque schema, closed-world name ownership, deterministic sorting/ownership, runtime-backed typed paths, config-tree read-only requirements, mixed immutable/writable native-directory projection, absence conflicts, ordered standalone fixed flags and typed option/value pairs, and redacted rejection. `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`, `TestPortableRuntimeNodeInterpreterIdentity`, and `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove caller-selected interpreter identity, descriptor-bound hashing and replacement rejection, direct or explicit-loader recipes independent of shebang and `PATH`, and fail-closed absolute `DT_RPATH`. Static, dynamic, and interpreted layout fixtures execute their typed launch recipe offline; OCI activation fixtures additionally prove the declared config tree and projected config members deny write, unlink, rename, replacement, and shadowing while writable seeds can refresh and create locks/siblings. |
 | Completed-session resolution | `TestCompletedSessionRouteResolutionRequiresTerminalRoute` rejects missing, unreadable, incomplete, duplicate-terminal, and route-less parents; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart` discards the in-memory hub, reloads the durable locator, and resolves the exact overridden path and full endpoint-aware route key. |
 | Continuation evidence boundary | `TestContinuationNativeReferenceIsNotSerialized` seeds a recognizable native token and proves it is absent from public final JSON, every service-owned session-log record, locator bytes, metadata, diagnostics, and error text. |
 | Route instance and lifecycle | `TestContinuationUsesRegisteredRouteInstance` proves Execute evidence and continuation use the actual endpoint-aware route-registry object rather than an ad hoc runner; `TestContinuationDispatchAcquiresFreshLifecycleLease` proves a resumed child uses a different lease and containment identity from its parent; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease` table-tests `prefer_resume` fallback and `fresh_session`. |
@@ -1500,6 +1539,7 @@ by `go vet`-shaped tooling:
     fields drift; ordering fixtures prove clamp, planning-skip, and rejection
     behavior without native stream authority or next-candidate dispatch.
 24. `internal/harnesses/types.go` declares `PortableRuntimeTarget`,
+    `PortableRuntimeFileIdentity`,
     `PortableRuntimeAssetKind`, `PortableRuntimePathKind`,
     `PortableRuntimeClosureClass`, `PortableRuntimeAsset`,
     `PortableRuntimeLaunch`, `PortableRuntimeEnvironment`,
@@ -1547,6 +1587,15 @@ by `go vet`-shaped tooling:
     identity and symlinks. Activation/OCI tests prove projected config cannot be
     written, unlinked, renamed, replaced, or shadowed while credential refresh,
     lock creation, and sibling state creation succeed.
+29. `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`,
+    `TestPortableRuntimeNodeInterpreterIdentity`, and
+    `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove that interpreted
+    closures bind the caller-selected interpreter to one exact size and SHA-256,
+    hash the retained ELF descriptor, reject path replacement and malformed
+    identity without leaking identity material, ignore absolute and env
+    shebangs plus poisoned `PATH` for interpreter selection, and retain the
+    absolute `DT_RPATH` prohibition. Publisher, version, build,
+    package-integrity, and offline-probe evidence remain contributor-owned.
 
 ## References
 

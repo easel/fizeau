@@ -621,6 +621,14 @@ type PortableRuntimeStructuralHarness interface {
 	PortableRuntimeStructure() PortableRuntimeStructure
 }
 
+// PortableRuntimeFileIdentity is a contributor-supplied exact identity for
+// one regular runtime file. It does not carry publisher, release, build, or
+// probe evidence; the contributing harness owns that evidence separately.
+type PortableRuntimeFileIdentity struct {
+	Size          int64
+	ContentSHA256 string
+}
+
 type PortableRuntimeAssetKind string
 type PortableRuntimePathKind string
 type PortableRuntimeClosureClass string

@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 4124536e5e2452793a45d8b47b38e261a33c29d88ef67dad8e2b035ca78eac98
+    self_hash: 5bf0e5c1f0fe37d8845804377086bb23d7a2287fe9fa9dffd3de29da56fb8ef6
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
-      CONTRACT-004: fe8cee3499465ce61e0043ca7e8a0c79979972a23253c86fee501a3d330ac259
-    reviewed_at: "2026-07-16T03:28:41Z"
+      CONTRACT-004: 3b5c5a15a83d6f5fa145e645162a72fbd1805262d4362b38b6001b1504f2e7c5
+    reviewed_at: "2026-07-16T04:37:11Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -578,6 +578,16 @@ registry to the actual registered instance so native/HTTP-backed transports are
 not mislabeled from a static row. Test-only and exact-pin-only surfaces do not
 become unpinned-capable through preparation.
 
+An interpreted contribution selects its interpreter only through the explicit
+source supplied by the harness package. The contributor supplies the expected
+file size and SHA-256 from its reviewed release evidence; the neutral analyzer
+resolves the source, retains one opened ELF descriptor through dependency
+inspection, hashes that descriptor, and rejects path replacement or identity
+drift. `PATH`, absolute or env shebang text, and a locally computed
+self-attestation cannot choose or authorize the interpreter. Publisher,
+version, build, package-integrity, and offline-probe evidence remain owned by
+the contributing harness.
+
 For a recognized single-file dynamic runtime that imports generic loader symbols,
 the owning contributor may declare verified-exact lookup only after its
 credential-free, network-disabled probe demonstrates that startup opens no
@@ -670,6 +680,11 @@ owner.
 - Linux OCI fixtures execute static-symlink, dynamic-ELF, and
   interpreter/package-tree closures without credentials or network as a mapped
   non-root UID.
+- `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`,
+  `TestPortableRuntimeNodeInterpreterIdentity`, and
+  `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove explicit interpreter
+  selection, descriptor-bound size/digest verification, replacement and
+  redaction failures, and the unchanged absolute `DT_RPATH` prohibition.
 - Claude contributor fixtures reject arbitrary dynamic ELF files, exercise
   verified-exact lookup with `dlopen`/`dlsym` imports through the emitted loader
   recipe inside a network-disabled isolated root, reject an unknown release

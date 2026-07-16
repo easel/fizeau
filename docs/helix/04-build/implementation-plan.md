@@ -14,20 +14,20 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 6af8542d24788640f72716a0886eaa9b9b57ee50ab2b6ab43a8cea1348e9a5a5
+    self_hash: 93835b2d11c1a4323d80be226456148df7c4c8fa9cdb1923d0777585a29b647a
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
-      ADR-014: 4124536e5e2452793a45d8b47b38e261a33c29d88ef67dad8e2b035ca78eac98
+      ADR-014: 5bf0e5c1f0fe37d8845804377086bb23d7a2287fe9fa9dffd3de29da56fb8ef6
       CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
-      CONTRACT-004: fe8cee3499465ce61e0043ca7e8a0c79979972a23253c86fee501a3d330ac259
+      CONTRACT-004: 3b5c5a15a83d6f5fa145e645162a72fbd1805262d4362b38b6001b1504f2e7c5
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-16T03:28:41Z"
+    reviewed_at: "2026-07-16T04:37:11Z"
 ---
 # Build Plan — Fizeau
 
@@ -141,7 +141,7 @@ preselected route.
 | Slice | Goal | Depends On | Validation Gate |
 |---|---|---|---|
 | P-0 Authority alignment | Align CONTRACT-003 public opacity/completeness, CONTRACT-004 harness ownership, ADR-014, this plan, and release gates | Lifecycle containment authority | HELIX graph validation and freshness checks pass; same-target and complete-or-error rules are unambiguous |
-| P-1 Complete runtime inventory | Join the production registry to actual service instances, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes, value-opaque execution constraints, and normalized mixed-state projections through `PortableRuntimeHarness`, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; launch recipes bypass copied loader/shebang paths; ordering, dedupe/conflict, target mismatch, inherited-name, typed environment/path constraint, mixed-state projection, standalone fixed-flag, and typed fixed option/value rules are deterministic without raw environment values |
+| P-1 Complete runtime inventory | Join the production registry to actual service instances, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes, value-opaque execution constraints, and normalized mixed-state projections through `PortableRuntimeHarness`, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; interpreted contributors supply reviewed exact interpreter size/SHA identities that the neutral analyzer verifies from the retained ELF descriptor without `PATH` or shebang selection; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`, `TestPortableRuntimeNodeInterpreterIdentity`, and `TestPortableRuntimeNodeInterpreterRejectsRPATH` pass; ordering, dedupe/conflict, target mismatch, inherited-name, typed environment/path constraint, mixed-state projection, standalone fixed-flag, and typed fixed option/value rules are deterministic without raw environment values |
 | P-2 Secure materialization | Stage one sibling tree, revalidate the empty caller directory by identity, commit one `runtime` child with no-replace rename, emit one fixed read-only guest mount, persist normalized projections, distinguish unprojected prefix-preserving seeds from projection-consumed seeds, revalidate every source identity/content/type/symlink condition while copying, and retain retryable cleanup ownership | P-1 | `TestPortableRuntimeMixedStateProjection` plus filesystem fixtures cover deterministic private persistence, concurrent preparers, traversal, links, source identity/content races, partial failure, cancellation, modes, redaction, both seed classifications, and failed-then-retried `Close` |
 | P-3 Public activation and OCI conformance | Add the opaque root facade plus `NewFromPortableRuntime`; reconstruct the configured service and production dispatch mapping in a separate public-only process from the fixed guest manifest before unpinned `Execute`; copy unprojected prefix seeds and generically assemble projected mixed native directories through namespace-owned immutable boundaries | P-2 | `TestPortableRuntimeActivationFeedsProductionDispatch`, `TestPortableRuntimeProjectionDeniesConfigMutation`, and required non-root Linux OCI execute each static, dynamic, and interpreted recipe through unpinned `Execute`; prove projected config write/unlink/rename/replacement/shadow denial while credential refresh, lock creation, and sibling state creation succeed; prove an unprojected OpenCode credential seed is readable while sibling data remains writable; and cover opaque environment inheritance, configured-provider bootstrap, and structural candidate parity without skipping |
 
