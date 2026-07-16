@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
@@ -125,6 +126,9 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		s.annotateOpenrouterCreditFreshness(result)
 		return result, publicRoutingError(err, result.Candidates, req.Policy)
 	}
+	if result != nil {
+		result.ContextLength, result.ContextSource = s.resolveSelectedRouteContext(result, snapshot, cat)
+	}
 	if result != nil && s != nil && s.routeSticky != nil {
 		sticky := s.routeSticky.ApplyStickyLease(time.Now().UTC(), routehealth.StickyRequest{
 			StickyKey:      req.CorrelationID,
@@ -173,6 +177,106 @@ func routeDecisionFromInternal(dec *routing.Decision, powerPolicy RoutePowerPoli
 		Reason:         dec.Reason,
 		Candidates:     routeCandidatesFromInternal(dec.Candidates, powerPolicy),
 	}
+}
+
+func (s *service) resolveSelectedRouteContext(decision *RouteDecision, snapshot modelsnapshot.ModelSnapshot, cat *modelcatalog.Catalog) (int, string) {
+	if decision == nil {
+		return compaction.DefaultContextWindow, routing.ContextSourceDefault
+	}
+
+	selected, selectedOK := selectedRouteCandidate(decision)
+	if selectedOK && selected.ContextLength > 0 {
+		return selected.ContextLength, selected.ContextSource
+	}
+
+	providerName := strings.TrimSpace(decision.Provider)
+	if base, _, ok := splitEndpointProviderRef(providerName); ok {
+		providerName = base
+	}
+	provider := serviceimpl.ProviderEntry{}
+	nativeRoute := decision.Harness == "fiz"
+	if nativeRoute && s != nil && s.opts.ServiceConfig != nil {
+		if entry, ok := s.opts.ServiceConfig.Provider(providerName); ok {
+			provider = serviceImplProviderEntry(entry)
+		}
+	}
+
+	model := decision.Model
+	snapshotCandidate := RouteCandidate{
+		Harness:        decision.Harness,
+		Provider:       decision.Provider,
+		Endpoint:       decision.Endpoint,
+		ServerInstance: decision.ServerInstance,
+		Model:          decision.Model,
+		Eligible:       true,
+	}
+	if selectedOK {
+		model = selected.Model
+		snapshotCandidate = selected
+	}
+	snapshotWindow := 0
+	snapshotSource := ""
+	if nativeRoute {
+		if row, ok := selectedRouteSnapshotEvidence(snapshotCandidate, snapshot); ok {
+			snapshotWindow = row.ContextWindow
+			snapshotSource = row.ContextWindowSource
+		}
+	}
+	if window, source := serviceimpl.SnapshotContextWindow(provider, cat, model, snapshotWindow, snapshotSource); window > 0 {
+		return window, source
+	}
+	return compaction.DefaultContextWindow, routing.ContextSourceDefault
+}
+
+func selectedRouteSnapshotEvidence(candidate RouteCandidate, snapshot modelsnapshot.ModelSnapshot) (modelsnapshot.KnownModel, bool) {
+	provider := strings.TrimSpace(candidate.Provider)
+	endpoint := strings.TrimSpace(candidate.Endpoint)
+	if base, qualifiedEndpoint, ok := splitEndpointProviderRef(provider); ok {
+		provider = base
+		if endpoint == "" {
+			endpoint = qualifiedEndpoint
+		}
+	}
+	want := routeSnapshotCandidateKey{
+		Provider:       provider,
+		Endpoint:       endpoint,
+		ServerInstance: strings.TrimSpace(candidate.ServerInstance),
+		Model:          strings.TrimSpace(candidate.Model),
+	}
+	for _, row := range snapshot.Models {
+		if row.Harness != "" && row.Harness != "fiz" {
+			continue
+		}
+		got := routeSnapshotCandidateKey{
+			Provider:       strings.TrimSpace(row.Provider),
+			Endpoint:       strings.TrimSpace(row.EndpointName),
+			ServerInstance: strings.TrimSpace(serverinstance.Normalize(row.EndpointBaseURL, row.ServerInstance)),
+			Model:          strings.TrimSpace(row.ID),
+		}
+		if got == want {
+			return row, true
+		}
+	}
+	return modelsnapshot.KnownModel{}, false
+}
+
+func selectedRouteCandidate(decision *RouteDecision) (RouteCandidate, bool) {
+	if decision == nil {
+		return RouteCandidate{}, false
+	}
+	for _, candidate := range decision.Candidates {
+		if !candidate.Eligible {
+			continue
+		}
+		if candidate.Harness == decision.Harness &&
+			candidate.Provider == decision.Provider &&
+			candidate.Endpoint == decision.Endpoint &&
+			candidate.ServerInstance == decision.ServerInstance &&
+			candidate.Model == decision.Model {
+			return candidate, true
+		}
+	}
+	return RouteCandidate{}, false
 }
 
 func routeCandidatesFromInternal(candidates []routing.Candidate, powerPolicy RoutePowerPolicy) []RouteCandidate {

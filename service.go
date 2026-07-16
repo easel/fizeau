@@ -517,6 +517,12 @@ type RouteDecision struct {
 	ServerInstance string
 	// Model is the selected concrete model.
 	Model string
+	// ContextLength is the resolved execution context window for the selected
+	// route. It may be greater than the raw selected-candidate value when that
+	// candidate carried unknown context evidence.
+	ContextLength int
+	// ContextSource records where ContextLength came from.
+	ContextSource string
 	// Reason summarizes why the selected candidate won.
 	Reason string
 	// Sticky captures whether this decision reused an existing sticky lease

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
@@ -180,6 +181,235 @@ func TestRouteCandidateFromInternalProjectionParity(t *testing.T) {
 	}, RoutePowerPolicy{MaxPower: 8})
 	if aboveMax.Components.PowerHintFit != -1002 || aboveMax.Components.PowerWeightedCapability != 0 {
 		t.Fatalf("above-max components=%#v, want exclusion power_hint_fit=-1002 and weighted capability=0", aboveMax.Components)
+	}
+}
+
+func TestResolveRouteSelectedContextUsesPositiveCandidate(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-16T00:00:00Z
+catalog_version: selected-context-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  selected-model:
+    family: fixture
+    status: active
+    power: 5
+    context_window: 71680
+`)
+	svc := &service{opts: ServiceOptions{ServiceConfig: &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"alpha": {ContextWindow: 102400},
+		},
+		names: []string{"alpha"},
+	}}}
+	decision := selectedContextTestDecision("selected-model")
+	decision.Candidates = []RouteCandidate{
+		{
+			Harness: "fiz", Provider: "alpha@east", Endpoint: "east", ServerInstance: "server-east", Model: "selected-model",
+			Eligible: true, ContextLength: 999999, ContextSource: "wrong-eligible-route",
+		},
+		{
+			Harness: "fiz", Provider: "alpha@west", Endpoint: "west", ServerInstance: "server-west", Model: "selected-model",
+			Eligible: false, ContextLength: 888888, ContextSource: "wrong-ineligible-route",
+		},
+		{
+			Harness: "fiz", Provider: "alpha@west", Endpoint: "west", ServerInstance: "server-west", Model: "selected-model",
+			Eligible: true, ContextLength: 777777, ContextSource: "selected-exact",
+		},
+	}
+	snapshot := modelsnapshot.ModelSnapshot{Models: []modelsnapshot.KnownModel{{
+		Provider: "alpha", ID: "selected-model", EndpointName: "west", ServerInstance: "server-west",
+		ContextWindow: 81920, ContextWindowSource: routing.ContextSourceProviderAPI,
+	}}}
+
+	window, source := svc.resolveSelectedRouteContext(decision, snapshot, catalog)
+	if window != 777777 || source != "selected-exact" {
+		t.Fatalf("selected context=%d/%q, want exact positive candidate 777777/selected-exact", window, source)
+	}
+	if decision.Harness != "fiz" || decision.Provider != "alpha@west" || decision.Endpoint != "west" ||
+		decision.ServerInstance != "server-west" || decision.Model != "selected-model" {
+		t.Fatalf("selected context resolution changed route identity: %#v", decision)
+	}
+}
+
+func TestResolveRouteSelectedContextFallbackPrecedence(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-16T00:00:00Z
+catalog_version: selected-context-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  precedence-model:
+    family: fixture
+    status: active
+    power: 5
+    context_window: 71680
+`)
+	exactSnapshot := []modelsnapshot.KnownModel{
+		{
+			Provider: "alpha", ID: "precedence-model", EndpointName: "east", ServerInstance: "server-east",
+			ContextWindow: 999999, ContextWindowSource: routing.ContextSourceProviderAPI,
+		},
+		{
+			Provider: "alpha", ID: "precedence-model", EndpointName: "west", ServerInstance: "server-west",
+			ContextWindow: 81920, ContextWindowSource: routing.ContextSourceProviderAPI,
+		},
+	}
+	nonNativeDecision := selectedContextTestDecisionFor("alpha", "", "", "uncataloged-nonnative-model")
+	nonNativeDecision.Harness = "claude"
+	nonNativeDecision.Candidates[0].Harness = "claude"
+	tests := []struct {
+		name       string
+		model      string
+		provider   ServiceProviderEntry
+		snapshot   []modelsnapshot.KnownModel
+		decision   *RouteDecision
+		wantWindow int
+		wantSource string
+	}{
+		{
+			name: "provider config wins", model: "precedence-model",
+			provider: ServiceProviderEntry{ContextWindow: 102400}, snapshot: exactSnapshot,
+			wantWindow: 102400, wantSource: routing.ContextSourceProviderConfig,
+		},
+		{
+			name: "exact cached provider api wins", model: "precedence-model",
+			snapshot:   exactSnapshot,
+			wantWindow: 81920, wantSource: routing.ContextSourceProviderAPI,
+		},
+		{
+			name: "exact default endpoint cache wins", model: "precedence-model",
+			snapshot: []modelsnapshot.KnownModel{{
+				Provider: "alpha", ID: "precedence-model", ContextWindow: 73728,
+				ContextWindowSource: routing.ContextSourceProviderAPI,
+			}},
+			decision:   selectedContextTestDecisionFor("alpha", "", "", "precedence-model"),
+			wantWindow: 73728, wantSource: routing.ContextSourceProviderAPI,
+		},
+		{
+			name: "empty axes do not wildcard sibling endpoints", model: "precedence-model",
+			snapshot:   exactSnapshot,
+			decision:   selectedContextTestDecisionFor("alpha", "", "", "precedence-model"),
+			wantWindow: 71680, wantSource: routing.ContextSourceCatalog,
+		},
+		{
+			name: "non-native snapshot row is not provider authority", model: "precedence-model",
+			snapshot: []modelsnapshot.KnownModel{{
+				Provider: "alpha", Harness: "claude", ID: "precedence-model", EndpointName: "west", ServerInstance: "server-west",
+				ContextWindow: 999999, ContextWindowSource: routing.ContextSourceProviderAPI,
+			}},
+			wantWindow: 71680, wantSource: routing.ContextSourceCatalog,
+		},
+		{
+			name: "non-native route ignores provider config and cache", model: "uncataloged-nonnative-model",
+			provider: ServiceProviderEntry{ContextWindow: 102400},
+			snapshot: []modelsnapshot.KnownModel{{
+				Provider: "alpha", Harness: "fiz", ID: "uncataloged-nonnative-model",
+				ContextWindow: 81920, ContextWindowSource: routing.ContextSourceProviderAPI,
+			}},
+			decision:   nonNativeDecision,
+			wantWindow: compaction.DefaultContextWindow, wantSource: routing.ContextSourceDefault,
+		},
+		{
+			name: "catalog wins", model: "precedence-model",
+			wantWindow: 71680, wantSource: routing.ContextSourceCatalog,
+		},
+		{
+			name: "default is final fallback", model: "uncataloged-model",
+			wantWindow: compaction.DefaultContextWindow, wantSource: routing.ContextSourceDefault,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &service{opts: ServiceOptions{ServiceConfig: &fakeServiceConfig{
+				providers: map[string]ServiceProviderEntry{"alpha": tc.provider},
+				names:     []string{"alpha"},
+			}}}
+			decision := tc.decision
+			if decision == nil {
+				decision = selectedContextTestDecision(tc.model)
+			}
+			window, source := svc.resolveSelectedRouteContext(decision, modelsnapshot.ModelSnapshot{Models: tc.snapshot}, catalog)
+			if window != tc.wantWindow || source != tc.wantSource {
+				t.Fatalf("selected context=%d/%q, want %d/%q", window, source, tc.wantWindow, tc.wantSource)
+			}
+		})
+	}
+}
+
+func TestResolveRouteSelectedContextPreservesRawCandidate(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-16T00:00:00Z
+catalog_version: selected-context-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  unrelated-model:
+    family: fixture
+    status: active
+    power: 5
+    context_window: 4096
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+	svc := newTestService(t, ServiceOptions{ServiceConfig: &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"alpha": {Type: "test", Model: "wired-raw-unknown-model"},
+		},
+		names:       []string{"alpha"},
+		defaultName: "alpha",
+	}})
+
+	decision, err := svc.ResolveRoute(context.Background(), RouteRequest{
+		Harness:  "fiz",
+		Provider: "alpha",
+		Model:    "wired-raw-unknown-model",
+	})
+	if err != nil {
+		t.Fatalf("ResolveRoute: %v", err)
+	}
+	if decision == nil {
+		t.Fatal("ResolveRoute returned nil decision")
+	}
+	if decision.ContextLength != compaction.DefaultContextWindow || decision.ContextSource != routing.ContextSourceDefault {
+		t.Fatalf("resolved context=%d/%q, want default %d/%q", decision.ContextLength, decision.ContextSource, compaction.DefaultContextWindow, routing.ContextSourceDefault)
+	}
+	selected, ok := selectedRouteCandidate(decision)
+	if !ok {
+		t.Fatalf("exact selected candidate missing from trace: decision=%#v candidates=%#v", decision, decision.Candidates)
+	}
+	if selected.ContextLength != 0 || selected.ContextSource != routing.ContextSourceUnknown {
+		t.Fatalf("raw selected candidate context=%d/%q, want 0/%q", selected.ContextLength, selected.ContextSource, routing.ContextSourceUnknown)
+	}
+	if selected.Harness != decision.Harness || selected.Provider != decision.Provider || selected.Endpoint != decision.Endpoint ||
+		selected.ServerInstance != decision.ServerInstance || selected.Model != decision.Model {
+		t.Fatalf("selected candidate tuple diverged from decision: selected=%#v decision=%#v", selected, decision)
+	}
+}
+
+func selectedContextTestDecision(model string) *RouteDecision {
+	return selectedContextTestDecisionFor("alpha@west", "west", "server-west", model)
+}
+
+func selectedContextTestDecisionFor(provider, endpoint, serverInstance, model string) *RouteDecision {
+	return &RouteDecision{
+		Harness: "fiz", Provider: provider, Endpoint: endpoint, ServerInstance: serverInstance, Model: model,
+		Candidates: []RouteCandidate{{
+			Harness: "fiz", Provider: provider, Endpoint: endpoint, ServerInstance: serverInstance, Model: model,
+			Eligible: true, ContextSource: routing.ContextSourceUnknown,
+		}},
 	}
 }
 
