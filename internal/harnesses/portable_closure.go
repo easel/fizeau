@@ -113,19 +113,25 @@ type PortableRuntimeDynamicClosureRequest struct {
 // interpreter, and package-tree layout. RuntimeArgs are fixed interpreter
 // arguments; request arguments are appended only when the recipe is activated.
 type PortableRuntimeInterpretedClosureRequest struct {
-	EntrypointSource    string
-	EntrypointTarget    string
-	InterpreterSource   string
-	InterpreterIdentity PortableRuntimeFileIdentity
-	InterpreterTarget   string
-	LoaderTarget        string
-	LibraryRoots        []PortableRuntimeSourceTree
-	ExactLibraryRoots   []PortableRuntimeLibrarySearchRoot
-	PackageTrees        []PortableRuntimeSourceTree
-	NativeAddons        []PortableRuntimeNativeAddon
-	RuntimeArgs         []string
-	RuntimeLookup       PortableRuntimeLookupPolicy
-	RuntimeTrees        []PortableRuntimeSourceTree
+	EntrypointSource string
+	EntrypointTarget string
+	// EntrypointPackageTreeTarget opts into a package-tree-owned entrypoint.
+	// The analyzer proves that EntrypointSource resolves to a direct regular
+	// member of this exact PackageTrees target and that EntrypointTarget names
+	// the same relative member. The tree then owns the emitted entrypoint; no
+	// overlapping duplicate file asset is produced.
+	EntrypointPackageTreeTarget string
+	InterpreterSource           string
+	InterpreterIdentity         PortableRuntimeFileIdentity
+	InterpreterTarget           string
+	LoaderTarget                string
+	LibraryRoots                []PortableRuntimeSourceTree
+	ExactLibraryRoots           []PortableRuntimeLibrarySearchRoot
+	PackageTrees                []PortableRuntimeSourceTree
+	NativeAddons                []PortableRuntimeNativeAddon
+	RuntimeArgs                 []string
+	RuntimeLookup               PortableRuntimeLookupPolicy
+	RuntimeTrees                []PortableRuntimeSourceTree
 }
 
 type portableRuntimeInterpretedClosureHooks struct {
@@ -354,6 +360,10 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	if !entryInfo.Mode().IsRegular() {
 		return PortableRuntimeContribution{}, closureError("interpreted entrypoint is not a regular file")
 	}
+	entrypointTreeMember, err := validatePortableRuntimeTreeOwnedEntrypoint(request, packageRoots, entrypoint, entryInfo)
+	if err != nil {
+		return PortableRuntimeContribution{}, err
+	}
 
 	interpreter, interpreterInfo, interpreterELF, err := inspectPortableRuntimeELFWithHook(ctx, request.InterpreterSource, target, portableRuntimeELFExecutable, hooks.afterInterpreterResolution)
 	if err != nil {
@@ -470,6 +480,11 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		}
 	}
 	if exactLibraries {
+		resolvedLibraries, err = omitPortableRuntimeExplicitLoader(resolvedLibraries, loader, loaderInfo)
+		if err != nil {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, err
+		}
 		roots = portableRuntimeUsedExactRoots(roots, resolvedLibraries)
 		if len(roots) == 0 {
 			closePortableRuntimeELF(interpreterELF)
@@ -495,13 +510,13 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 		return PortableRuntimeContribution{}, closureError("could not finish inspecting interpreter")
 	}
 
-	entryDigest, err := portableRuntimeDigestInspectedFile(entrypoint, entryInfo)
-	if err != nil {
-		return PortableRuntimeContribution{}, err
-	}
-	assets := []PortableRuntimeAsset{
-		{Kind: PortableRuntimeAssetExecutable, PathKind: PortableRuntimePathFile, Source: entrypoint, Target: request.EntrypointTarget, ContentSHA256: entryDigest},
-		{Kind: PortableRuntimeAssetSupport, PathKind: PortableRuntimePathFile, Source: interpreter, Target: request.InterpreterTarget, ContentSHA256: interpreterDigest, Executable: true},
+	assets := []PortableRuntimeAsset{{Kind: PortableRuntimeAssetSupport, PathKind: PortableRuntimePathFile, Source: interpreter, Target: request.InterpreterTarget, ContentSHA256: interpreterDigest, Executable: true}}
+	if entrypointTreeMember == "" {
+		entryDigest, digestErr := portableRuntimeDigestInspectedFile(entrypoint, entryInfo)
+		if digestErr != nil {
+			return PortableRuntimeContribution{}, digestErr
+		}
+		assets = append(assets, PortableRuntimeAsset{Kind: PortableRuntimeAssetExecutable, PathKind: PortableRuntimePathFile, Source: entrypoint, Target: request.EntrypointTarget, ContentSHA256: entryDigest})
 	}
 	if loader != "" {
 		loaderDigest, digestErr := portableRuntimeDigestInspectedFile(loader, loaderInfo)
@@ -533,14 +548,52 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	return NormalizePortableRuntimeContribution(target, PortableRuntimeContribution{
 		ClosureClass: PortableRuntimeClosureInterpreted,
 		Launch: PortableRuntimeLaunch{
-			EntrypointTarget:   request.EntrypointTarget,
-			InterpreterTarget:  request.InterpreterTarget,
-			LoaderTarget:       request.LoaderTarget,
-			RuntimeArgs:        append([]string(nil), request.RuntimeArgs...),
-			LibraryRootTargets: libraryTargets,
+			EntrypointTarget:     request.EntrypointTarget,
+			EntrypointTreeMember: entrypointTreeMember,
+			InterpreterTarget:    request.InterpreterTarget,
+			LoaderTarget:         request.LoaderTarget,
+			RuntimeArgs:          append([]string(nil), request.RuntimeArgs...),
+			LibraryRootTargets:   libraryTargets,
 		},
 		Assets: assets,
 	})
+}
+
+func validatePortableRuntimeTreeOwnedEntrypoint(request PortableRuntimeInterpretedClosureRequest, roots []portableRuntimeInspectedRoot, entrypoint string, entryInfo os.FileInfo) (string, error) {
+	treeTarget := request.EntrypointPackageTreeTarget
+	if treeTarget == "" {
+		return "", nil
+	}
+	if !validPortableRuntimeTargetPath(treeTarget) {
+		return "", closureError("interpreted entrypoint has an invalid package-tree target")
+	}
+	rootIndex := -1
+	for i, tree := range request.PackageTrees {
+		if tree.Target == treeTarget {
+			if rootIndex != -1 {
+				return "", closureError("interpreted entrypoint has an ambiguous package-tree target")
+			}
+			rootIndex = i
+		}
+	}
+	if rootIndex == -1 || rootIndex >= len(roots) || roots[rootIndex].snapshot == nil {
+		return "", closureError("interpreted entrypoint has an unknown package-tree target")
+	}
+	root := roots[rootIndex]
+	relative, err := filepath.Rel(root.source, entrypoint)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", closureError("interpreted entrypoint is not owned by its package tree")
+	}
+	relative = filepath.ToSlash(relative)
+	if !validPortableRuntimeTargetPath(relative) || request.EntrypointTarget != path.Join(treeTarget, relative) {
+		return "", closureError("interpreted entrypoint target does not match its package member")
+	}
+	record, ok := portableRuntimeTreeSnapshotRecord(root.snapshot, relative)
+	if !ok || record.kind != 'f' || !record.pathInfo.Mode().IsRegular() || record.pathInfo.Mode()&os.ModeSymlink != 0 ||
+		record.contentInfo == nil || !samePortableRuntimeFile(record.pathInfo, entryInfo) || !samePortableRuntimeFile(record.contentInfo, entryInfo) {
+		return "", closureError("interpreted entrypoint is not a direct regular package member")
+	}
+	return relative, nil
 }
 
 func validPortableRuntimeFileIdentity(identity PortableRuntimeFileIdentity) bool {
@@ -1518,6 +1571,23 @@ func mergePortableRuntimeResolvedLibraries(left, right []portableRuntimeResolved
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].target < result[j].target })
 	return result, nil
+}
+
+func omitPortableRuntimeExplicitLoader(libraries []portableRuntimeResolvedLibrary, loader string, loaderInfo os.FileInfo) ([]portableRuntimeResolvedLibrary, error) {
+	if loader == "" || loaderInfo == nil {
+		return libraries, nil
+	}
+	filtered := make([]portableRuntimeResolvedLibrary, 0, len(libraries))
+	for _, library := range libraries {
+		if library.source != loader {
+			filtered = append(filtered, library)
+			continue
+		}
+		if library.info == nil || !samePortableRuntimeFile(library.info, loaderInfo) {
+			return nil, closureError("explicit loader identity changed during dependency de-duplication")
+		}
+	}
+	return filtered, nil
 }
 
 func appendPortableRuntimeResolvedLibraries(ctx context.Context, assets []PortableRuntimeAsset, libraries []portableRuntimeResolvedLibrary) ([]PortableRuntimeAsset, error) {

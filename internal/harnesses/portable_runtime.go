@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -52,11 +53,12 @@ func NormalizePortableRuntimeContribution(target PortableRuntimeTarget, contribu
 	normalized := PortableRuntimeContribution{
 		ClosureClass: contribution.ClosureClass,
 		Launch: PortableRuntimeLaunch{
-			EntrypointTarget:   contribution.Launch.EntrypointTarget,
-			InterpreterTarget:  contribution.Launch.InterpreterTarget,
-			LoaderTarget:       contribution.Launch.LoaderTarget,
-			RuntimeArgs:        append([]string(nil), contribution.Launch.RuntimeArgs...),
-			LibraryRootTargets: append([]string(nil), contribution.Launch.LibraryRootTargets...),
+			EntrypointTarget:     contribution.Launch.EntrypointTarget,
+			EntrypointTreeMember: contribution.Launch.EntrypointTreeMember,
+			InterpreterTarget:    contribution.Launch.InterpreterTarget,
+			LoaderTarget:         contribution.Launch.LoaderTarget,
+			RuntimeArgs:          append([]string(nil), contribution.Launch.RuntimeArgs...),
+			LibraryRootTargets:   append([]string(nil), contribution.Launch.LibraryRootTargets...),
 		},
 		Assets:      append([]PortableRuntimeAsset(nil), contribution.Assets...),
 		Environment: append([]PortableRuntimeEnvironment(nil), contribution.Environment...),
@@ -453,13 +455,23 @@ func validatePortableRuntimeLaunch(contribution PortableRuntimeContribution) err
 		}
 	}
 
-	entrypoint, ok := portableRuntimeFileAsset(contribution.Assets, launch.EntrypointTarget)
-	if !ok {
+	entrypoint, fileEntrypoint := portableRuntimeFileAsset(contribution.Assets, launch.EntrypointTarget)
+	treeEntrypoint := false
+	if launch.EntrypointTreeMember != "" {
+		if contribution.ClosureClass != PortableRuntimeClosureInterpreted || fileEntrypoint ||
+			!portableRuntimeTreeOwnedEntrypoint(contribution.Assets, launch.EntrypointTreeMember, launch.EntrypointTarget) {
+			return closureError("tree-owned entrypoint does not match its declared install tree")
+		}
+		treeEntrypoint = true
+	} else if !fileEntrypoint {
 		return closureError("entrypoint target is not a declared file")
 	}
 
 	switch contribution.ClosureClass {
 	case PortableRuntimeClosureStatic:
+		if treeEntrypoint {
+			return closureError("static entrypoint cannot be tree-owned")
+		}
 		if !entrypoint.Executable {
 			return closureError("static entrypoint is not owner-executable")
 		}
@@ -467,6 +479,9 @@ func validatePortableRuntimeLaunch(contribution PortableRuntimeContribution) err
 			return closureError("static launch contains interpreter or loader state")
 		}
 	case PortableRuntimeClosureDynamic:
+		if treeEntrypoint {
+			return closureError("dynamic entrypoint cannot be tree-owned")
+		}
 		if !entrypoint.Executable {
 			return closureError("dynamic entrypoint is not owner-executable")
 		}
@@ -499,6 +514,25 @@ func validatePortableRuntimeLaunch(contribution PortableRuntimeContribution) err
 		}
 	}
 	return nil
+}
+
+func portableRuntimeTreeOwnedEntrypoint(assets []PortableRuntimeAsset, member, entrypointTarget string) bool {
+	if !validPortableRuntimeTargetPath(member) || !validPortableRuntimeTargetPath(entrypointTarget) {
+		return false
+	}
+	matches := 0
+	for _, asset := range assets {
+		if asset.Kind != PortableRuntimeAssetInstallTree || asset.PathKind != PortableRuntimePathTree || path.Join(asset.Target, member) != entrypointTarget {
+			continue
+		}
+		sourceMember := filepath.Join(asset.Source, filepath.FromSlash(member))
+		info, err := os.Lstat(sourceMember)
+		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			return false
+		}
+		matches++
+	}
+	return matches == 1
 }
 
 func validPortableRuntimeAssetKind(kind PortableRuntimeAssetKind) bool {

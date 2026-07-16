@@ -768,6 +768,128 @@ func TestPortableRuntimeClosureRejectsPluginLookupSymbols(t *testing.T) {
 	}
 }
 
+func TestPortableRuntimeInterpretedTreeOwnedEntrypoint(t *testing.T) {
+	requirePortableRuntimeLinux(t)
+	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
+	interpreter := buildPortableRuntimeStaticFixture(t)
+	packageRoot := t.TempDir()
+	entrypoint := filepath.Join(packageRoot, "bundle", "tool.js")
+	if err := os.MkdirAll(filepath.Dir(entrypoint), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entrypoint, []byte("#!/usr/bin/env node\nfixture\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	otherEntrypoint := filepath.Join(packageRoot, "bundle", "other.js")
+	if err := os.WriteFile(otherEntrypoint, []byte("#!/usr/bin/env node\nother\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	request := PortableRuntimeInterpretedClosureRequest{
+		EntrypointSource:            entrypoint,
+		EntrypointTarget:            "interpreted/package/bundle/tool.js",
+		EntrypointPackageTreeTarget: "interpreted/package",
+		InterpreterSource:           interpreter,
+		InterpreterIdentity:         portableRuntimeFixtureFileIdentity(t, interpreter),
+		InterpreterTarget:           "interpreted/bin/node",
+		PackageTrees:                []PortableRuntimeSourceTree{{Source: packageRoot, Target: "interpreted/package"}},
+		RuntimeLookup:               PortableRuntimeLookupClosed,
+	}
+	contribution, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contribution.Launch.EntrypointTreeMember != "bundle/tool.js" {
+		t.Fatalf("tree-owned launch = %#v", contribution.Launch)
+	}
+	for _, asset := range contribution.Assets {
+		if asset.Target == request.EntrypointTarget {
+			t.Fatalf("tree-owned entrypoint was duplicated as an asset: %#v", asset)
+		}
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*PortableRuntimeInterpretedClosureRequest)
+	}{
+		{"missing tree", func(r *PortableRuntimeInterpretedClosureRequest) { r.EntrypointPackageTreeTarget = "missing/tree" }},
+		{"target drift", func(r *PortableRuntimeInterpretedClosureRequest) {
+			r.EntrypointTarget = "interpreted/package/bundle/other.js"
+		}},
+		{"source outside", func(r *PortableRuntimeInterpretedClosureRequest) {
+			r.EntrypointSource = writePortableRuntimeNodeScript(t, "#!/usr/bin/env node\n")
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			changed := request
+			test.mutate(&changed)
+			if _, err := AnalyzePortableRuntimeInterpretedClosure(context.Background(), target, changed); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+				t.Fatalf("tree-owned entrypoint mutation error = %v", err)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*PortableRuntimeContribution)
+	}{
+		{"missing member", func(c *PortableRuntimeContribution) { c.Launch.EntrypointTreeMember = "" }},
+		{"target-only drift to existing member", func(c *PortableRuntimeContribution) {
+			c.Launch.EntrypointTarget = "interpreted/package/bundle/other.js"
+		}},
+		{"member-only drift to existing member", func(c *PortableRuntimeContribution) {
+			c.Launch.EntrypointTreeMember = "bundle/other.js"
+		}},
+		{"tree-owner drift", func(c *PortableRuntimeContribution) {
+			for i := range c.Assets {
+				if c.Assets[i].Target == "interpreted/package" {
+					c.Assets[i].Target = "interpreted/other-package"
+				}
+			}
+		}},
+	} {
+		t.Run("normalize "+test.name, func(t *testing.T) {
+			changed := contribution
+			changed.Assets = append([]PortableRuntimeAsset(nil), contribution.Assets...)
+			test.mutate(&changed)
+			if _, err := NormalizePortableRuntimeContribution(target, changed); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+				t.Fatalf("normalization mutation error = %v", err)
+			}
+		})
+	}
+}
+
+func TestPortableRuntimeInterpretedClosureOmitsExplicitLoaderDependency(t *testing.T) {
+	requirePortableRuntimeLinux(t)
+	_, loader := findPortableRuntimeDynamicFixture(t)
+	resolved, err := filepath.EvalSymlinks(loader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaderInfo, err := os.Stat(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := copyPortableRuntimeELFFixture(t, resolved)
+	otherInfo, err := os.Stat(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	libraries := []portableRuntimeResolvedLibrary{
+		{source: resolved, target: "interpreted/lib/" + filepath.Base(resolved), info: loaderInfo},
+		{source: other, target: "interpreted/lib/other.so", info: otherInfo},
+	}
+	filtered, err := omitPortableRuntimeExplicitLoader(libraries, resolved, loaderInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].source != other {
+		t.Fatalf("loader de-dup retained the wrong dependency set")
+	}
+	if _, err := omitPortableRuntimeExplicitLoader(libraries, resolved, otherInfo); !errors.Is(err, ErrPortableRuntimeClosureIncomplete) {
+		t.Fatalf("loader identity drift error = %v", err)
+	}
+}
+
 func TestPortableRuntimeClosureELFMetadataValidation(t *testing.T) {
 	for _, test := range []struct {
 		name     string

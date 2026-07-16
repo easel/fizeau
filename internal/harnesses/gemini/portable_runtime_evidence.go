@@ -18,6 +18,9 @@ const (
 	geminiPortableKeytarLoader      = "node_modules/@github/keytar/lib/keytar.js"
 	geminiPortablePTYLoader         = "node_modules/@lydell/node-pty/requireBinary.js"
 	geminiPortablePTYUnixLoader     = "node_modules/@lydell/node-pty/unixTerminal.js"
+	geminiPortableKeytarAddon       = "node_modules/@github/keytar/build/Release/keytar.node"
+	geminiPortablePTYAddon          = "node_modules/@lydell/node-pty-linux-arm64/pty.node"
+	geminiPortablePackageTreeSHA256 = "31adbda660d392d71583f7649dff2fc22e10d080c6701ff5849505ba0ec2a652"
 )
 
 type geminiPortableNPMEvidence struct {
@@ -109,7 +112,7 @@ func geminiPortableSelectedAddons(goos, goarch string) ([]string, error) {
 		return nil, fmt.Errorf("gemini portable addon evidence is unavailable for %s/%s", goos, goarch)
 	}
 	return []string{
-		"node_modules/@github/keytar/build/Release/keytar.node",
-		"node_modules/@lydell/node-pty-linux-arm64/pty.node",
+		geminiPortableKeytarAddon,
+		geminiPortablePTYAddon,
 	}, nil
 }

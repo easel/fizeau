@@ -27,6 +27,7 @@ func TestPortableRuntimeTypesMatchContract(t *testing.T) {
 	})
 	assertPortableRuntimeFields(t, reflect.TypeOf(PortableRuntimeLaunch{}), []fieldContract{
 		{name: "EntrypointTarget", typ: reflect.TypeOf("")},
+		{name: "EntrypointTreeMember", typ: reflect.TypeOf("")},
 		{name: "InterpreterTarget", typ: reflect.TypeOf("")},
 		{name: "LoaderTarget", typ: reflect.TypeOf("")},
 		{name: "RuntimeArgs", typ: reflect.TypeOf([]string{})},

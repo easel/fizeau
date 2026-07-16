@@ -784,11 +784,14 @@ type PortableRuntimeAsset struct {
 // PortableRuntimeLaunch is a guest-relative executable recipe. All targets
 // are slash-relative beneath the portable runtime guest root.
 type PortableRuntimeLaunch struct {
-	EntrypointTarget   string
-	InterpreterTarget  string
-	LoaderTarget       string
-	RuntimeArgs        []string
-	LibraryRootTargets []string
+	EntrypointTarget string
+	// EntrypointTreeMember binds an interpreted entrypoint to one exact regular
+	// member of the unique install-tree asset that owns EntrypointTarget.
+	EntrypointTreeMember string
+	InterpreterTarget    string
+	LoaderTarget         string
+	RuntimeArgs          []string
+	LibraryRootTargets   []string
 }
 
 // PortableRuntimeEnvironment carries an inherited variable name only. It

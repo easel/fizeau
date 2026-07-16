@@ -320,11 +320,12 @@ type PortableRuntimeAsset struct {
 // PortableRuntimeLaunch is a guest-relative executable recipe. Every target is
 // slash-relative beneath CONTRACT-003's fixed guest root.
 type PortableRuntimeLaunch struct {
-    EntrypointTarget   string
-    InterpreterTarget  string
-    LoaderTarget       string
-    RuntimeArgs        []string
-    LibraryRootTargets []string
+    EntrypointTarget     string
+    EntrypointTreeMember string
+    InterpreterTarget    string
+    LoaderTarget         string
+    RuntimeArgs          []string
+    LibraryRootTargets   []string
 }
 
 // PortableRuntimeEnvironment carries an inherited variable name only. It
@@ -819,9 +820,9 @@ The supported v0.15 closure classes are mechanically distinct:
 
 | Class | Required discovery and evidence |
 |-------|---------------------------------|
-| `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
-| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. A recognized single-file runtime may instead use verified-exact lookup only when its contributor-owned offline probe proves that startup loads no executable or library code beyond the exact dependency assets and discovery rejects every enabled plugin, hook, helper, wrapper, MCP server, marketplace, workflow, or external-path setting. Declared credential, configuration, quota, and cache assets remain ordinary state reads and do not weaken that code-closure claim. |
-| `interpreted` | Include the launcher/script, the contributor-selected interpreter with its required `PortableRuntimeFileIdentity`, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. If that interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
+| `static` | Resolve every launcher symlink to a regular Linux executable, verify target GOARCH and absence of an ELF interpreter, and include any data files required by the offline probe. `EntrypointTreeMember`, `InterpreterTarget`, `LoaderTarget`, `RuntimeArgs`, and `LibraryRootTargets` are empty. |
+| `dynamic` | Resolve the Linux ELF entrypoint, its ELF interpreter, and recursive shared libraries into private search roots. Ordinary `DT_NEEDED` closure members are individual digest-bound files; a complete tree is used only when verified runtime lookup needs more than those exact files. `LoaderTarget` names the bundled loader, `LibraryRootTargets` names every private search root that contains an emitted member, and `EntrypointTreeMember`/`InterpreterTarget`/`RuntimeArgs` are empty. Unknown `dlopen`/plugin/runtime lookup behavior is incomplete unless its additional runtime surface is included and its offline probe passes. A recognized single-file runtime may instead use verified-exact lookup only when its contributor-owned offline probe proves that startup loads no executable or library code beyond the exact dependency assets and discovery rejects every enabled plugin, hook, helper, wrapper, MCP server, marketplace, workflow, or external-path setting. Declared credential, configuration, quota, and cache assets remain ordinary state reads and do not weaken that code-closure claim. |
+| `interpreted` | Include the launcher/script, the contributor-selected interpreter with its required `PortableRuntimeFileIdentity`, the interpreter's own static/dynamic closure, package-tree root, and runtime data required by the offline probe. `InterpreterTarget` names the bundled interpreter and `RuntimeArgs` contains only fixed non-secret interpreter arguments. A standalone entrypoint leaves `EntrypointTreeMember` empty. A package-tree-owned entrypoint stores its exact clean slash-relative member path in `EntrypointTreeMember`; no overlapping duplicate entrypoint asset is emitted. If the interpreter is dynamic, `LoaderTarget` and `LibraryRootTargets` describe its loader closure; both are empty for a static interpreter. A copied JavaScript/Python/shell launcher without that closure is incomplete. |
 
 `PortableRuntimeInterpretedClosureRequest.InterpreterIdentity` has type
 `PortableRuntimeFileIdentity` and is required. `Size` MUST be greater than
@@ -835,6 +836,21 @@ from the caller-supplied `InterpreterSource`. It MUST NOT search `PATH`, run a
 command, or use the launcher's shebang to select an interpreter. It still
 traverses the selected interpreter's `PT_INTERP` loader and contributor-
 declared library roots when the selected ELF is dynamic.
+
+`PortableRuntimeInterpretedClosureRequest.EntrypointPackageTreeTarget` is the
+only opt-in to a tree-owned entrypoint. It MUST equal exactly one declared
+`PackageTrees` target. The analyzer resolves `EntrypointSource`, proves that it
+is a direct non-symlink regular member of that captured tree, derives its clean
+slash-relative member path, and requires
+`EntrypointTarget == path.Join(EntrypointPackageTreeTarget, member)`. The
+emitted launch stores the derived member in `EntrypointTreeMember`, not the
+tree target. Normalization then derives exactly one owning non-overlapping
+`install_tree` asset for which
+`path.Join(asset.Target, EntrypointTreeMember) == EntrypointTarget` and
+revalidates the source member as a non-symlink regular file. Missing ownership,
+multiple ownership, target-only drift, member-only drift, and tree-owner drift
+are incomplete. When `EntrypointTreeMember` is empty, the legacy standalone
+entrypoint rule still requires an exact declared file asset.
 
 An initially supplied symlink chain resolves to one regular final target. The
 analyzer opens that resolved target once, verifies path metadata against
@@ -901,9 +917,15 @@ to every addon and recursive dependency. `RPATH`, `RUNPATH`, `AUDIT`,
 `DEPAUDIT`, `FILTER`, and `AUXILIARY` metadata are always incomplete, and a
 closed lookup rejects runtime-lookup symbols. Addon `DT_NEEDED` closure merges
 with interpreter and loader closure before exact-root pruning. Shared
-dependencies deduplicate only when the same source identity maps to the same
-guest target; different sources claiming one target are ambiguous even when
-their bytes match.
+dependency files deduplicate only when the same source identity maps to the
+same guest target; different sources claiming one target are ambiguous even
+when their bytes match. One narrower loader rule applies after recursive
+closure merge: when an exact-root resolved dependency's canonical source and
+file identity equal the already selected explicit `LoaderTarget` source, the
+analyzer omits that redundant library-root alias because the loader is already
+loaded. The
+match is never basename-only, and the loader's other recursive dependencies
+remain in the closure.
 
 The owning `PackageTrees` asset is the only emitted asset for a selected
 `.node` member. The analyzer MUST NOT emit an overlapping addon file asset;
@@ -924,11 +946,12 @@ interpreted, dynamic interpreter:
              <guest LoaderTarget> --library-path <colon-joined guest LibraryRootTargets> <guest InterpreterTarget> + RuntimeArgs + <guest EntrypointTarget> + FixedArguments + flattened FixedOptionValues + registry argv + request argv
 ```
 
-Every target in `Launch` MUST resolve to a declared asset, a declared directory
+Every target in `Launch` MUST resolve to a declared asset, the exact
+`EntrypointTreeMember` of one derived install-tree owner, a declared directory
 within an asset tree, or a private library directory implied by exact library
 file assets beneath it. Unused host search roots are not retained in the launch
-recipe. The static/dynamic entrypoint plus every loader and
-interpreter target are regular owner-executable files. An interpreted entrypoint may be a
+recipe. The static/dynamic entrypoint plus every loader and interpreter target
+are regular owner-executable files. An interpreted entrypoint may be a
 non-executable regular file because the bundled interpreter opens it directly.
 `RuntimeArgs` contains no placeholder, environment assignment, route selector,
 or secret. The fixed launch prefix follows the complete executable recipe and
