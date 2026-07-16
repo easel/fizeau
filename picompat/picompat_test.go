@@ -1,6 +1,7 @@
 package picompat
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -387,6 +388,204 @@ func TestTranslate_NewCloudProviders(t *testing.T) {
 	assert.Equal(t, "zai", zai.Type)
 	assert.Equal(t, "https://api.z.ai/v1", zai.BaseURL)
 	assert.Equal(t, "sk-zai-abc", zai.APIKey)
+}
+
+func TestTranslatePiUsesConcreteProviderTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		piName      string
+		wantName    string
+		wantType    string
+		wantBaseURL string
+	}{
+		{name: "openai codex", piName: "openai-codex", wantName: "openai", wantType: "openai", wantBaseURL: "https://api.openai.com/v1"},
+		{name: "openrouter", piName: "openrouter", wantName: "openrouter", wantType: "openrouter", wantBaseURL: "https://openrouter.ai/api/v1"},
+		{name: "qwen", piName: "qwen", wantName: "qwen", wantType: "qwen", wantBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		{name: "dashscope alias", piName: "dashscope", wantName: "qwen", wantType: "qwen", wantBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		{name: "minimax", piName: "minimax", wantName: "minimax", wantType: "minimax", wantBaseURL: "https://api.minimaxi.chat/v1"},
+		{name: "z.ai", piName: "z.ai", wantName: "z.ai", wantType: "zai", wantBaseURL: "https://api.z.ai/v1"},
+		{name: "zai alias", piName: "zai", wantName: "z.ai", wantType: "zai", wantBaseURL: "https://api.z.ai/v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			agentDir := filepath.Join(tmpDir, "agent")
+			require.NoError(t, os.MkdirAll(agentDir, 0755))
+			authJSON := fmt.Sprintf(`{%q:{"type":"api_key","key":"test-key"}}`, tt.piName)
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "auth.json"), []byte(authJSON), 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "models.json"), []byte(`{"providers":[]}`), 0644))
+
+			result, err := Translate(tmpDir)
+			require.NoError(t, err)
+			require.Empty(t, result.Warnings)
+			require.Len(t, result.Providers, 1)
+			provider, ok := result.Providers[tt.wantName]
+			require.True(t, ok, "provider keys: %#v", result.Providers)
+			assert.Equal(t, tt.wantType, provider.Type)
+			assert.Equal(t, tt.wantBaseURL, provider.BaseURL)
+			assert.Equal(t, "test-key", provider.APIKey)
+		})
+	}
+}
+
+func TestTranslatePiCrossAliasTwoSourceMerge(t *testing.T) {
+	tests := []struct {
+		name       string
+		modelName  string
+		authJSON   string
+		wantName   string
+		wantAPIKey string
+	}{
+		{
+			name:       "z.ai model uses zai credential",
+			modelName:  "z.ai",
+			authJSON:   `{"zai":{"type":"api_key","key":"zai-alias-key"}}`,
+			wantName:   "z.ai",
+			wantAPIKey: "zai-alias-key",
+		},
+		{
+			name:       "zai model uses z.ai credential",
+			modelName:  "zai",
+			authJSON:   `{"z.ai":{"type":"api_key","key":"z.ai-alias-key"}}`,
+			wantName:   "z.ai",
+			wantAPIKey: "z.ai-alias-key",
+		},
+		{
+			name:       "qwen model uses dashscope credential",
+			modelName:  "qwen",
+			authJSON:   `{"dashscope":{"type":"api_key","key":"dashscope-alias-key"}}`,
+			wantName:   "qwen",
+			wantAPIKey: "dashscope-alias-key",
+		},
+		{
+			name:       "dashscope model uses qwen credential",
+			modelName:  "dashscope",
+			authJSON:   `{"qwen":{"type":"api_key","key":"qwen-alias-key"}}`,
+			wantName:   "qwen",
+			wantAPIKey: "qwen-alias-key",
+		},
+		{
+			name:       "qwen exact credential wins over alias",
+			modelName:  "qwen",
+			authJSON:   `{"dashscope":{"type":"api_key","key":"dashscope-alias-key"},"qwen":{"type":"api_key","key":"qwen-exact-key"}}`,
+			wantName:   "qwen",
+			wantAPIKey: "qwen-exact-key",
+		},
+		{
+			name:       "zai exact credential wins over alias",
+			modelName:  "zai",
+			authJSON:   `{"z.ai":{"type":"api_key","key":"z.ai-alias-key"},"zai":{"type":"api_key","key":"zai-exact-key"}}`,
+			wantName:   "z.ai",
+			wantAPIKey: "zai-exact-key",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			agentDir := filepath.Join(tmpDir, "agent")
+			require.NoError(t, os.MkdirAll(agentDir, 0755))
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "auth.json"), []byte(tt.authJSON), 0644))
+			modelsJSON := fmt.Sprintf(
+				`{"providers":[{"name":%q,"api":"openai-completions","models":["test-model"]}]}`,
+				tt.modelName,
+			)
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "models.json"), []byte(modelsJSON), 0644))
+
+			result, err := Translate(tmpDir)
+			require.NoError(t, err)
+			require.Empty(t, result.Warnings)
+			require.Len(t, result.Providers, 1)
+			provider, ok := result.Providers[tt.wantName]
+			require.True(t, ok, "provider keys: %#v", result.Providers)
+			assert.Equal(t, tt.wantAPIKey, provider.APIKey)
+		})
+	}
+}
+
+func TestTranslatePiInfersConcreteTypeFromRecognizedBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		piName    string
+		baseURL   string
+		api       string
+		wantType  string
+		wantAdded bool
+	}{
+		{name: "explicit concrete identity", piName: "lmstudio", baseURL: "https://proxy.example/v1", api: "openai-completions", wantType: "lmstudio", wantAdded: true},
+		{name: "normalized openai host", piName: "custom-openai", baseURL: " HTTPS://API.OPENAI.COM/v1/ ", api: "openai-completions", wantType: "openai", wantAdded: true},
+		{name: "openrouter host", piName: "custom-openrouter", baseURL: "https://openrouter.ai/api/v1", api: "openai-completions", wantType: "openrouter", wantAdded: true},
+		{name: "minimax host", piName: "custom-minimax", baseURL: "https://api.minimaxi.chat/v1", api: "openai-completions", wantType: "minimax", wantAdded: true},
+		{name: "dashscope host", piName: "custom-qwen", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", api: "openai-completions", wantType: "qwen", wantAdded: true},
+		{name: "zai host", piName: "custom-zai", baseURL: "https://api.z.ai/v1", api: "openai-completions", wantType: "zai", wantAdded: true},
+		{name: "ollama port", piName: "local-ollama", baseURL: "http://localhost:11434/v1", api: "openai-completions", wantType: "ollama", wantAdded: true},
+		{name: "lmstudio port", piName: "local-lmstudio", baseURL: "http://localhost:1234/v1", api: "openai-completions", wantType: "lmstudio", wantAdded: true},
+		{name: "omlx port", piName: "local-omlx", baseURL: "http://localhost:1235/v1", api: "openai-completions", wantType: "omlx", wantAdded: true},
+		{name: "lucebox port", piName: "local-lucebox", baseURL: "http://localhost:1236/v1", api: "openai-completions", wantType: "lucebox", wantAdded: true},
+		{name: "vllm port", piName: "local-vllm", baseURL: "http://localhost:8000/v1", api: "openai-completions", wantType: "vllm", wantAdded: true},
+		{name: "openai protocol is not identity", piName: "protocol-only-openai", baseURL: "https://unknown.example/v1", api: "openai-completions", wantAdded: false},
+		{name: "anthropic protocol is not identity", piName: "protocol-only-anthropic", baseURL: "https://unknown.example/v1", api: "anthropic", wantAdded: false},
+		{name: "lookalike host is not identity", piName: "spoofed-openai", baseURL: "https://api.openai.com.evil.example/v1", api: "openai-completions", wantAdded: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			agentDir := filepath.Join(tmpDir, "agent")
+			require.NoError(t, os.MkdirAll(agentDir, 0755))
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "auth.json"), []byte(`{}`), 0644))
+			modelsJSON := fmt.Sprintf(
+				`{"providers":[{"name":%q,"baseUrl":%q,"api":%q,"api_key":"test-key","models":["test-model"]}]}`,
+				tt.piName,
+				tt.baseURL,
+				tt.api,
+			)
+			require.NoError(t, os.WriteFile(filepath.Join(agentDir, "models.json"), []byte(modelsJSON), 0644))
+
+			result, err := Translate(tmpDir)
+			require.NoError(t, err)
+			if !tt.wantAdded {
+				assert.NotContains(t, result.Providers, tt.piName)
+				require.NotEmpty(t, result.Warnings)
+				return
+			}
+			require.Empty(t, result.Warnings)
+			provider, ok := result.Providers[tt.piName]
+			require.True(t, ok, "provider keys: %#v", result.Providers)
+			assert.Equal(t, tt.wantType, provider.Type)
+		})
+	}
+}
+
+func TestTranslatePiSkipsUnknownConcreteType(t *testing.T) {
+	tmpDir := t.TempDir()
+	agentDir := filepath.Join(tmpDir, "agent")
+	require.NoError(t, os.MkdirAll(agentDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(agentDir, "auth.json"), []byte(`{}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(agentDir, "models.json"), []byte(`{
+		"providers": [{
+			"name": "unknown-source",
+			"baseUrl": "https://operator:base-url-secret@unknown.example/v1",
+			"api": "openai-completions",
+			"api_key": "api-key-secret",
+			"models": ["test-model"]
+		}]
+	}`), 0644))
+
+	result, err := Translate(tmpDir)
+	require.NoError(t, err)
+	assert.Empty(t, result.Providers)
+	require.Len(t, result.Warnings, 1)
+	warning := result.Warnings[0]
+	assert.Contains(t, warning, "unknown-source")
+	assert.Contains(t, warning, "concrete provider type")
+	assert.Contains(t, warning, "supported provider name")
+	assert.NotContains(t, warning, "api-key-secret")
+	assert.NotContains(t, warning, "base-url-secret")
+	for _, provider := range result.Providers {
+		assert.NotContains(t, []string{"openai", "lmstudio", "openai-compat"}, provider.Type)
+	}
 }
 
 func TestTranslate_OAuthAccessToken(t *testing.T) {

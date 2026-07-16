@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	agentConfig "github.com/easel/fizeau/internal/config"
@@ -35,6 +37,27 @@ var knownMappings = map[string]ProviderMapping{
 	// Z.ai
 	"z.ai": {AgentName: "z.ai", Type: "zai", BaseURL: "https://api.z.ai/v1"},
 	"zai":  {AgentName: "z.ai", Type: "zai", BaseURL: "https://api.z.ai/v1"},
+}
+
+// concreteProviderTypes are the source identities that can be persisted as
+// provider identity without consulting protocol compatibility. The api field
+// in Pi's models.json selects a wire reader; it is not evidence of who owns the
+// endpoint.
+var concreteProviderTypes = map[string]string{
+	"anthropic":    "anthropic",
+	"openai":       "openai",
+	"openrouter":   "openrouter",
+	"lmstudio":     "lmstudio",
+	"llama-server": "llama-server",
+	"ds4":          "ds4",
+	"omlx":         "omlx",
+	"lucebox":      "lucebox",
+	"vllm":         "vllm",
+	"rapid-mlx":    "rapid-mlx",
+	"ollama":       "ollama",
+	"minimax":      "minimax",
+	"qwen":         "qwen",
+	"zai":          "zai",
 }
 
 // reasoningModelRe matches model IDs that benefit from an explicit portable
@@ -81,7 +104,15 @@ func Translate(piDir string) (*TranslationResult, error) {
 
 	// Step 1: Start with models.json providers (have baseUrl and model IDs)
 	for _, provider := range models.Providers {
-		pc := translateProvider(provider, auth[provider.Name])
+		sourceName := providerDefinitionName(provider)
+		pc, ok := translateProvider(provider, authEntryForProvider(auth, sourceName))
+		if !ok {
+			result.Warnings.Add(
+				"skipped provider %q: could not resolve a concrete provider type; use a supported provider name or recognized base_url",
+				sourceName,
+			)
+			continue
+		}
 		result.Providers[pc.Name] = pc.Config
 	}
 
@@ -89,7 +120,11 @@ func Translate(piDir string) (*TranslationResult, error) {
 	// create agent providers using well-known defaults
 	for name, cred := range auth {
 		// Skip if already added from models
-		if _, exists := result.Providers[name]; exists {
+		targetName := strings.TrimSpace(name)
+		if mapping, known := knownProviderMapping(name); known {
+			targetName = mapping.AgentName
+		}
+		if _, exists := result.Providers[targetName]; exists {
 			continue
 		}
 
@@ -107,7 +142,7 @@ func Translate(piDir string) (*TranslationResult, error) {
 		}
 
 		// Try known mappings
-		if mapping, known := knownMappings[name]; known {
+		if mapping, known := knownProviderMapping(name); known {
 			pc := agentConfig.ProviderConfig{
 				Type:   mapping.Type,
 				APIKey: resolvedKey,
@@ -127,7 +162,7 @@ func Translate(piDir string) (*TranslationResult, error) {
 	if settings != nil && settings.DefaultProvider != "" {
 		// Map pi provider name to agent name
 		agentName := settings.DefaultProvider
-		if mapping, known := knownMappings[settings.DefaultProvider]; known {
+		if mapping, known := knownProviderMapping(settings.DefaultProvider); known {
 			agentName = mapping.AgentName
 		}
 		// Check if this provider exists
@@ -151,17 +186,20 @@ type translatedProvider struct {
 	Config agentConfig.ProviderConfig
 }
 
-func translateProvider(def ProviderDefinition, cred AuthEntry) translatedProvider {
-	name := def.Name
-	if name == "" {
-		name = def.Provider
+func translateProvider(def ProviderDefinition, cred AuthEntry) (translatedProvider, bool) {
+	name := providerDefinitionName(def)
+	mapping, ok := concreteProviderIdentity(name, def.BaseURL)
+	if !ok {
+		return translatedProvider{}, false
 	}
 
 	pc := agentConfig.ProviderConfig{
-		Type: concreteProviderType(name, def.API, def.BaseURL),
+		Type: mapping.Type,
 	}
-	if def.BaseURL != "" {
-		pc.BaseURL = def.BaseURL
+	if baseURL := strings.TrimSpace(def.BaseURL); baseURL != "" {
+		pc.BaseURL = baseURL
+	} else if mapping.BaseURL != "" {
+		pc.BaseURL = mapping.BaseURL
 	}
 
 	// Prefer auth.json credential, fall back to model's inline api_key.
@@ -183,45 +221,107 @@ func translateProvider(def ProviderDefinition, cred AuthEntry) translatedProvide
 		pc.Reasoning = reasoning.ReasoningMedium
 	}
 
-	return translatedProvider{Name: name, Config: pc}
+	return translatedProvider{Name: mapping.AgentName, Config: pc}, true
 }
 
-func concreteProviderType(name, api, baseURL string) string {
-	if mapping, ok := knownMappings[strings.ToLower(strings.TrimSpace(name))]; ok {
-		return mapping.Type
+func providerDefinitionName(def ProviderDefinition) string {
+	if name := strings.TrimSpace(def.Name); name != "" {
+		return name
 	}
-	switch strings.ToLower(strings.TrimSpace(api)) {
-	case "anthropic":
-		return "anthropic"
+	return strings.TrimSpace(def.Provider)
+}
+
+func knownProviderMapping(name string) (ProviderMapping, bool) {
+	mapping, ok := knownMappings[strings.ToLower(strings.TrimSpace(name))]
+	return mapping, ok
+}
+
+// authEntryForProvider applies Pi's two-source merge precedence. An exact
+// models.json/auth.json provider-name match wins. When the model source uses a
+// known alias, a credential filed under another alias for the same canonical
+// provider is the fallback. Sorting makes that fallback stable if a future Pi
+// config contains more than one non-exact alias.
+func authEntryForProvider(auth AuthCredentials, sourceName string) AuthEntry {
+	if cred, ok := auth[sourceName]; ok {
+		return cred
 	}
-	if inferred := concreteProviderTypeFromBaseURL(baseURL); inferred != "" {
-		return inferred
+
+	sourceMapping, ok := knownProviderMapping(sourceName)
+	if !ok {
+		return AuthEntry{}
 	}
-	return "openai"
+	aliases := make([]string, 0, len(auth))
+	for name := range auth {
+		mapping, known := knownProviderMapping(name)
+		if known && mapping.AgentName == sourceMapping.AgentName {
+			aliases = append(aliases, name)
+		}
+	}
+	if len(aliases) == 0 {
+		return AuthEntry{}
+	}
+	sort.Strings(aliases)
+	return auth[aliases[0]]
+}
+
+func concreteProviderIdentity(name, baseURL string) (ProviderMapping, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ProviderMapping{}, false
+	}
+	if mapping, ok := knownProviderMapping(name); ok {
+		return mapping, true
+	}
+	if providerType, ok := concreteProviderTypes[strings.ToLower(name)]; ok {
+		return ProviderMapping{AgentName: name, Type: providerType}, true
+	}
+	if providerType := concreteProviderTypeFromBaseURL(baseURL); providerType != "" {
+		return ProviderMapping{AgentName: name, Type: providerType}, true
+	}
+	return ProviderMapping{}, false
 }
 
 func concreteProviderTypeFromBaseURL(baseURL string) string {
-	low := strings.ToLower(strings.TrimSpace(baseURL))
-	switch {
-	case strings.Contains(low, "openrouter.ai"):
-		return "openrouter"
-	case strings.Contains(low, "openai.com"):
-		return "openai"
-	case strings.Contains(low, "minimaxi.chat"):
-		return "minimax"
-	case strings.Contains(low, "dashscope.aliyuncs.com"):
-		return "qwen"
-	case strings.Contains(low, "z.ai"):
-		return "zai"
-	case strings.Contains(low, ":11434"):
-		return "ollama"
-	case strings.Contains(low, ":1234"):
-		return "lmstudio"
-	case strings.Contains(low, ":1235"):
-		return "omlx"
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
 	default:
 		return ""
 	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	switch {
+	case hostMatchesDomain(host, "openrouter.ai"):
+		return "openrouter"
+	case hostMatchesDomain(host, "openai.com"):
+		return "openai"
+	case hostMatchesDomain(host, "minimaxi.chat"):
+		return "minimax"
+	case hostMatchesDomain(host, "dashscope.aliyuncs.com"):
+		return "qwen"
+	case hostMatchesDomain(host, "z.ai"):
+		return "zai"
+	}
+	switch parsed.Port() {
+	case "11434":
+		return "ollama"
+	case "1234":
+		return "lmstudio"
+	case "1235":
+		return "omlx"
+	case "1236":
+		return "lucebox"
+	case "8000":
+		return "vllm"
+	default:
+		return ""
+	}
+}
+
+func hostMatchesDomain(host, domain string) bool {
+	return host == domain || strings.HasSuffix(host, "."+domain)
 }
 
 // isReasoningModel reports whether modelID belongs to a model family that
