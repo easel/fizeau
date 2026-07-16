@@ -106,6 +106,26 @@ func (r *Runner) HealthCheck(ctx context.Context) error {
 // on the returned channel. Since gemini has no stream-json mode, events are
 // emitted after the process exits (emit-on-EOF pattern).
 func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	base := r.BaseArgs
+	if base == nil {
+		base = []string{"--output-format", "stream-json"}
+	}
+	if err := validateGeminiPortableLaterArguments(base); err != nil {
+		return nil, err
+	}
+	if err := inspectGeminiPortableProjectSources(req.WorkDir); err != nil {
+		return nil, err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, geminiPortableRuntimeError("generated-home source is unavailable")
+	}
+	if err := inspectGeminiPortableUserConfiguration(home); err != nil {
+		return nil, err
+	}
+	if err := inspectGeminiPortableSystemSources(geminiPortableDefaultSystemSources()); err != nil {
+		return nil, err
+	}
 	binary := r.Binary
 	if binary == "" {
 		resolved, err := osexec.LookPath("gemini")
@@ -189,43 +209,21 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	if base == nil {
 		base = []string{"--output-format", "stream-json"}
 	}
-	args := append([]string{}, base...)
-
-	// Model flag: -m <model>
-	if req.Model != "" {
-		args = append(args, "-m", req.Model)
-	}
-
-	switch req.Permissions {
-	case "", "safe":
-		args = append(args, "--approval-mode", "plan")
-	case "supervised":
-		args = append(args, "--approval-mode", "default")
-	case "unrestricted":
-		args = append(args, "--approval-mode", "yolo")
-	}
-
-	if value := harnesses.AdapterReasoningValue(req); value != "" {
-		return nil, -1, "", fmt.Errorf("gemini reasoning control %q is not supported by the CLI harness", value), "failed"
-	}
 
 	promptMode := r.PromptMode
 	if promptMode == "" {
 		promptMode = "arg"
 	}
-	switch promptMode {
-	case "arg":
-		args = append(args, "-p", req.Prompt)
-	case "stdin":
-		args = append(args, "-p", "")
-	default:
-		return nil, -1, "", fmt.Errorf("unsupported gemini prompt mode %q", promptMode), "failed"
+	args, err := geminiPortableArguments(base, req, promptMode)
+	if err != nil {
+		return nil, -1, "", err, "failed"
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	cmd := harnesses.HarnessBatchCommand(binary, args...)
+	cmd.Env = geminiPortableRunnerEnvironment(os.Environ())
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}

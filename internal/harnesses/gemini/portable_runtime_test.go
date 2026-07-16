@@ -26,6 +26,10 @@ func TestGeminiPortableRuntimeContribution(t *testing.T) {
 	if contribution.ClosureClass != harnesses.PortableRuntimeClosureInterpreted {
 		t.Fatalf("closure class = %q", contribution.ClosureClass)
 	}
+	if len(contribution.ExecutionConstraints.FixedOptionValues) != 1 ||
+		contribution.ExecutionConstraints.FixedOptionValues[0] != (harnesses.PortableRuntimeFixedOptionValue{Option: "-e", Value: "none"}) {
+		t.Fatalf("execution constraints do not retain fixed extension disablement: %#v", contribution.ExecutionConstraints)
+	}
 	if contribution.Launch.EntrypointTarget != geminiPortableEntrypointTarget ||
 		contribution.Launch.EntrypointTreeMember != geminiPortableEntrypoint ||
 		contribution.Launch.InterpreterTarget != geminiPortableInterpreterTarget ||

@@ -62,11 +62,24 @@ func (r *Runner) PortableRuntimeAssets(ctx context.Context, target harnesses.Por
 	if err != nil || !filepath.IsAbs(home) || filepath.Clean(home) != home {
 		return harnesses.PortableRuntimeContribution{}, geminiPortableRuntimeError("retained install root is unavailable")
 	}
+	if err := validateGeminiPortableLaterArguments(r.BaseArgs); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
+	if err := inspectGeminiPortableUserConfiguration(home); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
+	if err := inspectGeminiPortableSystemSources(geminiPortableDefaultSystemSources()); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
 	paths := geminiPortableRuntimePathsForHome(home)
 	if configured := strings.TrimSpace(r.Binary); configured != "" && configured != paths.launcher {
 		return harnesses.PortableRuntimeContribution{}, geminiPortableRuntimeError("configured launcher is not the retained install")
 	}
-	return geminiPortableRuntimeAssets(ctx, target, paths)
+	contribution, err := geminiPortableRuntimeAssets(ctx, target, paths)
+	if err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
+	return harnesses.NormalizePortableRuntimeContribution(target, contribution)
 }
 
 func geminiPortableRuntimeAssets(ctx context.Context, target harnesses.PortableRuntimeTarget, paths geminiPortableRuntimePaths) (harnesses.PortableRuntimeContribution, error) {
@@ -92,7 +105,7 @@ func geminiPortableRuntimeAssets(ctx context.Context, target harnesses.PortableR
 	if err != nil {
 		return harnesses.PortableRuntimeContribution{}, err
 	}
-	return analyzeGeminiPortableRuntime(ctx, target, harnesses.PortableRuntimeInterpretedClosureRequest{
+	contribution, err := analyzeGeminiPortableRuntime(ctx, target, harnesses.PortableRuntimeInterpretedClosureRequest{
 		EntrypointSource:            paths.launcher,
 		EntrypointTarget:            geminiPortableEntrypointTarget,
 		EntrypointPackageTreeTarget: geminiPortablePackageTarget,
@@ -109,6 +122,11 @@ func geminiPortableRuntimeAssets(ctx context.Context, target harnesses.PortableR
 		NativeAddons:  addons,
 		RuntimeLookup: harnesses.PortableRuntimeLookupVerifiedExact,
 	})
+	if err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
+	contribution.ExecutionConstraints = geminiPortableExecutionConstraints()
+	return contribution, nil
 }
 
 func geminiPortableRuntimePathsForHome(home string) geminiPortableRuntimePaths {

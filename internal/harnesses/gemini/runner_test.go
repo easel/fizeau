@@ -1,6 +1,7 @@
 package gemini
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -193,14 +194,12 @@ EOF
 }
 
 func TestRunner_Execute_RequestControls(t *testing.T) {
-	capturePath := filepath.Join(t.TempDir(), "capture.json")
+	capture := newGeminiScriptCapture(t)
 	workDir := t.TempDir()
-	t.Setenv("GO_WANT_GEMINI_HELPER_PROCESS", "1")
-	t.Setenv("GEMINI_HELPER_CAPTURE", capturePath)
 
 	r := &Runner{
-		Binary:   os.Args[0],
-		BaseArgs: []string{"-test.run=TestGeminiHelperProcess", "--"},
+		Binary:   capture.binary,
+		BaseArgs: []string{"--output-format", "stream-json"},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -217,15 +216,8 @@ func TestRunner_Execute_RequestControls(t *testing.T) {
 	for range ch {
 	}
 
-	var captured geminiHelperCapture
-	data, err := os.ReadFile(capturePath)
-	if err != nil {
-		t.Fatalf("read capture: %v", err)
-	}
-	if err := json.Unmarshal(data, &captured); err != nil {
-		t.Fatalf("unmarshal capture: %v", err)
-	}
-	if !reflect.DeepEqual(captured.Args, []string{"-m", "gemini-test-model", "--approval-mode", "yolo", "-p", "prompt over stdin"}) {
+	captured := capture.read(t)
+	if !reflect.DeepEqual(captured.Args, []string{"--ignore-env", "-e", "none", "--output-format", "stream-json", "-m", "gemini-test-model", "--approval-mode", "yolo", "-p", "prompt over stdin"}) {
 		t.Fatalf("args: got %v", captured.Args)
 	}
 	if captured.WorkDir != workDir {
@@ -237,13 +229,11 @@ func TestRunner_Execute_RequestControls(t *testing.T) {
 }
 
 func TestRunner_Execute_StdinPromptMode(t *testing.T) {
-	capturePath := filepath.Join(t.TempDir(), "capture.json")
-	t.Setenv("GO_WANT_GEMINI_HELPER_PROCESS", "1")
-	t.Setenv("GEMINI_HELPER_CAPTURE", capturePath)
+	capture := newGeminiScriptCapture(t)
 
 	r := &Runner{
-		Binary:     os.Args[0],
-		BaseArgs:   []string{"-test.run=TestGeminiHelperProcess", "--"},
+		Binary:     capture.binary,
+		BaseArgs:   []string{"--output-format", "stream-json"},
 		PromptMode: "stdin",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -258,15 +248,8 @@ func TestRunner_Execute_StdinPromptMode(t *testing.T) {
 	for range ch {
 	}
 
-	var captured geminiHelperCapture
-	data, err := os.ReadFile(capturePath)
-	if err != nil {
-		t.Fatalf("read capture: %v", err)
-	}
-	if err := json.Unmarshal(data, &captured); err != nil {
-		t.Fatalf("unmarshal capture: %v", err)
-	}
-	if !reflect.DeepEqual(captured.Args, []string{"--approval-mode", "plan", "-p", ""}) {
+	captured := capture.read(t)
+	if !reflect.DeepEqual(captured.Args, []string{"--ignore-env", "-e", "none", "--output-format", "stream-json", "--approval-mode", "plan", "-p", ""}) {
 		t.Fatalf("args: got %v", captured.Args)
 	}
 	if captured.Stdin != "prompt over stdin" {
@@ -326,6 +309,70 @@ type geminiHelperCapture struct {
 	Args    []string `json:"args"`
 	WorkDir string   `json:"work_dir"`
 	Stdin   string   `json:"stdin"`
+}
+
+type geminiScriptCapture struct {
+	binary  string
+	args    string
+	workDir string
+	stdin   string
+	env     string
+}
+
+func newGeminiScriptCapture(t *testing.T) geminiScriptCapture {
+	t.Helper()
+	root := t.TempDir()
+	capture := geminiScriptCapture{
+		binary:  filepath.Join(root, "gemini-capture"),
+		args:    filepath.Join(root, "args"),
+		workDir: filepath.Join(root, "workdir"),
+		stdin:   filepath.Join(root, "stdin"),
+		env:     filepath.Join(root, "env"),
+	}
+	t.Setenv("GEMINI_CAPTURE_ARGS", capture.args)
+	t.Setenv("GEMINI_CAPTURE_WORKDIR", capture.workDir)
+	t.Setenv("GEMINI_CAPTURE_STDIN", capture.stdin)
+	t.Setenv("GEMINI_CAPTURE_ENV", capture.env)
+	script := `#!/bin/sh
+: > "$GEMINI_CAPTURE_ARGS"
+for argument in "$@"; do
+  printf '%s\0' "$argument" >> "$GEMINI_CAPTURE_ARGS"
+done
+pwd > "$GEMINI_CAPTURE_WORKDIR"
+cat > "$GEMINI_CAPTURE_STDIN"
+printf '%s' "$GEMINI_CLI_NO_RELAUNCH" > "$GEMINI_CAPTURE_ENV"
+printf '%s\n' '{"type":"message","role":"assistant","content":"gemini helper response","delta":true}'
+printf '%s\n' '{"type":"result","status":"success","stats":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}'
+`
+	if err := os.WriteFile(capture.binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return capture
+}
+
+func (capture geminiScriptCapture) read(t *testing.T) geminiHelperCapture {
+	t.Helper()
+	argumentData, err := os.ReadFile(capture.args)
+	if err != nil {
+		t.Fatalf("read argument capture: %v", err)
+	}
+	parts := bytes.Split(argumentData, []byte{0})
+	if len(parts) > 0 && len(parts[len(parts)-1]) == 0 {
+		parts = parts[:len(parts)-1]
+	}
+	arguments := make([]string, len(parts))
+	for i := range parts {
+		arguments[i] = string(parts[i])
+	}
+	workDir, err := os.ReadFile(capture.workDir)
+	if err != nil {
+		t.Fatalf("read workdir capture: %v", err)
+	}
+	stdin, err := os.ReadFile(capture.stdin)
+	if err != nil {
+		t.Fatalf("read stdin capture: %v", err)
+	}
+	return geminiHelperCapture{Args: arguments, WorkDir: strings.TrimSpace(string(workDir)), Stdin: string(stdin)}
 }
 
 func TestGeminiHelperProcess(t *testing.T) {
