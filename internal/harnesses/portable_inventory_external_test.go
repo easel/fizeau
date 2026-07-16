@@ -14,6 +14,13 @@ import (
 
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/harnesses/builtin"
+	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
+	piharness "github.com/easel/fizeau/internal/harnesses/pi"
+)
+
+var (
+	_ harnesses.PortableRuntimeHarness = (*geminiharness.Runner)(nil)
+	_ harnesses.PortableRuntimeHarness = (*piharness.Runner)(nil)
 )
 
 func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing.T) {
@@ -62,7 +69,7 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 			if row.Instance != instances[row.Name] {
 				t.Errorf("required row %q does not retain the actual runner instance", row.Name)
 			}
-			if row.Name == "claude" || row.Name == "claude-tui" || row.Name == "codex" || row.Name == "opencode" {
+			if row.Name == "claude" || row.Name == "claude-tui" || row.Name == "codex" || row.Name == "gemini" || row.Name == "opencode" || row.Name == "pi" {
 				if _, ok := row.Instance.(harnesses.PortableRuntimeHarness); !ok {
 					t.Errorf("required contributed row %q lacks PortableRuntimeHarness", row.Name)
 				}
@@ -71,6 +78,80 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 	}
 	if !reflect.DeepEqual(gotNames, wantNames) {
 		t.Fatalf("inventory names = %v, want %v", gotNames, wantNames)
+	}
+}
+
+func TestPortableRuntimeInventoryIncludesGeminiAndPi(t *testing.T) {
+	instances := builtin.Instances()
+	geminiInstance := instances["gemini"]
+	piInstance := instances["pi"]
+	selected := map[string]harnesses.Harness{
+		"gemini": geminiInstance,
+		"pi":     piInstance,
+	}
+	rows, err := harnesses.BuildPortableRuntimeInventory(
+		harnesses.NewRegistryForTest("gemini", "pi"),
+		selected,
+	)
+	if err != nil {
+		t.Fatalf("BuildPortableRuntimeInventory() error = %v", err)
+	}
+	if len(rows) != 2 || rows[0].Name != "gemini" || rows[1].Name != "pi" {
+		t.Fatalf("Gemini/Pi inventory rows = %#v, want lexical [gemini pi]", rows)
+	}
+
+	wantTypes := map[string]reflect.Type{
+		"gemini": reflect.TypeOf((*geminiharness.Runner)(nil)),
+		"pi":     reflect.TypeOf((*piharness.Runner)(nil)),
+	}
+	for _, row := range rows {
+		if row.Instance != selected[row.Name] {
+			t.Fatalf("row %q did not retain the exact production instance", row.Name)
+		}
+		if reflect.TypeOf(row.Instance) != wantTypes[row.Name] {
+			t.Fatalf("row %q instance type = %T, want %v", row.Name, row.Instance, wantTypes[row.Name])
+		}
+		if row.Transport != harnesses.PortableRuntimeTransportSubprocess || row.Inclusion != harnesses.PortableRuntimeInclusionRequired {
+			t.Fatalf("row %q classification = (%q, %q), want required subprocess", row.Name, row.Transport, row.Inclusion)
+		}
+		if _, ok := row.Instance.(harnesses.PortableRuntimeHarness); !ok {
+			t.Fatalf("row %q exact production instance lacks PortableRuntimeHarness", row.Name)
+		}
+		structure, ok := row.Instance.(harnesses.PortableRuntimeStructuralHarness)
+		if !ok {
+			t.Fatalf("row %q exact production instance lacks PortableRuntimeStructuralHarness", row.Name)
+		}
+		if got := structure.PortableRuntimeStructure(); got != (harnesses.PortableRuntimeStructure{
+			Name: row.Name, Transport: harnesses.PortableRuntimeTransportSubprocess, Mode: harnesses.PortableRuntimeStructuralUnpinned,
+		}) {
+			t.Fatalf("row %q structural descriptor = %#v", row.Name, got)
+		}
+
+		contributor := row.Instance.(harnesses.PortableRuntimeHarness)
+		contribution, targetErr := contributor.PortableRuntimeAssets(context.Background(), harnesses.PortableRuntimeTarget{
+			GOOS: "portable-inventory-unsupported", GOARCH: "portable-inventory-unsupported",
+		})
+		if !errors.Is(targetErr, harnesses.ErrPortableRuntimeTargetUnsupported) || !reflect.DeepEqual(contribution, harnesses.PortableRuntimeContribution{}) {
+			t.Fatalf("row %q target mismatch = %#v, %v; want zero plus target unsupported", row.Name, contribution, targetErr)
+		}
+	}
+
+	for _, missing := range []string{"gemini", "pi"} {
+		without := map[string]harnesses.Harness{}
+		for name, instance := range selected {
+			if name != missing {
+				without[name] = instance
+			}
+		}
+		_, missingErr := harnesses.BuildPortableRuntimeInventory(harnesses.NewRegistryForTest("gemini", "pi"), without)
+		if missingErr == nil || !strings.Contains(missingErr.Error(), missing) {
+			t.Fatalf("inventory without %q error = %v, want missing-instance failure", missing, missingErr)
+		}
+		for _, forbidden := range []string{os.Getenv("HOME"), os.Getenv("PATH")} {
+			if forbidden != "" && strings.Contains(missingErr.Error(), forbidden) {
+				t.Fatalf("inventory without %q leaked ambient path %q: %v", missing, forbidden, missingErr)
+			}
+		}
 	}
 }
 

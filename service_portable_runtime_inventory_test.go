@@ -62,3 +62,40 @@ func TestPortableRuntimeInventoryUsesConfiguredServiceInstances(t *testing.T) {
 		t.Fatal("service lookup and portable inventory do not share the same configured instance authority")
 	}
 }
+
+func TestPortableRuntimeInventoryUsesGeminiAndPiDispatchInstances(t *testing.T) {
+	t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "subprocess")
+	svc := newTestService(t, ServiceOptions{})
+	rows, err := svc.portableRuntimeInventory()
+	if err != nil {
+		t.Fatalf("portableRuntimeInventory() error = %v", err)
+	}
+
+	wanted := map[string]bool{"gemini": true, "pi": true}
+	seen := make(map[string]bool, len(wanted))
+	for _, row := range rows {
+		if !wanted[row.Name] {
+			continue
+		}
+		seen[row.Name] = true
+		configured := svc.harnessInstances[row.Name]
+		if row.Instance != configured || svc.harnessByName(row.Name) != configured {
+			t.Fatalf("%s inventory and dispatch do not share the configured service instance", row.Name)
+		}
+		coordinatorRequest := svc.executeCoordinatorRequest(ServiceExecuteRequest{}, RouteDecision{Harness: row.Name}, "fixture-session", nil)
+		if coordinatorRequest.ConfiguredHarness != configured {
+			t.Fatalf("%s execute coordinator did not receive the inventory-owned instance", row.Name)
+		}
+		if configured.Info().Name != row.Name {
+			t.Fatalf("%s configured service instance reports identity %q", row.Name, configured.Info().Name)
+		}
+		if _, ok := configured.(harnesses.PortableRuntimeHarness); !ok {
+			t.Fatalf("%s configured service instance lacks PortableRuntimeHarness", row.Name)
+		}
+	}
+	for name := range wanted {
+		if !seen[name] {
+			t.Fatalf("portable inventory lacks configured %s dispatch instance", name)
+		}
+	}
+}

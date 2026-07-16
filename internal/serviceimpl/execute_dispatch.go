@@ -11,9 +11,7 @@ import (
 	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
 	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
-	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
-	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
 
 // anthropicAPIKeyEnv / anthropicBaseURLEnv are the canonical env vars for the
@@ -50,8 +48,9 @@ func newClaudeRunner() (*claudeharness.Runner, error) {
 // ExecuteDispatchRequest carries API-neutral data needed to choose the
 // concrete execute runner.
 type ExecuteDispatchRequest struct {
-	Decision ExecuteRunnerDecision
-	Started  time.Time
+	Decision          ExecuteRunnerDecision
+	ConfiguredHarness harnesses.Harness
+	Started           time.Time
 }
 
 // ExecuteDispatchCallbacks connect the internal dispatcher to root-owned
@@ -94,11 +93,11 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 	case "codex":
 		runSubprocess(ctx, cb, &codexharness.Runner{})
 	case "gemini":
-		runSubprocess(ctx, cb, &geminiharness.Runner{})
+		runConfiguredSubprocess(ctx, req, cb)
 	case "opencode":
 		runSubprocess(ctx, cb, &opencodeharness.Runner{})
 	case "pi":
-		runSubprocess(ctx, cb, &piharness.Runner{})
+		runConfiguredSubprocess(ctx, req, cb)
 	case "virtual":
 		if cb.RunVirtual != nil {
 			cb.RunVirtual(ctx)
@@ -126,6 +125,26 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 			},
 		})
 	}
+}
+
+func runConfiguredSubprocess(ctx context.Context, req ExecuteDispatchRequest, cb ExecuteDispatchCallbacks) {
+	runner := req.ConfiguredHarness
+	descriptor, ok := runner.(harnesses.PortableRuntimeStructuralHarness)
+	if !ok || descriptor.PortableRuntimeStructure().Name != req.Decision.Harness {
+		finalizeDispatch(cb, harnesses.FinalData{
+			Status:     "failed",
+			Error:      fmt.Sprintf("harness %q has no matching configured service runner", req.Decision.Harness),
+			DurationMS: time.Since(req.Started).Milliseconds(),
+			RoutingActual: &harnesses.RoutingActual{
+				Harness:        req.Decision.Harness,
+				Provider:       req.Decision.Provider,
+				ServerInstance: req.Decision.ServerInstance,
+				Model:          req.Decision.Model,
+			},
+		})
+		return
+	}
+	runSubprocess(ctx, cb, runner)
 }
 
 func runSubprocess(ctx context.Context, cb ExecuteDispatchCallbacks, runner harnesses.Harness) {

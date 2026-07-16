@@ -23,7 +23,8 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 	routingDecisionData, _ := json.Marshal(serviceRoutingDecisionDataFromDecision(req, decision, sessionID))
 
 	return serviceimpl.ExecuteRequest{
-		SessionID: sessionID,
+		SessionID:         sessionID,
+		ConfiguredHarness: s.harnessByName(decision.Harness),
 
 		Prompt:            req.Prompt,
 		SystemPrompt:      req.SystemPrompt,

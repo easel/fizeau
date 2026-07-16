@@ -36,6 +36,10 @@ type ExecuteDecision struct {
 // terminal ordering.
 type ExecuteRequest struct {
 	SessionID string
+	// ConfiguredHarness is the exact service-owned runner for the resolved
+	// harness. Dispatch consumes it for inventory-backed contributors instead
+	// of constructing a competing runner instance.
+	ConfiguredHarness harnesses.Harness
 
 	Prompt            string
 	SystemPrompt      string
@@ -210,8 +214,9 @@ func (c ExecuteCoordinator) runResolved(ctx context.Context, req ExecuteRequest,
 func (c ExecuteCoordinator) dispatch(ctx context.Context, state *executeRunState) {
 	req := state.req
 	DispatchExecuteRun(ctx, ExecuteDispatchRequest{
-		Decision: runnerDecision(req.Decision),
-		Started:  state.start,
+		Decision:          runnerDecision(req.Decision),
+		ConfiguredHarness: req.ConfiguredHarness,
+		Started:           state.start,
 	}, ExecuteDispatchCallbacks{
 		RunNative: func(ctx context.Context) {
 			state.runNative(ctx)

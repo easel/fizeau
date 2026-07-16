@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/builtin"
 )
 
 func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
@@ -34,14 +35,22 @@ func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var native, virtual, script bool
 			var subprocess string
+			var configured harnesses.Harness
+			if tc.harness == "gemini" || tc.harness == "pi" {
+				configured = builtin.New(tc.harness)
+			}
 			DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
-				Decision: ExecuteRunnerDecision{Harness: tc.harness},
-				Started:  time.Now(),
+				Decision:          ExecuteRunnerDecision{Harness: tc.harness},
+				ConfiguredHarness: configured,
+				Started:           time.Now(),
 			}, ExecuteDispatchCallbacks{
 				RunNative: func(context.Context) {
 					native = true
 				},
 				RunSubprocess: func(_ context.Context, runner harnesses.Harness) {
+					if configured != nil && runner != configured {
+						t.Fatalf("dispatch runner = %p, want exact configured instance %p", runner, configured)
+					}
 					subprocess = runner.Info().Name
 				},
 				RunVirtual: func(context.Context) {
@@ -59,6 +68,25 @@ func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
 				t.Fatalf("dispatch = native:%v subprocess:%q virtual:%v script:%v, want native:%v subprocess:%q virtual:%v script:%v",
 					native, subprocess, virtual, script,
 					tc.wantNative, tc.wantSubprocess, tc.wantVirtual, tc.wantScript)
+			}
+		})
+	}
+}
+
+func TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner(t *testing.T) {
+	for _, name := range []string{"gemini", "pi"} {
+		t.Run(name, func(t *testing.T) {
+			var subprocess bool
+			var final harnesses.FinalData
+			DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
+				Decision: ExecuteRunnerDecision{Harness: name, Model: "fixture-model"},
+				Started:  time.Now(),
+			}, ExecuteDispatchCallbacks{
+				RunSubprocess: func(context.Context, harnesses.Harness) { subprocess = true },
+				Finalize:      func(got harnesses.FinalData) { final = got },
+			})
+			if subprocess || final.Status != "failed" || final.RoutingActual == nil || final.RoutingActual.Harness != name {
+				t.Fatalf("missing configured runner dispatch = subprocess:%v final:%#v", subprocess, final)
 			}
 		})
 	}
