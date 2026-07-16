@@ -7,7 +7,7 @@ ddx:
     self_hash: 83ee6bdfd89336cf77cb0dd2a1f6d8250baf1de494605112a56ef21b835c9b83
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # User Story: US-001 — Execute an Embedded Agent Run
 

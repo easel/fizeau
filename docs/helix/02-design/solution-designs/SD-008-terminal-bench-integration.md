@@ -6,7 +6,7 @@ ddx:
   review:
     self_hash: 38357271f3c5c7c3da364497f94615698ec68c53a43e407c71ddf14c01b90b1a
     deps: {}
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Solution Design: SD-008 — Terminal-Bench / Harbor Integration Path Audit
 

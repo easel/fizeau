@@ -9,7 +9,7 @@ ddx:
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-15T12:10:44Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Solution Design: SD-006 — Conversation Compaction
 

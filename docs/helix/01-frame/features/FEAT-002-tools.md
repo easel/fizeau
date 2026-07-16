@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 1f53e72517347be0932a7b315aa1cc00cc48fc526ca3c53506cd179e8d0231a9
     deps:
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Feature Specification: FEAT-002 — Tool Set
 

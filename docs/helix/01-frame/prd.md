@@ -2,9 +2,9 @@
 ddx:
   id: helix.prd
   review:
-    self_hash: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
+    self_hash: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
     deps: {}
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Product Requirements Document — Fizeau
 
@@ -384,8 +384,8 @@ tests, review findings, or execution beads.
 | Token tracking | Count tokens | Any successful completion | Drained final usage has non-zero input and output counts |
 | Session logging | Run any task | Any successful completion | JSONL log entry with full prompt, response, tool calls, tokens, timing |
 | Session replay | Read logged session | `fiz replay <id>` on a completed session | Human-readable dump of every turn, tool call, and result |
-| Cost tracking | Run cloud task with billed cost returned | Claude or gateway completion with reported billing | `DrainExecuteResult.CostUSD > 0` and matches reported cost |
-| Cost tracking | Run task without pricing data | Unconfigured runtime or provider with no reported billing | `DrainExecuteResult.CostUSD == -1` (unknown, not guessed) |
+| Cost tracking | Run cloud task with billed cost returned | Claude or gateway completion with reported billing | `DrainExecuteResult.CostUSD` is present, matches the reported cost, and carries `CostSourceReported` |
+| Cost tracking | Run task without pricing data | Unconfigured runtime or provider with no reported billing | `DrainExecuteResult.CostUSD` is absent and carries `CostSourceUnknown` (unknown, not guessed) |
 | Standalone CLI | End-to-end | `fiz -p "Read main.go"` with config file | Successful completion, session logged |
 | Shared model catalog | Select policy and route | `fiz run --policy smart "hi"` | Concrete route selected from the catalog and live inventory for the requested policy |
 | Harness path | Structured harness invocation | Prompt envelope or harness execution path (CONTRACT-003) | Machine-readable JSON output includes tokens, session ID, and cost semantics |

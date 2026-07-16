@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
     deps:
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T16:59:30Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Architecture — Fizeau
 

@@ -8,8 +8,8 @@ ddx:
     self_hash: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
     deps:
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Feature Specification: FEAT-004 — Shared Model Catalog and Policy Routing
 

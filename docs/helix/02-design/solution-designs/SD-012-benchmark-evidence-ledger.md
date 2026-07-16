@@ -9,7 +9,7 @@ ddx:
     deps:
       FEAT-008: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
       SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 title: Benchmark Evidence Ledger and Derived Model Power
 status: draft
 updated: 2026-05-06

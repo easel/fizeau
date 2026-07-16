@@ -6,12 +6,12 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
+    self_hash: 5a45d7c4113eb487a73fad736dc867e8305d7ef6718c7752af2e80f922755138
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-16T03:28:41Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -902,13 +902,13 @@ const (
 
 type DrainExecuteResult struct {
     // Other public result fields omitted.
-    CostUSD    float64
+    CostUSD    *float64
     CostSource CostSource
 }
 
 type ServiceFinalData struct {
     // Other public final-event fields omitted.
-    CostUSD    float64    `json:"cost_usd"`
+    CostUSD    *float64   `json:"cost_usd,omitempty"`
     CostSource CostSource `json:"cost_source"`
 }
 ```
@@ -916,9 +916,10 @@ type ServiceFinalData struct {
 Provider- or gateway-reported billing wins and uses `reported`. Exact
 runtime/provider/model pricing supplied by the caller uses `configured` only
 when no reported amount exists. If neither source exists, `CostSource` is
-`unknown` and `CostUSD` is `-1`. A reported or configured zero is a known zero,
-not an unknown value. Terminal service events always emit `cost_source`; callers
-must not infer provenance from amount or JSON field presence.
+`unknown`, `CostUSD` is `nil`, and terminal JSON omits `cost_usd`. A present
+reported or configured zero is a known zero, not an unknown value. Terminal
+service events always emit `cost_source`; callers must use amount presence and
+provenance together and must not infer provenance from the amount alone.
 
 ## Routing Types
 

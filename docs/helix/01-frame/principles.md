@@ -7,7 +7,7 @@ ddx:
     self_hash: 5856324a09b90b09eb20a7111c81f2eacb3f780f2c2c559e9326386a7554979f
     deps:
       helix.product-vision: eb5af3663734d35e7b42963ce12e39adc19147aa2df25fe9bd3887793217836c
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Product Principles — Fizeau
 

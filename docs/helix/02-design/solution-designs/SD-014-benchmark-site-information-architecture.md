@@ -18,7 +18,7 @@ ddx:
       SD-010: 12f0b391c23a5a2b7e2abbbc6fec88ec6c7a57a7ff0a20e39c3a065a6c818e7a
       SD-012: bf30b7ba2939970dc4b6f94343403b37d72bc5626314a689682abcdd93d3acb2
       website/DESIGN.md: 920c3b6fb2b3daed4a4b409de13f57f3c07f7c5732e4a32bc1ad42f389aa842b
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 
 # Solution Design: SD-014 — Benchmark Site Information Architecture

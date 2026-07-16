@@ -6,12 +6,12 @@ ddx:
     - FEAT-001
     - FEAT-003
   review:
-    self_hash: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+    self_hash: 91bfec0fee89364d352de541dadd2414792b33930e70c44614ce96abf26abff7
     deps:
       FEAT-001: cd37386d6fbdf5d388440be2d885fcad38298a0720429cb9fed602b55631260d
       FEAT-003: 8c4332150f3d5d591015e360231913d4e8f24f9b83f3678e65574e5f45f78e0d
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-14T20:00:14Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Feature Specification: FEAT-005 — Logging, Replay, and Cost Tracking
 
@@ -146,9 +146,10 @@ loop.
     known; otherwise the session total is unknown
 24. Public `DrainExecuteResult` and the terminal `ServiceFinalData` projection expose both
     `CostUSD` and the public `CostSource` classification defined by
-    CONTRACT-003: `reported`, `configured`, or `unknown`. Unknown cost uses
-    `CostUSD = -1`; a known zero remains distinguishable from unknown by its
-    non-unknown source.
+    CONTRACT-003: `reported`, `configured`, or `unknown`. `CostUSD` is optional:
+    `nil` means the amount is unknown, while a present zero or positive value is
+    known. `CostSource` is always present, so a known zero carries a non-unknown
+    source and remains distinguishable from unknown.
 25. Usage reporting aggregates token and timing data for all sessions, known
     costs for priced sessions, unknown-cost session counts, concrete model
     attribution, and v0.11 policy/power routing attribution when present
@@ -217,7 +218,7 @@ proceeds normally.
 - **Session interrupted (context cancelled)**: Write `session.end` with
   status=cancelled and whatever data was collected
 - **Provider/runtime does not expose cost and no explicit pricing exists**:
-  CostUSD = -1 (unknown), not 0 (free)
+  `CostUSD` is absent and `CostSource` is `unknown`, not 0 (free)
 - **Very large tool output (>1MB)**: Truncate in log with marker, store
   byte count of original
 - **Timing breakdown missing**: Emit only available timestamps and durations;
@@ -245,7 +246,7 @@ proceeds normally.
 | AC-FEAT-005-04 | OTel export conforms to `CONTRACT-001`, including span taxonomy, identity fields, cost/timing attributes, tool error semantics, and throughput formulas derived only from valid timing windows. | `go test ./telemetry ./...` |
 | AC-FEAT-005-05 | `fiz usage` preserves known-cost and unknown-cost session semantics across time-window filtering and supports the documented table, JSON, and CSV output modes. | `go test ./cmd/fiz ./session ./...` |
 | AC-FEAT-005-06 | Unwritable log directories and telemetry-export failures are best-effort failures: the run still completes, operators receive a warning, and whatever partial log/telemetry data exists remains readable. | `go test ./session ./telemetry ./...` |
-| AC-FEAT-005-09 | Public `DrainExecuteResult` and terminal `ServiceFinalData` preserve the session cost amount plus `reported`, `configured`, or `unknown` provenance; known zero is not conflated with unknown. | Root facade and service-event contract tests |
+| AC-FEAT-005-09 | Public `DrainExecuteResult` and terminal `ServiceFinalData` preserve an optional session cost amount plus mandatory `reported`, `configured`, or `unknown` provenance: unknown omits the amount, while known zero and positive amounts remain present and are never conflated with unknown. | Root facade and service-event contract tests |
 
 ## Constraints and Assumptions
 

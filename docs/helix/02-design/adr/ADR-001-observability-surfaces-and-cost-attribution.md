@@ -9,11 +9,11 @@ ddx:
   review:
     self_hash: 18d3c8a6d83435bbe498008e7093031ad4713640c3ac40a2688ebaed16430780
     deps:
-      FEAT-005: 0a963abf9f30cb7551a30302fa853525e417f03cd1611603aec221d0159998e0
+      FEAT-005: 91bfec0fee89364d352de541dadd2414792b33930e70c44614ce96abf26abff7
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
-      helix.prd: 12c9ecc92726e3d50896a8afb51224906edfea9863d8114d39a6c2a0a2e54003
-    reviewed_at: "2026-07-15T16:59:30Z"
+      helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # ADR-001: Observability Surfaces and Cost Attribution
 

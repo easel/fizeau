@@ -11,7 +11,7 @@ ddx:
       ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
       ADR-006: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
       FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # ADR-009: Routing Surface Redesign
 

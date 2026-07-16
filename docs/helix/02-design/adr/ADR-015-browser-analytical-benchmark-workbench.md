@@ -12,7 +12,7 @@ ddx:
       FEAT-008: 7ccd6ca324a99e7e35a27f5cb3e7cdf9d591417327d101bf0f08dbe4e2e3d6f1
       SD-014: 65cd79f7118efef8d5f05ed4a5dd067de2925394eff229f0af3f6aa73c7faff7
       website/DESIGN.md: 920c3b6fb2b3daed4a4b409de13f57f3c07f7c5732e4a32bc1ad42f389aa842b
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # ADR-015: Browser Analytical Benchmark Workbench
 

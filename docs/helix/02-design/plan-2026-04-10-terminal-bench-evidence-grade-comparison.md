@@ -10,7 +10,7 @@ ddx:
     deps:
       SD-009: 7f518a10f93a3bee6ab4e09dadb24b7bfd43822db3c0bbfed43de0abb664b83a
       benchmark-baseline-2026-04-08: 3d28ddc0759f2a3ff403ba888b2377b60e3efa8e91d702fce86db25ee849f827
-    reviewed_at: "2026-07-14T20:00:14Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 
 # Plan: Evidence-Grade Terminal-Bench Comparison

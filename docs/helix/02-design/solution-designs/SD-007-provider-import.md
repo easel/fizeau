@@ -7,7 +7,7 @@ ddx:
     self_hash: 86409bb8c20bb697653c495f9c44b15070518356e06c5005e52616676827da67
     deps:
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
-    reviewed_at: "2026-07-15T12:46:06Z"
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 # Solution Design: SD-007 — Provider Import from Pi and OpenCode
 

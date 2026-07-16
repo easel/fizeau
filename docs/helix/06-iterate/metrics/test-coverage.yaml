@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 1fb6d9e219544807b04f1853bc4d6a4874f17479716da941429e4909555e29ce
     deps:
-      TP-001: 8b9ac8c637bdc4e7e36eb8271966356efb57d315650bbdf31f6d1e2f697dc8a4
-    reviewed_at: "2026-07-14T20:00:14Z"
+      TP-001: 665b70e76dbe75ed81b56655b243d80a092d744690b57b2017c6eef2e7105d50
+    reviewed_at: "2026-07-16T07:15:29Z"
 ---
 name: test-coverage
 description: >-
