@@ -114,6 +114,72 @@ env_vars = [{ name = "MCP_TARGET", source = "MCP_REQUIRED" }, "MCP_OPTIONAL"]
 	}
 }
 
+func TestCodexPortableRuntimeMixedStateProjection(t *testing.T) {
+	requireCodexPortableRuntimeLinux(t)
+	home, _ := seedCodexPortableState(t, true)
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("model = 'fixture'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	contribution, err := (&Runner{Binary: buildCodexPortableStaticFixture(t)}).PortableRuntimeAssets(context.Background(), harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH})
+	if err != nil {
+		t.Fatalf("mixed-state contribution error = %v", err)
+	}
+	if len(contribution.StateProjections) != 1 {
+		t.Fatalf("state projections = %#v", contribution.StateProjections)
+	}
+	projection := contribution.StateProjections[0]
+	wantDirectory := harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "codex"}
+	if projection.Directory != wantDirectory {
+		t.Fatalf("projection directory = %#v, want %#v", projection.Directory, wantDirectory)
+	}
+	entries := make(map[string]string, len(projection.Entries))
+	for _, entry := range projection.Entries {
+		if _, exists := entries[entry.AssetTarget]; exists {
+			t.Fatalf("asset projected twice: %#v", entry)
+		}
+		entries[entry.AssetTarget] = entry.Target
+	}
+	for target, output := range map[string]string{
+		codexPortableConfigTarget: "config.toml",
+		codexPortableAuthTarget:   "auth.json",
+		codexPortableModelsTarget: "models_cache.json",
+		codexPortableCacheTarget:  "cache",
+	} {
+		if entries[target] != output {
+			t.Errorf("projection entry %q = %q, want %q", target, entries[target], output)
+		}
+	}
+	for _, asset := range contribution.Assets {
+		if (asset.Kind == harnesses.PortableRuntimeAssetCredential || asset.Kind == harnesses.PortableRuntimeAssetCache || asset.Kind == harnesses.PortableRuntimeAssetQuota) && strings.HasPrefix(asset.Target, "home/") {
+			t.Errorf("home-scoped mutable asset remains unprojectable: %#v", asset)
+		}
+	}
+	foundConstraint := false
+	for _, constraint := range contribution.ExecutionConstraints.Environment {
+		if constraint.Name == "CODEX_HOME" {
+			foundConstraint = constraint.Kind == harnesses.PortableRuntimeEnvironmentGuestPath && constraint.GuestPath == wantDirectory
+		}
+	}
+	if !foundConstraint {
+		t.Fatalf("CODEX_HOME constraint = %#v", contribution.ExecutionConstraints.Environment)
+	}
+	t.Run("mutable-only uses data scope", func(t *testing.T) {
+		minimal := harnesses.PortableRuntimeContribution{Assets: []harnesses.PortableRuntimeAsset{{Kind: harnesses.PortableRuntimeAssetCredential, Target: codexPortableAuthTarget}}}
+		if err := projectCodexPortableState(&minimal); err != nil {
+			t.Fatal(err)
+		}
+		if len(minimal.StateProjections) != 0 || len(minimal.ExecutionConstraints.Environment) != 1 || minimal.ExecutionConstraints.Environment[0].GuestPath != (harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "codex"}) {
+			t.Fatalf("mutable-only projection = %#v, constraints = %#v", minimal.StateProjections, minimal.ExecutionConstraints.Environment)
+		}
+	})
+	t.Run("config-only fails closed", func(t *testing.T) {
+		minimal := harnesses.PortableRuntimeContribution{Assets: []harnesses.PortableRuntimeAsset{{Kind: harnesses.PortableRuntimeAssetConfig, Target: codexPortableConfigTarget}}}
+		if err := projectCodexPortableState(&minimal); !errors.Is(err, harnesses.ErrPortableRuntimeClosureIncomplete) {
+			t.Fatalf("config-only error = %v", err)
+		}
+	})
+}
+
 func TestCodexPortableRuntimeContributionNPMLayout(t *testing.T) {
 	requireCodexPortableRuntimeLinux(t)
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {

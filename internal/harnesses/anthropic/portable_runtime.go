@@ -22,11 +22,13 @@ import (
 
 const (
 	claudePortableEntrypointTarget = "harnesses/anthropic/bin/claude"
-	claudePortableConfigTarget     = "home/.claude/settings.json"
-	claudePortableLocalTarget      = "home/.claude/settings.local.json"
-	claudePortableCredentialTarget = "home/.claude/.credentials.json" // #nosec G101 -- guest-relative path, not a credential value.
-	claudePortableCacheTarget      = "home/.claude/cache"
-	claudePortableStatsTarget      = "home/.claude/stats-cache.json"
+	claudePortableConfigRoot       = "config/claude"
+	claudePortableDataRoot         = "data/claude"
+	claudePortableConfigTarget     = claudePortableConfigRoot + "/settings.json"
+	claudePortableLocalTarget      = claudePortableConfigRoot + "/settings.local.json"
+	claudePortableCredentialTarget = claudePortableDataRoot + "/.credentials.json" // #nosec G101 -- guest-relative path, not a credential value.
+	claudePortableCacheTarget      = claudePortableDataRoot + "/cache"
+	claudePortableStatsTarget      = claudePortableDataRoot + "/stats-cache.json"
 	claudePortableQuotaTarget      = "state/fizeau/claude-quota.json"
 	claudePortableMaxJSONBytes     = 8 << 20
 	claudePortableIdentityMarker   = "@anthropic-ai/claude-code"
@@ -184,17 +186,17 @@ func ClaudePortableRuntimeAssets(ctx context.Context, target harnesses.PortableR
 		{credentialPath, claudePortableCredentialTarget, harnesses.PortableRuntimeAssetCredential, harnesses.PortableRuntimePathFile},
 		{settingsPath, claudePortableConfigTarget, harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
 		{localSettingsPath, claudePortableLocalTarget, harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
-		{remoteSettingsPath, "home/.claude/remote-settings.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
-		{policyLimitsPath, "home/.claude/policy-limits.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
-		{filepath.Join(configRoot, "keybindings.json"), "home/.claude/keybindings.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
-		{filepath.Join(configRoot, "CLAUDE.md"), "home/.claude/CLAUDE.md", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
+		{remoteSettingsPath, claudePortableConfigRoot + "/remote-settings.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
+		{policyLimitsPath, claudePortableConfigRoot + "/policy-limits.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
+		{filepath.Join(configRoot, "keybindings.json"), claudePortableConfigRoot + "/keybindings.json", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
+		{filepath.Join(configRoot, "CLAUDE.md"), claudePortableConfigRoot + "/CLAUDE.md", harnesses.PortableRuntimeAssetConfig, harnesses.PortableRuntimePathFile},
 		{filepath.Join(configRoot, "cache"), claudePortableCacheTarget, harnesses.PortableRuntimeAssetCache, harnesses.PortableRuntimePathTree},
 		{filepath.Join(configRoot, "stats-cache.json"), claudePortableStatsTarget, harnesses.PortableRuntimeAssetCache, harnesses.PortableRuntimePathFile},
 		{quotaPath, claudePortableQuotaTarget, harnesses.PortableRuntimeAssetQuota, harnesses.PortableRuntimePathFile},
 	}
 	for _, name := range claudePortableConfigTrees {
 		states = append(states, claudePortableState{
-			path: filepath.Join(configRoot, name), target: "home/.claude/" + name,
+			path: filepath.Join(configRoot, name), target: claudePortableConfigRoot + "/" + name,
 			kind: harnesses.PortableRuntimeAssetConfig, pathKind: harnesses.PortableRuntimePathTree,
 		})
 	}
@@ -220,7 +222,50 @@ func ClaudePortableRuntimeAssets(ctx context.Context, target harnesses.PortableR
 		return harnesses.PortableRuntimeContribution{}, err
 	}
 	contribution.Environment = environment
+	if err := projectClaudePortableState(&contribution); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
 	return harnesses.NormalizePortableRuntimeContribution(target, contribution)
+}
+
+func projectClaudePortableState(contribution *harnesses.PortableRuntimeContribution) error {
+	if contribution == nil {
+		return nil
+	}
+	projection := harnesses.PortableRuntimeStateProjection{
+		Directory: harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "claude"},
+	}
+	hasConfig := false
+	hasWritable := false
+	for _, asset := range contribution.Assets {
+		var relative string
+		switch {
+		case asset.Kind == harnesses.PortableRuntimeAssetConfig && strings.HasPrefix(asset.Target, claudePortableConfigRoot+"/"):
+			relative = strings.TrimPrefix(asset.Target, claudePortableConfigRoot+"/")
+			hasConfig = true
+		case (asset.Kind == harnesses.PortableRuntimeAssetCredential || asset.Kind == harnesses.PortableRuntimeAssetCache) && strings.HasPrefix(asset.Target, claudePortableDataRoot+"/"):
+			relative = strings.TrimPrefix(asset.Target, claudePortableDataRoot+"/")
+			hasWritable = true
+		default:
+			continue
+		}
+		projection.Entries = append(projection.Entries, harnesses.PortableRuntimeStateProjectionEntry{AssetTarget: asset.Target, Target: relative})
+	}
+
+	guestPath := harnesses.PortableRuntimeGuestPath{}
+	if hasConfig && hasWritable {
+		contribution.StateProjections = append(contribution.StateProjections, projection)
+		guestPath = projection.Directory
+	} else if hasWritable {
+		guestPath = harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "claude"}
+	} else if hasConfig {
+		return claudePortableError("configuration has no activation-owned state boundary")
+	}
+	if guestPath.Scope != "" {
+		contribution.ExecutionConstraints.Environment = append(contribution.ExecutionConstraints.Environment,
+			harnesses.PortableRuntimeEnvironmentConstraint{Name: "CLAUDE_CONFIG_DIR", Kind: harnesses.PortableRuntimeEnvironmentGuestPath, GuestPath: guestPath})
+	}
+	return nil
 }
 
 func validateClaudePortableArguments(arguments []string) error {

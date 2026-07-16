@@ -73,6 +73,103 @@ func TestClaudePortableRuntimeSharedAssetsDeduplicate(t *testing.T) {
 	}
 }
 
+func TestClaudePortableRuntimeMixedStateProjection(t *testing.T) {
+	assertSharedClaudePortableMixedStateProjection(t, true)
+	assertClaudePortableProjectionEdgeCases(t)
+}
+
+func TestClaudeTUIPortableRuntimeMixedStateProjection(t *testing.T) {
+	assertSharedClaudePortableMixedStateProjection(t, false)
+	assertClaudePortableProjectionEdgeCases(t)
+}
+
+func assertClaudePortableProjectionEdgeCases(t *testing.T) {
+	t.Helper()
+	t.Run("mutable-only uses data scope", func(t *testing.T) {
+		contribution := harnesses.PortableRuntimeContribution{Assets: []harnesses.PortableRuntimeAsset{{Kind: harnesses.PortableRuntimeAssetCredential, Target: claudePortableCredentialTarget}}}
+		if err := projectClaudePortableState(&contribution); err != nil {
+			t.Fatal(err)
+		}
+		if len(contribution.StateProjections) != 0 || len(contribution.ExecutionConstraints.Environment) != 1 || contribution.ExecutionConstraints.Environment[0].GuestPath != (harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "claude"}) {
+			t.Fatalf("mutable-only projection = %#v, constraints = %#v", contribution.StateProjections, contribution.ExecutionConstraints.Environment)
+		}
+	})
+	t.Run("config-only fails closed", func(t *testing.T) {
+		contribution := harnesses.PortableRuntimeContribution{Assets: []harnesses.PortableRuntimeAsset{{Kind: harnesses.PortableRuntimeAssetConfig, Target: claudePortableConfigTarget}}}
+		if err := projectClaudePortableState(&contribution); !errors.Is(err, harnesses.ErrPortableRuntimeClosureIncomplete) {
+			t.Fatalf("config-only error = %v", err)
+		}
+	})
+}
+
+func assertSharedClaudePortableMixedStateProjection(t *testing.T, printMode bool) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("portable runtime v0.15 is Linux-only")
+	}
+	clearClaudePortableEnvironment(t)
+	home := filepath.Join(t.TempDir(), "account-bearing-mixed-state-home")
+	launcher := buildSharedClaudePortableFixture(t, home)
+	registerSharedClaudePortableFixture(t, launcher)
+	root := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(filepath.Join(root, "cache"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeSharedClaudePortableFile(t, filepath.Join(root, ".credentials.json"), `{"claudeAiOauth":{"accessToken":"projection-credential-secret"}}`)
+	writeSharedClaudePortableFile(t, filepath.Join(root, "settings.json"), `{"model":"sonnet"}`)
+	writeSharedClaudePortableFile(t, filepath.Join(root, "cache", "seed"), "projection-cache-secret")
+	t.Setenv("HOME", home)
+	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", filepath.Join(t.TempDir(), "absent-quota.json"))
+
+	options := ClaudePortableRuntimeOptions{Launcher: launcher, EnvironmentPrefixes: []string{"CLAUDE_"}}
+	if printMode {
+		options.EnvironmentPrefixes = []string{"ANTHROPIC_", "CLAUDE_"}
+		options.InheritsProcessEnvironment = true
+	}
+	contribution, err := ClaudePortableRuntimeAssets(context.Background(), harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}, options)
+	if err != nil {
+		t.Fatalf("mixed-state contribution error = %v", err)
+	}
+	if len(contribution.StateProjections) != 1 {
+		t.Fatalf("state projections = %#v", contribution.StateProjections)
+	}
+	projection := contribution.StateProjections[0]
+	wantDirectory := harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "claude"}
+	if projection.Directory != wantDirectory {
+		t.Fatalf("projection directory = %#v, want %#v", projection.Directory, wantDirectory)
+	}
+	entries := make(map[string]string, len(projection.Entries))
+	for _, entry := range projection.Entries {
+		if _, exists := entries[entry.AssetTarget]; exists {
+			t.Fatalf("asset projected twice: %#v", entry)
+		}
+		entries[entry.AssetTarget] = entry.Target
+	}
+	for target, output := range map[string]string{
+		claudePortableConfigTarget:     "settings.json",
+		claudePortableCredentialTarget: ".credentials.json",
+		claudePortableCacheTarget:      "cache",
+	} {
+		if entries[target] != output {
+			t.Errorf("projection entry %q = %q, want %q", target, entries[target], output)
+		}
+	}
+	for _, asset := range contribution.Assets {
+		if (asset.Kind == harnesses.PortableRuntimeAssetCredential || asset.Kind == harnesses.PortableRuntimeAssetCache || asset.Kind == harnesses.PortableRuntimeAssetQuota) && strings.HasPrefix(asset.Target, "home/") {
+			t.Errorf("home-scoped mutable asset remains unprojectable: %#v", asset)
+		}
+	}
+	foundConstraint := false
+	for _, constraint := range contribution.ExecutionConstraints.Environment {
+		if constraint.Name == "CLAUDE_CONFIG_DIR" {
+			foundConstraint = constraint.Kind == harnesses.PortableRuntimeEnvironmentGuestPath && constraint.GuestPath == wantDirectory
+		}
+	}
+	if !foundConstraint {
+		t.Fatalf("CLAUDE_CONFIG_DIR constraint = %#v", contribution.ExecutionConstraints.Environment)
+	}
+}
+
 func TestClaudePortableRuntimeOptionalStateAbsent(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("portable runtime v0.15 is Linux-only")
@@ -96,7 +193,7 @@ func TestClaudePortableRuntimeOptionalStateAbsent(t *testing.T) {
 		t.Fatalf("optional state contribution error = %v", err)
 	}
 	for _, asset := range contribution.Assets {
-		for _, absent := range []string{"home/.claude/settings.json", "home/.claude/cache", "state/fizeau/claude-quota.json"} {
+		for _, absent := range []string{claudePortableConfigTarget, claudePortableCacheTarget, claudePortableQuotaTarget} {
 			if asset.Target == absent {
 				t.Fatalf("absent optional state emitted as %#v", asset)
 			}

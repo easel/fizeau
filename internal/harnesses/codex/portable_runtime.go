@@ -19,10 +19,12 @@ import (
 
 const (
 	codexPortableEntrypointTarget = "harnesses/codex/bin/codex"
-	codexPortableConfigTarget     = "home/.codex/config.toml"
-	codexPortableAuthTarget       = "home/.codex/auth.json"
-	codexPortableModelsTarget     = "home/.codex/models_cache.json"
-	codexPortableCacheTarget      = "home/.codex/cache"
+	codexPortableConfigRoot       = "config/codex"
+	codexPortableDataRoot         = "data/codex"
+	codexPortableConfigTarget     = codexPortableConfigRoot + "/config.toml"
+	codexPortableAuthTarget       = codexPortableDataRoot + "/auth.json"
+	codexPortableModelsTarget     = codexPortableDataRoot + "/models_cache.json"
+	codexPortableCacheTarget      = codexPortableDataRoot + "/cache"
 	codexPortableQuotaTarget      = "state/fizeau/codex-quota.json"
 	codexPortableMaxMetadataBytes = 8 << 20
 )
@@ -135,7 +137,50 @@ func (r *Runner) portableRuntimeAssets(ctx context.Context, target harnesses.Por
 	}
 
 	contribution.Environment = environment
+	if err := projectCodexPortableState(&contribution); err != nil {
+		return harnesses.PortableRuntimeContribution{}, err
+	}
 	return harnesses.NormalizePortableRuntimeContribution(target, contribution)
+}
+
+func projectCodexPortableState(contribution *harnesses.PortableRuntimeContribution) error {
+	if contribution == nil {
+		return nil
+	}
+	projection := harnesses.PortableRuntimeStateProjection{
+		Directory: harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "codex"},
+	}
+	hasConfig := false
+	hasWritable := false
+	for _, asset := range contribution.Assets {
+		var relative string
+		switch {
+		case asset.Kind == harnesses.PortableRuntimeAssetConfig && strings.HasPrefix(asset.Target, codexPortableConfigRoot+"/"):
+			relative = strings.TrimPrefix(asset.Target, codexPortableConfigRoot+"/")
+			hasConfig = true
+		case (asset.Kind == harnesses.PortableRuntimeAssetCredential || asset.Kind == harnesses.PortableRuntimeAssetCache) && strings.HasPrefix(asset.Target, codexPortableDataRoot+"/"):
+			relative = strings.TrimPrefix(asset.Target, codexPortableDataRoot+"/")
+			hasWritable = true
+		default:
+			continue
+		}
+		projection.Entries = append(projection.Entries, harnesses.PortableRuntimeStateProjectionEntry{AssetTarget: asset.Target, Target: relative})
+	}
+
+	guestPath := harnesses.PortableRuntimeGuestPath{}
+	if hasConfig && hasWritable {
+		contribution.StateProjections = append(contribution.StateProjections, projection)
+		guestPath = projection.Directory
+	} else if hasWritable {
+		guestPath = harnesses.PortableRuntimeGuestPath{Scope: harnesses.PortableRuntimeGuestPathData, Target: "codex"}
+	} else if hasConfig {
+		return codexPortableError("configuration has no activation-owned state boundary")
+	}
+	if guestPath.Scope != "" {
+		contribution.ExecutionConstraints.Environment = append(contribution.ExecutionConstraints.Environment,
+			harnesses.PortableRuntimeEnvironmentConstraint{Name: "CODEX_HOME", Kind: harnesses.PortableRuntimeEnvironmentGuestPath, GuestPath: guestPath})
+	}
+	return nil
 }
 
 func resolveCodexPortableEntrypoint(launcher string, target harnesses.PortableRuntimeTarget) (string, error) {
