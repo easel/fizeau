@@ -19,6 +19,7 @@ import (
 // See CONTRACT-003 for the full specification.
 type FizeauService interface {
 	Execute(ctx context.Context, req ServiceExecuteRequest) (<-chan ServiceEvent, error)
+	Continue(ctx context.Context, req ServiceContinuationRequest) (<-chan ServiceEvent, error)
 	TailSessionLog(ctx context.Context, sessionID string) (<-chan ServiceEvent, error)
 	ListHarnesses(ctx context.Context) ([]HarnessInfo, error)
 	ListProviders(ctx context.Context) ([]ProviderInfo, error)

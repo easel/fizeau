@@ -10,6 +10,9 @@ import (
 
 // SessionStartData is the data payload for a session.start event.
 type SessionStartData struct {
+	ParentSessionID        string                  `json:"parent_session_id,omitempty"`
+	ContinuationPolicy     string                  `json:"continuation_policy,omitempty"`
+	Continuation           string                  `json:"continuation,omitempty"`
 	Provider               string                  `json:"provider"`
 	Model                  string                  `json:"model"`
 	SelectedProvider       string                  `json:"selected_provider,omitempty"`
@@ -84,6 +87,9 @@ type ToolCallData struct {
 
 // SessionEndData is the data payload for a session.end event.
 type SessionEndData struct {
+	ParentSessionID        string                   `json:"parent_session_id,omitempty"`
+	ContinuationPolicy     string                   `json:"continuation_policy,omitempty"`
+	Continuation           string                   `json:"continuation,omitempty"`
 	Status                 agent.Status             `json:"status"`
 	Outcome                harnesses.SessionOutcome `json:"outcome,omitempty"`
 	Cause                  harnesses.TerminalCause  `json:"cause,omitempty"`

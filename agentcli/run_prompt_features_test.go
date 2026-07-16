@@ -219,6 +219,10 @@ func (s stubFizeauService) Execute(ctx context.Context, req fizeau.ServiceExecut
 	return s.executeFn(ctx, req)
 }
 
+func (stubFizeauService) Continue(context.Context, fizeau.ServiceContinuationRequest) (<-chan fizeau.ServiceEvent, error) {
+	panic("unexpected Continue call")
+}
+
 func (stubFizeauService) TailSessionLog(context.Context, string) (<-chan fizeau.ServiceEvent, error) {
 	panic("unexpected TailSessionLog call")
 }

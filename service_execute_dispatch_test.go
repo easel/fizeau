@@ -41,8 +41,7 @@ func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 		t.Fatal("missing (*service).Execute implementation")
 	}
 
-	validated := map[string]bool{}
-	var coordinatorLiterals, runResolvedCalls int
+	var coordinatorLiterals, runResolvedCalls, validationCalls int
 	ast.Inspect(execute.Body, func(node ast.Node) bool {
 		switch n := node.(type) {
 		case *ast.GoStmt:
@@ -70,8 +69,8 @@ func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 						t.Error("root Execute makes a channel; it must return the coordinator stream")
 					}
 				}
-				if _, ok := requiredExecuteValidators[fn.Name]; ok {
-					validated[fn.Name] = true
+				if fn.Name == "validateServiceExecuteRequest" {
+					validationCalls++
 				}
 			case *ast.SelectorExpr:
 				if fn.Sel.Name == "RunResolved" {
@@ -82,9 +81,29 @@ func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 		return true
 	})
 
+	if validationCalls != 1 {
+		t.Errorf("root Execute validation calls = %d, want exactly 1 shared preflight", validationCalls)
+	}
+	preflight := findRootFunction(files, "validateServiceExecuteRequest")
+	if preflight == nil || preflight.Body == nil {
+		t.Fatal("missing shared Execute request preflight")
+	}
+	validated := map[string]bool{}
+	ast.Inspect(preflight.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			if _, required := requiredExecuteValidators[ident.Name]; required {
+				validated[ident.Name] = true
+			}
+		}
+		return true
+	})
 	for name := range requiredExecuteValidators {
 		if !validated[name] {
-			t.Errorf("root Execute no longer performs public boundary validation via %s", name)
+			t.Errorf("shared Execute preflight no longer validates via %s", name)
 		}
 	}
 	if coordinatorLiterals != 1 {
@@ -96,10 +115,23 @@ func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 }
 
 var requiredExecuteValidators = map[string]struct{}{
+	"validateMaxTokens":     {},
 	"ValidateCachePolicy":   {},
 	"ValidatePowerBounds":   {},
 	"ValidateRole":          {},
 	"ValidateCorrelationID": {},
+}
+
+func findRootFunction(files map[string]*ast.File, name string) *ast.FuncDecl {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if ok && fn.Recv == nil && fn.Name.Name == name {
+				return fn
+			}
+		}
+	}
+	return nil
 }
 
 func TestExecuteDispatcherMovesConcreteRunnerSelectionOutOfExecuteLoop(t *testing.T) {

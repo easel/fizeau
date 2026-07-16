@@ -430,23 +430,25 @@ const (
 )
 
 type ServiceFinalData struct {
-	Status         string                `json:"status"`
-	Outcome        SessionOutcome        `json:"outcome"`
-	Cause          TerminalCause         `json:"cause"`
-	Stage          SessionStage          `json:"stage"`
-	PrimaryOutcome SessionOutcome        `json:"primary_outcome,omitempty"`
-	PrimaryCause   TerminalCause         `json:"primary_cause,omitempty"`
-	PrimaryStage   SessionStage          `json:"primary_stage,omitempty"`
-	ExitCode       int                   `json:"exit_code"`
-	Error          string                `json:"error,omitempty"`
-	FinalText      string                `json:"final_text,omitempty"`
-	DurationMS     int64                 `json:"duration_ms"`
-	Usage          *ServiceFinalUsage    `json:"usage,omitempty"`
-	Warnings       []ServiceFinalWarning `json:"warnings,omitempty"`
-	CostUSD        *float64              `json:"cost_usd,omitempty"`
-	CostSource     CostSource            `json:"cost_source"`
-	SessionLogPath string                `json:"session_log_path,omitempty"`
-	RoutingActual  *ServiceRoutingActual `json:"routing_actual,omitempty"`
+	Status          string                  `json:"status"`
+	Outcome         SessionOutcome          `json:"outcome"`
+	Cause           TerminalCause           `json:"cause"`
+	Stage           SessionStage            `json:"stage"`
+	PrimaryOutcome  SessionOutcome          `json:"primary_outcome,omitempty"`
+	PrimaryCause    TerminalCause           `json:"primary_cause,omitempty"`
+	PrimaryStage    SessionStage            `json:"primary_stage,omitempty"`
+	ExitCode        int                     `json:"exit_code"`
+	Error           string                  `json:"error,omitempty"`
+	FinalText       string                  `json:"final_text,omitempty"`
+	DurationMS      int64                   `json:"duration_ms"`
+	Usage           *ServiceFinalUsage      `json:"usage,omitempty"`
+	Warnings        []ServiceFinalWarning   `json:"warnings,omitempty"`
+	CostUSD         *float64                `json:"cost_usd,omitempty"`
+	CostSource      CostSource              `json:"cost_source"`
+	SessionLogPath  string                  `json:"session_log_path,omitempty"`
+	RoutingActual   *ServiceRoutingActual   `json:"routing_actual,omitempty"`
+	ParentSessionID string                  `json:"parent_session_id,omitempty"`
+	Continuation    ContinuationDisposition `json:"continuation,omitempty"`
 }
 
 // ServiceFinalUsage is the public token-usage payload emitted on service
@@ -632,21 +634,23 @@ type DrainExecuteResult struct {
 	RejectedOverride *ServiceOverrideData
 	Final            *ServiceFinalData
 
-	FinalStatus    string
-	Outcome        SessionOutcome
-	Cause          TerminalCause
-	Stage          SessionStage
-	PrimaryOutcome SessionOutcome
-	PrimaryCause   TerminalCause
-	PrimaryStage   SessionStage
-	FinalText      string
-	Usage          *ServiceFinalUsage
-	Warnings       []ServiceFinalWarning
-	CostUSD        *float64
-	CostSource     CostSource
-	SessionLogPath string
-	RoutingActual  *ServiceRoutingActual
-	TerminalError  string
+	FinalStatus     string
+	Outcome         SessionOutcome
+	Cause           TerminalCause
+	Stage           SessionStage
+	PrimaryOutcome  SessionOutcome
+	PrimaryCause    TerminalCause
+	PrimaryStage    SessionStage
+	FinalText       string
+	Usage           *ServiceFinalUsage
+	Warnings        []ServiceFinalWarning
+	CostUSD         *float64
+	CostSource      CostSource
+	SessionLogPath  string
+	RoutingActual   *ServiceRoutingActual
+	ParentSessionID string
+	Continuation    ContinuationDisposition
+	TerminalError   string
 }
 
 func DrainExecute(ctx context.Context, events <-chan ServiceEvent) (*DrainExecuteResult, error) {
@@ -709,6 +713,8 @@ func (r *DrainExecuteResult) append(ev ServiceDecodedEvent) {
 		r.CostSource = source
 		r.SessionLogPath = ev.Final.SessionLogPath
 		r.RoutingActual = ev.Final.RoutingActual
+		r.ParentSessionID = ev.Final.ParentSessionID
+		r.Continuation = ev.Final.Continuation
 		r.TerminalError = ev.Final.Error
 	}
 }

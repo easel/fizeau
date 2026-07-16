@@ -90,14 +90,50 @@ type (
 	SessionEvent     = agentcore.Event
 	SessionEventType = agentcore.EventType
 	SessionStatus    = agentcore.Status
-	SessionStartData = session.SessionStartData
 	TokenUsage       = agentcore.TokenUsage
 )
+
+// SessionStartData is the root-owned public projection of a durable
+// session.start record. Keep it wire-compatible with the internal persistence
+// payload while retaining public type identity for continuation fields.
+type SessionStartData struct {
+	ParentSessionID        string                         `json:"parent_session_id,omitempty"`
+	ContinuationPolicy     ContinuationPolicy             `json:"continuation_policy,omitempty"`
+	Continuation           ContinuationDisposition        `json:"continuation,omitempty"`
+	Provider               string                         `json:"provider"`
+	Model                  string                         `json:"model"`
+	SelectedProvider       string                         `json:"selected_provider,omitempty"`
+	SelectedEndpoint       string                         `json:"selected_endpoint,omitempty"`
+	SelectedServerInstance string                         `json:"selected_server_instance,omitempty"`
+	SelectedRoute          string                         `json:"selected_route,omitempty"`
+	Sticky                 ServiceRoutingStickyState      `json:"sticky,omitempty"`
+	Utilization            ServiceRoutingUtilizationState `json:"utilization,omitempty"`
+	RequestedHarness       string                         `json:"requested_harness,omitempty"`
+	ResolvedHarness        string                         `json:"resolved_harness,omitempty"`
+	HarnessSource          string                         `json:"harness_source,omitempty"`
+	RequestedModel         string                         `json:"requested_model,omitempty"`
+	ResolvedModel          string                         `json:"resolved_model,omitempty"`
+	Reasoning              Reasoning                      `json:"reasoning,omitempty"`
+	ReasoningIntent        Reasoning                      `json:"reasoning_intent,omitempty"`
+	ReasoningEmitted       Reasoning                      `json:"reasoning_emitted,omitempty"`
+	ResolvedReasoning      Reasoning                      `json:"resolved_reasoning,omitempty"`
+	ReasoningSource        string                         `json:"reasoning_source,omitempty"`
+	AttemptedProviders     []string                       `json:"attempted_providers,omitempty"`
+	FailoverCount          int                            `json:"failover_count,omitempty"`
+	WorkDir                string                         `json:"work_dir"`
+	MaxIterations          int                            `json:"max_iterations"`
+	Prompt                 string                         `json:"prompt"`
+	SystemPrompt           string                         `json:"system_prompt,omitempty"`
+	Metadata               map[string]string              `json:"metadata,omitempty"`
+}
 
 // SessionEndData is the root-owned public projection of a durable
 // session.end record. Keep it wire-compatible with the internal persistence
 // payload, while retaining public type identity for terminal classifications.
 type SessionEndData struct {
+	ParentSessionID        string                         `json:"parent_session_id,omitempty"`
+	ContinuationPolicy     ContinuationPolicy             `json:"continuation_policy,omitempty"`
+	Continuation           ContinuationDisposition        `json:"continuation,omitempty"`
 	Status                 SessionStatus                  `json:"status"`
 	Outcome                SessionOutcome                 `json:"outcome,omitempty"`
 	Cause                  TerminalCause                  `json:"cause,omitempty"`

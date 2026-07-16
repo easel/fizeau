@@ -53,6 +53,10 @@ func Replay(path string, w io.Writer) error {
 			}
 			fmt.Fprintf(w, "=== Session %s ===\n", e.SessionID)
 			fmt.Fprintf(w, "Time: %s\n", e.Timestamp.Format("2006-01-02 15:04:05 UTC"))
+			if data.ParentSessionID != "" {
+				fmt.Fprintf(w, "Parent session: %s | Continuation requested: %s | Actual: %s\n",
+					data.ParentSessionID, data.ContinuationPolicy, data.Continuation)
+			}
 			fmt.Fprintf(w, "Provider: %s | Model: %s\n", data.Provider, data.Model)
 			if data.SelectedEndpoint != "" {
 				fmt.Fprintf(w, "Selected endpoint: %s\n", data.SelectedEndpoint)
@@ -138,6 +142,10 @@ func Replay(path string, w io.Writer) error {
 				continue
 			}
 			fmt.Fprintf(w, "\n=== End (%s) ===\n", data.Status)
+			if data.ParentSessionID != "" {
+				fmt.Fprintf(w, "Parent session: %s | Continuation requested: %s | Actual: %s\n",
+					data.ParentSessionID, data.ContinuationPolicy, data.Continuation)
+			}
 			if data.Model != "" {
 				fmt.Fprintf(w, "Model: %s\n", data.Model)
 			}

@@ -39,22 +39,7 @@ func generateSessionID() string {
 // still be supplied for the native path until provider construction lands
 // in a follow-up.
 func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-chan ServiceEvent, error) {
-	if err := validateMaxTokens(req.MaxTokens); err != nil {
-		return nil, err
-	}
-	// Boundary validation: reject unknown CachePolicy values before any
-	// session state is opened or events are emitted. Beads C/D consume this
-	// field; an unknown value is a caller programming error.
-	if err := ValidateCachePolicy(req.CachePolicy); err != nil {
-		return nil, err
-	}
-	if err := ValidatePowerBounds(req.MinPower, req.MaxPower); err != nil {
-		return nil, err
-	}
-	if err := ValidateRole(req.Role); err != nil {
-		return nil, err
-	}
-	if err := ValidateCorrelationID(req.CorrelationID); err != nil {
+	if err := validateServiceExecuteRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -122,6 +107,32 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 		s.executeCoordinatorRequest(req, *decision, sessionID, overrideCtx),
 		s.executeCoordinatorPorts(req, *decision, sessionID, overrideCtx),
 	), nil
+}
+
+// validateServiceExecuteRequest is the side-effect-free public Execute
+// boundary. Keep validation order stable: callers rely on the first error, and
+// Continue must apply the same rules to an effective fresh request without
+// opening routing, session, log, or process state.
+func validateServiceExecuteRequest(req ServiceExecuteRequest) error {
+	if err := validateMaxTokens(req.MaxTokens); err != nil {
+		return err
+	}
+	// Boundary validation: reject unknown CachePolicy values before any
+	// session state is opened or events are emitted. Beads C/D consume this
+	// field; an unknown value is a caller programming error.
+	if err := ValidateCachePolicy(req.CachePolicy); err != nil {
+		return err
+	}
+	if err := ValidatePowerBounds(req.MinPower, req.MaxPower); err != nil {
+		return err
+	}
+	if err := ValidateRole(req.Role); err != nil {
+		return err
+	}
+	if err := ValidateCorrelationID(req.CorrelationID); err != nil {
+		return err
+	}
+	return nil
 }
 
 // resolveExecuteRoute reduces the request to a concrete RouteDecision.
