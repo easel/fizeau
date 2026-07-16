@@ -14,20 +14,20 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 00293cfba03606a65035a4a610a6541270c0db7e766a6495bbed9684f9a7954c
+    self_hash: e2b7f6eac62a08c680ce6257711bd24b828aa33e34abb4b1664a49a8b8aa9973
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
       ADR-014: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
-      CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
+      CONTRACT-004: 409f5c347ed33bd68caf004dd2eb4840a41e803f601a4e88f6e305ed8b30f89d
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       TP-001: 6c4ab91699f822620ed7176769f969bc7f54b3ed1b1233e4d0643548f40cfdb9
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T11:01:22Z"
+    reviewed_at: "2026-07-16T21:51:19Z"
 ---
 # Build Plan — Fizeau
 
@@ -117,7 +117,7 @@ queue remains authoritative for claim, progress, and close state.
 | L-3 PTY and auxiliary containment | Route PTY sessions, `claude-tui`, quota/account/model-discovery probes, health checks, and subprocess helpers through the same per-invocation lease | L-2 | A successful `claude-tui` invocation leaves no live Claude or PTY process; contextual probes cancel and clean up; structural checks reject cross-invocation live pools |
 | L-4 Windows and unsupported platforms | Add suspended creation, non-inheritable kill-on-job-close assignment before resume, and fail-before-spawn rejection where no equivalent boundary exists | L-3 | Injectable Windows adapter tests prove ordering and failure cleanup; a Windows live-grandchild run is required before claiming Windows execution support; unsupported-platform tests prove no child starts |
 | L-5 Service cleanup and recovery | Connect lifecycle results to exactly-one service terminalization, cleanup precedence, caller-death persistence, and stale recovery | L-4 | Caller-alive terminal delivery follows cleanup success or deadline; `cleanup_failed` preserves the primary tuple and lifecycle record |
-| L-6 Harness-neutral continuation | Add continuation only after shared cleanup and recovery semantics are stable | L-5 | Every continuation attempt starts a fresh containment boundary and reports the contract-defined disposition without retaining a live subprocess |
+| L-6 Optional route-owned harness continuation | Add continuation only after shared cleanup and recovery semantics are stable; v0.15 native-provider routes remain unsupported | L-5 | Resume preparation creates no child, lease, process, or event. Unsupported `require_resume` returns without a child; unavailable `prefer_resume` may take one ordinary fresh path, and `fresh_session` never probes resume capability. After successful preparation, the resumed child gets a new Fizeau session and fresh lifecycle lease/containment; `Start` runs once after lease acquisition and a `Start` failure never falls back fresh. Every permitted fresh child gets its own session, lease, and containment |
 
 No slice may substitute cassette evidence for OS containment evidence. Cassettes
 cover terminal/protocol projection; live subprocess fixtures cover process
@@ -167,9 +167,9 @@ preselected route.
 | Slice | Goal | Depends On | Validation Gate |
 |---|---|---|---|
 | P-0 Authority alignment | Align CONTRACT-003 public opacity/completeness, CONTRACT-004 harness ownership, ADR-014, this plan, and release gates | Lifecycle containment authority | HELIX graph validation and freshness checks pass; same-target and complete-or-error rules are unambiguous |
-| P-1 Complete runtime inventory | Join the production registry to actual service instances, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes, value-opaque execution constraints, and normalized mixed-state projections through `PortableRuntimeHarness`, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; interpreted contributors supply reviewed exact interpreter size/SHA identities and exhaustive native-addon declarations that the neutral analyzer verifies from retained root/member descriptors and immutable package snapshots without `PATH`, shebang selection, or blind `.node` scanning; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`, `TestPortableRuntimeNodeInterpreterIdentity`, `TestPortableRuntimeNodeInterpreterRejectsRPATH`, `TestPortableRuntimeNodeAddonDeclaration`, `TestPortableRuntimeNodeAddonDescriptorIdentity`, `TestPortableRuntimeNodeAddonELFPolicy`, and `TestPortableRuntimeNodeAddonClosure` pass; ordering, merge-before-prune, dedupe/conflict, package-tree ownership, target mismatch, inherited-name, typed environment/path constraint, mixed-state projection, standalone fixed-flag, and typed fixed option/value rules are deterministic without raw environment values |
+| P-1 Complete runtime inventory | Join the production registry to actual service instances, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes, value-opaque execution constraints, and normalized mixed-state projections through `PortableRuntimeHarness`, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; interpreted contributors supply reviewed exact interpreter size/SHA identities and exhaustive native-addon declarations that the neutral analyzer verifies from retained root/member descriptors and immutable package snapshots without `PATH`, shebang selection, or blind `.node` scanning; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`, `TestPortableRuntimeNodeInterpreterIdentity`, `TestPortableRuntimeNodeInterpreterRejectsRPATH`, `TestPortableRuntimeNodeAddonDeclaration`, `TestPortableRuntimeNodeAddonDescriptorIdentity`, `TestPortableRuntimeNodeAddonELFPolicy`, `TestPortableRuntimeNodeAddonClosure`, and `TestPortableRuntimeInventoryIncludesGeminiAndPi` pass; ordering, merge-before-prune, dedupe/conflict, package-tree ownership, target mismatch, inherited-name, typed environment/path constraint, mixed-state projection, standalone fixed-flag, and typed fixed option/value rules are deterministic without raw environment values. Gemini and Pi execution receives the exact configured runner retained by the portable inventory; no fresh competing constructor is used |
 | P-2 Secure materialization | Stage one sibling tree, revalidate the empty caller directory by identity, commit one `runtime` child with no-replace rename, emit one fixed read-only guest mount, persist normalized projections, distinguish unprojected prefix-preserving seeds from projection-consumed seeds, revalidate every source identity/content/type/symlink condition while copying, and retain retryable cleanup ownership | P-1 | `TestPortableRuntimeMixedStateProjection` plus filesystem fixtures cover deterministic private persistence, concurrent preparers, traversal, links, source identity/content races, partial failure, cancellation, modes, redaction, both seed classifications, and failed-then-retried `Close` |
-| P-3 Public activation and OCI conformance | Add the opaque root facade plus `NewFromPortableRuntime`; reconstruct the configured service and production dispatch mapping in a separate public-only process from the fixed guest manifest before unpinned `Execute`; copy unprojected prefix seeds and generically assemble projected mixed native directories through namespace-owned immutable boundaries | P-2 | `TestPortableRuntimeActivationFeedsProductionDispatch`, `TestPortableRuntimeProjectionDeniesConfigMutation`, and required non-root Linux OCI execute each static, dynamic, and interpreted recipe through unpinned `Execute`; prove projected config write/unlink/rename/replacement/shadow denial while credential refresh, lock creation, and sibling state creation succeed; prove an unprojected OpenCode credential seed is readable while sibling data remains writable; and cover opaque environment inheritance, configured-provider bootstrap, and structural candidate parity without skipping |
+| P-3 Public activation and OCI conformance | Add the opaque root facade plus `NewFromPortableRuntime`; reconstruct the configured service and production dispatch mapping in a separate public-only process from the fixed guest manifest before unpinned `Execute`; copy unprojected prefix seeds and generically assemble projected mixed native directories through namespace-owned immutable boundaries | P-2 | `TestPortableRuntimeActivationFeedsProductionDispatch`, `TestPortableRuntimeProjectionDeniesConfigMutation`, `TestPortableRuntimeInventoryUsesGeminiAndPiDispatchInstances`, `TestDispatchExecuteRunSelectsExplicitHarnessRunner`, `TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner`, and required non-root Linux OCI execute each static, dynamic, and interpreted recipe through unpinned `Execute`; Gemini/Pi use the exact configured inventory-owned runner and fail before subprocess dispatch when it is absent or identity-mismatched; prove projected config write/unlink/rename/replacement/shadow denial while credential refresh, lock creation, and sibling state creation succeed; prove an unprojected OpenCode credential seed is readable while sibling data remains writable; and cover opaque environment inheritance, configured-provider bootstrap, and structural candidate parity without skipping |
 
 ## Issue Decomposition
 
@@ -230,6 +230,12 @@ evidence that prevents an unowned path from remaining.
 - [ ] Compile the public portable-runtime request, opaque bundle, and separate
       `NewFromPortableRuntime` consumer fixture; prove the plan contains no
       routing selector, original source path, or environment value.
+- [ ] Run `TestPortableRuntimeInventoryIncludesGeminiAndPi`,
+      `TestPortableRuntimeInventoryUsesGeminiAndPiDispatchInstances`,
+      `TestDispatchExecuteRunSelectsExplicitHarnessRunner`, and
+      `TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner`; prove
+      Gemini/Pi dispatch consumes the exact configured inventory-owned runner
+      and fails before subprocess dispatch when it is absent or mismatched.
 - [ ] Exercise empty-root identity, one-child no-replace commit, concurrent
       preparers, copied-symlink/hardlink rejection or re-creation, traversal,
       source identity/content races, restrictive modes, cancellation, rollback,

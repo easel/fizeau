@@ -15,8 +15,8 @@ ddx:
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
-      CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
-    reviewed_at: "2026-07-16T10:47:59Z"
+      CONTRACT-004: 409f5c347ed33bd68caf004dd2eb4840a41e803f601a4e88f6e305ed8b30f89d
+    reviewed_at: "2026-07-16T21:41:14Z"
 ---
 # ADR-014: Universal Harness Interface
 

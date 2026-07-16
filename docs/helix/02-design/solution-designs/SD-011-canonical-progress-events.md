@@ -12,10 +12,10 @@ ddx:
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
-      CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
+      CONTRACT-004: 409f5c347ed33bd68caf004dd2eb4840a41e803f601a4e88f6e305ed8b30f89d
       FEAT-005: 5b479bd3a3b1dede6630f99fcc6a1d26da118eb8f891a1145b59cfa76d4c272b
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T10:47:59Z"
+    reviewed_at: "2026-07-16T21:41:15Z"
 ---
 # Solution Design: SD-011 — Canonical Progress Events
 

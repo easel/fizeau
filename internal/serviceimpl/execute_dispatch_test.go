@@ -75,19 +75,28 @@ func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
 
 func TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner(t *testing.T) {
 	for _, name := range []string{"gemini", "pi"} {
-		t.Run(name, func(t *testing.T) {
-			var subprocess bool
-			var final harnesses.FinalData
-			DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
-				Decision: ExecuteRunnerDecision{Harness: name, Model: "fixture-model"},
-				Started:  time.Now(),
-			}, ExecuteDispatchCallbacks{
-				RunSubprocess: func(context.Context, harnesses.Harness) { subprocess = true },
-				Finalize:      func(got harnesses.FinalData) { final = got },
+		for _, tc := range []struct {
+			name       string
+			configured harnesses.Harness
+		}{
+			{name: "missing"},
+			{name: "mismatched", configured: builtin.New("codex")},
+		} {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				var subprocess bool
+				var final harnesses.FinalData
+				DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
+					Decision:          ExecuteRunnerDecision{Harness: name, Model: "fixture-model"},
+					ConfiguredHarness: tc.configured,
+					Started:           time.Now(),
+				}, ExecuteDispatchCallbacks{
+					RunSubprocess: func(context.Context, harnesses.Harness) { subprocess = true },
+					Finalize:      func(got harnesses.FinalData) { final = got },
+				})
+				if subprocess || final.Status != "failed" || final.RoutingActual == nil || final.RoutingActual.Harness != name {
+					t.Fatalf("%s configured runner dispatch = subprocess:%v final:%#v", tc.name, subprocess, final)
+				}
 			})
-			if subprocess || final.Status != "failed" || final.RoutingActual == nil || final.RoutingActual.Harness != name {
-				t.Fatalf("missing configured runner dispatch = subprocess:%v final:%#v", subprocess, final)
-			}
-		})
+		}
 	}
 }
