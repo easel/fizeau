@@ -7,13 +7,13 @@ ddx:
     - CONTRACT-003
     - ADR-008
   review:
-    self_hash: 09861f7103db1731b221dde6bdf3283f5f2992ae08fc920da1f3f07f7e825e99
+    self_hash: a2643fb1f1e3d047d6e4ca6a77168666893950dd42e7da1204c979685da33fee
     deps:
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
-      CONTRACT-003: 46ca28e03ead881ed812c198f19d6d077fbafa2494f3a7716c704f0e360c0694
+      CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
       FEAT-006: 1c78778fcc8efa7fe750cf233719c21f1f6b07ce6b098c48f6d42855d57faa07
       SD-001: 7123b4d558d2ddd35289bf49390fde9e00b52081cbe90de37986d13fbbf36988
-    reviewed_at: "2026-07-16T07:25:15Z"
+    reviewed_at: "2026-07-16T10:47:59Z"
 ---
 # Solution Design: SD-002 — Mountable CLI and Standalone Binary
 
@@ -104,6 +104,14 @@ selected route's resolved context value and source are authoritative for
 execution and final routing attribution; a request-local compaction bound may
 only tighten that value.
 
+Final cost follows the same service boundary. The CLI consumes CONTRACT-003's
+optional amount and normalized `reported`, `configured`, or `unknown` source
+without reconstructing presence from the numeric value. JSON output always
+includes `cost_source`, omits `cost_usd` when the amount is unknown, and
+preserves known zero and positive amounts. Human output prints every present
+amount, including zero, and omits only an unknown amount; a configured cap may
+still be shown when final cost is unknown.
+
 Routing intent uses the current ADR-009 vocabulary:
 
 - `Policy`, `MinPower`, and `MaxPower` express automatic-routing intent;
@@ -160,6 +168,9 @@ termination. Only `cmd/fiz` maps them to `os.Exit`.
 7. The v0.15 Go migration requires keyed literals for public Fizeau structs
    that gained fields. The CLI and embedding examples use keyed literals; JSON
    capacity events and fields remain additive for tolerant consumers.
+8. The v0.15 cost migration uses nil/source branching and explicit
+   dereference. CLI adapters do not compare, format, or accumulate a cost
+   pointer until amount presence and normalized provenance are established.
 
 ## Test Strategy
 
@@ -173,6 +184,9 @@ termination. Only `cmd/fiz` maps them to `os.Exit`.
 - Verify JSON and text rendering preserve the selected context value/source,
   decode additive capacity events, and use the typed terminal fact for a main
   capacity rejection without synthesizing a next-route retry.
+- Verify JSON and text rendering preserve unknown, known-zero, and positive
+  final cost with normalized source, including zero-valued human output and a
+  visible configured cap when final cost is unknown.
 - Compile public CLI/embedding fixtures with keyed v0.15 request and projection
   literals, and accept unknown future event and terminal-cause values.
 - Preserve explicit regression tests for supported compatibility flags.

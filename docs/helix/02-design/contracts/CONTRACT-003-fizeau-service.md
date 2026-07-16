@@ -3,15 +3,17 @@ ddx:
   id: CONTRACT-003
   depends_on:
     - helix.prd
+    - ADR-006
     - ADR-008
     - ADR-009
   review:
-    self_hash: 46ca28e03ead881ed812c198f19d6d077fbafa2494f3a7716c704f0e360c0694
+    self_hash: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
     deps:
+      ADR-006: 70e1de266a6e8c6289f23c05e36bc2fed2af4dc8ad131d352e40876dc46f6793
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:25:15Z"
+    reviewed_at: "2026-07-16T10:47:59Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -911,6 +913,19 @@ type ServiceFinalData struct {
     CostUSD    *float64   `json:"cost_usd,omitempty"`
     CostSource CostSource `json:"cost_source"`
 }
+
+type SessionEndData struct {
+    // Other public durable session-end fields omitted.
+    CostUSD    *float64   `json:"cost_usd,omitempty"`
+    CostSource CostSource `json:"cost_source"`
+}
+
+type ServiceOverrideOutcome struct {
+    Status     string     `json:"status"`
+    CostUSD    *float64   `json:"cost_usd,omitempty"`
+    CostSource CostSource `json:"cost_source"`
+    DurationMS int64      `json:"duration_ms"`
+}
 ```
 
 Provider- or gateway-reported billing wins and uses `reported`. Exact
@@ -921,6 +936,18 @@ reported or configured zero is a known zero, not an unknown value. Terminal
 service events always emit `cost_source`; callers must use amount presence and
 provenance together and must not infer provenance from the amount alone.
 
+These validity rules apply uniformly to `ServiceFinalData`,
+`DrainExecuteResult`, the public durable `SessionEndData` projection, and
+`ServiceOverrideOutcome`. A present amount is valid only when it is zero or
+positive and the normalized source is `reported` or `configured`. Producers
+MUST NOT emit a negative amount, infer presence from `CostUSD > 0`, infer
+provenance from the numeric value, or retain a present amount with an empty,
+`unknown`, or invalid source. Any such invalid combination normalizes to `nil`
+plus `unknown`. Legacy source-less final or `session.end` JSON remains
+decodable, but its scalar amount is not promoted to authoritative billing
+evidence; it normalizes to `nil` plus `unknown` when projected through the
+v0.15 typed surface.
+
 For a session total, any contributing turn with unknown cost makes the total
 amount `nil` and the source `unknown`. When every contributing turn is known,
 the amount is their sum: the source is `reported` if any turn used provider- or
@@ -930,6 +957,17 @@ state or discard an all-known amount. This public terminal classification does
 not replace CONTRACT-001 root-span provenance: an all-known root span whose
 turn-level provenance differs continues to emit the amount while omitting the
 root `ddx.cost.source` and `ddx.cost.pricing_ref` attributes.
+
+Accepted `override` events MUST include `ServiceOverrideOutcome` after
+execution. Its amount and source follow the same rules as the terminal
+projection: `nil` requires `unknown` and omits `cost_usd`; a present zero or
+positive amount requires `reported` or `configured` and is serialized without
+collapsing zero into absence.
+
+A pre-dispatch `rejected_override` event MUST omit `outcome` entirely because
+no execution cost exists. It MUST NOT fabricate a zero-cost outcome. Whenever
+an outcome is present, `cost_source` is mandatory even when `cost_usd` is
+omitted.
 
 ## Routing Types
 
@@ -1539,7 +1577,26 @@ selected-route context evidence, `ServiceFinalData.ContextCapacity`, and
 `ServiceDecodedEvent.ContextCapacity`—is source-breaking for external unkeyed
 composite literals. These fields ship in the v0.15 migration, whose Go guidance
 requires keyed literals for public Fizeau structs. Existing keyed literals and
-field selectors remain source-compatible.
+field selectors remain source-compatible only for additive fields whose types
+did not change.
+
+Changing `CostUSD` from `float64` to `*float64` on `ServiceFinalData`,
+`DrainExecuteResult`, and `ServiceOverrideOutcome` is a deliberate v0.15 Go
+source break. It breaks keyed literals that assign a scalar and field-selector
+expressions used directly in arithmetic, comparison, or formatting; keyed
+literals and selectors do not make a type change source-compatible. Consumers
+MUST migrate literals to `nil` for unknown or to a pointer for known zero and
+positive amounts. They MUST replace numeric presence checks such as
+`CostUSD > 0` with a nil check, inspect `CostSource`, and dereference only after
+presence is established. Formatting and arithmetic likewise operate on the
+dereferenced value, never on the pointer or on a synthesized zero.
+
+Adding mandatory `CostSource` to `ServiceFinalData`, `DrainExecuteResult`,
+`ServiceOverrideOutcome`, and the public durable `SessionEndData` projection
+is part of the same v0.15 migration. The new `SessionEndData` field is additive
+for keyed literals and JSON consumers but breaks external unkeyed literals;
+source-less historical records remain readable under the normalization rule
+above rather than being assigned guessed provenance.
 
 The JSON/event additions—`ServiceEventTypeContextCapacity`,
 `ServiceContextCapacityData`, `TerminalCauseContextCapacityExceeded`, and the
@@ -1811,6 +1868,17 @@ that prove:
     candidate identities match the prepared set; it does not equate
     network/quota health with structural parity. The opted-in job fails rather
     than skips when OCI is unavailable.
+30. `TestV015CostPointerMigrationCompile` builds an external
+    `package fizeau_test` consumer that uses keyed pointer literals, nil
+    branching, dereference, and `CostSource` inspection for
+    `ServiceFinalData`, `DrainExecuteResult`, and `ServiceOverrideOutcome`.
+    Final and override conformance fixtures also prove unknown omission, known
+    zero and positive preservation, mandatory normalized provenance, rejected
+    override outcome omission, and the absence of negative producer values or
+    numeric presence inference. `TestPublicSessionEndTypedValuesDurableRoundTrip`
+    proves the durable public projection follows the same normalization and
+    preserves source-less legacy records as unknown without fabricating an
+    amount.
 
 ## Validation Checklist
 

@@ -5,11 +5,11 @@ ddx:
     - ADR-005
     - FEAT-004
   review:
-    self_hash: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+    self_hash: 70e1de266a6e8c6289f23c05e36bc2fed2af4dc8ad131d352e40876dc46f6793
     deps:
       ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
       FEAT-004: 9761114849a85ae13627ea086fdfb1d332edda875fd81cb3769096bedc7eaeae
-    reviewed_at: "2026-07-16T07:25:15Z"
+    reviewed_at: "2026-07-16T10:35:57Z"
 ---
 # ADR-006: Manual Overrides Are Auto-Routing Failure Signals
 
@@ -62,6 +62,10 @@ This is deliberate. A high rate of coincidental-agreement overrides means users 
 
 `Execute` emits an `override` event whenever any override axis is set on the request. The event carries both the user-pinned decision and the unconstrained auto-decision (computed by a second in-process `ResolveRoute` call with override axes stripped):
 
+The exact public event and outcome schema is normative in `CONTRACT-003`.
+The excerpt below is implementation reference for this accepted decision; it
+does not define a second payload contract.
+
 ```jsonc
 {
   "type": "override",
@@ -81,12 +85,18 @@ This is deliberate. A high rate of coincidental-agreement overrides means users 
   "outcome": {
     "status": "success|stalled|failed|cancelled",
     "cost_usd": 0.42,
+    "cost_source": "reported",
     "duration_ms": 12345
   }
 }
 ```
 
 `outcome` is populated post-execution, mirroring the final-event status fields. It does **not** provide a counterfactual ("what auto would have cost") — that would require speculatively running the auto pick. Outcome correlation across many overrides is sufficient to diagnose whether overrides on a prompt class are completing better or worse than the cohort.
+
+`cost_source` is mandatory whenever `outcome` is present. A known zero remains
+`"cost_usd": 0` with source `reported` or `configured`; unknown cost omits
+`cost_usd` and uses `"cost_source": "unknown"`. `CONTRACT-003` owns these
+presence and provenance rules.
 
 ### 4. Rejected-override event
 

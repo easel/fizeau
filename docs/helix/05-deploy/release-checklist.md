@@ -12,18 +12,18 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: d57210df264f099db85eb475313efd16278860c81f3bf2a45f847002bbae5a50
+    self_hash: 21cf853707776ccf40b4c3b5cac286e6be31825098f742f49b137ea5e0cbaa1f
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
       ADR-014: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
-      CONTRACT-003: 46ca28e03ead881ed812c198f19d6d077fbafa2494f3a7716c704f0e360c0694
+      CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
       CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      implementation-plan: 5169cc67f1c2fca01746b76a40fd8ac40d03203e039c189e6e922eb3f0818835
-    reviewed_at: "2026-07-16T07:25:15Z"
+      implementation-plan: 00293cfba03606a65035a4a610a6541270c0db7e766a6495bbed9684f9a7954c
+    reviewed_at: "2026-07-16T11:01:22Z"
 ---
 # Release Checklist — Fizeau
 
@@ -33,8 +33,9 @@ ddx:
 - Version or commit: `v*` tag and its immutable commit SHA
 - Release owner: tag creator
 - Rollback owner: repository maintainer on duty
-- Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `SD-005`, `SD-006`,
-  `ADR-002`, `ADR-013`, `ADR-014`, `.github/workflows/ci.yml`,
+- Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `TP-001`, `SD-005`,
+  `SD-006`, `ADR-002`, `ADR-006`, `ADR-013`, `ADR-014`,
+  `.github/workflows/ci.yml`,
   `.github/workflows/release.yml`, `install.sh`, and
   `tests/install_sh_acceptance.sh`
 
@@ -60,9 +61,10 @@ ddx:
 | Context evidence | Selected-route context comes from candidate/config, cached type-gated provider evidence, catalog metadata, or the documented default; route and execution hot paths make no synchronous limit probe | SD-005/SD-006 conformance evidence; structural probe-path review | [ ] |
 | Capacity enforcement | The selected context value/source is authoritative, a positive compaction bound only tightens it, and every provider-call path applies the canonical estimate and fixed capacity envelope | CONTRACT-003 obligations 17–20; focused route/core evidence | [ ] |
 | One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, accepted-session capacity failure never dispatches the next ranked candidate and semantic retry is a new caller request | CONTRACT-003 obligations 17, 20, and 21; service dispatch evidence | [ ] |
-| v0.15 public compatibility | Core-to-`internal/harnesses`-to-root capacity mapping is exhaustive; additive capacity events/final values preserve unknown JSON enums; changed exported structs use keyed literals; external mocks implement both new `Continue` and `PreparePortableRuntime` interface methods | CONTRACT-003 obligations 21–29; public compile, AST, and JSON fixture evidence | [ ] |
+| Cost presence and provenance | Final, override, durable session, CLI, service-backed comparison evidence, and its benchmark-runner ingestion preserve unknown, known zero, positive amount, and mandatory normalized source without a behavior-losing migration slice, negative producer values, or numeric presence inference | Final/override/session conformance suite; `TestRunResultCostSourceIngressCompile`; `TestBenchmarkFinalCostPresence`; `TestBenchmarkEvidenceCostPresence`; `TestBenchmarkReportCostPresence` | [ ] |
+| v0.15 public compatibility | Core-to-`internal/harnesses`-to-root capacity mapping is exhaustive; additive capacity events/final values preserve unknown JSON enums; external mocks implement both new `Continue` and `PreparePortableRuntime` methods; all three public cost types use pointer literals and nil/source-aware selectors | CONTRACT-003 obligations 21–30; `TestV015CostPointerMigrationCompile`; public AST and JSON fixtures | [ ] |
 | Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
-| Governed documents | Lifecycle and capacity contracts, decisions, and designs are current | `ddx doc stale --json` omits `CONTRACT-003`, `CONTRACT-004`, `SD-005`, `SD-006`, `ADR-002`, `ADR-004`, `ADR-013`, and `ADR-014` | [ ] |
+| Governed documents | Lifecycle, capacity, and cost-provenance contracts, decisions, tests, build sequence, and release gates are current | `ddx doc stale --json` omits `ADR-006`, `CONTRACT-003`, `TP-001`, `implementation-plan`, and `deployment-checklist`, in addition to the lifecycle/capacity artifacts | [ ] |
 | Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
 | Artifact names | Workflow emits only `fiz-<os>-<arch>` names | `go test . -run TestReleaseWorkflowArtifactNamesFiz -count=1` | [ ] |
 | Version | Tag starts with `v` and points at the intended commit | tag/SHA record | [ ] |
@@ -101,7 +103,8 @@ and arm64 until a separate artifact decision expands it.
 | Context provenance | Routing event, execution handoff, capacity event, and final projection agree on selected context value/source; raw unknown candidate evidence remains distinguishable | CONTRACT-003 selected-context conformance evidence | [ ] |
 | Capacity event order | Clamp immediately precedes its request; planning skip prevents planning request/response/turn; main rejection precedes session end and typed terminal, with no provider call or next-route dispatch | CONTRACT-003 capacity event-order evidence | [ ] |
 | Portable runtime | Preparation is route-neutral and value-opaque; separate-process activation reproduces structural candidate identities, configured providers, and production dispatch; projected config remains namespace-immutable while projected state refresh/locks/siblings and unprojected prefix seeds remain writable; runtime destruction removes guest overlays and explicit Close leaves no host bundle credential copy | all six parent `TestPreparePortableRuntime*` / `TestPortableRuntime*` conformance tests; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; `TestPortableRuntimeActivationFeedsProductionDispatch`; `TestPortableRuntimeProjectionDeniesConfigMutation`; required Linux OCI job | [ ] |
-| v0.15 migration | External keyed Go literals compile, additive capacity JSON accepts unknown future event/cause values, and third-party service mocks implement `Continue` plus `PreparePortableRuntime`; public consumers compile `NewFromPortableRuntime` | public compile/AST and JSON compatibility fixtures | [ ] |
+| Cost projection | Unknown cost omits `cost_usd`, known zero and positive remain present, accepted override outcomes always carry normalized `cost_source`, and rejected overrides omit `outcome` | final/override/session/consumer cost-presence conformance suite | [ ] |
+| v0.15 migration | External keyed Go pointer literals and nil/source-aware selectors compile for `ServiceFinalData`, `DrainExecuteResult`, and `ServiceOverrideOutcome`; additive capacity JSON accepts unknown future values; third-party mocks implement `Continue` plus `PreparePortableRuntime`; public consumers compile `NewFromPortableRuntime` | `TestV015CostPointerMigrationCompile`; public compile/AST and JSON compatibility fixtures | [ ] |
 
 ## Rollback Triggers
 
@@ -123,6 +126,8 @@ and arm64 until a separate artifact decision expands it.
 | Capacity authority mismatch | Execution enlarges the selected route window, projections disagree on value/source, or a capacity failure advances to another candidate | Hold release; restore selected-route authority and one-route-per-`Execute` behavior | Maintainer |
 | Capacity projection regression | A capacity payload field is dropped between core, harness-neutral event, root decode, or final projection, or event order permits a prevented provider call | Hold release; restore exhaustive mapping and required event order | Maintainer |
 | v0.15 migration regression | Public examples use unkeyed changed structs or additive JSON/event values are rejected as unknown | Hold release; correct migration fixtures and tolerant decoding before publishing v0.15 | Maintainer |
+| Cost pointer migration regression | Any external fixture still assigns a scalar `CostUSD`, uses a cost selector in comparison, formatting, or arithmetic without nil/source handling, or cannot compile all three migrated public types | Hold release; migrate the consumer and fixture to keyed pointers, nil checks, source inspection, and explicit dereference before publishing v0.15 | Maintainer |
+| Cost-collapse regression | Unknown cost serializes as numeric zero, known zero is omitted, provenance is missing or inferred from amount, a negative producer value escapes, or rejected override fabricates an outcome | Hold release; disable the faulty projection path and restore authoritative optional amount plus normalized source at every boundary before a corrective release | Maintainer |
 | Portable runtime narrows the structural set | Any installed structurally unpinned-capable subprocess or effective provider is silently omitted, actual transport is misclassified, or preparation chooses a route | Hold release; restore exhaustive registry/instance and provider inventory, then defer live eligibility to `Execute` | Maintainer |
 | Portable activation drifts | `NewFromPortableRuntime` cannot reconstruct provider/structural identity and the declared closed-world execution constraints in a separate public-only process, falls back to ambient host config/environment, permits projected config write/unlink/rename/replacement/shadow operations, blocks declared state refresh/locks/siblings, or starts an undeclared installer/background child | Hold release; disable portable execution until fixed-root manifest activation and generic namespace enforcement are authoritative | Maintainer |
 | Portable dispatch bypass | Activation updates only a scheduler/refresh map while production `Execute` constructs or selects an unconfigured runner | Hold release; wire activated launch recipes into production dispatch and prove them with distinguishable fixtures | Maintainer |

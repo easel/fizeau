@@ -9,9 +9,9 @@ ddx:
     self_hash: be383d4b64de9629cd84f094cbbfa902607dfff5343c643977d12899de12e553
     deps:
       ADR-005: e47168fa6ebdb3a0f57d9a5e34cc638563f74fe5c529f73e0bee327259c7bec5
-      ADR-006: 511bae45baeef8e764665393c35d5d80490ef1ed29a1efd769a063965a9e33bc
+      ADR-006: 70e1de266a6e8c6289f23c05e36bc2fed2af4dc8ad131d352e40876dc46f6793
       ADR-007: 8a70a46a9efdc916ea7e3146dce7050a12d054c1c9d56c006bb4c3245b4d4300
-    reviewed_at: "2026-07-16T07:25:15Z"
+    reviewed_at: "2026-07-16T10:46:26Z"
 ---
 # ADR-010: Reasoning Wire Form Belongs in the Model Catalog
 

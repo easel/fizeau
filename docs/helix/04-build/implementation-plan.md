@@ -14,20 +14,20 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 5169cc67f1c2fca01746b76a40fd8ac40d03203e039c189e6e922eb3f0818835
+    self_hash: 00293cfba03606a65035a4a610a6541270c0db7e766a6495bbed9684f9a7954c
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-013: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
       ADR-014: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
-      CONTRACT-003: 46ca28e03ead881ed812c198f19d6d077fbafa2494f3a7716c704f0e360c0694
+      CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
       CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      TP-001: 1db11eb064984a076f4a4faaff7e964f4ee4a992eb89cde1d63c875814f16e76
+      TP-001: 6c4ab91699f822620ed7176769f969bc7f54b3ed1b1233e4d0643548f40cfdb9
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T07:25:15Z"
+    reviewed_at: "2026-07-16T11:01:22Z"
 ---
 # Build Plan — Fizeau
 
@@ -80,6 +80,11 @@ close state; this document does not copy that queue or freeze a second backlog.
 - CONTRACT-003 v0.15 adds capacity JSON/events compatibly for tolerant
   consumers but adds fields to exported Go structs. Public Go fixtures and
   examples use keyed literals for the source-breaking migration.
+- CONTRACT-003 v0.15 deliberately changes `CostUSD` from `float64` to
+  `*float64` on `ServiceFinalData`, `DrainExecuteResult`, and
+  `ServiceOverrideOutcome`. External keyed literals and selector expressions
+  migrate to nil/source branching and explicit dereference; no adapter infers
+  amount presence from a positive scalar.
 - Portable-runtime preparation is route-neutral and complete-or-error. v0.15 is
   Linux same-GOARCH only. It packages every installed, structurally unpinned-capable harness
   closure plus every effective configured provider without selecting a route,
@@ -131,6 +136,27 @@ CONTRACT-003. It does not duplicate live bead state.
 | C-3 Core per-call enforcement | Use the shared non-enlarging working window, canonical estimator, fixed 95-percent envelope, and monotonic attempt state on every provider-call path | C-2 | Core fixtures cover planning, stream/non-stream, retry, compaction retry, no-stream rerun, clamp, skip, and rejection order |
 | C-4 Public projection and migration | Project the exhaustive capacity payload through core, serviceimpl-owned `internal/harnesses` events, and root decode/final types without making harness-native streams authoritative | C-3 | Public contract fixtures prove event/final ordering, unknown-value preservation, keyed Go literals, and no next-route dispatch |
 | C-5 Residual overflow evidence | Normalize only provider overflow that remains after preflight and keep it on the selected route | C-4 | Provider fixtures prove typed evidence without semantic rerouting |
+
+### Cost Presence and Provenance Sequence — v0.15
+
+This sequence separates the visible Go source migration from the silent risk
+of collapsing unknown cost and known zero into the same value.
+
+| Slice | Goal | Depends On | Validation Gate |
+|---|---|---|---|
+| F-0 Authority | Align ADR-006's accepted override decision, CONTRACT-003's normative final/override schema, TP-001, this plan, and the release checklist | None | `ddx doc validate` passes and freshness output omits all five evolved artifacts |
+| F-1 Core and harness projection | Produce authoritative optional session cost plus normalized `reported` / `configured` / `unknown` provenance in core and every harness without numeric presence inference | F-0 | Focused core and harness tests cover unknown, known zero, positive, mixed all-known provenance, stale-state replacement, and negative upstream values |
+| F-2 Service, session, and override projection | Clone the authoritative pointer and source through native execution, service coordination, accepted override JSON, rejected-override omission, and durable session records | F-1 | `TestExecuteNativePreservesFinalCostPresence`, `TestMakeExecuteOverrideEventPreservesFinalCostPresence`, and `TestSessionLogPreservesFinalCostPresence` pass |
+| F-3 Public and consumer migration | Stage only bounded source-backed seams: migrate CLI output, add a no-behavior-change comparison provenance ingress, populate it from the service-backed benchmark runner, then cut emitted comparison evidence over; cut all three public `CostUSD` fields to pointers; switch consumers to the normative fields; remove the temporary public bridge | F-2 | Final/override public conformance, `TestRunResultCostSourceIngressCompile`, comparison evidence/report, benchmark-ingestion, and `TestV015CostPointerMigrationCompile` tests pass; every pushed slice preserves existing known-cost behavior and production scans find no positive-value presence inference or temporary public bridge |
+
+The F-3 source break is expected and compile-visible: scalar keyed literals,
+comparisons, formatting, and arithmetic stop compiling until migrated. A cost
+collapse is different: it can compile while silently fabricating zero billing
+or discarding a known zero. External compile fixtures gate the former;
+nil/zero/positive/source round trips at every boundary gate the latter.
+The separate matrix, TerminalBench, and website cell-evidence pipeline remains
+owned by SD-010, SD-012, SD-015, and its benchmark-rewrite queue; F-3 does not
+silently redefine those schemas as part of the public service migration.
 
 ### Portable Runtime Sequence — v0.15
 
@@ -195,6 +221,12 @@ evidence that prevents an unowned path from remaining.
 - [ ] Compile external keyed-literal fixtures for changed v0.15 Go structs and
       decode additive capacity events/terminal values while preserving unknown
       future values.
+- [ ] Run final and override cost-presence fixtures across core, harness,
+      service/session, root facade, CLI, and benchmark consumers. Unknown omits
+      the amount, known zero remains present, and provenance is mandatory.
+- [ ] Run `TestV015CostPointerMigrationCompile` against all three public cost
+      types and reject scalar literals, numeric presence checks, or selector
+      use without nil/source handling.
 - [ ] Compile the public portable-runtime request, opaque bundle, and separate
       `NewFromPortableRuntime` consumer fixture; prove the plan contains no
       routing selector, original source path, or environment value.
@@ -230,6 +262,8 @@ the commands above decide whether a bead can close.
 | A missing context limit triggers a request-path probe | High | Keep discovery in explicit/background refresh and route from cached typed evidence | Disable the probing path and fall back to catalog/default evidence |
 | Capacity failure silently selects another route | High | Enforce one route per `Execute` and expose typed event/final evidence | Disable semantic fallback and require caller-owned retry |
 | v0.15 Go additions break unkeyed downstream literals | Medium | Publish keyed-literal migration guidance and compile external fixtures | Hold v0.15 until migration evidence is complete |
+| Cost pointer migration leaves a downstream consumer uncompilable | Medium | Compile an external consumer that migrates keyed literals, selectors, comparisons, formatting, and arithmetic through nil/source branching | Hold the pointer cutover until the consumer and migration fixture compile; do not weaken the pointer contract |
+| Cost presence collapses across a compiling adapter | High | Exercise unknown, known zero, positive, and source at every F-1 through F-3 boundary; reject negative producer values and numeric presence inference | Revert or disable the faulty projection adapter while preserving the governing optional-amount contract |
 | Portable inventory silently drops a difficult harness or provider | High | Exhaustive registry/provider parity tests and complete-or-error preparation | Hold the feature; do not publish a narrowed bundle as complete |
 | Copied launcher lacks its interpreter, package tree, loader, or shared runtime | High | Require content-addressed same-target closure classes plus offline layout/OCI probes from the owning harness | Reject preparation with a typed redacted error |
 | Declared native addon changes, escapes its package snapshot, or has an incomplete dependency closure | High | Require root-anchored no-follow descriptors, exact identities, immutable package snapshots, recursive ELF policy, and contributor-owned exhaustive probes | Reject the interpreted contribution with `ErrPortableRuntimeClosureIncomplete`; do not scan or emit the addon separately |
