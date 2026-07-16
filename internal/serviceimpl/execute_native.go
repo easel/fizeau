@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -313,8 +314,9 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	if result.Tokens.CacheRead > 0 || result.Tokens.CacheWrite > 0 {
 		final.Usage.CacheTokens = harnesses.IntPtr(result.Tokens.CacheRead + result.Tokens.CacheWrite)
 	}
-	if result.CostUSD > 0 {
-		final.CostUSD = result.CostUSD
+	final.FinalCostUSD, final.FinalCostSource = projectNativeFinalCost(result)
+	if final.FinalCostUSD != nil {
+		final.CostUSD = *final.FinalCostUSD
 	}
 	if result.Output != "" && cb.EmitEvent != nil {
 		cb.EmitEvent(harnesses.EventTypeTextDelta, harnesses.TextDeltaData{Text: result.Output})
@@ -369,6 +371,32 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
 	}
 	finalize(cb, final, nativeTerminalOrigin(runErr))
+}
+
+func projectNativeFinalCost(result agentcore.Result) (*float64, harnesses.CostSource) {
+	var source harnesses.CostSource
+	switch result.FinalCostSource {
+	case agentcore.SessionCostSourceReported:
+		source = harnesses.CostSourceReported
+	case agentcore.SessionCostSourceConfigured:
+		source = harnesses.CostSourceConfigured
+	default:
+		source = harnesses.CostSourceUnknown
+	}
+	return normalizeProjectedFinalCost(result.FinalCostUSD, source)
+}
+
+func normalizeProjectedFinalCost(cost *float64, source harnesses.CostSource) (*float64, harnesses.CostSource) {
+	if cost == nil || *cost < 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0) {
+		return nil, harnesses.CostSourceUnknown
+	}
+	switch source {
+	case harnesses.CostSourceReported, harnesses.CostSourceConfigured:
+		cloned := *cost
+		return &cloned, source
+	default:
+		return nil, harnesses.CostSourceUnknown
+	}
 }
 
 func newNativeCompactor(req NativeRequest, model string) agentcore.Compactor {

@@ -178,12 +178,7 @@ func (sl *SessionLog) endData(meta map[string]string, final harnesses.FinalData)
 	end.Metadata = cloneStringMap(meta)
 	end.Error = final.Error
 
-	if final.CostUSD > 0 {
-		cost := final.CostUSD
-		end.CostUSD = &cost
-	} else {
-		end.CostUSD = nil
-	}
+	end.CostUSD, end.CostSource = normalizeProjectedFinalCost(final.FinalCostUSD, final.FinalCostSource)
 	if final.RoutingActual != nil {
 		end.ResolvedHarness = final.RoutingActual.Harness
 		end.Model = final.RoutingActual.Model
@@ -213,10 +208,7 @@ func cloneSessionEndData(in session.SessionEndData) session.SessionEndData {
 	out := in
 	out.AttemptedProviders = append([]string(nil), in.AttemptedProviders...)
 	out.Metadata = cloneStringMap(in.Metadata)
-	if in.CostUSD != nil {
-		value := *in.CostUSD
-		out.CostUSD = &value
-	}
+	out.CostUSD, out.CostSource = normalizeProjectedFinalCost(in.CostUSD, in.CostSource)
 	if in.CostCapUSD != nil {
 		value := *in.CostCapUSD
 		out.CostCapUSD = &value

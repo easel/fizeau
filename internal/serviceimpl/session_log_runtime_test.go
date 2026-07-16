@@ -53,18 +53,21 @@ func TestSessionLogProjectsTerminalAndFirstEndWins(t *testing.T) {
 	*endBase.Utilization.ActiveRequests = 99
 
 	input, output, cacheRead, cacheWrite, total := 10, 4, 3, 2, 19
+	finalCost := 1.75
 	sl.WriteEnd(map[string]string{"role": "implementer"}, harnesses.FinalData{
-		Status:         string(agentcore.StatusBudgetHalted),
-		Outcome:        harnesses.SessionOutcomeFailed,
-		Cause:          harnesses.TerminalCauseBudgetHalted,
-		Stage:          harnesses.SessionStageProvider,
-		PrimaryOutcome: harnesses.SessionOutcomeFailed,
-		PrimaryCause:   harnesses.TerminalCauseBudgetHalted,
-		PrimaryStage:   harnesses.SessionStageProvider,
-		Error:          "cost cap reached",
-		FinalText:      "partial answer",
-		DurationMS:     1250,
-		CostUSD:        1.75,
+		Status:          string(agentcore.StatusBudgetHalted),
+		Outcome:         harnesses.SessionOutcomeFailed,
+		Cause:           harnesses.TerminalCauseBudgetHalted,
+		Stage:           harnesses.SessionStageProvider,
+		PrimaryOutcome:  harnesses.SessionOutcomeFailed,
+		PrimaryCause:    harnesses.TerminalCauseBudgetHalted,
+		PrimaryStage:    harnesses.SessionStageProvider,
+		Error:           "cost cap reached",
+		FinalText:       "partial answer",
+		DurationMS:      1250,
+		FinalCostUSD:    &finalCost,
+		FinalCostSource: harnesses.CostSourceConfigured,
+		CostUSD:         99,
 		Usage: &harnesses.FinalUsage{
 			InputTokens:      &input,
 			OutputTokens:     &output,
@@ -122,8 +125,8 @@ func TestSessionLogProjectsTerminalAndFirstEndWins(t *testing.T) {
 	if got.Tokens.Input != input || got.Tokens.Output != output || got.Tokens.CacheRead != cacheRead || got.Tokens.CacheWrite != cacheWrite || got.Tokens.Total != total {
 		t.Fatalf("tokens = %#v", got.Tokens)
 	}
-	if got.CostUSD == nil || *got.CostUSD != 1.75 || got.CostCapUSD == nil || *got.CostCapUSD != 2.5 {
-		t.Fatalf("cost/cap = %v/%v", got.CostUSD, got.CostCapUSD)
+	if got.CostUSD == nil || *got.CostUSD != 1.75 || got.CostSource != harnesses.CostSourceConfigured || got.CostCapUSD == nil || *got.CostCapUSD != 2.5 {
+		t.Fatalf("cost/source/cap = %v/%q/%v", got.CostUSD, got.CostSource, got.CostCapUSD)
 	}
 	if got.ResolvedHarness != "fiz" || got.SelectedProvider != "local" || got.Model != "resolved-model" || got.ResolvedModel != "resolved-model" {
 		t.Fatalf("resolved route = %#v", got)
@@ -143,6 +146,109 @@ func TestSessionLogProjectsTerminalAndFirstEndWins(t *testing.T) {
 	if !sl.EndWritten() {
 		t.Fatal("EndWritten = false after terminal write")
 	}
+}
+
+func TestSessionLogPreservesFinalCostPresence(t *testing.T) {
+	tests := []struct {
+		name       string
+		final      harnesses.FinalData
+		wantCost   *float64
+		wantSource harnesses.CostSource
+	}{
+		{name: "nil unknown", final: harnesses.FinalData{Status: "success", FinalCostSource: harnesses.CostSourceUnknown}, wantSource: harnesses.CostSourceUnknown},
+		{name: "nil amount forces unknown", final: harnesses.FinalData{Status: "success", FinalCostSource: harnesses.CostSourceReported}, wantSource: harnesses.CostSourceUnknown},
+		{name: "known zero", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(0), FinalCostSource: harnesses.CostSourceReported}, wantCost: float64Pointer(0), wantSource: harnesses.CostSourceReported},
+		{name: "positive configured", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(1.25), FinalCostSource: harnesses.CostSourceConfigured}, wantCost: float64Pointer(1.25), wantSource: harnesses.CostSourceConfigured},
+		{name: "positive reported", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(2.5), FinalCostSource: harnesses.CostSourceReported}, wantCost: float64Pointer(2.5), wantSource: harnesses.CostSourceReported},
+		{name: "empty source", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(3)}, wantSource: harnesses.CostSourceUnknown},
+		{name: "invalid source", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(3), FinalCostSource: harnesses.CostSource("invalid")}, wantSource: harnesses.CostSourceUnknown},
+		{name: "negative amount", final: harnesses.FinalData{Status: "success", FinalCostUSD: float64Pointer(-1), FinalCostSource: harnesses.CostSourceReported}, wantSource: harnesses.CostSourceUnknown},
+		{name: "legacy scalar is not promoted", final: harnesses.FinalData{Status: "success", CostUSD: 4, FinalCostSource: harnesses.CostSourceReported}, wantSource: harnesses.CostSourceUnknown},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			sl := OpenSessionLog(SessionLogOptions{Dir: dir, SessionID: "cost", Start: session.SessionStartData{Prompt: "test"}})
+			sl.WriteEnd(nil, test.final)
+			sl.Close()
+
+			events, err := session.ReadEvents(filepath.Join(dir, "cost.jsonl"))
+			if err != nil {
+				t.Fatalf("ReadEvents: %v", err)
+			}
+			var (
+				got    session.SessionEndData
+				gotRaw map[string]json.RawMessage
+			)
+			for _, event := range events {
+				if event.Type == agentcore.EventSessionEnd {
+					if err := json.Unmarshal(event.Data, &got); err != nil {
+						t.Fatalf("decode session.end: %v", err)
+					}
+					if err := json.Unmarshal(event.Data, &gotRaw); err != nil {
+						t.Fatalf("decode raw session.end: %v", err)
+					}
+				}
+			}
+			if _, ok := gotRaw["cost_source"]; !ok {
+				t.Fatal("cost_source omitted from session.end")
+			}
+			if got.CostSource != test.wantSource {
+				t.Fatalf("cost source = %q, want %q", got.CostSource, test.wantSource)
+			}
+			if test.wantCost == nil {
+				if got.CostUSD != nil {
+					t.Fatalf("cost = %v, want nil", got.CostUSD)
+				}
+				if _, ok := gotRaw["cost_usd"]; ok {
+					t.Fatal("unknown cost_usd was not omitted")
+				}
+				return
+			}
+			if got.CostUSD == nil || *got.CostUSD != *test.wantCost {
+				t.Fatalf("cost = %v, want %v", got.CostUSD, *test.wantCost)
+			}
+			if _, ok := gotRaw["cost_usd"]; !ok {
+				t.Fatal("known cost_usd was omitted")
+			}
+		})
+	}
+
+	t.Run("clones authoritative pointer and first end wins", func(t *testing.T) {
+		dir := t.TempDir()
+		sl := OpenSessionLog(SessionLogOptions{Dir: dir, SessionID: "first", Start: session.SessionStartData{Prompt: "test"}})
+		cost := 0.0
+		projected := sl.endData(nil, harnesses.FinalData{Status: "success", FinalCostUSD: &cost, FinalCostSource: harnesses.CostSourceReported})
+		cost = 8
+		if projected.CostUSD == nil || *projected.CostUSD != 0 {
+			t.Fatalf("projected pointer was not cloned: %v", projected.CostUSD)
+		}
+
+		first := 0.0
+		second := 9.0
+		sl.WriteEnd(nil, harnesses.FinalData{Status: "success", FinalCostUSD: &first, FinalCostSource: harnesses.CostSourceReported})
+		sl.WriteEnd(nil, harnesses.FinalData{Status: "success", FinalCostUSD: &second, FinalCostSource: harnesses.CostSourceConfigured})
+		sl.Close()
+
+		events, err := session.ReadEvents(filepath.Join(dir, "first.jsonl"))
+		if err != nil {
+			t.Fatalf("ReadEvents: %v", err)
+		}
+		ends := 0
+		var got session.SessionEndData
+		for _, event := range events {
+			if event.Type == agentcore.EventSessionEnd {
+				ends++
+				if err := json.Unmarshal(event.Data, &got); err != nil {
+					t.Fatalf("decode session.end: %v", err)
+				}
+			}
+		}
+		if ends != 1 || got.CostUSD == nil || *got.CostUSD != 0 || got.CostSource != harnesses.CostSourceReported {
+			t.Fatalf("first-end result count=%d cost=%v source=%q", ends, got.CostUSD, got.CostSource)
+		}
+	})
 }
 
 func TestSessionLogPersistsCoreAndOpaqueOverrideEvents(t *testing.T) {

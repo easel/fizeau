@@ -634,11 +634,13 @@ func makeExecuteOverrideEvent(req ExecuteRequest, finalEv harnesses.Event) (harn
 	if err := json.Unmarshal(finalEv.Data, &final); err != nil {
 		return harnesses.Event{}, "", false
 	}
+	cost, costSource := normalizeProjectedFinalCost(final.FinalCostUSD, final.FinalCostSource)
 	outcome, err := json.Marshal(struct {
-		Status     string  `json:"status"`
-		CostUSD    float64 `json:"cost_usd,omitempty"`
-		DurationMS int64   `json:"duration_ms"`
-	}{Status: final.Status, CostUSD: final.CostUSD, DurationMS: final.DurationMS})
+		Status     string               `json:"status"`
+		CostUSD    *float64             `json:"cost_usd,omitempty"`
+		CostSource harnesses.CostSource `json:"cost_source"`
+		DurationMS int64                `json:"duration_ms"`
+	}{Status: final.Status, CostUSD: cost, CostSource: costSource, DurationMS: final.DurationMS})
 	if err != nil {
 		return harnesses.Event{}, "", false
 	}

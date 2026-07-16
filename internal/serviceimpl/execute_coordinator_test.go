@@ -148,6 +148,76 @@ func TestExecuteCoordinatorVirtualTerminalOrdering(t *testing.T) {
 	}
 }
 
+func TestMakeExecuteOverrideEventPreservesFinalCostPresence(t *testing.T) {
+	tests := []struct {
+		name       string
+		final      string
+		wantCost   *float64
+		wantSource harnesses.CostSource
+	}{
+		{name: "nil unknown", final: `{"status":"success","cost_source":"unknown","duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+		{name: "nil amount forces unknown", final: `{"status":"success","cost_source":"reported","duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+		{name: "known zero", final: `{"status":"success","cost_usd":0,"cost_source":"reported","duration_ms":7}`, wantCost: float64Pointer(0), wantSource: harnesses.CostSourceReported},
+		{name: "positive configured", final: `{"status":"success","cost_usd":1.25,"cost_source":"configured","duration_ms":7}`, wantCost: float64Pointer(1.25), wantSource: harnesses.CostSourceConfigured},
+		{name: "positive reported", final: `{"status":"success","cost_usd":2.5,"cost_source":"reported","duration_ms":7}`, wantCost: float64Pointer(2.5), wantSource: harnesses.CostSourceReported},
+		{name: "invalid source", final: `{"status":"success","cost_usd":3,"cost_source":"invalid","duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+		{name: "empty source", final: `{"status":"success","cost_usd":3,"cost_source":"","duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+		{name: "negative amount", final: `{"status":"success","cost_usd":-1,"cost_source":"reported","duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+		{name: "legacy scalar is not promoted", final: `{"status":"success","cost_usd":4,"duration_ms":7}`, wantSource: harnesses.CostSourceUnknown},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			event, _, ok := makeExecuteOverrideEvent(ExecuteRequest{
+				OverridePayload: json.RawMessage(`{"session_id":"cost-test"}`),
+			}, harnesses.Event{Type: harnesses.EventTypeFinal, Data: json.RawMessage(test.final)})
+			if !ok {
+				t.Fatal("makeExecuteOverrideEvent returned ok=false")
+			}
+			var payload struct {
+				Outcome struct {
+					CostUSD    *float64             `json:"cost_usd"`
+					CostSource harnesses.CostSource `json:"cost_source"`
+				} `json:"outcome"`
+			}
+			if err := json.Unmarshal(event.Data, &payload); err != nil {
+				t.Fatalf("decode override: %v", err)
+			}
+			if payload.Outcome.CostSource != test.wantSource {
+				t.Fatalf("cost source = %q, want %q", payload.Outcome.CostSource, test.wantSource)
+			}
+			var raw map[string]json.RawMessage
+			if err := json.Unmarshal(event.Data, &raw); err != nil {
+				t.Fatalf("decode raw override: %v", err)
+			}
+			var rawOutcome map[string]json.RawMessage
+			if err := json.Unmarshal(raw["outcome"], &rawOutcome); err != nil {
+				t.Fatalf("decode raw outcome: %v", err)
+			}
+			if _, ok := rawOutcome["cost_source"]; !ok {
+				t.Fatal("cost_source omitted from override outcome")
+			}
+			if test.wantCost == nil {
+				if payload.Outcome.CostUSD != nil {
+					t.Fatalf("cost = %v, want nil", payload.Outcome.CostUSD)
+				}
+				if _, ok := rawOutcome["cost_usd"]; ok {
+					t.Fatal("unknown cost_usd was not omitted")
+				}
+				return
+			}
+			if payload.Outcome.CostUSD == nil || *payload.Outcome.CostUSD != *test.wantCost {
+				t.Fatalf("cost = %v, want %v", payload.Outcome.CostUSD, *test.wantCost)
+			}
+			if _, ok := rawOutcome["cost_usd"]; !ok {
+				t.Fatal("known cost_usd was omitted")
+			}
+		})
+	}
+}
+
+func float64Pointer(value float64) *float64 { return &value }
+
 func TestExecuteCoordinatorTerminalSurvivesBackpressure(t *testing.T) {
 	out := make(chan harnesses.Event, 1)
 	out <- harnesses.Event{Type: harnesses.EventTypeProgress}
