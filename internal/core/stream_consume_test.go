@@ -819,19 +819,20 @@ func TestConsumeStream_AdaptiveStallDeadline(t *testing.T) {
 	// observed token rate so that slow local providers are not cut off prematurely.
 	//
 	// Setup: floor timeout = 60ms, but the model is generating reasoning tokens at
-	// ~10ms each. With a 64-token budget (~256 bytes at 4B/tok), the adaptive
-	// deadline should be pushed well past the floor, allowing the stream to
-	// complete without a stall error.
+	// ~10ms each. The first delta reaches the 256-byte adaptive bootstrap
+	// immediately, so scheduler dilation cannot make the fixture hit the floor
+	// before it has enough data to estimate the token rate. The remaining delayed
+	// deltas keep the stream running past the floor.
 	const floorTimeout = 60 * time.Millisecond
 	const delayBetween = 10 * time.Millisecond
-	// Budget: 512 tokens × 4 bytes = 2048 bytes. Stream sends 10 × 64 = 640
-	// bytes, well within budget. After bootstrap (256B, ~4 deltas, ~40ms),
-	// adaptive extra ≈ (2048-256)/rate*2 >> 60ms floor, so no stall.
+	// Budget: 512 tokens × 4 bytes = 2048 bytes. Stream sends one 256-byte
+	// bootstrap delta plus 9 × 64-byte deltas = 832 bytes, well within budget.
+	// Adaptive extra remains well above the 60ms floor, so no stall.
 	const budgetTokens = 512
 
-	chunk := strings.Repeat("x", 64) // 64 bytes per delta
-	var deltas []StreamDelta
-	for i := 0; i < 10; i++ { // 640 bytes total > 256B bootstrap
+	chunk := strings.Repeat("x", 64) // 64 bytes per delayed delta
+	deltas := []StreamDelta{{ReasoningContent: strings.Repeat("x", 256)}}
+	for i := 0; i < 9; i++ {
 		deltas = append(deltas, StreamDelta{ReasoningContent: chunk})
 	}
 	deltas = append(deltas, StreamDelta{Content: "done", Done: true})
