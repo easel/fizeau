@@ -376,6 +376,18 @@ func TestPortableRuntimeDynamicExactLibraryClosure(t *testing.T) {
 }
 
 func TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH(t *testing.T) {
+	testPortableRuntimeInterpretedClosure(t)
+}
+
+// TestPortableRuntimeInterpretedClosure preserves the analyzer contract's
+// named structural proof after the Node-specific hardening split the broader
+// fixture into more focused tests.
+func TestPortableRuntimeInterpretedClosure(t *testing.T) {
+	testPortableRuntimeInterpretedClosure(t)
+}
+
+func testPortableRuntimeInterpretedClosure(t *testing.T) {
+	t.Helper()
 	requirePortableRuntimeLinux(t)
 	target := PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
 	staticInterpreter := buildPortableRuntimeStaticFixture(t)
