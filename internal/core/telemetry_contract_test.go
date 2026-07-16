@@ -338,6 +338,9 @@ func TestRun_CONTRACT001CostPrecedence(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusSuccess, result.Status)
 	assert.InDelta(t, reportedCost, result.CostUSD, 1e-9)
+	require.NotNil(t, result.FinalCostUSD)
+	assert.InDelta(t, reportedCost, *result.FinalCostUSD, 1e-9)
+	assert.Equal(t, SessionCostSourceReported, result.FinalCostSource)
 
 	ended := recorder.Ended()
 	require.Len(t, ended, 2)
@@ -427,6 +430,9 @@ func TestRun_CONTRACT001MixedKnownCostProvenance(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusSuccess, result.Status)
 	assert.InDelta(t, 0.03, result.CostUSD, 1e-9)
+	require.NotNil(t, result.FinalCostUSD)
+	assert.InDelta(t, 0.03, *result.FinalCostUSD, 1e-9)
+	assert.Equal(t, SessionCostSourceReported, result.FinalCostSource)
 
 	ended := recorder.Ended()
 	require.Len(t, ended, 4)

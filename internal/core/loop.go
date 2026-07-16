@@ -35,6 +35,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		Reasoning:        req.Reasoning,
 		ReasoningIntent:  req.Reasoning,
 		CostCapUSD:       req.CostCapUSD,
+		FinalCostSource:  SessionCostSourceUnknown,
 	}
 
 	if req.Provider == nil {
@@ -55,6 +56,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 	chatMetricsRecorder, _ := runtimeTelemetry.(telemetry.ChatMetricsRecorder)
 	sessionCostObserved := false
 	sessionCostKnown := true
+	sessionCostTotalUSD := 0.0
 	sessionCostSource := ""
 	sessionCostCurrency := ""
 	sessionCostPricingRef := ""
@@ -62,7 +64,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 	defer func() {
 		applyRoutingReport(req.Provider, &result)
 		applyRoutingSpanAttributes(rootSpan, result)
-		applySessionCostAttributes(rootSpan, sessionCostObserved, sessionCostKnown, sessionCostSource, result.CostUSD, sessionCostCurrency, sessionCostPricingRef, sessionCostStable)
+		applySessionCostAttributes(rootSpan, sessionCostObserved, sessionCostKnown, sessionCostSource, sessionCostTotalUSD, sessionCostCurrency, sessionCostPricingRef, sessionCostStable)
 		if result.Error != nil {
 			recordSpanError(rootSpan, result.Error)
 		}
@@ -334,18 +336,18 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		// the projected next turn cost would meet or exceed the cap. Skipped
 		// on iteration 0 (no observed turn yet to project from), and skipped
 		// when any prior turn reported unknown cost (the cap cannot fire on
-		// unknown cost — see spec §28). result.CostUSD < 0 sentinel also means
-		// unknown.
+		// unknown cost — see spec §28). All arithmetic uses private loop state;
+		// Result never exposes an unknown-cost numeric sentinel.
 		if req.CostCapUSD > 0 && iteration > 0 && !anyUnknownCostObserved && sessionCostKnown {
-			projected := result.CostUSD + lastTurnKnownCostUSD
+			projected := sessionCostTotalUSD + lastTurnKnownCostUSD
 			if projected >= req.CostCapUSD {
 				slog.Warn("cost cap reached: halting before next llm.request",
-					"running_cost_usd", result.CostUSD,
+					"running_cost_usd", sessionCostTotalUSD,
 					"projected_next_cost_usd", lastTurnKnownCostUSD,
 					"cap_usd", req.CostCapUSD)
 				result.Status = StatusBudgetHalted
 				result.Duration = time.Since(start)
-				result.Error = fmt.Errorf("agent: cost cap reached: $%.4f running + $%.4f projected >= $%.4f cap", result.CostUSD, lastTurnKnownCostUSD, req.CostCapUSD)
+				result.Error = fmt.Errorf("agent: cost cap reached: $%.4f running + $%.4f projected >= $%.4f cap", sessionCostTotalUSD, lastTurnKnownCostUSD, req.CostCapUSD)
 				snapshotMessages()
 				emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
 				return result, nil
@@ -526,8 +528,9 @@ func Run(ctx context.Context, req Request) (Result, error) {
 						sessionCostStable = false
 					}
 				}
+				sessionCostTotalUSD += iterCost
 				if sessionCostKnown {
-					result.CostUSD += iterCost
+					setKnownFinalCost(&result, sessionCostTotalUSD, resp.Attempt.Cost.Source)
 				}
 				// Track this turn's known cost so the next-iteration cap gate
 				// can project the upcoming turn conservatively.
@@ -535,7 +538,9 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			} else {
 				sessionCostObserved = true
 				sessionCostKnown = false
-				result.CostUSD = -1
+				result.FinalCostUSD = nil
+				result.FinalCostSource = SessionCostSourceUnknown
+				result.CostUSD = 0
 				// Per FEAT-005 §28 / AC-FEAT-005-07: cap cannot fire when any
 				// turn returned unknown cost. Surface a one-shot warning the
 				// first time so operators know the configured cap is inert.
@@ -1020,8 +1025,9 @@ func emitSessionEnd(cb EventCallback, sessionID string, seq *int, result Result,
 		"metadata":            metadata,
 		"error":               errStr,
 	}
-	if result.CostUSD >= 0 {
-		data["cost_usd"] = result.CostUSD
+	data["cost_source"] = result.FinalCostSource
+	if result.FinalCostUSD != nil {
+		data["cost_usd"] = *result.FinalCostUSD
 	}
 	emitCallback(cb, Event{
 		SessionID: sessionID,
@@ -1122,12 +1128,36 @@ func attemptCostUSD(attempt *AttemptMetadata) (float64, bool) {
 	if attempt == nil || attempt.Cost == nil || attempt.Cost.Amount == nil {
 		return 0, false
 	}
+	if *attempt.Cost.Amount < 0 {
+		return 0, false
+	}
 
 	switch attempt.Cost.Source {
 	case CostSourceProviderReported, CostSourceGatewayReported, CostSourceConfigured:
 		return *attempt.Cost.Amount, true
 	default:
 		return 0, false
+	}
+}
+
+func setKnownFinalCost(result *Result, total float64, source CostSource) {
+	if result == nil {
+		return
+	}
+	amount := total
+	result.FinalCostUSD = &amount
+	result.CostUSD = total
+	switch source {
+	case CostSourceProviderReported, CostSourceGatewayReported:
+		result.FinalCostSource = SessionCostSourceReported
+	case CostSourceConfigured:
+		if result.FinalCostSource != SessionCostSourceReported {
+			result.FinalCostSource = SessionCostSourceConfigured
+		}
+	default:
+		result.FinalCostUSD = nil
+		result.FinalCostSource = SessionCostSourceUnknown
+		result.CostUSD = 0
 	}
 }
 

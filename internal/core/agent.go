@@ -253,6 +253,18 @@ const (
 	CostSourceUnknown          CostSource = "unknown"
 )
 
+// SessionCostSource is the normalized provenance of an aggregated session
+// cost. Attempt-level provider_reported and gateway_reported sources both
+// project to reported; configured is retained only when every known
+// constituent was configured; unknown means the aggregate amount is absent.
+type SessionCostSource string
+
+const (
+	SessionCostSourceReported   SessionCostSource = "reported"
+	SessionCostSourceConfigured SessionCostSource = "configured"
+	SessionCostSourceUnknown    SessionCostSource = "unknown"
+)
+
 // CostAttribution captures the provenance of the cost associated with one
 // internal provider attempt.
 type CostAttribution struct {
@@ -466,9 +478,19 @@ type Result struct {
 	// Duration is the total wall-clock time of the run.
 	Duration time.Duration `json:"duration_ms"`
 
-	// CostUSD is the estimated cost. -1 means unknown (model not in pricing table).
-	// 0 means free (local model with $0 pricing entry).
-	CostUSD float64 `json:"cost_usd"`
+	// FinalCostUSD is the authoritative optional session cost. Nil means at
+	// least one constituent cost was unknown. A non-nil zero is a known free or
+	// explicitly configured zero-cost session.
+	FinalCostUSD *float64 `json:"cost_usd,omitempty"`
+	// FinalCostSource is the normalized provenance of FinalCostUSD. It is always
+	// emitted so consumers do not infer provenance from amount presence or value.
+	FinalCostSource SessionCostSource `json:"cost_source"`
+
+	// CostUSD is a deprecated compatibility mirror for callers that still expect
+	// a scalar. It is not serialized. Known sessions mirror FinalCostUSD;
+	// unknown sessions leave it at zero. Use FinalCostUSD and FinalCostSource for
+	// presence-aware behavior.
+	CostUSD float64 `json:"-"`
 
 	// Model is the model that was used.
 	Model string `json:"model"`

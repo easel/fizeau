@@ -918,7 +918,9 @@ func TestRun_UnknownCostDoesNotUseDefaultPricing(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusSuccess, result.Status)
-	assert.Equal(t, -1.0, result.CostUSD)
+	assert.Zero(t, result.CostUSD, "deprecated scalar mirror must not expose an unknown sentinel")
+	assert.Nil(t, result.FinalCostUSD)
+	assert.Equal(t, SessionCostSourceUnknown, result.FinalCostSource)
 	require.NotNil(t, responsePayload)
 	_, ok := responsePayload["cost_usd"]
 	assert.False(t, ok, "unknown-cost llm.response must omit cost_usd")
@@ -1026,7 +1028,9 @@ func TestRun_ConfiguredRuntimeCostRequiresExactMatch(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusSuccess, result.Status)
-	assert.Equal(t, -1.0, result.CostUSD)
+	assert.Zero(t, result.CostUSD, "deprecated scalar mirror must not expose an unknown sentinel")
+	assert.Nil(t, result.FinalCostUSD)
+	assert.Equal(t, SessionCostSourceUnknown, result.FinalCostSource)
 	require.NotNil(t, responsePayload)
 	_, ok := responsePayload["cost_usd"]
 	assert.False(t, ok, "non-matching runtime pricing must not invent cost")
@@ -1213,7 +1217,9 @@ func TestRun_EmitsCostAttributesOnChatAndRootSpans(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, StatusSuccess, result.Status)
-		assert.Equal(t, -1.0, result.CostUSD)
+		assert.Zero(t, result.CostUSD, "deprecated scalar mirror must not expose an unknown sentinel")
+		assert.Nil(t, result.FinalCostUSD)
+		assert.Equal(t, SessionCostSourceUnknown, result.FinalCostSource)
 
 		ended := recorder.Ended()
 		require.Len(t, ended, 2)
@@ -1679,10 +1685,14 @@ func TestRun_SessionEndEventIncludesKnownCost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.InDelta(t, sessionCost, result.CostUSD, 1e-9)
+	require.NotNil(t, result.FinalCostUSD)
+	assert.InDelta(t, sessionCost, *result.FinalCostUSD, 1e-9)
+	assert.Equal(t, SessionCostSourceReported, result.FinalCostSource)
 	require.NotNil(t, sessionEndData)
 	costVal, ok := sessionEndData["cost_usd"]
 	require.True(t, ok, "session.end event must include cost_usd")
 	assert.InDelta(t, sessionCost, costVal.(float64), 1e-9)
+	assert.Equal(t, string(SessionCostSourceReported), sessionEndData["cost_source"])
 }
 
 func TestRun_SessionEndEventOmitsUnknownCost(t *testing.T) {
@@ -1719,10 +1729,13 @@ func TestRun_SessionEndEventOmitsUnknownCost(t *testing.T) {
 		Callback: cb,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, -1.0, result.CostUSD)
+	assert.Zero(t, result.CostUSD, "deprecated scalar mirror must not expose an unknown sentinel")
+	assert.Nil(t, result.FinalCostUSD)
+	assert.Equal(t, SessionCostSourceUnknown, result.FinalCostSource)
 	require.NotNil(t, sessionEndData)
 	_, ok := sessionEndData["cost_usd"]
 	assert.False(t, ok, "session.end event must omit cost_usd when unknown")
+	assert.Equal(t, string(SessionCostSourceUnknown), sessionEndData["cost_source"])
 }
 
 func spanByName(t *testing.T, spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan {
@@ -2606,7 +2619,9 @@ func TestRun_CostCapDoesNotFireOnUnknownCost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, StatusSuccess, result.Status, "unknown-cost run must NOT trip the cap (FEAT-005 §28)")
-	assert.Equal(t, float64(-1), result.CostUSD, "unknown cost stays as -1 sentinel")
+	assert.Zero(t, result.CostUSD, "deprecated scalar mirror must not expose an unknown sentinel")
+	assert.Nil(t, result.FinalCostUSD)
+	assert.Equal(t, SessionCostSourceUnknown, result.FinalCostSource)
 	assert.Equal(t, 3, provider.callCount, "all turns must execute when cost is unknown")
 }
 
