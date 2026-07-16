@@ -122,7 +122,7 @@ sleep 1
 `), 0o700))
 	cassetteDir := filepath.Join(dir, "cassette")
 
-	windows, account, err := readClaudeQuotaViaPTY(2*time.Second, WithQuotaPTYCommand(script), WithQuotaPTYCassetteDir(cassetteDir))
+	windows, account, err := readClaudeQuotaViaPTY(10*time.Second, WithQuotaPTYCommand(script), WithQuotaPTYCassetteDir(cassetteDir))
 	require.Error(t, err)
 	require.Empty(t, windows)
 	require.Nil(t, account)
