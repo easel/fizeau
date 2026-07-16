@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 )
 
@@ -152,6 +153,15 @@ const (
 	CostSourceUnknown    CostSource = "unknown"
 )
 
+func normalizeFinalCostPair(cost *float64, source CostSource) (*float64, CostSource) {
+	source = normalizeCostSource(source)
+	if cost == nil || source == CostSourceUnknown || *cost < 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0) {
+		return nil, CostSourceUnknown
+	}
+	value := *cost
+	return &value, source
+}
+
 // FinalData is the payload for type=final events.
 type FinalData struct {
 	Status          string         `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
@@ -178,16 +188,12 @@ type FinalData struct {
 	Extra          map[string]string `json:"-"`
 }
 
-// MarshalJSON writes the authoritative final-cost wire contract while
-// retaining a non-zero scalar fallback for legacy in-memory producers.
+// MarshalJSON writes the authoritative final-cost wire contract. The
+// deprecated scalar remains in-memory only and is never promoted to wire
+// evidence.
 func (d FinalData) MarshalJSON() ([]byte, error) {
 	type finalDataAlias FinalData
-
-	cost := d.FinalCostUSD
-	if cost == nil && d.CostUSD != 0 {
-		legacyCost := d.CostUSD
-		cost = &legacyCost
-	}
+	cost, source := normalizeFinalCostPair(d.FinalCostUSD, d.FinalCostSource)
 
 	return json.Marshal(struct {
 		finalDataAlias
@@ -196,7 +202,7 @@ func (d FinalData) MarshalJSON() ([]byte, error) {
 	}{
 		finalDataAlias: finalDataAlias(d),
 		CostUSD:        cost,
-		CostSource:     normalizeCostSource(d.FinalCostSource),
+		CostSource:     source,
 	})
 }
 

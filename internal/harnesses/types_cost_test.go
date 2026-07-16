@@ -2,6 +2,7 @@ package harnesses
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"testing"
 )
@@ -86,13 +87,74 @@ func TestFinalDataCostJSONRoundTrip(t *testing.T) {
 		}
 
 		wire := decodeFinalDataWireForTest(t, marshalFinalDataForTest(t, decoded))
-		if got := string(wire["cost_usd"]); got != "3.75" {
-			t.Fatalf("re-encoded cost_usd = %s, want 3.75", got)
+		if got, ok := wire["cost_usd"]; ok {
+			t.Fatalf("re-encoded cost_usd = %s, want omitted", got)
 		}
 		if got := string(wire["cost_source"]); got != `"unknown"` {
 			t.Fatalf("re-encoded cost_source = %s, want unknown", got)
 		}
 	})
+
+	for _, test := range []struct {
+		name string
+		cost float64
+	}{
+		{name: "positive deprecated scalar", cost: 3.75},
+		{name: "negative deprecated scalar", cost: -1},
+	} {
+		t.Run(test.name+" is never promoted", func(t *testing.T) {
+			encoded := marshalFinalDataForTest(t, FinalData{
+				Status:          "success",
+				FinalCostSource: CostSourceUnknown,
+				CostUSD:         test.cost,
+			})
+			wire := decodeFinalDataWireForTest(t, encoded)
+			if got, ok := wire["cost_usd"]; ok {
+				t.Fatalf("cost_usd = %s, want omitted", got)
+			}
+			if got := string(wire["cost_source"]); got != `"unknown"` {
+				t.Fatalf("cost_source = %s, want unknown", got)
+			}
+		})
+	}
+
+	positive := 1.25
+	zero := 0.0
+	negative := -1.0
+	nan := math.NaN()
+	positiveInfinity := math.Inf(1)
+	negativeInfinity := math.Inf(-1)
+	for _, test := range []struct {
+		name   string
+		cost   *float64
+		source CostSource
+	}{
+		{name: "positive pointer with unknown source", cost: &positive, source: CostSourceUnknown},
+		{name: "zero pointer with unknown source", cost: &zero, source: CostSourceUnknown},
+		{name: "positive pointer with invalid source", cost: &positive, source: CostSource("invalid")},
+		{name: "zero pointer with invalid source", cost: &zero, source: CostSource("invalid")},
+		{name: "nil pointer with reported source", source: CostSourceReported},
+		{name: "nil pointer with configured source", source: CostSourceConfigured},
+		{name: "negative pointer with reported source", cost: &negative, source: CostSourceReported},
+		{name: "NaN pointer with reported source", cost: &nan, source: CostSourceReported},
+		{name: "positive infinity pointer with reported source", cost: &positiveInfinity, source: CostSourceReported},
+		{name: "negative infinity pointer with reported source", cost: &negativeInfinity, source: CostSourceReported},
+	} {
+		t.Run(test.name+" normalizes on re-encode", func(t *testing.T) {
+			encoded := marshalFinalDataForTest(t, FinalData{
+				Status:          "success",
+				FinalCostUSD:    test.cost,
+				FinalCostSource: test.source,
+			})
+			wire := decodeFinalDataWireForTest(t, encoded)
+			if got, ok := wire["cost_usd"]; ok {
+				t.Fatalf("cost_usd = %s, want omitted", got)
+			}
+			if got := string(wire["cost_source"]); got != `"unknown"` {
+				t.Fatalf("cost_source = %s, want unknown", got)
+			}
+		})
+	}
 
 	for _, source := range []string{`"invalid"`, `""`, `null`, `17`} {
 		t.Run("invalid source "+source, func(t *testing.T) {
