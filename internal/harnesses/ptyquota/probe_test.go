@@ -96,6 +96,70 @@ func TestRunReturnsWhenProcessExitsBeforeMarkers(t *testing.T) {
 	require.ErrorContains(t, err, "exited before expected output")
 }
 
+func TestMarkerWaitPrefersObservedOutputCompletionOverContext(t *testing.T) {
+	tests := []struct {
+		name string
+		wait func(*runState, context.Context) error
+	}{
+		{
+			name: "ready markers",
+			wait: func(run *runState, ctx context.Context) error {
+				return run.waitForAnyText(ctx, "never-ready")
+			},
+		},
+		{
+			name: "done markers",
+			wait: func(run *runState, ctx context.Context) error {
+				return run.waitForText(ctx, []string{"never-done"}, nil, nil)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			done := make(chan struct{})
+			close(done)
+
+			err := tc.wait(&runState{done: done}, ctx)
+			require.ErrorContains(t, err, "exited before expected output")
+			require.NotErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
+func TestMarkerWaitPreservesContextWithoutObservedExit(t *testing.T) {
+	tests := []struct {
+		name string
+		wait func(*runState, context.Context) error
+	}{
+		{
+			name: "ready markers",
+			wait: func(run *runState, ctx context.Context) error {
+				return run.waitForAnyText(ctx, "never-ready")
+			},
+		},
+		{
+			name: "done markers",
+			wait: func(run *runState, ctx context.Context) error {
+				return run.waitForText(ctx, []string{"never-done"}, nil, nil)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := tc.wait(&runState{done: make(chan struct{})}, ctx)
+			require.ErrorContains(t, err, "quota probe timed out")
+			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
 func TestRunRequiresAllDoneMarkers(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell-backed PTY probes require Unix PTY support")

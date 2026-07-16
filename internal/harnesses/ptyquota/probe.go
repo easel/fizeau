@@ -379,6 +379,15 @@ func (r *runState) waitForAnyText(ctx context.Context, markers ...string) error 
 				}
 			}
 		}
+		// Output completion already observed before blocking is more specific than
+		// the enclosing deadline. Do not recheck done after ctx wins: deadline-
+		// triggered session teardown can itself close the output channel and must
+		// remain classified as a timeout.
+		select {
+		case <-r.done:
+			return r.exitedBeforeMarkersError(markers, nil, nil)
+		default:
+		}
 		select {
 		case <-ctx.Done():
 			return &ProbeError{Status: StatusError, Reason: "quota probe timed out", Err: ctx.Err()}
@@ -415,6 +424,11 @@ func (r *runState) waitForText(ctx context.Context, allMarkers, anyMarkers []str
 			if ready && containsAllAndAny(screen, allMarkers, anyMarkers) && (doneWhen == nil || doneWhen(screen)) {
 				return nil
 			}
+		}
+		select {
+		case <-r.done:
+			return r.exitedBeforeMarkersError(allMarkers, anyMarkers, doneWhen)
+		default:
 		}
 		select {
 		case <-ctx.Done():
