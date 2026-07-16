@@ -65,6 +65,7 @@ const (
 	portableRuntimeELFExecutable portableRuntimeELFRole = iota + 1
 	portableRuntimeELFLoader
 	portableRuntimeELFDependency
+	portableRuntimeELFNativeAddon
 )
 
 const (
@@ -121,6 +122,7 @@ type PortableRuntimeInterpretedClosureRequest struct {
 	LibraryRoots        []PortableRuntimeSourceTree
 	ExactLibraryRoots   []PortableRuntimeLibrarySearchRoot
 	PackageTrees        []PortableRuntimeSourceTree
+	NativeAddons        []PortableRuntimeNativeAddon
 	RuntimeArgs         []string
 	RuntimeLookup       PortableRuntimeLookupPolicy
 	RuntimeTrees        []PortableRuntimeSourceTree
@@ -129,6 +131,8 @@ type PortableRuntimeInterpretedClosureRequest struct {
 type portableRuntimeInterpretedClosureHooks struct {
 	afterInterpreterResolution            func()
 	beforeInterpreterIdentityVerification func()
+	afterNativeAddonPackageSnapshots      func()
+	beforeNativeAddonSnapshotVerification func()
 }
 
 // AnalyzePortableRuntimeStaticClosure resolves a symlinked launcher, verifies
@@ -323,6 +327,10 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	if err := ValidatePortableRuntimeTarget(target); err != nil {
 		return PortableRuntimeContribution{}, err
 	}
+	addonDeclarations, err := validatePortableRuntimeNativeAddonDeclarations(request.PackageTrees, request.NativeAddons)
+	if err != nil {
+		return PortableRuntimeContribution{}, err
+	}
 	if !validPortableRuntimeFileIdentity(request.InterpreterIdentity) {
 		return PortableRuntimeContribution{}, closureError("interpreted layout has an invalid interpreter identity")
 	}
@@ -331,6 +339,13 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	}
 	if err := validatePortableRuntimeLookup(request.RuntimeLookup, request.RuntimeTrees); err != nil {
 		return PortableRuntimeContribution{}, err
+	}
+	packageRoots, err := inspectPortableRuntimeRoots(request.PackageTrees)
+	if err != nil {
+		return PortableRuntimeContribution{}, err
+	}
+	if len(addonDeclarations) != 0 && hooks.afterNativeAddonPackageSnapshots != nil {
+		hooks.afterNativeAddonPackageSnapshots()
 	}
 	entrypoint, entryInfo, err := inspectPortableRuntimeScript(ctx, request.EntrypointSource)
 	if err != nil {
@@ -361,6 +376,10 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 	var loaderELF *portableRuntimeELFFile
 	var loaderInfo os.FileInfo
 	if elfInterpreter == "" {
+		if len(addonDeclarations) != 0 {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, closureError("native addons require a dynamic interpreted closure")
+		}
 		if request.RuntimeLookup == PortableRuntimeLookupVerifiedExact {
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("static interpreter cannot claim verified exact dynamic lookup")
@@ -431,13 +450,38 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			closePortableRuntimeELF(interpreterELF)
 			return PortableRuntimeContribution{}, closureError("could not finish inspecting interpreter loader")
 		}
-		if exactLibraries {
-			roots = portableRuntimeUsedExactRoots(roots, resolvedLibraries)
-			if len(roots) == 0 {
-				closePortableRuntimeELF(interpreterELF)
-				return PortableRuntimeContribution{}, closureError("exact interpreter closure resolved no library roots")
-			}
+	}
+	addons, addonRoots, err := inspectPortableRuntimeNativeAddons(target, packageRoots, addonDeclarations)
+	if err != nil {
+		closePortableRuntimeELF(interpreterELF)
+		return PortableRuntimeContribution{}, err
+	}
+	defer closePortableRuntimeNativeAddons(addons, addonRoots)
+	for _, addon := range addons {
+		addonLibraries, resolveErr := resolvePortableRuntimeELFClosure(ctx, addon.file, target, roots, request.RuntimeLookup)
+		if resolveErr != nil {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, resolveErr
 		}
+		resolvedLibraries, err = mergePortableRuntimeResolvedLibraries(resolvedLibraries, addonLibraries)
+		if err != nil {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, err
+		}
+	}
+	if exactLibraries {
+		roots = portableRuntimeUsedExactRoots(roots, resolvedLibraries)
+		if len(roots) == 0 {
+			closePortableRuntimeELF(interpreterELF)
+			return PortableRuntimeContribution{}, closureError("exact interpreted closure resolved no library roots")
+		}
+	}
+	if len(addons) != 0 && hooks.beforeNativeAddonSnapshotVerification != nil {
+		hooks.beforeNativeAddonSnapshotVerification()
+	}
+	if err := verifyPortableRuntimeNativeAddonSnapshots(packageRoots, addons, addonRoots); err != nil {
+		closePortableRuntimeELF(interpreterELF)
+		return PortableRuntimeContribution{}, err
 	}
 	if hooks.beforeInterpreterIdentityVerification != nil {
 		hooks.beforeInterpreterIdentityVerification()
@@ -474,7 +518,7 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 			return PortableRuntimeContribution{}, err
 		}
 	}
-	assets, err = appendPortableRuntimeTrees(ctx, assets, request.PackageTrees, PortableRuntimeAssetInstallTree)
+	assets, err = appendInspectedPortableRuntimeRoots(ctx, assets, packageRoots, PortableRuntimeAssetInstallTree)
 	if err != nil {
 		return PortableRuntimeContribution{}, err
 	}
@@ -501,6 +545,231 @@ func analyzePortableRuntimeInterpretedClosure(ctx context.Context, target Portab
 
 func validPortableRuntimeFileIdentity(identity PortableRuntimeFileIdentity) bool {
 	return identity.Size > 0 && validPortableRuntimeDigest(identity.ContentSHA256)
+}
+
+type portableRuntimeNativeAddonDeclaration struct {
+	rootIndex    int
+	relativePath string
+	identity     PortableRuntimeFileIdentity
+}
+
+type portableRuntimeNativeAddonRoot struct {
+	rootIndex  int
+	descriptor *safefs.NoFollowRoot
+}
+
+type portableRuntimeInspectedNativeAddon struct {
+	rootIndex int
+	record    portableRuntimeTreeRecord
+	identity  PortableRuntimeFileIdentity
+	digest    [sha256.Size]byte
+	file      *portableRuntimeELFFile
+}
+
+func validatePortableRuntimeNativeAddonDeclarations(packageTrees []PortableRuntimeSourceTree, declarations []PortableRuntimeNativeAddon) ([]portableRuntimeNativeAddonDeclaration, error) {
+	if len(declarations) == 0 {
+		return nil, nil
+	}
+	validated := make([]portableRuntimeNativeAddonDeclaration, len(declarations))
+	seen := make(map[string]struct{}, len(declarations))
+	for i, declaration := range declarations {
+		if declaration.PackageTreeTarget == "" || !validPortableRuntimeTargetPath(declaration.PackageTreeTarget) {
+			return nil, closureErrorAt("native addon", i, "has an invalid package-tree target")
+		}
+		rootIndex := -1
+		for j, tree := range packageTrees {
+			if tree.Target != declaration.PackageTreeTarget {
+				continue
+			}
+			if rootIndex != -1 {
+				return nil, closureErrorAt("native addon", i, "has an ambiguous package-tree target")
+			}
+			rootIndex = j
+		}
+		if rootIndex == -1 {
+			return nil, closureErrorAt("native addon", i, "has an unknown package-tree target")
+		}
+		relative := declaration.RelativePath
+		if relative == "" || path.IsAbs(relative) || relative != path.Clean(relative) || strings.Contains(relative, "\\") ||
+			!validPortableRuntimeTargetPath(relative) || !strings.HasSuffix(path.Base(relative), ".node") {
+			return nil, closureErrorAt("native addon", i, "has an invalid relative path")
+		}
+		for _, component := range strings.Split(relative, "/") {
+			if component == "" || component == "." || component == ".." {
+				return nil, closureErrorAt("native addon", i, "has an invalid relative path")
+			}
+		}
+		if !validPortableRuntimeFileIdentity(declaration.Identity) {
+			return nil, closureErrorAt("native addon", i, "has an invalid exact identity")
+		}
+		key := declaration.PackageTreeTarget + "\x00" + relative
+		if _, exists := seen[key]; exists {
+			return nil, closureErrorAt("native addon", i, "duplicates an earlier declaration")
+		}
+		seen[key] = struct{}{}
+		validated[i] = portableRuntimeNativeAddonDeclaration{rootIndex: rootIndex, relativePath: relative, identity: declaration.Identity}
+	}
+	return validated, nil
+}
+
+func inspectPortableRuntimeNativeAddons(target PortableRuntimeTarget, packageRoots []portableRuntimeInspectedRoot, declarations []portableRuntimeNativeAddonDeclaration) ([]portableRuntimeInspectedNativeAddon, []portableRuntimeNativeAddonRoot, error) {
+	if len(declarations) == 0 {
+		return nil, nil, nil
+	}
+	addons := make([]portableRuntimeInspectedNativeAddon, 0, len(declarations))
+	roots := make([]portableRuntimeNativeAddonRoot, 0)
+	rootByIndex := make(map[int]*safefs.NoFollowRoot)
+	fail := func(err error) ([]portableRuntimeInspectedNativeAddon, []portableRuntimeNativeAddonRoot, error) {
+		closePortableRuntimeNativeAddons(addons, roots)
+		return nil, nil, err
+	}
+	for _, declaration := range declarations {
+		if declaration.rootIndex < 0 || declaration.rootIndex >= len(packageRoots) {
+			return fail(closureError("native addon package snapshot is unavailable"))
+		}
+		packageRoot := packageRoots[declaration.rootIndex]
+		if packageRoot.snapshot == nil {
+			return fail(closureError("native addon package snapshot is unavailable"))
+		}
+		rootDescriptor := rootByIndex[declaration.rootIndex]
+		if rootDescriptor == nil {
+			var openErr error
+			rootDescriptor, openErr = safefs.OpenNoFollowRoot(packageRoot.source)
+			if openErr != nil {
+				return fail(closureError("native addon package root cannot be opened safely"))
+			}
+			rootInfo, statErr := rootDescriptor.Stat()
+			if statErr != nil || !samePortableRuntimeFile(packageRoot.snapshot.rootInfo, rootInfo) {
+				_ = rootDescriptor.Close()
+				return fail(closureError("native addon package root changed before inspection"))
+			}
+			rootByIndex[declaration.rootIndex] = rootDescriptor
+			roots = append(roots, portableRuntimeNativeAddonRoot{rootIndex: declaration.rootIndex, descriptor: rootDescriptor})
+		}
+		record, exists := portableRuntimeTreeSnapshotRecord(packageRoot.snapshot, declaration.relativePath)
+		if !exists || record.kind != 'f' || !record.pathInfo.Mode().IsRegular() || record.pathInfo.Mode()&os.ModeSymlink != 0 ||
+			record.contentInfo == nil || !samePortableRuntimeFile(record.pathInfo, record.contentInfo) {
+			return fail(closureError("native addon is not a direct regular package member"))
+		}
+		member, openErr := rootDescriptor.OpenReadNoFollow(declaration.relativePath)
+		if openErr != nil {
+			return fail(closureError("native addon cannot be opened safely"))
+		}
+		memberInfo, digest, identityErr := verifyPortableRuntimeDescriptorIdentity(member, declaration.identity)
+		if identityErr != nil || !samePortableRuntimeFile(record.pathInfo, memberInfo) || !samePortableRuntimeFile(record.contentInfo, memberInfo) || record.digest != digest {
+			_ = member.Close()
+			return fail(closureError("native addon does not match its package snapshot identity"))
+		}
+		addonELF, elfErr := inspectPortableRuntimeELFDescriptor(member, target, portableRuntimeELFNativeAddon)
+		if elfErr != nil {
+			_ = member.Close()
+			return fail(elfErr)
+		}
+		if policyErr := validatePortableRuntimeNativeAddonELF(addonELF.File, path.Base(declaration.relativePath)); policyErr != nil {
+			closePortableRuntimeELF(addonELF)
+			return fail(policyErr)
+		}
+		addons = append(addons, portableRuntimeInspectedNativeAddon{
+			rootIndex: declaration.rootIndex,
+			record:    record,
+			identity:  declaration.identity,
+			digest:    digest,
+			file:      addonELF,
+		})
+	}
+	return addons, roots, nil
+}
+
+func closePortableRuntimeNativeAddons(addons []portableRuntimeInspectedNativeAddon, roots []portableRuntimeNativeAddonRoot) {
+	for i := range addons {
+		closePortableRuntimeELF(addons[i].file)
+		addons[i].file = nil
+	}
+	for i := range roots {
+		if roots[i].descriptor != nil {
+			_ = roots[i].descriptor.Close()
+			roots[i].descriptor = nil
+		}
+	}
+}
+
+func verifyPortableRuntimeDescriptorIdentity(descriptor *os.File, expected PortableRuntimeFileIdentity) (os.FileInfo, [sha256.Size]byte, error) {
+	var zero [sha256.Size]byte
+	if descriptor == nil || !validPortableRuntimeFileIdentity(expected) {
+		return nil, zero, closureError("file descriptor identity cannot be verified")
+	}
+	before, err := descriptor.Stat()
+	if err != nil || !before.Mode().IsRegular() || before.Mode()&os.ModeSymlink != 0 || before.Size() != expected.Size {
+		return nil, zero, closureError("file descriptor does not match its declared identity")
+	}
+	hasher := sha256.New()
+	read, err := io.Copy(hasher, io.NewSectionReader(descriptor, 0, before.Size()))
+	after, statErr := descriptor.Stat()
+	if err != nil || read != before.Size() || statErr != nil || !samePortableRuntimeFile(before, after) {
+		return nil, zero, closureError("file descriptor changed during identity verification")
+	}
+	copy(zero[:], hasher.Sum(nil))
+	if hex.EncodeToString(zero[:]) != expected.ContentSHA256 {
+		return nil, [sha256.Size]byte{}, closureError("file descriptor does not match its declared identity")
+	}
+	return after, zero, nil
+}
+
+func validatePortableRuntimeNativeAddonELF(file *elf.File, basename string) error {
+	if file == nil || portableRuntimeELFHasInterpreter(file) {
+		return closureError("native addon declares an unsupported interpreter")
+	}
+	flags, err := file.DynValue(elf.DT_FLAGS_1)
+	if err != nil {
+		return closureError("native addon flags cannot be verified")
+	}
+	for _, value := range flags {
+		if value&uint64(elf.DF_1_PIE) != 0 {
+			return closureError("native addon is marked as a position-independent executable")
+		}
+	}
+	sonames, err := file.DynString(elf.DT_SONAME)
+	if err != nil {
+		return closureError("native addon SONAME cannot be verified")
+	}
+	if len(sonames) > 1 || len(sonames) == 1 && (sonames[0] == "" || sonames[0] != basename) {
+		return closureError("native addon SONAME does not match its package member name")
+	}
+	return nil
+}
+
+func verifyPortableRuntimeNativeAddonSnapshots(packageRoots []portableRuntimeInspectedRoot, addons []portableRuntimeInspectedNativeAddon, roots []portableRuntimeNativeAddonRoot) error {
+	if len(addons) == 0 {
+		return nil
+	}
+	for _, root := range roots {
+		if root.rootIndex < 0 || root.rootIndex >= len(packageRoots) || root.descriptor == nil {
+			return closureError("native addon package root identity cannot be verified")
+		}
+		captured := packageRoots[root.rootIndex].snapshot
+		before, err := root.descriptor.Stat()
+		if err != nil || captured == nil || !samePortableRuntimeFile(captured.rootInfo, before) {
+			return closureError("native addon package root changed during inspection")
+		}
+		if err := verifyPortableRuntimeTreeSnapshotUnchanged(captured); err != nil {
+			return err
+		}
+		after, err := root.descriptor.Stat()
+		if err != nil || !samePortableRuntimeFile(before, after) || !samePortableRuntimeFile(captured.rootInfo, after) {
+			return closureError("native addon package root changed during inspection")
+		}
+	}
+	for _, addon := range addons {
+		if addon.file == nil || addon.file.descriptor == nil {
+			return closureError("native addon descriptor identity cannot be verified")
+		}
+		info, digest, err := verifyPortableRuntimeDescriptorIdentity(addon.file.descriptor, addon.identity)
+		if err != nil || digest != addon.digest || digest != addon.record.digest ||
+			!samePortableRuntimeFile(addon.record.pathInfo, info) || !samePortableRuntimeFile(addon.record.contentInfo, info) {
+			return closureError("native addon changed during package snapshot verification")
+		}
+	}
+	return nil
 }
 
 // BuildPortableRuntimeLaunchCommand expands a typed launch recipe below one
@@ -580,9 +849,24 @@ func PortableRuntimeFileDigest(source string) (string, error) {
 // file content digest. Safe in-tree regular-file symlinks are normalized to
 // independent file records; other symlinks and special files are rejected.
 func PortableRuntimeTreeDigest(source string) (string, error) {
-	root, rootInfo, err := inspectPortableRuntimeTreeRoot(source)
+	snapshot, err := capturePortableRuntimeTreeSnapshot(source)
 	if err != nil {
 		return "", err
+	}
+	return snapshot.digest, nil
+}
+
+type portableRuntimeTreeSnapshot struct {
+	root     string
+	rootInfo os.FileInfo
+	digest   string
+	records  []portableRuntimeTreeRecord
+}
+
+func capturePortableRuntimeTreeSnapshot(source string) (*portableRuntimeTreeSnapshot, error) {
+	root, rootInfo, err := inspectPortableRuntimeTreeRoot(source)
+	if err != nil {
+		return nil, err
 	}
 	var records []portableRuntimeTreeRecord
 	err = filepath.Walk(root, func(current string, info os.FileInfo, walkErr error) error {
@@ -645,7 +929,7 @@ func PortableRuntimeTreeDigest(source string) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].name < records[j].name })
 
@@ -655,16 +939,22 @@ func PortableRuntimeTreeDigest(source string) (string, error) {
 		writePortableRuntimeManifestRecord(manifest, record.kind, record.name, record.owner, record.digest)
 	}
 	if err := verifyPortableRuntimeTreeSnapshot(root, rootInfo, records); err != nil {
-		return "", err
+		return nil, err
 	}
-	return hex.EncodeToString(manifest.Sum(nil)), nil
+	return &portableRuntimeTreeSnapshot{
+		root:     root,
+		rootInfo: rootInfo,
+		digest:   hex.EncodeToString(manifest.Sum(nil)),
+		records:  records,
+	}, nil
 }
 
 type portableRuntimeInspectedRoot struct {
-	source string
-	target string
-	digest string
-	exact  bool
+	source   string
+	target   string
+	digest   string
+	exact    bool
+	snapshot *portableRuntimeTreeSnapshot
 }
 
 type portableRuntimeResolvedLibrary struct {
@@ -689,15 +979,11 @@ func inspectPortableRuntimeRoots(mappings []PortableRuntimeSourceTree) ([]portab
 		if !validPortableRuntimeTargetPath(mapping.Target) {
 			return nil, closureErrorAt("source tree", i, "has invalid target")
 		}
-		source, _, err := inspectPortableRuntimeTreeRoot(mapping.Source)
-		if err != nil {
-			return nil, closureErrorAt("source tree", i, "is not a stable regular directory")
-		}
-		digest, digestErr := PortableRuntimeTreeDigest(source)
-		if digestErr != nil {
+		snapshot, snapshotErr := capturePortableRuntimeTreeSnapshot(mapping.Source)
+		if snapshotErr != nil {
 			return nil, closureErrorAt("source tree", i, "cannot be canonically digested")
 		}
-		roots[i] = portableRuntimeInspectedRoot{source: source, target: mapping.Target, digest: digest}
+		roots[i] = portableRuntimeInspectedRoot{source: snapshot.root, target: mapping.Target, digest: snapshot.digest, snapshot: snapshot}
 	}
 	return roots, nil
 }
@@ -794,25 +1080,33 @@ func inspectPortableRuntimeELFWithHook(ctx context.Context, source string, targe
 		_ = descriptor.Close()
 		return "", nil, nil, closureError("installed ELF changed before it could be inspected")
 	}
-	parsed, err := elf.NewFile(descriptor)
+	file, err := inspectPortableRuntimeELFDescriptor(descriptor, target, role)
 	if err != nil {
 		_ = descriptor.Close()
-		return "", nil, nil, closureError("installed layout is not a recognized Linux ELF file")
+		return "", nil, nil, err
+	}
+	return resolved, descriptorInfo, file, nil
+}
+
+func inspectPortableRuntimeELFDescriptor(descriptor *os.File, target PortableRuntimeTarget, role portableRuntimeELFRole) (*portableRuntimeELFFile, error) {
+	parsed, err := elf.NewFile(descriptor)
+	if err != nil {
+		return nil, closureError("installed layout is not a recognized Linux ELF file")
 	}
 	file := &portableRuntimeELFFile{File: parsed, descriptor: descriptor}
 	if file.OSABI != elf.ELFOSABI_NONE && file.OSABI != elf.ELFOSABI_LINUX {
-		closePortableRuntimeELF(file)
-		return "", nil, nil, closureError("ELF operating-system ABI is not Linux-compatible")
+		_ = parsed.Close()
+		return nil, closureError("ELF operating-system ABI is not Linux-compatible")
 	}
 	machine := portableRuntimeELFMachine(target.GOARCH)
 	if machine == elf.EM_NONE || file.Class != portableRuntimeELFClass(target.GOARCH) || file.Machine != machine {
-		closePortableRuntimeELF(file)
-		return "", nil, nil, closureError("ELF architecture does not match the portable target")
+		_ = parsed.Close()
+		return nil, closureError("ELF architecture does not match the portable target")
 	}
 	data := portableRuntimeELFData(target.GOARCH)
 	if data == elf.ELFDATANONE || file.Data != data {
-		closePortableRuntimeELF(file)
-		return "", nil, nil, closureError("ELF byte order does not match the portable target")
+		_ = parsed.Close()
+		return nil, closureError("ELF byte order does not match the portable target")
 	}
 	validType := false
 	switch role {
@@ -821,14 +1115,14 @@ func inspectPortableRuntimeELFWithHook(ctx context.Context, source string, targe
 		validType = (file.Type == elf.ET_EXEC || file.Type == elf.ET_DYN) && portableRuntimeELFHasExecutableEntry(file.File)
 	case portableRuntimeELFLoader:
 		validType = file.Type == elf.ET_DYN && portableRuntimeELFHasExecutableEntry(file.File)
-	case portableRuntimeELFDependency:
+	case portableRuntimeELFDependency, portableRuntimeELFNativeAddon:
 		validType = file.Type == elf.ET_DYN
 	}
 	if !validType {
-		closePortableRuntimeELF(file)
-		return "", nil, nil, closureError("ELF file has an unsupported executable type")
+		_ = parsed.Close()
+		return nil, closureError("ELF file has an unsupported executable type")
 	}
-	return resolved, descriptorInfo, file, nil
+	return file, nil
 }
 
 func portableRuntimeELFHasExecutableEntry(file *elf.File) bool {
@@ -1259,17 +1553,26 @@ func appendInspectedPortableRuntimeRoots(ctx context.Context, assets []PortableR
 		if err := checkPortableRuntimeContext(ctx); err != nil {
 			return nil, err
 		}
-		digest, err := PortableRuntimeTreeDigest(root.source)
-		if err != nil {
-			return nil, err
+		if root.snapshot != nil {
+			if err := verifyPortableRuntimeTreeSnapshotUnchanged(root.snapshot); err != nil {
+				return nil, err
+			}
+		} else {
+			digest, err := PortableRuntimeTreeDigest(root.source)
+			if err != nil {
+				return nil, err
+			}
+			if digest != root.digest {
+				return nil, closureError("source tree changed during closure analysis")
+			}
 		}
-		if digest != root.digest {
+		if root.digest == "" {
 			return nil, closureError("source tree changed during closure analysis")
 		}
 		if portableRuntimeTreeAssetAlreadyDeclared(assets, root) {
 			continue
 		}
-		assets = append(assets, PortableRuntimeAsset{Kind: kind, PathKind: PortableRuntimePathTree, Source: root.source, Target: root.target, ContentSHA256: digest})
+		assets = append(assets, PortableRuntimeAsset{Kind: kind, PathKind: PortableRuntimePathTree, Source: root.source, Target: root.target, ContentSHA256: root.digest})
 	}
 	return assets, nil
 }
@@ -1446,6 +1749,52 @@ func verifyPortableRuntimeTreeSnapshot(root string, rootInfo os.FileInfo, record
 		}
 	}
 	return nil
+}
+
+func portableRuntimeTreeSnapshotRecord(snapshot *portableRuntimeTreeSnapshot, relative string) (portableRuntimeTreeRecord, bool) {
+	if snapshot == nil {
+		return portableRuntimeTreeRecord{}, false
+	}
+	index := sort.Search(len(snapshot.records), func(i int) bool { return snapshot.records[i].name >= relative })
+	if index == len(snapshot.records) || snapshot.records[index].name != relative {
+		return portableRuntimeTreeRecord{}, false
+	}
+	return snapshot.records[index], true
+}
+
+func verifyPortableRuntimeTreeSnapshotUnchanged(captured *portableRuntimeTreeSnapshot) error {
+	if captured == nil {
+		return closureError("tree snapshot is unavailable")
+	}
+	current, err := capturePortableRuntimeTreeSnapshot(captured.root)
+	if err != nil || !samePortableRuntimeTreeSnapshot(captured, current) {
+		return closureError("source tree changed during closure analysis")
+	}
+	return nil
+}
+
+func samePortableRuntimeTreeSnapshot(first, second *portableRuntimeTreeSnapshot) bool {
+	if first == nil || second == nil || first.root != second.root || first.digest != second.digest ||
+		!samePortableRuntimeFile(first.rootInfo, second.rootInfo) || len(first.records) != len(second.records) {
+		return false
+	}
+	for i := range first.records {
+		if !samePortableRuntimeTreeRecord(first.records[i], second.records[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func samePortableRuntimeTreeRecord(first, second portableRuntimeTreeRecord) bool {
+	if first.name != second.name || first.kind != second.kind || first.owner != second.owner || first.digest != second.digest ||
+		!samePortableRuntimeFile(first.pathInfo, second.pathInfo) {
+		return false
+	}
+	if first.kind == 'f' && !samePortableRuntimeFile(first.contentInfo, second.contentInfo) {
+		return false
+	}
+	return true
 }
 
 func checkPortableRuntimeContext(ctx context.Context) error {

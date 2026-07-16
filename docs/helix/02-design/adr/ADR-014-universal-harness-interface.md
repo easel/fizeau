@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 5bf0e5c1f0fe37d8845804377086bb23d7a2287fe9fa9dffd3de29da56fb8ef6
+    self_hash: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
-      CONTRACT-004: 3b5c5a15a83d6f5fa145e645162a72fbd1805262d4362b38b6001b1504f2e7c5
-    reviewed_at: "2026-07-16T04:37:11Z"
+      CONTRACT-004: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
+    reviewed_at: "2026-07-16T05:32:45Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -588,6 +588,18 @@ self-attestation cannot choose or authorize the interpreter. Publisher,
 version, build, package-integrity, and offline-probe evidence remain owned by
 the contributing harness.
 
+The same ownership rule applies to native Node addons inside interpreted
+package trees. A contributor declares only the exact package members its
+accepted code paths can load and proves that set exhaustive with offline
+positive and missing-library evidence. The neutral analyzer neither imports
+contributor code nor scans foreign `.node` prebuilds. It validates the supplied
+declarations through root-anchored no-follow descriptors, binds them to one
+captured package-tree manifest, merges their recursive ELF dependencies before
+pruning exact roots, and leaves each addon owned solely by the package-tree
+asset. This keeps policy evidence in the harness package while centralizing
+filesystem race resistance, ELF policy, deduplication, and redacted failures in
+the neutral CONTRACT-004 implementation.
+
 For a recognized single-file dynamic runtime that imports generic loader symbols,
 the owning contributor may declare verified-exact lookup only after its
 credential-free, network-disabled probe demonstrates that startup opens no
@@ -685,6 +697,14 @@ owner.
   `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove explicit interpreter
   selection, descriptor-bound size/digest verification, replacement and
   redaction failures, and the unchanged absolute `DT_RPATH` prohibition.
+- `TestPortableRuntimeNodeAddonDeclaration`,
+  `TestPortableRuntimeNodeAddonDescriptorIdentity`,
+  `TestPortableRuntimeNodeAddonELFPolicy`, and
+  `TestPortableRuntimeNodeAddonClosure` prove contributor-selected addon
+  declarations, root/member descriptor binding, both replacement windows,
+  ELF and runtime-lookup policy, recursive dependency merge-before-prune,
+  deterministic deduplication, package-tree ownership, foreign-prebuild
+  opacity, and redacted failure coverage.
 - Claude contributor fixtures reject arbitrary dynamic ELF files, exercise
   verified-exact lookup with `dlopen`/`dlsym` imports through the emitted loader
   recipe inside a network-disabled isolated root, reject an unknown release

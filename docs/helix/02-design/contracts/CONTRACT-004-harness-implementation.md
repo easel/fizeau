@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 3b5c5a15a83d6f5fa145e645162a72fbd1805262d4362b38b6001b1504f2e7c5
+    self_hash: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
     deps:
       CONTRACT-003: 00832f8e545c23177a039758eaf8dd9fd8a07f2e54d5293d63de8c275acfa0c5
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T04:37:11Z"
+    reviewed_at: "2026-07-16T05:32:45Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -852,6 +852,65 @@ The contributing harness separately binds the accepted identity to the named
 install form, publisher-authenticated release, version, build, package
 integrity, and offline probe. The neutral analyzer MUST NOT infer or create
 that evidence from the locally installed interpreter.
+
+Interpreted contributors MAY declare runtime-loadable native Node addons through
+the following internal-only surface:
+
+```go
+type PortableRuntimeNativeAddon struct {
+    PackageTreeTarget string
+    RelativePath      string
+    Identity          PortableRuntimeFileIdentity
+}
+
+type PortableRuntimeInterpretedClosureRequest struct {
+    // Existing fields omitted.
+    NativeAddons []PortableRuntimeNativeAddon
+}
+```
+
+`PackageTreeTarget` MUST equal exactly one declared `PackageTrees` target.
+`RelativePath` MUST be a unique, clean, non-empty slash-relative path with no
+dot, dot-dot, absolute, backslash, or NUL component and a basename ending in
+`.node`. `Identity` follows the exact `PortableRuntimeFileIdentity` rules
+above. Invalid, duplicate, unknown, or ambiguous declarations fail before the
+analyzer accesses an addon member. A nil or empty declaration set is valid.
+The contributing harness owns evidence that the supplied set is exhaustive for
+its accepted package layout and code paths, including credential-free offline
+positive and missing-library probes. The neutral analyzer MUST validate exactly
+the supplied set and MUST NOT discover addons by scanning `.node` files;
+unselected foreign-platform prebuilds remain opaque package-tree content.
+
+Native addons are valid only with a dynamic interpreted closure that declares
+an explicit loader and library roots. For each declaration, the analyzer MUST
+capture the owning package-tree manifest, retain a descriptor for that exact
+regular directory, traverse every relative-path component with Linux
+root-anchored no-follow semantics, and parse and hash one retained regular-file
+descriptor. Intermediate and final symlinks are invalid. Before success, the
+root descriptor, member descriptor, manifest record, and a newly captured full
+tree snapshot MUST agree on file identity, mode, size, modification time, and
+content digest. Replacement between initial snapshot and descriptor open, or
+between descriptor inspection and final snapshot verification, fails with
+`ErrPortableRuntimeClosureIncomplete`.
+
+Each selected addon MUST be a same-target Linux `ET_DYN` file with no
+`PT_INTERP` and no `DF_1_PIE`. `DT_SONAME` is absent or occurs exactly once as
+the non-empty basename of `RelativePath`; malformed, empty, duplicate, or
+mismatched values are incomplete. The request's `RuntimeLookup` policy applies
+to every addon and recursive dependency. `RPATH`, `RUNPATH`, `AUDIT`,
+`DEPAUDIT`, `FILTER`, and `AUXILIARY` metadata are always incomplete, and a
+closed lookup rejects runtime-lookup symbols. Addon `DT_NEEDED` closure merges
+with interpreter and loader closure before exact-root pruning. Shared
+dependencies deduplicate only when the same source identity maps to the same
+guest target; different sources claiming one target are ambiguous even when
+their bytes match.
+
+The owning `PackageTrees` asset is the only emitted asset for a selected
+`.node` member. The analyzer MUST NOT emit an overlapping addon file asset;
+only dependency libraries outside that package tree are emitted separately.
+Every native-addon failure is `ErrPortableRuntimeClosureIncomplete` and omits
+package roots, relative paths, expected or actual sizes and digests, `SONAME`
+and `NEEDED` values, and binary bytes.
 
 Launch construction is exhaustive and does not use guest PATH, the copied
 ELF `PT_INTERP`, an absolute shebang, or a shell wrapper:

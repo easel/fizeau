@@ -629,6 +629,16 @@ type PortableRuntimeFileIdentity struct {
 	ContentSHA256 string
 }
 
+// PortableRuntimeNativeAddon identifies one contributor-selected native Node
+// addon inside an exact PackageTrees target. The neutral closure analyzer
+// validates only declarations supplied by the contributing harness; it never
+// scans package trees for additional .node files.
+type PortableRuntimeNativeAddon struct {
+	PackageTreeTarget string
+	RelativePath      string
+	Identity          PortableRuntimeFileIdentity
+}
+
 type PortableRuntimeAssetKind string
 type PortableRuntimePathKind string
 type PortableRuntimeClosureClass string
