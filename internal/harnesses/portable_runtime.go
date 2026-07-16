@@ -234,7 +234,7 @@ func validatePortableRuntimeExecutionConstraints(contribution PortableRuntimeCon
 
 	seenArguments := make(map[string]int, len(constraints.FixedArguments))
 	for i, argument := range constraints.FixedArguments {
-		if argument == "" || !validPortableRuntimeArgument(argument) {
+		if !validPortableRuntimeFixedArgument(argument) || !validPortableRuntimeArgument(argument) {
 			return closureErrorAt("fixed argument", i, "is not a fixed non-secret argument")
 		}
 		if previous, exists := seenArguments[argument]; exists {
@@ -429,6 +429,7 @@ func validPortableRuntimeGuestPathScope(scope PortableRuntimeGuestPathScope) boo
 func portableRuntimeBaselineEnvironmentName(name string) bool {
 	switch name {
 	case "HOME", "PATH", "USER", "LOGNAME", "SHELL",
+		"TERM", "LANG", "LC_ALL",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "TMPDIR":
 		return true
 	default:
@@ -443,6 +444,8 @@ func validPortableRuntimeBaselineOverride(environment PortableRuntimeEnvironment
 	case "HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "TMPDIR":
 		return environment.Kind == PortableRuntimeEnvironmentGuestPath || environment.Kind == PortableRuntimeEnvironmentUnset
 	case "USER", "LOGNAME", "SHELL":
+		return environment.Kind == PortableRuntimeEnvironmentUnset
+	case "TERM", "LANG", "LC_ALL":
 		return environment.Kind == PortableRuntimeEnvironmentUnset
 	default:
 		return environment.Kind != PortableRuntimeEnvironmentRuntimePath
@@ -490,6 +493,32 @@ func validPortableRuntimeArgument(argument string) bool {
 		if normalized == forbidden || strings.HasPrefix(normalized, forbidden+"=") {
 			return false
 		}
+	}
+	return true
+}
+
+func validPortableRuntimeFixedArgument(argument string) bool {
+	if len(argument) < 3 || !strings.HasPrefix(argument, "--") {
+		return false
+	}
+	name := argument[2:]
+	if name[0] < 'a' || name[0] > 'z' {
+		return false
+	}
+	previousHyphen := false
+	for i := range len(name) {
+		c := name[i]
+		if c == '-' {
+			if i == 0 || i == len(name)-1 || previousHyphen {
+				return false
+			}
+			previousHyphen = true
+			continue
+		}
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+			return false
+		}
+		previousHyphen = false
 	}
 	return true
 }

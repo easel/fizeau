@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 4487661e9f9919f70cfcd5a2a6d35b4e39ae6b829e70885475b148f74bd72a70
+    self_hash: 56a72a7ad04dbf71b1ea292ce96b8976f2073dcddff63f2736a3cd5247b194d0
     deps:
       CONTRACT-003: 50cbc8709ce89d676bd10df9ba3d635089cb474823dbc10a468e2f7ecd72cf31
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T00:41:02Z"
+    reviewed_at: "2026-07-16T00:51:15Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -636,6 +636,8 @@ remain absent.
 | `PATH` | `runtime_path`: the stable, deduplicated, lexical list of guest parent directories containing declared owner-executable assets, followed by the fixed guest tool directories `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. Arbitrary host PATH segments are never retained. |
 | `USER`, `LOGNAME` | The fixed non-secret runtime identity `fizeau`. |
 | `SHELL` | The fixed guest tool path `/bin/sh`. |
+| `TERM` | The fixed generated terminal type `xterm-256color`. |
+| `LANG`, `LC_ALL` | The fixed generated locale `C.UTF-8`. |
 | `XDG_CONFIG_HOME` | Root of the generated `config` scope. |
 | `XDG_DATA_HOME` | Root of the generated `data` scope. |
 | `XDG_CACHE_HOME` | Root of the generated `cache` scope. |
@@ -654,8 +656,8 @@ Typed environment treatments have these exact meanings:
 | `runtime_path` | `Name` exactly `PATH`; zero `GuestPath` | Regenerate the baseline search path above without accepting a colon-delimited value. |
 
 For baseline overrides, `PATH` accepts only `runtime_path`;
-`USER`/`LOGNAME`/`SHELL` accept only `unset`; and `HOME`, the XDG names, and
-`TMPDIR` accept only `guest_path` or `unset`. Other valid names may use
+`USER`/`LOGNAME`/`SHELL`/`TERM`/`LANG`/`LC_ALL` accept only `unset`; and
+`HOME`, the XDG names, and `TMPDIR` accept only `guest_path` or `unset`. Other valid names may use
 `fixed_true`, `fixed_false`, `guest_path`, or `unset`. The schema contains no
 environment value, raw assignment, source selector, or free-form absolute
 path. A `guest_path` in the `runtime` scope MUST name an exact declared asset
@@ -687,14 +689,19 @@ the runtime user cannot write it or run an installer through it.
 `RequiredAbsentPaths` accepts only the immutable/generated scopes above. Each
 path MUST be disjoint from every declared asset, read-only path, explicitly
 generated `guest_path`, and other required-absent path under exact,
-ancestor, and descendant comparison. Activation MUST verify absence before any
-service activity and MUST NOT create the path later.
+ancestor, and descendant comparison. Activation MUST verify every declared path
+immediately before every harness process start, including the first; an earlier
+launch creating a path in a writable generated scope therefore prevents every
+later launch until the runtime is destroyed. Fizeau's activation and service
+code MUST NOT create a declared path between validation and process start.
 
 Environment constraints sort by `Name`; read-only and required-absent paths
 sort by `Scope`, then `Target`. Duplicate or conflicting rules fail with
 `ErrPortableRuntimeClosureIncomplete`. Errors identify only rule classes and
-indexes. `FixedArguments` remains in contributor order, contains unique,
-non-empty fixed non-secret arguments, and is inserted after the complete
+indexes. `FixedArguments` remains in contributor order and contains unique
+boolean long-option tokens with the exact grammar
+`--[a-z][a-z0-9]*(?:-[a-z0-9]+)*`. It carries no positional value, option
+value, assignment, or path. The prefix is inserted after the complete
 executable/loader/interpreter recipe but before registry and request arguments.
 No route selector, secret, environment assignment, or placeholder is valid.
 
@@ -1432,7 +1439,8 @@ by `go vet`-shaped tooling:
     inherited, and typed-rule name ownership; the exact enum/field shape;
     runtime-backed environment paths; exact config-tree read-only backing;
     required-absent disjointness; deterministic sorting and defensive copies;
-    ordered unique fixed arguments; raw assignment/path rejection; and
+    ordered unique flag-only fixed arguments; positional value, assignment, and
+    path rejection; and
     index-only redacted errors. Later activation and OCI tests prove actual
     read-only enforcement and absence before process start.
 

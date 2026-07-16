@@ -280,6 +280,24 @@ func TestPortableRuntimeExecutionConstraints(t *testing.T) {
 			},
 		},
 		{
+			name: "inherited generated terminal name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Environment = append(candidate.Environment, PortableRuntimeEnvironment{Name: "TERM"})
+			},
+		},
+		{
+			name: "inherited generated language name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Environment = append(candidate.Environment, PortableRuntimeEnvironment{Name: "LANG"})
+			},
+		},
+		{
+			name: "inherited generated locale name",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.Environment = append(candidate.Environment, PortableRuntimeEnvironment{Name: "LC_ALL"})
+			},
+		},
+		{
 			name: "environment raw assignment",
 			mutate: func(candidate *PortableRuntimeContribution) {
 				candidate.ExecutionConstraints.Environment[0].Name = "FEATURE_ENABLED=" + sensitive
@@ -431,6 +449,30 @@ func TestPortableRuntimeExecutionConstraints(t *testing.T) {
 			name: "fixed argument raw assignment",
 			mutate: func(candidate *PortableRuntimeContribution) {
 				candidate.ExecutionConstraints.FixedArguments[0] = "TOKEN=" + sensitive
+			},
+		},
+		{
+			name: "fixed argument positional value",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = sensitive
+			},
+		},
+		{
+			name: "fixed argument starts with digit",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = "--1"
+			},
+		},
+		{
+			name: "fixed argument absolute host source",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = "/" + sensitive
+			},
+		},
+		{
+			name: "fixed argument flag value",
+			mutate: func(candidate *PortableRuntimeContribution) {
+				candidate.ExecutionConstraints.FixedArguments[0] = "--config=/" + sensitive
 			},
 		},
 		{
