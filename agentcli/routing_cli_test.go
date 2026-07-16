@@ -434,6 +434,7 @@ func TestCLI_ModelIntentAutoRoutingSkipsUnhealthyDefaultAndChoosesBestHealthyPro
 		Status:           fizeau.StatusSuccess,
 		Tokens:           fizeau.TokenUsage{Input: 100, Output: 50, Total: 150},
 		CostUSD:          &knownCost,
+		CostSource:       fizeau.CostSourceReported,
 		DurationMs:       1500,
 		SelectedProvider: "openrouter",
 		RequestedModel:   "qwen3.5-27b",

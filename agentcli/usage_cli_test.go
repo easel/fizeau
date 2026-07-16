@@ -54,6 +54,7 @@ func seedMixedUsageLogs(t *testing.T, logDir string) {
 		Output:     "ok",
 		Tokens:     fizeau.TokenUsage{Input: 10, Output: 5, Total: 15},
 		CostUSD:    usageFloat64Ptr(0.25),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 1000,
 		Model:      "qwen3.5-7b",
 	})
@@ -67,6 +68,7 @@ func seedMixedUsageLogs(t *testing.T, logDir string) {
 		Output:     "ok",
 		Tokens:     fizeau.TokenUsage{Input: 20, Output: 10, Total: 30},
 		CostUSD:    usageFloat64Ptr(-1),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 2000,
 		Model:      "qwen3.5-7b",
 	})
@@ -80,6 +82,7 @@ func seedMixedUsageLogs(t *testing.T, logDir string) {
 		Output:     "ok",
 		Tokens:     fizeau.TokenUsage{Input: 100, Output: 50, Total: 150},
 		CostUSD:    usageFloat64Ptr(0.5),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 3000,
 		Model:      "claude-sonnet-4-20250514",
 	})

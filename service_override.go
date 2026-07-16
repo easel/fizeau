@@ -213,10 +213,14 @@ func makeOverrideEvent(ovr *overrideContext, sessionID string, finalEv ServiceEv
 	payload := ovr.payload
 	payload.SessionID = sessionID
 	if final, ok := decodeFinalForOutcome(finalEv); ok {
+		cost, source := final.CostMeasurement()
 		payload.Outcome = &ServiceOverrideOutcome{
 			Status:     final.Status,
-			CostUSD:    final.CostUSD,
+			CostSource: source,
 			DurationMS: final.DurationMS,
+		}
+		if cost != nil {
+			payload.Outcome.CostUSD = *cost
 		}
 	}
 	raw, err := json.Marshal(payload)

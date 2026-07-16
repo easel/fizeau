@@ -108,6 +108,7 @@ type SessionEndData struct {
 	Output                 string                         `json:"output"`
 	Tokens                 TokenUsage                     `json:"tokens"`
 	CostUSD                *float64                       `json:"cost_usd,omitempty"`
+	CostSource             CostSource                     `json:"cost_source"`
 	DurationMs             int64                          `json:"duration_ms"`
 	Model                  string                         `json:"model,omitempty"`
 	SelectedProvider       string                         `json:"selected_provider,omitempty"`

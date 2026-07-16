@@ -162,6 +162,7 @@ func TestListHarnesses_CodexUsageWindowsFromServiceSessionLogs(t *testing.T) {
 		Status:     fizeau.StatusSuccess,
 		Tokens:     fizeau.TokenUsage{Input: 10, Output: 4, Total: 14, CacheRead: 3, CacheWrite: 2},
 		CostUSD:    publicUsageCostPtr(0.12),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 1000,
 		Model:      "gpt-5.4",
 	})
@@ -172,6 +173,7 @@ func TestListHarnesses_CodexUsageWindowsFromServiceSessionLogs(t *testing.T) {
 		Status:     fizeau.StatusSuccess,
 		Tokens:     fizeau.TokenUsage{Input: 5, Output: 2, Total: 7},
 		CostUSD:    publicUsageCostPtr(-1),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 1000,
 		Model:      "gpt-5.4",
 	})
@@ -182,6 +184,7 @@ func TestListHarnesses_CodexUsageWindowsFromServiceSessionLogs(t *testing.T) {
 		Status:     fizeau.StatusSuccess,
 		Tokens:     fizeau.TokenUsage{Input: 100, Output: 100, Total: 200},
 		CostUSD:    publicUsageCostPtr(1),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 1000,
 		Model:      "gpt-5.4",
 	})
@@ -229,6 +232,7 @@ func TestListHarnesses_GeminiAccountAndUsageWindows(t *testing.T) {
 		Status:     fizeau.StatusSuccess,
 		Tokens:     fizeau.TokenUsage{Input: 21, Output: 3, Total: 24, CacheRead: 5},
 		CostUSD:    publicUsageCostPtr(0.02),
+		CostSource: fizeau.CostSourceReported,
 		DurationMs: 1000,
 		Model:      "gemini-2.5-flash",
 	})
