@@ -2,7 +2,11 @@
 // quorum primitives for the fizeau integration suite.
 package comparison
 
-import "time"
+import (
+	"time"
+
+	"github.com/easel/fizeau"
+)
 
 // RunResult is the minimal result shape the comparison engine needs from a
 // single harness invocation. Callers adapt their concrete result type (e.g.
@@ -16,6 +20,7 @@ type RunResult struct {
 	InputTokens  int
 	OutputTokens int
 	CostUSD      float64
+	CostSource   fizeau.CostSource `json:"-"`
 	DurationMS   int
 	ExitCode     int
 	Error        string
