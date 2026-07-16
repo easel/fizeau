@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -88,12 +89,14 @@ type treeSourceIdentity struct {
 	linkText string
 	entry    fileIdentity
 	resolved fileIdentity
+	content  [sha256.Size]byte
 }
 
 type sourceReceipt struct {
 	asset    harnesses.PortableRuntimeAsset
 	ancestry []fileIdentity
 	tree     []treeSourceIdentity
+	digest   string
 }
 
 type destinationHandle struct {
@@ -540,9 +543,12 @@ func materializeAsset(ctx context.Context, stage *stageHandle, asset harnesses.P
 	if stage == nil || stage.file == nil {
 		return "", sourceReceipt{}, errors.New("staging handle is unavailable")
 	}
-	receipt, err := captureSourceReceipt(asset)
+	receipt, err := captureSourceReceipt(ctx, asset)
 	if err != nil {
 		return "", sourceReceipt{}, err
+	}
+	if receipt.digest != asset.ContentSHA256 {
+		return "", sourceReceipt{}, errors.New("asset source does not match its declared identity")
 	}
 	parentFD, leaf, err := createTargetParent(descriptorFD(stage.file), asset.Target)
 	if err != nil {
@@ -592,9 +598,6 @@ func materializeAsset(ctx context.Context, stage *stageHandle, asset harnesses.P
 		}
 		return digest, receipt, nil
 	case harnesses.PortableRuntimePathTree:
-		if declared, err := harnesses.PortableRuntimeTreeDigest(asset.Source); err != nil || declared != asset.ContentSHA256 {
-			return "", sourceReceipt{}, errors.New("asset tree does not match its declared identity")
-		}
 		source, ancestry, err := openAbsoluteNoFollow(asset.Source, true)
 		if err != nil {
 			return "", sourceReceipt{}, err
@@ -631,9 +634,6 @@ func materializeAsset(ctx context.Context, stage *stageHandle, asset harnesses.P
 		}
 		if err := revalidateAbsoluteNoFollow(asset.Source, ancestry); err != nil {
 			return "", sourceReceipt{}, err
-		}
-		if declared, err := harnesses.PortableRuntimeTreeDigest(asset.Source); err != nil || declared != asset.ContentSHA256 {
-			return "", sourceReceipt{}, errors.New("asset tree changed after copy")
 		}
 		if err := verifyAssetSource(ctx, receipt); err != nil {
 			return "", sourceReceipt{}, err
@@ -753,6 +753,8 @@ func openAbsoluteNoFollow(source string, directory bool) (*os.File, []fileIdenti
 		flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC
 		if index < len(components)-1 || directory {
 			flags |= unix.O_DIRECTORY
+		} else {
+			flags |= unix.O_NONBLOCK
 		}
 		fd, openErr := unix.Openat(descriptorFD(current), component, flags, 0)
 		if openErr != nil {
@@ -909,7 +911,7 @@ func copyTree(ctx context.Context, rootSourceFD, sourceFD, destinationFD int, re
 }
 
 func copyTreeRegular(ctx context.Context, sourceParentFD int, sourceName string, destinationParentFD int, destinationName string, before fileIdentity, asset harnesses.PortableRuntimeAsset) error {
-	sourceFD, err := unix.Openat(sourceParentFD, sourceName, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	sourceFD, err := unix.Openat(sourceParentFD, sourceName, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1005,7 @@ func readlinkAt(directoryFD int, name string) (string, error) {
 	return "", syscall.ENAMETOOLONG
 }
 
-func captureSourceReceipt(asset harnesses.PortableRuntimeAsset) (sourceReceipt, error) {
+func captureSourceReceipt(ctx context.Context, asset harnesses.PortableRuntimeAsset) (sourceReceipt, error) {
 	directory := asset.PathKind == harnesses.PortableRuntimePathTree
 	source, ancestry, err := openAbsoluteNoFollow(asset.Source, directory)
 	if err != nil {
@@ -1012,14 +1014,29 @@ func captureSourceReceipt(asset harnesses.PortableRuntimeAsset) (sourceReceipt, 
 	defer source.Close()
 	receipt := sourceReceipt{asset: asset, ancestry: ancestry}
 	if directory {
-		if err := captureTreeSourceIdentities(descriptorFD(source), asset.Source, descriptorFD(source), "", &receipt.tree); err != nil {
+		if err := captureTreeSourceIdentities(ctx, descriptorFD(source), asset.Source, descriptorFD(source), "", &receipt.tree); err != nil {
 			return sourceReceipt{}, err
 		}
+		receipt.digest = digestTreeSourceReceipt(receipt.tree)
+	} else {
+		before := ancestry[len(ancestry)-1]
+		if before.mode&unix.S_IFMT != unix.S_IFREG {
+			return sourceReceipt{}, errors.New("asset source is not a regular file")
+		}
+		content, err := hashSourceFile(ctx, source)
+		if err != nil {
+			return sourceReceipt{}, err
+		}
+		after, err := identityOfFD(descriptorFD(source))
+		if err != nil || !sameIdentity(before, after) {
+			return sourceReceipt{}, errors.New("asset source changed during identity capture")
+		}
+		receipt.digest = hex.EncodeToString(content[:])
 	}
 	return receipt, nil
 }
 
-func captureTreeSourceIdentities(rootFD int, rootPath string, directoryFD int, relative string, identities *[]treeSourceIdentity) error {
+func captureTreeSourceIdentities(ctx context.Context, rootFD int, rootPath string, directoryFD int, relative string, identities *[]treeSourceIdentity) error {
 	names, err := readDirectoryNames(directoryFD)
 	if err != nil {
 		return err
@@ -1046,19 +1063,30 @@ func captureTreeSourceIdentities(rootFD int, rootPath string, directoryFD int, r
 				return errors.New("asset tree changed during identity capture")
 			}
 			*identities = append(*identities, entry)
-			err = captureTreeSourceIdentities(rootFD, rootPath, childFD, childRelative, identities)
+			err = captureTreeSourceIdentities(ctx, rootFD, rootPath, childFD, childRelative, identities)
+			after, afterErr := identityOfFD(childFD)
 			_ = unix.Close(childFD)
 			if err != nil {
 				return err
 			}
+			if afterErr != nil || !sameIdentity(entry.entry, after) {
+				return errors.New("asset tree directory changed during identity capture")
+			}
 		case unix.S_IFREG:
-			childFD, err := unix.Openat(directoryFD, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+			childFD, err := unix.Openat(directoryFD, name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 			if err != nil {
 				return err
 			}
 			opened, statErr := identityOfFD(childFD)
-			_ = unix.Close(childFD)
 			if statErr != nil || !sameIdentity(entry.entry, opened) {
+				_ = unix.Close(childFD)
+				return errors.New("asset tree changed during identity capture")
+			}
+			file := newDescriptorFile(childFD, "portable-runtime-tree-identity")
+			entry.content, err = hashSourceFile(ctx, file)
+			after, afterErr := identityOfFD(childFD)
+			_ = file.Close()
+			if err != nil || afterErr != nil || !sameIdentity(entry.entry, after) {
 				return errors.New("asset tree changed during identity capture")
 			}
 			*identities = append(*identities, entry)
@@ -1072,9 +1100,22 @@ func captureTreeSourceIdentities(rootFD int, rootPath string, directoryFD int, r
 				return errors.New("asset tree symlink is not a safe in-tree file")
 			}
 			entry.resolved, err = identityOfFD(resolvedFD)
-			_ = unix.Close(resolvedFD)
 			if err != nil || entry.resolved.mode&unix.S_IFMT != unix.S_IFREG {
+				_ = unix.Close(resolvedFD)
 				return errors.New("asset tree symlink does not resolve to a regular file")
+			}
+			file := newDescriptorFile(resolvedFD, "portable-runtime-tree-symlink-identity")
+			entry.content, err = hashSourceFile(ctx, file)
+			after, afterErr := identityOfFD(resolvedFD)
+			_ = file.Close()
+			if err != nil || afterErr != nil || !sameIdentity(entry.resolved, after) {
+				return errors.New("asset tree symlink changed during identity capture")
+			}
+			var linkAfterStat unix.Stat_t
+			linkAfter, linkErr := readlinkAt(directoryFD, name)
+			statErr := unix.Fstatat(directoryFD, name, &linkAfterStat, unix.AT_SYMLINK_NOFOLLOW)
+			if linkErr != nil || statErr != nil || linkAfter != entry.linkText || !sameIdentity(entry.entry, identityFromStat(&linkAfterStat)) {
+				return errors.New("asset tree symlink changed during identity capture")
 			}
 			*identities = append(*identities, entry)
 		default:
@@ -1084,9 +1125,66 @@ func captureTreeSourceIdentities(rootFD int, rootPath string, directoryFD int, r
 	return nil
 }
 
+func hashSourceFile(ctx context.Context, file *os.File) ([sha256.Size]byte, error) {
+	var digest [sha256.Size]byte
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return digest, err
+	}
+	hasher := sha256.New()
+	buffer := make([]byte, 128*1024)
+	for {
+		if err := checkContext(ctx); err != nil {
+			return digest, err
+		}
+		read, readErr := file.Read(buffer)
+		if read > 0 {
+			_, _ = hasher.Write(buffer[:read])
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			return digest, readErr
+		}
+	}
+	copy(digest[:], hasher.Sum(nil))
+	return digest, nil
+}
+
+func digestTreeSourceReceipt(entries []treeSourceIdentity) string {
+	records := append([]treeSourceIdentity(nil), entries...)
+	sort.Slice(records, func(left, right int) bool { return records[left].path < records[right].path })
+	hasher := sha256.New()
+	_, _ = io.WriteString(hasher, "fizeau-portable-tree-v1\x00")
+	for _, entry := range records {
+		kind := byte('d')
+		owner := uint32(entry.entry.mode & 0o700)
+		content := [sha256.Size]byte{}
+		if entry.entry.mode&unix.S_IFMT == unix.S_IFREG {
+			kind = 'f'
+			content = entry.content
+		} else if entry.entry.mode&unix.S_IFMT == unix.S_IFLNK {
+			kind = 'f'
+			owner = uint32(entry.resolved.mode & 0o700)
+			content = entry.content
+		}
+		_, _ = hasher.Write([]byte{kind})
+		var encoded [4]byte
+		binary.BigEndian.PutUint32(encoded[:], uint32(len(entry.path))) // #nosec G115 -- OS path lengths are bounded below uint32.
+		_, _ = hasher.Write(encoded[:])
+		_, _ = io.WriteString(hasher, entry.path)
+		binary.BigEndian.PutUint32(encoded[:], owner)
+		_, _ = hasher.Write(encoded[:])
+		if kind == 'f' {
+			_, _ = hasher.Write(content[:])
+		}
+	}
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 func openSafeTreeSymlink(rootFD int, rootPath, relative string) (int, error) {
 	fd, err := unix.Openat2(rootFD, relative, &unix.OpenHow{
-		Flags:   unix.O_RDONLY | unix.O_CLOEXEC,
+		Flags:   unix.O_RDONLY | unix.O_NONBLOCK | unix.O_CLOEXEC,
 		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS,
 	})
 	if err == nil {
@@ -1102,7 +1200,7 @@ func openSafeTreeSymlink(rootFD int, rootPath, relative string) (int, error) {
 		return -1, errors.New("asset tree symlink escapes its source root")
 	}
 	return unix.Openat2(rootFD, filepath.ToSlash(relativeResolved), &unix.OpenHow{
-		Flags:   unix.O_RDONLY | unix.O_CLOEXEC,
+		Flags:   unix.O_RDONLY | unix.O_NONBLOCK | unix.O_CLOEXEC,
 		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS | unix.RESOLVE_NO_SYMLINKS,
 	})
 }
@@ -1130,17 +1228,11 @@ func verifyAssetSource(ctx context.Context, receipt sourceReceipt) error {
 	if err := checkContext(ctx); err != nil {
 		return err
 	}
-	current, err := captureSourceReceipt(receipt.asset)
+	current, err := captureSourceReceipt(ctx, receipt.asset)
 	if err != nil || !sameSourceReceipt(receipt, current) {
 		return errors.New("asset source identity changed")
 	}
-	var digest string
-	if receipt.asset.PathKind == harnesses.PortableRuntimePathTree {
-		digest, err = harnesses.PortableRuntimeTreeDigest(receipt.asset.Source)
-	} else {
-		digest, err = harnesses.PortableRuntimeFileDigest(receipt.asset.Source)
-	}
-	if err != nil || digest != receipt.asset.ContentSHA256 {
+	if current.digest != receipt.asset.ContentSHA256 {
 		return errors.New("asset source no longer matches its declared identity")
 	}
 	return nil

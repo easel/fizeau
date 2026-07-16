@@ -364,6 +364,42 @@ func TestPortableRuntimeRejectsUnsafeDestination(t *testing.T) {
 		assertDirectoryEmpty(t, fixture.destination)
 	})
 
+	t.Run("source replaced by fifo rejects without blocking", func(t *testing.T) {
+		fixture := newMaterializerFixture(t)
+		contribution := fixture.request.Inventory[0].Instance.(materializerTestHarness).contribution
+		original := fixture.executable + "-original"
+		fixture.request.Inventory[0].Instance = materializerTestHarness{
+			contribution: contribution,
+			beforeReturn: func() {
+				if err := os.Rename(fixture.executable, original); err != nil {
+					t.Fatal(err)
+				}
+				if err := unix.Mkfifo(fixture.executable, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		}
+		type result struct {
+			bundle *Bundle
+			err    error
+		}
+		completed := make(chan result, 1)
+		go func() {
+			bundle, err := Prepare(context.Background(), fixture.request)
+			completed <- result{bundle: bundle, err: err}
+		}()
+		select {
+		case got := <-completed:
+			if got.bundle != nil || !errors.Is(got.err, ErrClosureIncomplete) {
+				t.Fatalf("Prepare() = %#v, %v", got.bundle, got.err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("Prepare blocked while opening a FIFO source")
+		}
+		assertDirectoryEmpty(t, fixture.destination)
+		assertNoMaterializerStages(t, fixture.destination)
+	})
+
 	for _, target := range []string{"../escape", ".fizeau/foreign"} {
 		t.Run("rejected target "+strings.ReplaceAll(target, "/", "-"), func(t *testing.T) {
 			fixture := newMaterializerFixture(t)
@@ -627,6 +663,32 @@ func TestPortableRuntimeMaterializationUsesRestrictiveModes(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPortableRuntimeSourceReceiptDigestMatchesCanonical(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tree")
+	if err := os.MkdirAll(filepath.Join(root, "a"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = writeMaterializerSource(t, root, "a/x", []byte("nested"), 0o700)
+	_ = writeMaterializerSource(t, root, "a-", []byte("sibling sorts before nested"), 0o600)
+	if err := os.Symlink(filepath.Join(root, "a-"), filepath.Join(root, "absolute-link")); err != nil {
+		t.Fatal(err)
+	}
+	want, err := harnesses.PortableRuntimeTreeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := captureSourceReceipt(context.Background(), harnesses.PortableRuntimeAsset{
+		Kind: harnesses.PortableRuntimeAssetSupport, PathKind: harnesses.PortableRuntimePathTree,
+		Source: root, Target: "lib/tree", ContentSHA256: want,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.digest != want {
+		t.Fatalf("descriptor receipt digest = %q, canonical digest = %q", receipt.digest, want)
 	}
 }
 
