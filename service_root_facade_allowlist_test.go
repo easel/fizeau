@@ -122,6 +122,7 @@ func TestRootFacadeTestAllowlist(t *testing.T) {
 		"service_providers_test.go",
 		"service_root_facade_allowlist_test.go",
 		"service_route_attempts_test.go",
+		"service_route_budget_test.go",
 		"service_route_evidence_test.go",
 		"service_route_leases_test.go",
 		"service_routehealth_boundary_test.go",

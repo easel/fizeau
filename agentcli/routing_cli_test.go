@@ -995,11 +995,13 @@ providers:
     base_url: `+dead.baseURL()+`
     api_key: test
     model: local-dead
+    context_window: 131072
   healthy:
     type: lmstudio
     base_url: `+healthy.baseURL()+`
     api_key: test
     model: local-healthy
+    context_window: 131072
 backends:
   local-pool:
     providers: [dead, healthy]

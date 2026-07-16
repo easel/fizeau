@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modeleligibility"
 	"github.com/easel/fizeau/internal/modelsnapshot"
@@ -355,8 +354,8 @@ func SnapshotProviderContextWindows(pcfg ProviderEntry, cat *modelcatalog.Catalo
 	return out, sources
 }
 
-// SnapshotContextWindow preserves the current service precedence and source
-// projection for cache-backed context evidence.
+// SnapshotContextWindow preserves only observed routing evidence. Unknown
+// capacity stays raw until post-selection execution fallback resolves it.
 func SnapshotContextWindow(pcfg ProviderEntry, cat *modelcatalog.Catalog, modelID string, snapshotWindow int, snapshotSource string) (int, string) {
 	if pcfg.ContextWindow > 0 {
 		return pcfg.ContextWindow, routing.ContextSourceProviderConfig
@@ -374,7 +373,7 @@ func SnapshotContextWindow(pcfg ProviderEntry, cat *modelcatalog.Catalog, modelI
 			return n, routing.ContextSourceCatalog
 		}
 	}
-	return compaction.DefaultContextWindow, routing.ContextSourceDefault
+	return 0, routing.ContextSourceUnknown
 }
 
 // RoutingCatalogResolver resolves a model reference for a routing surface.
@@ -583,13 +582,13 @@ func RoutingCatalogSurface(surface string) (modelcatalog.Surface, bool) {
 	}
 }
 
-// BuildProviderContextWindows projects catalog/default context evidence for a
-// subscription or provider inventory.
+// BuildProviderContextWindows projects available context evidence for a
+// subscription or provider routing inventory. Unknown capacity is omitted.
 func BuildProviderContextWindows(ctx context.Context, pcfg ProviderEntry, cat *modelcatalog.Catalog, discoveredIDs []string) (map[string]int, map[string]string) {
 	out := make(map[string]int)
 	sources := make(map[string]string)
 	if defaultModel := strings.TrimSpace(pcfg.Model); defaultModel != "" {
-		if length, source := ResolveContextEvidence(ctx, pcfg, defaultModel, cat); length > 0 {
+		if length, source := resolveRoutingContextEvidence(ctx, pcfg, defaultModel, cat); length > 0 {
 			out[defaultModel] = length
 			sources[defaultModel] = source
 		}
@@ -601,7 +600,7 @@ func BuildProviderContextWindows(ctx context.Context, pcfg ProviderEntry, cat *m
 		if _, exists := out[id]; exists {
 			continue
 		}
-		if length, source := ResolveContextEvidence(ctx, pcfg, id, cat); length > 0 {
+		if length, source := resolveRoutingContextEvidence(ctx, pcfg, id, cat); length > 0 {
 			out[id] = length
 			sources[id] = source
 		}
@@ -610,6 +609,25 @@ func BuildProviderContextWindows(ctx context.Context, pcfg ProviderEntry, cat *m
 		return nil, nil
 	}
 	return out, sources
+}
+
+func resolveRoutingContextEvidence(ctx context.Context, entry ProviderEntry, modelID string, cat *modelcatalog.Catalog) (int, string) {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return 0, routing.ContextSourceUnknown
+	}
+	if entry.ContextWindow > 0 {
+		return entry.ContextWindow, routing.ContextSourceProviderConfig
+	}
+	if limits, source := providerAPIContextEvidence(ctx, entry, modelID); limits > 0 {
+		return limits, source
+	}
+	if cat != nil {
+		if n := cat.ContextWindowForModel(modelID); n > 0 {
+			return n, routing.ContextSourceCatalog
+		}
+	}
+	return 0, routing.ContextSourceUnknown
 }
 
 // ContextWindowSourceForProviderConfig returns the source label for an

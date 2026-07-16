@@ -1,13 +1,13 @@
 package serviceimpl
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/modelsnapshot"
 	"github.com/easel/fizeau/internal/routing"
@@ -331,9 +331,9 @@ func TestSnapshotContextWindowPrecedenceAndCatalogFallback(t *testing.T) {
 			wantWindow: 262144, wantSource: routing.ContextSourceCatalog,
 		},
 		{
-			name:       "default fallback",
+			name:       "unknown stays raw",
 			model:      "unknown-model",
-			wantWindow: compaction.DefaultContextWindow, wantSource: routing.ContextSourceDefault,
+			wantWindow: 0, wantSource: routing.ContextSourceUnknown,
 		},
 	}
 	for _, tc := range tests {
@@ -343,6 +343,18 @@ func TestSnapshotContextWindowPrecedenceAndCatalogFallback(t *testing.T) {
 				t.Fatalf("SnapshotContextWindow() = %d/%q, want %d/%q", window, source, tc.wantWindow, tc.wantSource)
 			}
 		})
+	}
+}
+
+func TestBuildProviderContextWindowsPreservesUnknown(t *testing.T) {
+	windows, sources := BuildProviderContextWindows(
+		context.Background(),
+		ProviderEntry{Model: "unknown-model"},
+		nil,
+		[]string{"unknown-model"},
+	)
+	if windows != nil || sources != nil {
+		t.Fatalf("routing context evidence=%v/%v, want nil for unknown named model", windows, sources)
 	}
 }
 

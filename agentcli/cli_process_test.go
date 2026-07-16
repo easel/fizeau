@@ -164,6 +164,7 @@ providers:
     base_url: `+loop.URL+`/v1
     api_key: test
     model: stub-model
+    context_window: 131072
 default: local
 `)
 
@@ -186,6 +187,7 @@ providers:
     base_url: `+fake.baseURL()+`
     api_key: test
     model: gpt-4o
+    context_window: 131072
 default: local
 `)
 
@@ -210,6 +212,7 @@ providers:
     base_url: `+fake.baseURL()+`
     api_key: test
     model: gpt-4o
+    context_window: 131072
 default: local
 `)
 
@@ -247,6 +250,7 @@ providers:
     base_url: `+fake.baseURL()+`
     api_key: test
     model: gpt-4o
+    context_window: 131072
 default: local
 `)
 
@@ -317,6 +321,7 @@ providers:
     base_url: `+globalFake.baseURL()+`
     api_key: test
     model: global-model
+    context_window: 131072
 default: local
 `)
 
@@ -329,6 +334,7 @@ providers:
     base_url: `+projectFake.baseURL()+`
     api_key: test
     model: project-model
+    context_window: 131072
 default: local
 `)
 
@@ -451,6 +457,7 @@ providers:
     base_url: `+slow.URL+`/v1
     api_key: test
     model: gpt-4o
+    context_window: 131072
 default: local
 session_log_dir: .fizeau/sessions
 `)

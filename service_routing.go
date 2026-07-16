@@ -28,6 +28,9 @@ var loadRoutingCatalog = modelcatalog.Default
 // routing engine that consolidates DDx-side harness-tier ranking and
 // fiz-side provider failover ordering.
 func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDecision, error) {
+	if err := validateMaxTokens(req.MaxTokens); err != nil {
+		return nil, err
+	}
 	if err := ValidatePowerBounds(req.MinPower, req.MaxPower); err != nil {
 		return nil, err
 	}
@@ -97,6 +100,7 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		Reasoning:             effectiveReasoningString(req.Reasoning),
 		Permissions:           req.Permissions,
 		EstimatedPromptTokens: req.EstimatedPromptTokens,
+		MaxTokens:             req.MaxTokens,
 		RequiresTools:         req.RequiresTools,
 		CorrelationID:         req.CorrelationID,
 		ExcludedRoutes:        publicToRoutingExcludedRoutes(req.ExcludedRoutes),

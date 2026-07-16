@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -29,6 +30,9 @@ type Request struct {
 
 	// EstimatedPromptTokens, when > 0, drives context-window gating.
 	EstimatedPromptTokens int
+	// MaxTokens is the requested output budget. Positive values reserve
+	// context capacity; zero preserves provider-default output sizing.
+	MaxTokens int
 
 	// RequiresTools, when true, requires the candidate to support tool calling.
 	RequiresTools bool
@@ -105,14 +109,20 @@ func surfacePreferred(h HarnessEntry, req Request, in Inputs) bool {
 	return ok && want == h.Name
 }
 
-// MinContextWindow returns the minimum context window the request requires,
-// derived from EstimatedPromptTokens with a safety margin.
+// MinContextWindow returns the minimum context window the request requires.
+// Each addition saturates so large non-negative inputs cannot wrap.
 func (r Request) MinContextWindow() int {
-	if r.EstimatedPromptTokens <= 0 {
-		return 0
+	prompt := max(r.EstimatedPromptTokens, 0)
+	output := max(r.MaxTokens, 0)
+	required := saturatingContextAdd(prompt, prompt/4)
+	return saturatingContextAdd(required, output)
+}
+
+func saturatingContextAdd(left, right int) int {
+	if right > math.MaxInt-left {
+		return math.MaxInt
 	}
-	// 1.25x safety margin for response tokens + tool overhead.
-	return r.EstimatedPromptTokens + r.EstimatedPromptTokens/4
+	return left + right
 }
 
 const (
@@ -1434,10 +1444,6 @@ func buildHarnessCandidates(h HarnessEntry, req Request, in Inputs) []rankedCand
 				if p.ContextWindowSource != "" {
 					ctxSrc = p.ContextWindowSource
 				}
-			}
-			if ctxWin == 0 && model != "" {
-				ctxWin = 131072
-				ctxSrc = ContextSourceDefault
 			}
 			if model == "" {
 				ctxSrc = ContextSourceUnknown

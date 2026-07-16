@@ -39,6 +39,9 @@ func generateSessionID() string {
 // still be supplied for the native path until provider construction lands
 // in a follow-up.
 func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-chan ServiceEvent, error) {
+	if err := validateMaxTokens(req.MaxTokens); err != nil {
+		return nil, err
+	}
 	// Boundary validation: reject unknown CachePolicy values before any
 	// session state is opened or events are emitted. Beads C/D consume this
 	// field; an unknown value is a caller programming error.

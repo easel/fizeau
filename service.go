@@ -401,6 +401,10 @@ type RouteRequest struct {
 	// EstimatedPromptTokens, when > 0, filters out candidates whose context
 	// window cannot accommodate the prompt (with a safety margin).
 	EstimatedPromptTokens int
+	// MaxTokens is the requested per-call output budget. A positive value is
+	// included in the routing context-capacity gate; zero preserves the
+	// provider-default output-budget convention.
+	MaxTokens int
 
 	// RequiresTools, when true, filters out candidates that do not support
 	// tool calling.
@@ -478,6 +482,13 @@ func ValidatePowerBounds(minPower, maxPower int) error {
 	}
 	if minPower > 0 && maxPower > 0 && maxPower < minPower {
 		return fmt.Errorf("invalid power bounds: MaxPower %d must be >= MinPower %d", maxPower, minPower)
+	}
+	return nil
+}
+
+func validateMaxTokens(maxTokens int) error {
+	if maxTokens < 0 {
+		return fmt.Errorf("invalid MaxTokens %d: must be >= 0", maxTokens)
 	}
 	return nil
 }

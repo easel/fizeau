@@ -100,27 +100,7 @@ func (s *service) buildOverrideContext(ctx context.Context, req ServiceExecuteRe
 // stripped to produce the unconstrained auto pick. Returns zero values when
 // the resolution does not yield a usable decision.
 func (s *service) resolveAutoDecisionForOverride(ctx context.Context, req ServiceExecuteRequest, axes []string) (ServiceOverridePin, float64, ServiceOverrideAutoComponents) {
-	// Strip the overridden axes; keep all non-axis intent fields verbatim.
-	// The non-axes branches are unreachable in practice (if the axis is in
-	// `axes`, the field on req is non-empty), but we surface non-axis user
-	// inputs explicitly so future axis additions are obvious here.
-	stripped := RouteRequest{
-		Policy:                req.Policy,
-		Reasoning:             req.Reasoning,
-		Permissions:           req.Permissions,
-		EstimatedPromptTokens: req.EstimatedPromptTokens,
-		RequiresTools:         req.RequiresTools,
-		CachePolicy:           req.CachePolicy,
-	}
-	if !stringIn(axes, overrideAxisHarness) {
-		stripped.Harness = req.Harness
-	}
-	if !stringIn(axes, overrideAxisProvider) {
-		stripped.Provider = req.Provider
-	}
-	if !stringIn(axes, overrideAxisModel) {
-		stripped.Model = req.Model
-	}
+	stripped := overrideRouteRequest(req, axes)
 
 	dec, err := s.ResolveRoute(ctx, stripped)
 	if err != nil || dec == nil || dec.Harness == "" {
@@ -161,6 +141,32 @@ func (s *service) resolveAutoDecisionForOverride(ctx context.Context, req Servic
 		}
 	}
 	return auto, 0, ServiceOverrideAutoComponents{}
+}
+
+func overrideRouteRequest(req ServiceExecuteRequest, axes []string) RouteRequest {
+	// Strip the overridden axes; keep all non-axis intent fields verbatim.
+	// The non-axes branches are unreachable in practice (if the axis is in
+	// `axes`, the field on req is non-empty), but we surface non-axis user
+	// inputs explicitly so future axis additions are obvious here.
+	stripped := RouteRequest{
+		Policy:                req.Policy,
+		Reasoning:             req.Reasoning,
+		Permissions:           req.Permissions,
+		EstimatedPromptTokens: req.EstimatedPromptTokens,
+		MaxTokens:             req.MaxTokens,
+		RequiresTools:         req.RequiresTools,
+		CachePolicy:           req.CachePolicy,
+	}
+	if !stringIn(axes, overrideAxisHarness) {
+		stripped.Harness = req.Harness
+	}
+	if !stringIn(axes, overrideAxisProvider) {
+		stripped.Provider = req.Provider
+	}
+	if !stringIn(axes, overrideAxisModel) {
+		stripped.Model = req.Model
+	}
+	return stripped
 }
 
 func stringIn(xs []string, v string) bool {

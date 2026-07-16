@@ -348,6 +348,7 @@ providers:
     base_url: `+fake.baseURL()+`
     api_key: test
     model: gpt-4o
+    context_window: 131072
 default: local
 session_log_dir: sessions
 `)

@@ -78,6 +78,7 @@ func executeRouteRequest(req ServiceExecuteRequest) RouteRequest {
 		MinPower:              req.MinPower,
 		MaxPower:              req.MaxPower,
 		EstimatedPromptTokens: req.EstimatedPromptTokens,
+		MaxTokens:             req.MaxTokens,
 		RequiresTools:         req.RequiresTools,
 		Role:                  req.Role,
 		CorrelationID:         req.CorrelationID,
