@@ -131,6 +131,67 @@ EOF
 	}
 }
 
+func TestRunner_Execute_CostPresence(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	tests := []struct {
+		name      string
+		costJSON  string
+		wantKnown bool
+		wantCost  float64
+	}{
+		{name: "unknown"},
+		{name: "zero", costJSON: `,"cost_usd":0`, wantKnown: true},
+		{name: "positive", costJSON: `,"total_cost_usd":0.0123`, wantKnown: true, wantCost: 0.0123},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			script := `#!/bin/sh
+cat <<'EOF'
+{"type":"message","role":"assistant","content":"done","delta":true}
+{"type":"result","status":"success","stats":{"input_tokens":1` + tt.costJSON + `}}
+EOF
+`
+			binary := filepath.Join(t.TempDir(), "fake-gemini-cost")
+			if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ch, err := (&Runner{Binary: binary, BaseArgs: []string{}}).Execute(ctx, harnesses.ExecuteRequest{Prompt: "cost"})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+
+			var raw json.RawMessage
+			for ev := range ch {
+				if ev.Type == harnesses.EventTypeFinal {
+					raw = append(raw[:0], ev.Data...)
+				}
+			}
+			if len(raw) == 0 {
+				t.Fatal("no final event received")
+			}
+
+			wantSource := harnesses.CostSourceUnknown
+			if tt.wantKnown {
+				wantSource = harnesses.CostSourceReported
+			}
+			assertGeminiFinalCostJSON(t, raw, tt.wantKnown, tt.wantCost, wantSource)
+
+			var final harnesses.FinalData
+			if err := json.Unmarshal(raw, &final); err != nil {
+				t.Fatalf("unmarshal final event: %v", err)
+			}
+			assertGeminiCostState(t, final.FinalCostUSD, final.FinalCostSource, final.CostUSD, tt.wantKnown, tt.wantCost)
+		})
+	}
+}
+
 func TestRunner_Execute_RequestControls(t *testing.T) {
 	capturePath := filepath.Join(t.TempDir(), "capture.json")
 	workDir := t.TempDir()

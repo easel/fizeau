@@ -134,9 +134,10 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	agg, exitCode, stderr, runErr, status := r.runBuffered(ctx, binary, req, out, &seq)
 
 	final := harnesses.FinalData{
-		Status:     status,
-		ExitCode:   exitCode,
-		DurationMS: time.Since(start).Milliseconds(),
+		Status:          status,
+		ExitCode:        exitCode,
+		DurationMS:      time.Since(start).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	if runErr != nil && status != "success" {
 		final.Error = runErr.Error()
@@ -161,9 +162,9 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 				final.Usage.CacheTokens = harnesses.IntPtr(agg.CacheTokens)
 			}
 		}
-		if agg.CostUSD > 0 {
-			final.CostUSD = agg.CostUSD
-		}
+		final.FinalCostUSD = agg.FinalCostUSD
+		final.FinalCostSource = agg.CostSource
+		final.CostUSD = agg.CostUSD
 	}
 
 	finalRaw, err := json.Marshal(final)
@@ -322,7 +323,7 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 // emitGeminiOutput parses buffered gemini output, emits a text_delta, and
 // extracts token usage from the JSON stats block if present.
 func emitGeminiOutput(ctx context.Context, output string, out chan<- harnesses.Event, metadata map[string]string, seq *int64, progressLog *os.File) (*streamAggregate, error) {
-	agg := &streamAggregate{}
+	agg := &streamAggregate{CostSource: harnesses.CostSourceUnknown}
 	if output == "" {
 		return agg, nil
 	}

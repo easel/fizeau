@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+
+	"github.com/easel/fizeau/internal/harnesses"
 )
 
 // streamAggregate captures usage extracted from gemini output. HasUsage is
@@ -16,7 +18,11 @@ type streamAggregate struct {
 	OutputTokens int
 	CacheTokens  int
 	TotalTokens  int
-	CostUSD      float64
+	FinalCostUSD *float64
+	CostSource   harnesses.CostSource
+	// CostUSD remains an in-memory compatibility mirror. FinalCostUSD and
+	// CostSource are authoritative, including for an explicitly reported zero.
+	CostUSD float64
 }
 
 // geminiStatsEnvelope is a minimal view of the gemini JSON stats block.
@@ -41,8 +47,8 @@ type geminiStatsBlock struct {
 	OutputTokens int                         `json:"output_tokens"`
 	CacheTokens  int                         `json:"cached"`
 	TotalTokens  int                         `json:"total_tokens"`
-	CostUSD      float64                     `json:"cost_usd"`
-	TotalCostUSD float64                     `json:"total_cost_usd"`
+	CostUSD      *float64                    `json:"cost_usd"`
+	TotalCostUSD *float64                    `json:"total_cost_usd"`
 	Models       map[string]geminiStatsModel `json:"models"`
 }
 
@@ -83,7 +89,7 @@ type geminiStreamEnvelope struct {
 // gemini output that is a valid JSON stats envelope.
 // Returns a streamAggregate with FinalText = full output.
 func parseGeminiUsage(output string) *streamAggregate {
-	agg := &streamAggregate{FinalText: output}
+	agg := &streamAggregate{FinalText: output, CostSource: harnesses.CostSourceUnknown}
 
 	// Try last non-empty line (gemini may emit stats on the last line).
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
@@ -108,7 +114,7 @@ func parseGeminiUsage(output string) *streamAggregate {
 }
 
 func parseGeminiStreamOutput(output string) (*streamAggregate, bool) {
-	agg := &streamAggregate{}
+	agg := &streamAggregate{CostSource: harnesses.CostSourceUnknown}
 	var sawStreamEvent bool
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 	for _, rawLine := range lines {
@@ -170,7 +176,7 @@ func applyGeminiStats(agg *streamAggregate, env geminiStatsEnvelope) {
 				agg.TotalTokens = agg.InputTokens + agg.OutputTokens
 			}
 		}
-		agg.CostUSD = firstPositiveFloat(env.Stats.CostUSD, env.Stats.TotalCostUSD)
+		agg.recordReportedCost(env.Stats.CostUSD, env.Stats.TotalCostUSD)
 	}
 	if env.Meta != nil {
 		agg.HasUsage = true
@@ -197,16 +203,26 @@ func applyGeminiStats(agg *streamAggregate, env geminiStatsEnvelope) {
 	}
 }
 
-func firstPositive(values ...int) int {
-	for _, value := range values {
-		if value > 0 {
-			return value
-		}
+func (a *streamAggregate) recordReportedCost(costUSD, totalCostUSD *float64) {
+	a.FinalCostUSD = nil
+	a.CostSource = harnesses.CostSourceUnknown
+	a.CostUSD = 0
+
+	selected := costUSD
+	if selected == nil {
+		selected = totalCostUSD
 	}
-	return 0
+	if selected == nil || *selected < 0 {
+		return
+	}
+
+	value := *selected
+	a.FinalCostUSD = &value
+	a.CostSource = harnesses.CostSourceReported
+	a.CostUSD = value
 }
 
-func firstPositiveFloat(values ...float64) float64 {
+func firstPositive(values ...int) int {
 	for _, value := range values {
 		if value > 0 {
 			return value
