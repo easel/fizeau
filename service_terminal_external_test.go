@@ -60,7 +60,7 @@ func TestServiceFinalTypedClassificationRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPublicFinalCostPointerFieldsCompile(t *testing.T) {
+func TestV015CostPointerMigrationCompile(t *testing.T) {
 	cost := 1.25
 	final := fizeau.ServiceFinalData{
 		CostUSD:    &cost,
