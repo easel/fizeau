@@ -230,6 +230,7 @@ func TestPiPortableRuntimeDataSelection(t *testing.T) {
 	want := piPortableVerifiedRuntime.data
 	if want.photonSHA256 != "10468181565c56004c867f3a4af96f89a0ef5a63a72f2b5fb12c1f1992a3615c" ||
 		want.clipboardSHA256 != "1c15a004a06c9dc5eda5ba0a7a3535203eb141b97098ca033ca49a1269f84663" ||
+		want.clipboardClass != elf.ELFCLASS64 ||
 		!slices.Equal(want.clipboardNeeded, []string{"libgcc_s.so.1", "libpthread.so.0", "libm.so.6", "libdl.so.2", "libc.so.6"}) ||
 		!slices.Equal(want.forbiddenDisplay, []string{"DISPLAY", "WAYLAND_DISPLAY"}) {
 		t.Fatalf("Pi runtime-data evidence is incomplete: %#v", want)
@@ -242,6 +243,7 @@ func TestPiPortableRuntimeDataSelection(t *testing.T) {
 		{name: "Photon digest", mutate: func(e *piPortableDataEvidence) { e.photonSHA256 = strings.Repeat("0", 64) }},
 		{name: "Doom classification", mutate: func(e *piPortableDataEvidence) { e.doomRelative = e.photonRelative }},
 		{name: "clipboard digest", mutate: func(e *piPortableDataEvidence) { e.clipboardSHA256 = strings.Repeat("0", 64) }},
+		{name: "clipboard ELF class", mutate: func(e *piPortableDataEvidence) { e.clipboardClass = elf.ELFCLASS32 }},
 		{name: "clipboard dependencies", mutate: func(e *piPortableDataEvidence) { e.clipboardNeeded = e.clipboardNeeded[:len(e.clipboardNeeded)-1] }},
 		{name: "display boundary", mutate: func(e *piPortableDataEvidence) { e.forbiddenDisplay = []string{"DISPLAY"} }},
 	} {
@@ -267,6 +269,7 @@ func TestPiPortableRuntimeDataSelection(t *testing.T) {
 		if clipboard.Machine != elf.EM_AARCH64 {
 			t.Fatalf("clipboard architecture = %v", clipboard.Machine)
 		}
+		observed.clipboardClass = clipboard.Class
 		observed.clipboardNeeded, err = clipboard.ImportedLibraries()
 		if err != nil {
 			_ = clipboard.Close()

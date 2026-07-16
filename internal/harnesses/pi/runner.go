@@ -182,33 +182,13 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	if base == nil {
 		base = defaultBaseArgs
 	}
-	args := append([]string{}, base...)
-
-	// Provider flag: --provider <provider>. Pi uses this to route to a
-	// concrete backend (e.g. lmstudio, omlx) so the --model ID does not
-	// need to be in Pi's Gemini defaults.
-	if req.Provider != "" {
-		args = append(args, "--provider", req.Provider)
-	}
-
-	// Model flag: --model <model>
-	if req.Model != "" {
-		args = append(args, "--model", req.Model)
-	}
-
-	// Reasoning flag: --thinking <reasoning>
-	if value := harnesses.AdapterReasoningValue(req); value != "" {
-		args = append(args, "--thinking", value)
-	}
-
-	// Pi has no permission flags.
-
 	promptMode := r.PromptMode
 	if promptMode == "" {
 		promptMode = "arg"
 	}
-	if promptMode == "arg" && req.Prompt != "" {
-		args = append(args, req.Prompt)
+	args, err := piPortableArguments(base, req, promptMode)
+	if err != nil {
+		return nil, -1, "", err, "failed"
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -317,14 +297,66 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	return parseAgg, 0, stderr, nil, "success"
 }
 
-var defaultBaseArgs = []string{
-	"--mode", "json",
-	"--print",
-	"--no-session",
+var piPortableFixedArguments = []string{
 	"--no-extensions",
 	"--no-skills",
 	"--no-prompt-templates",
 	"--no-themes",
+}
+
+var defaultBaseArgs = []string{
+	"--mode", "json",
+	"--print",
+	"--no-session",
+}
+
+func piPortableArguments(base []string, req harnesses.ExecuteRequest, promptMode string) ([]string, error) {
+	if err := validatePiPortableLaterArguments(base); err != nil {
+		return nil, err
+	}
+	args := append([]string(nil), piPortableFixedArguments...)
+	args = append(args, base...)
+	if req.Provider != "" {
+		args = append(args, "--provider", req.Provider)
+	}
+	if req.Model != "" {
+		args = append(args, "--model", req.Model)
+	}
+	if value := harnesses.AdapterReasoningValue(req); value != "" {
+		args = append(args, "--thinking", value)
+	}
+	if promptMode == "arg" && req.Prompt != "" && piPortableConflictingArgument(req.Prompt) {
+		return nil, piPortableRuntimeError("request arguments conflict with fixed resource controls")
+	}
+	if promptMode == "arg" && req.Prompt != "" {
+		args = append(args, req.Prompt)
+	}
+	return args, nil
+}
+
+func validatePiPortableLaterArguments(arguments []string) error {
+	for _, argument := range arguments {
+		if piPortableConflictingArgument(argument) {
+			return piPortableRuntimeError("configured arguments conflict with fixed resource controls")
+		}
+	}
+	return nil
+}
+
+func piPortableConflictingArgument(argument string) bool {
+	key := argument
+	if index := strings.IndexByte(key, '='); index >= 0 {
+		key = key[:index]
+	}
+	switch key {
+	case "--extension", "-e", "--no-extensions", "-ne",
+		"--skill", "--no-skills", "-ns",
+		"--prompt-template", "--no-prompt-templates", "-np",
+		"--theme", "--no-themes":
+		return true
+	default:
+		return false
+	}
 }
 
 type stringBuilderWriter struct {

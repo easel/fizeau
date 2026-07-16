@@ -1,6 +1,7 @@
 package pi
 
 import (
+	"debug/elf"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -71,6 +72,7 @@ type piPortableDataEvidence struct {
 	clipboardRelative string
 	clipboardSize     int64
 	clipboardSHA256   string
+	clipboardClass    elf.Class
 	clipboardNeeded   []string
 	forbiddenDisplay  []string
 }
@@ -114,6 +116,7 @@ var piPortableVerifiedRuntime = piPortableRuntimeEvidenceRecord{
 		clipboardRelative: "node_modules/@mariozechner/clipboard-linux-arm64-gnu/clipboard.linux-arm64-gnu.node",
 		clipboardSize:     2309056,
 		clipboardSHA256:   "1c15a004a06c9dc5eda5ba0a7a3535203eb141b97098ca033ca49a1269f84663",
+		clipboardClass:    elf.ELFCLASS64,
 		clipboardNeeded:   []string{"libgcc_s.so.1", "libpthread.so.0", "libm.so.6", "libdl.so.2", "libc.so.6"},
 		forbiddenDisplay:  []string{"DISPLAY", "WAYLAND_DISPLAY"},
 	},
@@ -146,6 +149,7 @@ func validatePiPortableDataEvidence(observed piPortableDataEvidence) error {
 		observed.photonSHA256 != want.photonSHA256 || observed.doomRelative != want.doomRelative ||
 		observed.doomSHA256 != want.doomSHA256 || observed.clipboardRelative != want.clipboardRelative ||
 		observed.clipboardSize != want.clipboardSize || observed.clipboardSHA256 != want.clipboardSHA256 ||
+		observed.clipboardClass != want.clipboardClass ||
 		!slices.Equal(observed.clipboardNeeded, want.clipboardNeeded) ||
 		!slices.Equal(observed.forbiddenDisplay, want.forbiddenDisplay) {
 		return piPortableEvidenceError("runtime data")
