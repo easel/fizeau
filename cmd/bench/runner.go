@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,49 @@ import (
 	agentConfig "github.com/easel/fizeau/internal/config"
 	"github.com/easel/fizeau/internal/harnesses"
 )
+
+// benchmarkTaskCost keeps the amount and its provenance together while a
+// benchmark task is running. A nil amount is unknown; a pointer to zero is an
+// explicitly known zero.
+type benchmarkTaskCost struct {
+	amount *float64
+	source fizeau.CostSource
+}
+
+func benchmarkTaskCostFromFinal(fd harnesses.FinalData) benchmarkTaskCost {
+	if fd.FinalCostUSD == nil {
+		return benchmarkTaskCost{source: fizeau.CostSourceUnknown}
+	}
+
+	amount := *fd.FinalCostUSD
+	if amount < 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return benchmarkTaskCost{source: fizeau.CostSourceUnknown}
+	}
+
+	var source fizeau.CostSource
+	switch fd.FinalCostSource {
+	case harnesses.CostSourceReported:
+		source = fizeau.CostSourceReported
+	case harnesses.CostSourceConfigured:
+		source = fizeau.CostSourceConfigured
+	default:
+		return benchmarkTaskCost{source: fizeau.CostSourceUnknown}
+	}
+
+	return benchmarkTaskCost{amount: &amount, source: source}
+}
+
+// populateComparisonResult publishes authoritative cost evidence at the
+// comparison ingress. The returned amount and presence flag drive cap
+// accounting without treating a scalar zero as absence.
+func (c benchmarkTaskCost) populateComparisonResult(result *comparison.RunResult) (float64, bool) {
+	if c.amount == nil {
+		return 0, false
+	}
+	result.CostUSD = *c.amount
+	result.CostSource = c.source
+	return *c.amount, true
+}
 
 // CostCapExceededError is returned (via RunResult.Error) when the accumulated
 // cost across the bench sweep would exceed --max-cost-usd before a task runs.
@@ -58,9 +102,11 @@ func buildRunFunc(wd string, timeout time.Duration, maxCostUSD float64, baseSeed
 
 	return func(harness, model, prompt string) comparison.RunResult {
 		result := comparison.RunResult{
-			Harness: harness,
-			Model:   model,
+			Harness:    harness,
+			Model:      model,
+			CostSource: fizeau.CostSourceUnknown,
 		}
+		taskCost := benchmarkTaskCost{source: fizeau.CostSourceUnknown}
 
 		// Pre-flight cost cap check: if we already know accumulated cost is
 		// at or beyond the cap, skip without invoking the provider.
@@ -148,7 +194,7 @@ func buildRunFunc(wd string, timeout time.Duration, maxCostUSD float64, baseSeed
 						result.OutputTokens = usageInt(fd.Usage.OutputTokens)
 						result.Tokens = usageInt(fd.Usage.TotalTokens)
 					}
-					result.CostUSD = fd.CostUSD
+					taskCost = benchmarkTaskCostFromFinal(fd)
 				}
 			}
 		}
@@ -156,10 +202,11 @@ func buildRunFunc(wd string, timeout time.Duration, maxCostUSD float64, baseSeed
 		result.Output = outputBuf.String()
 		result.DurationMS = int(time.Since(start).Milliseconds())
 
-		// Accumulate cost after the task completes.
-		if result.CostUSD > 0 {
+		// Publish and accumulate only authoritative cost evidence after the
+		// task completes. A present zero remains source-tagged evidence.
+		if amount, present := taskCost.populateComparisonResult(&result); present {
 			mu.Lock()
-			accumulated += result.CostUSD
+			accumulated += amount
 			mu.Unlock()
 		}
 
