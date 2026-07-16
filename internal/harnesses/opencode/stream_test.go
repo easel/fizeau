@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -177,12 +178,109 @@ func TestParseOpencodeStream_StepFinishUsage(t *testing.T) {
 	if candidate.Counts.TotalTokens == nil || *candidate.Counts.TotalTokens != 13526 {
 		t.Errorf("TotalTokens = %#v, want 13526", candidate.Counts.TotalTokens)
 	}
-	if agg.CostUSD != 0.005 {
-		t.Errorf("CostUSD = %f, want 0.005", agg.CostUSD)
-	}
+	assertOpenCodeCostState(t, agg.FinalCostUSD, agg.CostSource, agg.CostUSD, true, 0.005)
 	// step_finish emits no text_delta events
 	if n := len(out); n != 0 {
 		t.Errorf("expected 0 events in channel, got %d", n)
+	}
+}
+
+func TestOpenCodeCostPresence(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantKnown bool
+		wantCost  float64
+	}{
+		{name: "no step_finish", input: `{"type":"text","part":{"type":"text","text":"done"}}`},
+		{name: "absent", input: `{"type":"step_finish","part":{"type":"step-finish"}}`},
+		{name: "negative", input: `{"type":"step_finish","part":{"type":"step-finish","cost":-0.01}}`},
+		{name: "zero", input: `{"type":"step_finish","part":{"type":"step-finish","cost":0}}`, wantKnown: true},
+		{name: "positive", input: `{"type":"step_finish","part":{"type":"step-finish","cost":0.0123}}`, wantKnown: true, wantCost: 0.0123},
+		{
+			name: "positive followed by absent",
+			input: `{"type":"step_finish","part":{"type":"step-finish","cost":0.0123}}` + "\n" +
+				`{"type":"step_finish","part":{"type":"step-finish"}}`,
+		},
+		{
+			name: "positive followed by negative",
+			input: `{"type":"step_finish","part":{"type":"step-finish","cost":0.0123}}` + "\n" +
+				`{"type":"step_finish","part":{"type":"step-finish","cost":-0.01}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := make(chan harnesses.Event, 8)
+			var seq int64
+			agg, err := parseOpencodeStream(context.Background(), strings.NewReader(tt.input), out, nil, &seq)
+			close(out)
+			if err != nil {
+				t.Fatalf("parseOpencodeStream: %v", err)
+			}
+			assertOpenCodeCostState(t, agg.FinalCostUSD, agg.CostSource, agg.CostUSD, tt.wantKnown, tt.wantCost)
+		})
+	}
+}
+
+func assertOpenCodeCostState(t *testing.T, cost *float64, source harnesses.CostSource, scalar float64, wantKnown bool, wantCost float64) {
+	t.Helper()
+	if !wantKnown {
+		if cost != nil {
+			t.Fatalf("FinalCostUSD: got %v, want nil", *cost)
+		}
+		if source != harnesses.CostSourceUnknown {
+			t.Fatalf("CostSource: got %q, want %q", source, harnesses.CostSourceUnknown)
+		}
+		if scalar != 0 {
+			t.Fatalf("CostUSD: got %v, want 0", scalar)
+		}
+		return
+	}
+
+	if cost == nil {
+		t.Fatal("FinalCostUSD: got nil, want reported cost")
+	}
+	if math.Abs(*cost-wantCost) > 1e-12 {
+		t.Fatalf("FinalCostUSD: got %v, want %v", *cost, wantCost)
+	}
+	if source != harnesses.CostSourceReported {
+		t.Fatalf("CostSource: got %q, want %q", source, harnesses.CostSourceReported)
+	}
+	if math.Abs(scalar-wantCost) > 1e-12 {
+		t.Fatalf("CostUSD: got %v, want %v", scalar, wantCost)
+	}
+}
+
+func assertOpenCodeFinalCostJSON(t *testing.T, raw json.RawMessage, wantKnown bool, wantCost float64, wantSource harnesses.CostSource) {
+	t.Helper()
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatalf("unmarshal final JSON: %v", err)
+	}
+	var source harnesses.CostSource
+	if err := json.Unmarshal(wire["cost_source"], &source); err != nil {
+		t.Fatalf("decode cost_source: %v", err)
+	}
+	if source != wantSource {
+		t.Fatalf("cost_source: got %q, want %q", source, wantSource)
+	}
+	costRaw, ok := wire["cost_usd"]
+	if !wantKnown {
+		if ok {
+			t.Fatalf("unknown cost must omit cost_usd: %s", raw)
+		}
+		return
+	}
+	if !ok {
+		t.Fatalf("known cost must include cost_usd: %s", raw)
+	}
+	var cost float64
+	if err := json.Unmarshal(costRaw, &cost); err != nil {
+		t.Fatalf("decode cost_usd: %v", err)
+	}
+	if math.Abs(cost-wantCost) > 1e-12 {
+		t.Fatalf("cost_usd: got %v, want %v", cost, wantCost)
 	}
 }
 

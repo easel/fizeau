@@ -297,6 +297,64 @@ cat ` + fixture + `
 	}
 }
 
+func TestRunner_Execute_FinalCostPresence(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	tests := []struct {
+		name      string
+		output    string
+		wantKnown bool
+		wantCost  float64
+	}{
+		{name: "no step_finish", output: `{"type":"text","part":{"type":"text","text":"done"}}`},
+		{name: "absent", output: `{"type":"step_finish","part":{"type":"step-finish"}}`},
+		{name: "negative", output: `{"type":"step_finish","part":{"type":"step-finish","cost":-0.01}}`},
+		{name: "zero", output: `{"type":"step_finish","part":{"type":"step-finish","cost":0}}`, wantKnown: true},
+		{name: "positive", output: `{"type":"step_finish","part":{"type":"step-finish","cost":0.0123}}`, wantKnown: true, wantCost: 0.0123},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binary := filepath.Join(t.TempDir(), "fake-opencode-cost")
+			script := "#!/bin/sh\ncat <<'EOF'\n" + tt.output + "\nEOF\n"
+			if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ch, err := (&Runner{Binary: binary, BaseArgs: []string{}}).Execute(ctx, harnesses.ExecuteRequest{Prompt: "cost"})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+
+			var raw json.RawMessage
+			for ev := range ch {
+				if ev.Type == harnesses.EventTypeFinal {
+					raw = append(raw[:0], ev.Data...)
+				}
+			}
+			if len(raw) == 0 {
+				t.Fatal("no final event received")
+			}
+
+			wantSource := harnesses.CostSourceUnknown
+			if tt.wantKnown {
+				wantSource = harnesses.CostSourceReported
+			}
+			assertOpenCodeFinalCostJSON(t, raw, tt.wantKnown, tt.wantCost, wantSource)
+
+			var final harnesses.FinalData
+			if err := json.Unmarshal(raw, &final); err != nil {
+				t.Fatalf("unmarshal final event: %v", err)
+			}
+			assertOpenCodeCostState(t, final.FinalCostUSD, final.FinalCostSource, final.CostUSD, tt.wantKnown, tt.wantCost)
+		})
+	}
+}
+
 func TestRunner_Execute_ExitErrorIncludesStderr(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")
@@ -402,9 +460,7 @@ func TestParseOpencodeStream_WithUsage(t *testing.T) {
 	if candidate.Counts.TotalTokens == nil || *candidate.Counts.TotalTokens != 23 {
 		t.Errorf("expected TotalTokens=23, got %#v", candidate.Counts.TotalTokens)
 	}
-	if agg.CostUSD != 0.003 {
-		t.Errorf("expected CostUSD=0.003, got %f", agg.CostUSD)
-	}
+	assertOpenCodeCostState(t, agg.FinalCostUSD, agg.CostSource, agg.CostUSD, true, 0.003)
 
 	// step_finish emits no text_delta events.
 	var events []harnesses.Event

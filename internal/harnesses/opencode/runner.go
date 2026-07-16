@@ -137,9 +137,10 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	agg, exitCode, stderr, runErr, status := r.runStreaming(ctx, binary, req, out, &seq)
 
 	final := harnesses.FinalData{
-		Status:     status,
-		ExitCode:   exitCode,
-		DurationMS: time.Since(start).Milliseconds(),
+		Status:          status,
+		ExitCode:        exitCode,
+		DurationMS:      time.Since(start).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	reasoningResolution := harnesses.ResolveRunnerReasoningWithCache(r.DiscoveryCache, "opencode", req.Reasoning)
 	if harnesses.ShouldEmitRunnerReasoningResolution(reasoningResolution) {
@@ -153,6 +154,8 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	if agg != nil {
 		final.FinalText = agg.FinalText
 		final.Usage, final.Warnings = harnesses.ResolveFinalUsage(agg.UsageSources)
+		final.FinalCostUSD = agg.FinalCostUSD
+		final.FinalCostSource = agg.CostSource
 		final.CostUSD = agg.CostUSD
 	}
 

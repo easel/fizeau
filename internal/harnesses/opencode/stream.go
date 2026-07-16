@@ -40,7 +40,7 @@ type opencodeStreamEvent struct {
 			Metadata json.RawMessage `json:"metadata,omitempty"`
 		} `json:"state"`
 		Tokens *opencodeTokens `json:"tokens"`
-		Cost   float64         `json:"cost"`
+		Cost   *float64        `json:"cost"`
 	} `json:"part"`
 	Error struct {
 		Name string `json:"name"`
@@ -54,7 +54,11 @@ type opencodeStreamEvent struct {
 type streamAggregate struct {
 	FinalText    string
 	UsageSources []harnesses.UsageCandidate
-	CostUSD      float64
+	FinalCostUSD *float64
+	CostSource   harnesses.CostSource
+	// CostUSD remains an in-memory compatibility mirror. FinalCostUSD and
+	// CostSource are authoritative, including for an explicitly reported zero.
+	CostUSD float64
 }
 
 // parseOpencodeStream reads opencode --format json newline-delimited JSON
@@ -66,7 +70,7 @@ type streamAggregate struct {
 //   - type==error                         -> return error
 //   - all other types                     -> skipped
 func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event, metadata map[string]string, seq *int64) (*streamAggregate, error) {
-	agg := &streamAggregate{}
+	agg := &streamAggregate{CostSource: harnesses.CostSourceUnknown}
 
 	emit := func(t harnesses.EventType, data any) error {
 		raw, err := json.Marshal(data)
@@ -145,7 +149,7 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 			if ev.Part.Tokens != nil {
 				agg.recordUsage(ev.Part.Tokens)
 			}
-			agg.CostUSD = ev.Part.Cost
+			agg.recordReportedCost(ev.Part.Cost)
 		case "error":
 			if msg, ok := opencodeErrorMessage(line); ok {
 				return agg, errors.New("opencode error: " + msg)
@@ -157,6 +161,19 @@ func parseOpencodeStream(ctx context.Context, r io.Reader, out chan<- harnesses.
 		return agg, err
 	}
 	return agg, nil
+}
+
+func (a *streamAggregate) recordReportedCost(cost *float64) {
+	a.FinalCostUSD = nil
+	a.CostSource = harnesses.CostSourceUnknown
+	a.CostUSD = 0
+	if cost == nil || *cost < 0 {
+		return
+	}
+	value := *cost
+	a.FinalCostUSD = &value
+	a.CostSource = harnesses.CostSourceReported
+	a.CostUSD = value
 }
 
 func (a *streamAggregate) recordUsage(tokens *opencodeTokens) {
