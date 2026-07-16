@@ -464,14 +464,14 @@ func runWithOptions(opts Options) int {
 
 	// Status to stderr
 	fmt.Fprintf(os.Stderr, "[%s] tokens: %d in / %d out", result.Status, result.Tokens.Input, result.Tokens.Output)
-	if result.CostUSD > 0 {
-		fmt.Fprintf(os.Stderr, " | cost: $%.4f", result.CostUSD)
+	if result.CostUSD != nil {
+		fmt.Fprintf(os.Stderr, " | cost: $%.4f", *result.CostUSD)
 		if costCapUSD > 0 {
 			fmt.Fprintf(os.Stderr, " / cap $%.4f", costCapUSD)
 		}
 	} else if costCapUSD > 0 {
-		// Cap configured but cost still 0 — print the cap so operators see
-		// it even on free / unknown-cost runs.
+		// Cap configured but cost is unknown — print the cap so operators see
+		// it even when the service cannot provide a final cost.
 		fmt.Fprintf(os.Stderr, " | cap $%.4f", costCapUSD)
 	}
 	fmt.Fprintln(os.Stderr)
@@ -541,8 +541,9 @@ func executeViaService(ctx context.Context, req fizeau.ServiceExecuteRequest, se
 	}
 
 	result := cliExecutionResult{
-		Status:    "failed",
-		Reasoning: req.Reasoning,
+		Status:     "failed",
+		Reasoning:  req.Reasoning,
+		CostSource: fizeau.CostSourceUnknown,
 	}
 	var sawFinal bool
 	for ev := range ch {
@@ -570,7 +571,7 @@ func executeViaService(ctx context.Context, req fizeau.ServiceExecuteRequest, se
 			result.Status = decoded.Final.Status
 			result.Output = decoded.Final.FinalText
 			result.Duration = time.Duration(decoded.Final.DurationMS) * time.Millisecond
-			result.CostUSD = decoded.Final.CostUSD
+			result.CostUSD, result.CostSource = decoded.Final.CostMeasurement()
 			result.Error = decoded.Final.Error
 			if decoded.Final.Usage != nil {
 				result.Tokens = cliTokenUsage{
@@ -661,21 +662,22 @@ type serviceExecuteRequestParams struct {
 }
 
 type cliExecutionResult struct {
-	Status             string           `json:"status"`
-	Output             string           `json:"output"`
-	Tokens             cliTokenUsage    `json:"tokens"`
-	Duration           time.Duration    `json:"duration_ms"`
-	CostUSD            float64          `json:"cost_usd,omitempty"`
-	Model              string           `json:"model,omitempty"`
-	SelectedProvider   string           `json:"selected_provider,omitempty"`
-	SelectedRoute      string           `json:"selected_route,omitempty"`
-	RequestedModel     string           `json:"requested_model,omitempty"`
-	ResolvedModel      string           `json:"resolved_model,omitempty"`
-	Reasoning          fizeau.Reasoning `json:"reasoning,omitempty"`
-	AttemptedProviders []string         `json:"attempted_providers,omitempty"`
-	FailoverCount      int              `json:"failover_count,omitempty"`
-	Error              string           `json:"error,omitempty"`
-	SessionID          string           `json:"session_id"`
+	Status             string            `json:"status"`
+	Output             string            `json:"output"`
+	Tokens             cliTokenUsage     `json:"tokens"`
+	Duration           time.Duration     `json:"duration_ms"`
+	CostUSD            *float64          `json:"cost_usd,omitempty"`
+	CostSource         fizeau.CostSource `json:"cost_source"`
+	Model              string            `json:"model,omitempty"`
+	SelectedProvider   string            `json:"selected_provider,omitempty"`
+	SelectedRoute      string            `json:"selected_route,omitempty"`
+	RequestedModel     string            `json:"requested_model,omitempty"`
+	ResolvedModel      string            `json:"resolved_model,omitempty"`
+	Reasoning          fizeau.Reasoning  `json:"reasoning,omitempty"`
+	AttemptedProviders []string          `json:"attempted_providers,omitempty"`
+	FailoverCount      int               `json:"failover_count,omitempty"`
+	Error              string            `json:"error,omitempty"`
+	SessionID          string            `json:"session_id"`
 }
 
 type cliTokenUsage struct {
