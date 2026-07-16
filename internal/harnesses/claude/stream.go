@@ -25,7 +25,7 @@ type claudeStreamEvent struct {
 	// result-event fields
 	Usage           json.RawMessage `json:"usage"`
 	CapturedAt      string          `json:"captured_at"`
-	TotalCostUSD    float64         `json:"total_cost_usd"`
+	TotalCostUSD    *float64        `json:"total_cost_usd"`
 	DurationMsField int64           `json:"duration_ms"`
 	SessionID       string          `json:"session_id"`
 	IsError         bool            `json:"is_error"`
@@ -70,10 +70,15 @@ type streamAggregate struct {
 	Model        string
 	UsageSources []harnesses.UsageCandidate
 	Warnings     []harnesses.FinalWarning
-	CostUSD      float64
-	ToolCalls    int
-	TurnCount    int
-	IsError      bool
+	FinalCostUSD *float64
+	CostSource   harnesses.CostSource
+	// CostUSD remains an in-memory compatibility mirror. FinalCostUSD and
+	// CostSource are authoritative, including for an explicitly reported zero.
+	CostUSD     float64
+	costUnknown bool
+	ToolCalls   int
+	TurnCount   int
+	IsError     bool
 }
 
 // parseClaudeStream reads newline-delimited claude stream-json events from r
@@ -98,7 +103,7 @@ type streamAggregate struct {
 // ctx is honored: when ctx is done the parser returns early with the
 // running aggregate and ctx.Err().
 func parseClaudeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Event, metadata map[string]string, seq *int64) (*streamAggregate, error) {
-	agg := &streamAggregate{}
+	agg := &streamAggregate{CostSource: harnesses.CostSourceUnknown}
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 256*1024), 16*1024*1024) // 16MB max line — claude can dump big tool results
 
@@ -221,9 +226,7 @@ func parseClaudeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Ev
 				agg.FinalText = ev.Result
 			}
 			agg.recordUsage(ev.Usage)
-			if ev.TotalCostUSD > 0 {
-				agg.CostUSD = ev.TotalCostUSD
-			}
+			agg.recordReportedCost(ev.TotalCostUSD)
 			if ev.SessionID != "" {
 				agg.SessionID = ev.SessionID
 			}
@@ -238,6 +241,42 @@ func parseClaudeStream(ctx context.Context, r io.Reader, out chan<- harnesses.Ev
 		return agg, err
 	}
 	return agg, nil
+}
+
+func (a *streamAggregate) recordReportedCost(cost *float64) {
+	a.FinalCostUSD = nil
+	a.CostSource = harnesses.CostSourceUnknown
+	a.CostUSD = 0
+	if cost == nil || *cost < 0 {
+		return
+	}
+	value := *cost
+	a.FinalCostUSD = &value
+	a.CostSource = harnesses.CostSourceReported
+	a.CostUSD = value
+}
+
+// recordNativeCost adds one native provider turn to the configured-price
+// total. Once any attempted turn has unknown cost, the aggregate remains
+// unknown even if other turns have exact pricing.
+func (a *streamAggregate) recordNativeCost(cost *float64) {
+	if cost == nil {
+		a.costUnknown = true
+		a.FinalCostUSD = nil
+		a.CostSource = harnesses.CostSourceUnknown
+		a.CostUSD = 0
+		return
+	}
+	if a.costUnknown {
+		return
+	}
+	total := *cost
+	if a.FinalCostUSD != nil {
+		total += *a.FinalCostUSD
+	}
+	a.FinalCostUSD = &total
+	a.CostSource = harnesses.CostSourceConfigured
+	a.CostUSD = total
 }
 
 func (a *streamAggregate) recordUsage(raw json.RawMessage) {

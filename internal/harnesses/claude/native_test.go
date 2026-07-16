@@ -3,6 +3,7 @@ package claude
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -255,6 +256,9 @@ func TestNativeRunner_MeteredBilling(t *testing.T) {
 	require.NoError(t, json.Unmarshal(by[harnesses.EventTypeFinal][0].Data, &final))
 	assert.Equal(t, "success", final.Status)
 	assert.InDelta(t, 18.0, final.CostUSD, 0.0001, "metered cost must be computed from native usage")
+	require.NotNil(t, final.FinalCostUSD)
+	assert.InDelta(t, 18.0, *final.FinalCostUSD, 0.0001)
+	assert.Equal(t, harnesses.CostSourceConfigured, final.FinalCostSource)
 
 	// Usage must be attributed to the native_stream source with the real token
 	// counts (proving usage flows through the metered path).
@@ -319,6 +323,132 @@ func TestNativeRunner_CacheCost(t *testing.T) {
 		"cache-inclusive cost must exceed input+output-only cost")
 	assert.InDelta(t, wantCacheInclusive, final.CostUSD, 0.001,
 		"expected cache-inclusive cost $%.4f, got $%.4f", wantCacheInclusive, final.CostUSD)
+	require.NotNil(t, final.FinalCostUSD)
+	assert.InDelta(t, wantCacheInclusive, *final.FinalCostUSD, 0.001)
+	assert.Equal(t, harnesses.CostSourceConfigured, final.FinalCostSource)
+}
+
+func TestNativeRunnerCostPresence(t *testing.T) {
+	type result struct {
+		final harnesses.FinalData
+		raw   json.RawMessage
+	}
+	run := func(t *testing.T, turns [][]agentcore.StreamDelta, model string) result {
+		t.Helper()
+		tool := &fakeTool{name: "search", output: "ok"}
+		runner := &Runner{
+			NativeMode:     true,
+			NativeProvider: &fakeStreamProvider{turns: turns},
+			NativeTools:    []agentcore.Tool{tool},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := runner.Execute(ctx, harnesses.ExecuteRequest{Prompt: "cost", Model: model})
+		require.NoError(t, err)
+		events := drainEvents(t, ctx, out)
+		by := eventsByType(events)
+		require.Len(t, by[harnesses.EventTypeFinal], 1)
+		var final harnesses.FinalData
+		require.NoError(t, json.Unmarshal(by[harnesses.EventTypeFinal][0].Data, &final))
+		return result{final: final, raw: by[harnesses.EventTypeFinal][0].Data}
+	}
+	assertUnknown := func(t *testing.T, got result) {
+		t.Helper()
+		assert.Nil(t, got.final.FinalCostUSD)
+		assert.Equal(t, harnesses.CostSourceUnknown, got.final.FinalCostSource)
+		assert.Zero(t, got.final.CostUSD)
+		assertFinalCostJSON(t, got.raw, false, 0, harnesses.CostSourceUnknown)
+	}
+	assertConfigured := func(t *testing.T, got result, want float64) {
+		t.Helper()
+		require.NotNil(t, got.final.FinalCostUSD)
+		assert.InDelta(t, want, *got.final.FinalCostUSD, 1e-12)
+		assert.Equal(t, harnesses.CostSourceConfigured, got.final.FinalCostSource)
+		assert.InDelta(t, want, got.final.CostUSD, 1e-12)
+		assertFinalCostJSON(t, got.raw, true, want, harnesses.CostSourceConfigured)
+	}
+
+	t.Run("no usage frame", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{{{Content: "answer"}, {Done: true}}}, "claude-sonnet-4-20250514")
+		assertUnknown(t, got)
+	})
+
+	t.Run("explicit zero usage on known pricing", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{{{Usage: &agentcore.TokenUsage{}}, {Done: true}}}, "claude-sonnet-4-20250514")
+		assertConfigured(t, got, 0)
+	})
+
+	t.Run("positive usage on known pricing", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{{{Usage: &agentcore.TokenUsage{Input: 1_000_000, Output: 1_000_000}}, {Done: true}}}, "claude-sonnet-4-20250514")
+		assertConfigured(t, got, 18)
+	})
+
+	t.Run("usage on unknown model", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{{{Model: "claude-unknown", Usage: &agentcore.TokenUsage{}}, {Done: true}}}, "claude-sonnet-4-20250514")
+		assertUnknown(t, got)
+	})
+
+	t.Run("negative computed cost", func(t *testing.T) {
+		assert.Nil(t, nativeCostUSD("claude-sonnet-4-20250514", agentcore.TokenUsage{Input: -1}))
+	})
+
+	t.Run("failed turn without usage", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{{{Err: errors.New("provider failed")}}}, "claude-sonnet-4-20250514")
+		assert.Equal(t, "failed", got.final.Status)
+		assertUnknown(t, got)
+	})
+
+	t.Run("unknown then known remains unknown", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{
+			{
+				{ToolCallID: "tc-1", ToolCallName: "search"},
+				{ToolCallID: "tc-1", ToolCallArgs: `{}`},
+				{Done: true},
+			},
+			{{Usage: &agentcore.TokenUsage{}}, {Done: true}},
+		}, "claude-sonnet-4-20250514")
+		assertUnknown(t, got)
+	})
+
+	t.Run("known then unknown remains unknown", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{
+			{
+				{Usage: &agentcore.TokenUsage{}},
+				{ToolCallID: "tc-1", ToolCallName: "search"},
+				{ToolCallID: "tc-1", ToolCallArgs: `{}`},
+				{Done: true},
+			},
+			{{Content: "answer"}, {Done: true}},
+		}, "claude-sonnet-4-20250514")
+		assertUnknown(t, got)
+	})
+
+	t.Run("later failed turn poisons known total", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{
+			{
+				{Usage: &agentcore.TokenUsage{}},
+				{ToolCallID: "tc-1", ToolCallName: "search"},
+				{ToolCallID: "tc-1", ToolCallArgs: `{}`},
+				{Done: true},
+			},
+			{{Err: errors.New("provider failed")}},
+		}, "claude-sonnet-4-20250514")
+		assert.Equal(t, "failed", got.final.Status)
+		assertUnknown(t, got)
+	})
+
+	t.Run("all known turns sum", func(t *testing.T) {
+		got := run(t, [][]agentcore.StreamDelta{
+			{
+				{Usage: &agentcore.TokenUsage{Input: 1_000_000}},
+				{ToolCallID: "tc-1", ToolCallName: "search"},
+				{ToolCallID: "tc-1", ToolCallArgs: `{}`},
+				{Done: true},
+			},
+			{{Usage: &agentcore.TokenUsage{Output: 1_000_000}}, {Done: true}},
+		}, "claude-sonnet-4-20250514")
+		assertConfigured(t, got, 18)
+	})
 }
 
 // TestNativeRunner_HealthCheckIgnoresBinary proves a native-mode Runner reports

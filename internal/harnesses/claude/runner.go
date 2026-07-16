@@ -254,9 +254,10 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	// always see a terminator. Errors during emit are non-fatal — the
 	// channel close still signals end-of-stream.
 	final := harnesses.FinalData{
-		Status:     status,
-		ExitCode:   exitCode,
-		DurationMS: time.Since(start).Milliseconds(),
+		Status:          status,
+		ExitCode:        exitCode,
+		DurationMS:      time.Since(start).Milliseconds(),
+		FinalCostSource: harnesses.CostSourceUnknown,
 	}
 	reasoningResolution := harnesses.ResolveRunnerReasoningWithCache(r.DiscoveryCache, "claude", req.Reasoning)
 	if harnesses.ShouldEmitRunnerReasoningResolution(reasoningResolution) {
@@ -282,9 +283,9 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	if agg != nil {
 		final.FinalText = agg.FinalText
 		final.Usage, final.Warnings = harnesses.ResolveFinalUsage(agg.UsageSources)
-		if agg.CostUSD > 0 {
-			final.CostUSD = agg.CostUSD
-		}
+		final.FinalCostUSD = agg.FinalCostUSD
+		final.FinalCostSource = agg.CostSource
+		final.CostUSD = agg.CostUSD
 	}
 
 	finalRaw, err := json.Marshal(final)
@@ -600,7 +601,7 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 			return nil, 0, stderrBytesStr, ctx.Err(), "cancelled"
 		}
 	}
-	return &streamAggregate{FinalText: text}, 0, stderrBytesStr, nil, "success"
+	return &streamAggregate{FinalText: text, CostSource: harnesses.CostSourceUnknown}, 0, stderrBytesStr, nil, "success"
 }
 
 func (r *Runner) buildArgs(base []string, req harnesses.ExecuteRequest) []string {

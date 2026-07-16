@@ -74,6 +74,7 @@ type nativeStreamResult struct {
 	text      string
 	toolCalls []agentcore.ToolCall
 	usage     agentcore.TokenUsage
+	hasUsage  bool
 	model     string
 	finish    string
 }
@@ -132,6 +133,7 @@ func consumeNativeTurn(
 				res.model = d.Model
 			}
 			if d.Usage != nil {
+				res.hasUsage = true
 				mergeUsage(&res.usage, *d.Usage)
 			}
 			if d.FinishReason != "" {

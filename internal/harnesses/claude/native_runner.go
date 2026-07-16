@@ -116,7 +116,7 @@ func (r *Runner) runNative(ctx context.Context, req harnesses.ExecuteRequest, ou
 		opts.Reasoning = agentcore.Reasoning(req.Reasoning)
 	}
 
-	agg := &streamAggregate{Model: model}
+	agg := &streamAggregate{Model: model, CostSource: harnesses.CostSourceUnknown}
 
 	maxIter := r.NativeMaxIterations
 	if maxIter <= 0 {
@@ -130,21 +130,25 @@ func (r *Runner) runNative(ctx context.Context, req harnesses.ExecuteRequest, ou
 
 		deltas, err := provider.ChatStream(ctx, messages, toolDefs, opts)
 		if err != nil {
+			agg.recordNativeCost(nil)
 			return agg, -1, "", err, "failed"
 		}
 
 		turn, err := consumeNativeTurn(ctx, deltas, emit)
+		if turn.model != "" {
+			agg.Model = turn.model
+		}
+		if turn.hasUsage {
+			agg.UsageSources = append(agg.UsageSources, nativeUsageCandidate(turn.usage))
+			agg.recordNativeCost(nativeCostUSD(agg.Model, turn.usage))
+		} else {
+			agg.recordNativeCost(nil)
+		}
 		if err != nil {
 			return agg, -1, "", err, classifyCtx(err)
 		}
 
 		agg.TurnCount++
-		if turn.model != "" {
-			agg.Model = turn.model
-		}
-		// Accumulate metered usage + cost across turns.
-		agg.UsageSources = append(agg.UsageSources, nativeUsageCandidate(turn.usage))
-		agg.CostUSD += nativeCostUSD(agg.Model, turn.usage)
 
 		if turn.text != "" {
 			agg.FinalText = turn.text
@@ -265,14 +269,14 @@ func optIntPtr(v int) *int {
 }
 
 // nativeCostUSD computes metered (actual_cash_spend) cost from native usage
-// using fizeau's pricing table. Unknown models yield 0 (no cost asserted)
-// rather than a negative sentinel.
-func nativeCostUSD(model string, u agentcore.TokenUsage) float64 {
+// using fizeau's exact model pricing table. Unknown models have unknown cost;
+// an explicit zero from a known price is still a known configured value.
+func nativeCostUSD(model string, u agentcore.TokenUsage) *float64 {
 	cost := agentcore.DefaultPricing.EstimateCostWithCache(model, u.Input, u.Output, u.CacheRead, u.CacheWrite)
 	if cost < 0 {
-		return 0
+		return nil
 	}
-	return cost
+	return &cost
 }
 
 func classifyCtx(err error) string {

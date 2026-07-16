@@ -172,6 +172,9 @@ func TestParseClaudeStream_BehavioralParity(t *testing.T) {
 			assert.Equal(t, tc.wantInputTokens, *usage.InputTokens, "input tokens")
 			assert.Equal(t, tc.wantOutputTokens, *usage.OutputTokens, "output tokens")
 			assert.InDelta(t, tc.wantCostUSD, agg.CostUSD, 1e-9, "cost usd")
+			require.NotNil(t, agg.FinalCostUSD, "reported cost pointer")
+			assert.InDelta(t, tc.wantCostUSD, *agg.FinalCostUSD, 1e-9, "authoritative cost usd")
+			assert.Equal(t, harnesses.CostSourceReported, agg.CostSource)
 			assert.Equal(t, tc.wantFinalText, agg.FinalText, "final text")
 			assert.Equal(t, tc.wantSessionID, agg.SessionID, "session id")
 			assert.Equal(t, tc.wantModel, agg.Model, "model")
@@ -208,6 +211,92 @@ func TestParseClaudeStream_BehavioralParity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseClaudeStreamCostPresence(t *testing.T) {
+	cases := []struct {
+		name      string
+		costField string
+		wantKnown bool
+		wantCost  float64
+	}{
+		{name: "absent", costField: ""},
+		{name: "negative", costField: `,"total_cost_usd":-0.01`},
+		{name: "zero", costField: `,"total_cost_usd":0`, wantKnown: true},
+		{name: "positive", costField: `,"total_cost_usd":0.0123`, wantKnown: true, wantCost: 0.0123},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := `{"type":"result","subtype":"success","result":"done"` + tc.costField + `}`
+			_, agg := runParser(t, result)
+			assertClaudeCostPresence(t, agg.FinalCostUSD, agg.CostSource, agg.CostUSD, tc.wantKnown, tc.wantCost)
+
+			if runtime.GOOS == "windows" {
+				t.Skip("final projection fixture relies on POSIX shell")
+			}
+			binary := filepath.Join(t.TempDir(), "fake-claude-cost")
+			script := "#!/bin/sh\nprintf '%s\\n' '" + result + "'\n"
+			require.NoError(t, os.WriteFile(binary, []byte(script), 0o755))
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			out, err := (&Runner{Binary: binary}).Execute(ctx, harnesses.ExecuteRequest{Prompt: "cost"})
+			require.NoError(t, err)
+			events := drainEvents(t, ctx, out)
+			require.NotEmpty(t, events)
+			finalEvent := events[len(events)-1]
+			require.Equal(t, harnesses.EventTypeFinal, finalEvent.Type)
+
+			var final harnesses.FinalData
+			require.NoError(t, json.Unmarshal(finalEvent.Data, &final))
+			assertClaudeCostPresence(t, final.FinalCostUSD, final.FinalCostSource, final.CostUSD, tc.wantKnown, tc.wantCost)
+			assertFinalCostJSON(t, finalEvent.Data, tc.wantKnown, tc.wantCost, func() harnesses.CostSource {
+				if tc.wantKnown {
+					return harnesses.CostSourceReported
+				}
+				return harnesses.CostSourceUnknown
+			}())
+		})
+	}
+
+	t.Run("latest result without cost clears earlier reported cost", func(t *testing.T) {
+		_, agg := runParser(t,
+			`{"type":"result","subtype":"success","result":"first","total_cost_usd":0.0123}`+"\n"+
+				`{"type":"result","subtype":"success","result":"second"}`,
+		)
+		assertClaudeCostPresence(t, agg.FinalCostUSD, agg.CostSource, agg.CostUSD, false, 0)
+	})
+}
+
+func assertClaudeCostPresence(t *testing.T, cost *float64, source harnesses.CostSource, scalar float64, wantKnown bool, wantCost float64) {
+	t.Helper()
+	if !wantKnown {
+		assert.Nil(t, cost)
+		assert.Equal(t, harnesses.CostSourceUnknown, source)
+		assert.Zero(t, scalar)
+		return
+	}
+	require.NotNil(t, cost)
+	assert.InDelta(t, wantCost, *cost, 1e-12)
+	assert.Equal(t, harnesses.CostSourceReported, source)
+	assert.InDelta(t, wantCost, scalar, 1e-12)
+}
+
+func assertFinalCostJSON(t *testing.T, raw json.RawMessage, wantKnown bool, wantCost float64, wantSource harnesses.CostSource) {
+	t.Helper()
+	var wire map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &wire))
+	require.JSONEq(t, `"`+string(wantSource)+`"`, string(wire["cost_source"]))
+	cost, ok := wire["cost_usd"]
+	if !wantKnown {
+		assert.False(t, ok, "unknown cost must omit cost_usd: %s", raw)
+		return
+	}
+	require.True(t, ok, "known cost must include cost_usd: %s", raw)
+	var got float64
+	require.NoError(t, json.Unmarshal(cost, &got))
+	assert.InDelta(t, wantCost, got, 1e-12)
 }
 
 // TestParseClaudeStream_Empty verifies the parser tolerates an empty stream
@@ -427,6 +516,9 @@ func TestRunnerExecute_HappyPath(t *testing.T) {
 	require.NotNil(t, final.Usage.TotalTokens)
 	assert.Equal(t, 7, *final.Usage.TotalTokens)
 	assert.InDelta(t, 0.0001, final.CostUSD, 1e-9)
+	require.NotNil(t, final.FinalCostUSD)
+	assert.InDelta(t, 0.0001, *final.FinalCostUSD, 1e-9)
+	assert.Equal(t, harnesses.CostSourceReported, final.FinalCostSource)
 
 	// Earlier events should include a text_delta.
 	var sawText bool
