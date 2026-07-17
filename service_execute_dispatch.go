@@ -112,6 +112,9 @@ func (s *service) executeCoordinatorPorts(req ServiceExecuteRequest, decision Ro
 				Model:    nreq.Model,
 			}, routeDecision(ndecision))
 		},
+		ProjectContextCapacity: func(payload harnesses.ContextCapacityData) any {
+			return serviceContextCapacityDataFromHarness(payload)
+		},
 		ObserveRouteAttempt:        s.recordRouteAttemptFromFinal,
 		ObserveWrappedRouteAttempt: s.observeRouteAttemptFromFinal,
 		ObserveTokenUsage:          s.observeTokenUsage,

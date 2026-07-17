@@ -204,10 +204,11 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	}
 
 	var (
-		readOnlyStreak atomic.Int64
-		stalled        atomic.Bool
-		stallReason    atomic.Value
-		stallCount     atomic.Int64
+		readOnlyStreak   atomic.Int64
+		stalled          atomic.Bool
+		stallReason      atomic.Value
+		stallCount       atomic.Int64
+		rejectedCapacity *harnesses.ContextCapacityData
 	)
 	cancelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -217,6 +218,19 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 			cb.ObserveAgentEvent(ev)
 		}
 		switch ev.Type {
+		case agentcore.EventContextCapacity:
+			var payload agentcore.ContextCapacityEventData
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				break
+			}
+			mapped := contextCapacityDataFromCore(payload)
+			if cb.EmitEvent != nil {
+				cb.EmitEvent(harnesses.EventTypeContextCapacity, mapped)
+			}
+			if mapped.Action == agentcore.ContextCapacityActionRejected {
+				copy := mapped
+				rejectedCapacity = &copy
+			}
 		case agentcore.EventToolCall:
 			var payload nativeToolCallPayload
 			_ = json.Unmarshal(ev.Data, &payload)
@@ -305,8 +319,9 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		finalModel = result.ResolvedModel
 	}
 	final := harnesses.FinalData{
-		DurationMS: time.Since(req.Started).Milliseconds(),
-		FinalText:  result.Output,
+		DurationMS:      time.Since(req.Started).Milliseconds(),
+		FinalText:       result.Output,
+		ContextCapacity: rejectedCapacity,
 		RoutingActual: &harnesses.RoutingActual{
 			Harness:            actualHarness,
 			Provider:           finalProvider,
@@ -382,13 +397,29 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	default:
 		final.Status = "success"
 	}
-	if final.Status == "failed" && final.Error != "" && final.RoutingActual != nil {
+	origin := nativeTerminalOrigin(runErr)
+	if origin != TerminalOriginContextCapacity && final.Status == "failed" && final.Error != "" && final.RoutingActual != nil {
 		final.RoutingActual.FailureClass = classifyDispatchFailure(final.Error)
 	}
 	if final.RoutingActual != nil && final.Usage != nil && cb.ObserveTokenUsage != nil {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
 	}
-	finalize(cb, final, nativeTerminalOrigin(runErr))
+	finalize(cb, final, origin)
+}
+
+func contextCapacityDataFromCore(payload agentcore.ContextCapacityEventData) harnesses.ContextCapacityData {
+	return harnesses.ContextCapacityData{
+		Action:                 payload.Action,
+		CallKind:               payload.CallKind,
+		TurnIndex:              payload.TurnIndex,
+		AttemptIndex:           payload.AttemptIndex,
+		ContextWindow:          payload.ContextWindow,
+		EffectiveContextWindow: payload.EffectiveContextWindow,
+		EstimatedInputTokens:   payload.EstimatedInputTokens,
+		RequestedMaxTokens:     payload.RequestedMaxTokens,
+		EffectiveMaxTokens:     payload.EffectiveMaxTokens,
+		AvailableOutputTokens:  payload.AvailableOutputTokens,
+	}
 }
 
 // projectNativeDispatchToCore copies resolved dispatch identity, selected
@@ -766,6 +797,8 @@ func finalize(cb NativeCallbacks, final harnesses.FinalData, origin TerminalOrig
 
 func nativeTerminalOrigin(runErr error) TerminalOrigin {
 	switch {
+	case errors.Is(runErr, agentcore.ErrContextCapacityExceeded):
+		return TerminalOriginContextCapacity
 	case errors.Is(runErr, agentcore.ErrToolCallLoop),
 		errors.Is(runErr, agentcore.ErrCompactionNoFit),
 		errors.Is(runErr, agentcore.ErrCompactionStuck),

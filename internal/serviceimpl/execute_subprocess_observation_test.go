@@ -18,6 +18,45 @@ type finalObservationHarness struct {
 	execute func(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error)
 }
 
+func TestExecuteSubprocessCannotOriginateContextCapacity(t *testing.T) {
+	runner := finalObservationHarness{execute: func(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+		ch := make(chan harnesses.Event, 3)
+		ch <- harnesses.Event{Type: harnesses.EventTypeContextCapacity, Data: json.RawMessage(`{"action":"rejected","call_kind":"main"}`)}
+		ch <- harnesses.Event{Type: harnesses.EventTypeProgress, Data: json.RawMessage(`{"phase":"fixture"}`)}
+		ch <- finalObservationEvent(harnesses.FinalData{
+			Status: "success",
+			ContextCapacity: &harnesses.ContextCapacityData{
+				Action: "rejected", CallKind: "main",
+			},
+		})
+		close(ch)
+		return ch, nil
+	}}
+	var observed, emitted []harnesses.EventType
+	var final harnesses.FinalData
+	RunSubprocess(context.Background(), SubprocessRequest{}, runner, SubprocessCallbacks{
+		ObserveEvent: func(event harnesses.Event) harnesses.Event {
+			observed = append(observed, event.Type)
+			return event
+		},
+		EmitEvent: func(event harnesses.Event) bool {
+			emitted = append(emitted, event.Type)
+			if event.Type == harnesses.EventTypeFinal {
+				final = decodeFinalObservationEvent(t, event)
+			}
+			return true
+		},
+	})
+
+	want := []harnesses.EventType{harnesses.EventTypeProgress, harnesses.EventTypeFinal}
+	if !reflect.DeepEqual(observed, want) || !reflect.DeepEqual(emitted, want) {
+		t.Fatalf("subprocess events observed/emitted = %v/%v, want %v", observed, emitted, want)
+	}
+	if final.Cause != harnesses.TerminalCauseCompleted || final.ContextCapacity != nil {
+		t.Fatalf("subprocess final retained service-owned capacity authority: %#v", final)
+	}
+}
+
 func (h finalObservationHarness) Info() harnesses.HarnessInfo {
 	return harnesses.HarnessInfo{Name: "final-observation-test"}
 }

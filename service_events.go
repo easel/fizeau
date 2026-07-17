@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/easel/fizeau/internal/harnesses"
 )
 
 const (
@@ -16,6 +18,7 @@ const (
 	ServiceEventTypeProgress         = "progress"
 	ServiceEventTypeRoutingDecision  = "routing_decision"
 	ServiceEventTypeStall            = "stall"
+	ServiceEventTypeContextCapacity  = "context_capacity"
 	ServiceEventTypeFinal            = "final"
 	ServiceEventTypeOverride         = "override"
 	ServiceEventTypeRejectedOverride = "rejected_override"
@@ -115,6 +118,36 @@ type ServiceCompactionData struct {
 	MessagesBefore int `json:"messages_before"`
 	MessagesAfter  int `json:"messages_after"`
 	TokensFreed    int `json:"tokens_freed"`
+}
+
+type ServiceContextCapacityAction string
+
+const (
+	ServiceContextCapacityClamped         ServiceContextCapacityAction = "clamped"
+	ServiceContextCapacityPlanningSkipped ServiceContextCapacityAction = "planning_skipped"
+	ServiceContextCapacityRejected        ServiceContextCapacityAction = "rejected"
+)
+
+type ServiceContextCapacityCallKind string
+
+const (
+	ServiceContextCapacityPlanning ServiceContextCapacityCallKind = "planning"
+	ServiceContextCapacityMain     ServiceContextCapacityCallKind = "main"
+)
+
+// ServiceContextCapacityData is the complete public projection of one native
+// provider-call capacity decision.
+type ServiceContextCapacityData struct {
+	Action                 ServiceContextCapacityAction   `json:"action"`
+	CallKind               ServiceContextCapacityCallKind `json:"call_kind"`
+	TurnIndex              int                            `json:"turn_index"`
+	AttemptIndex           int                            `json:"attempt_index"`
+	ContextWindow          int                            `json:"context_window"`
+	EffectiveContextWindow int                            `json:"effective_context_window"`
+	EstimatedInputTokens   int                            `json:"estimated_input_tokens"`
+	RequestedMaxTokens     int                            `json:"requested_max_tokens"`
+	EffectiveMaxTokens     int                            `json:"effective_max_tokens"`
+	AvailableOutputTokens  int                            `json:"available_output_tokens"`
 }
 
 // ServiceProgressData is the bounded progress payload emitted alongside the
@@ -417,19 +450,20 @@ const (
 type TerminalCause string
 
 const (
-	TerminalCauseCompleted        TerminalCause = "completed"
-	TerminalCauseRouteUnavailable TerminalCause = "route_unavailable"
-	TerminalCauseSpawnFailed      TerminalCause = "spawn_failed"
-	TerminalCauseHarnessFailed    TerminalCause = "harness_failed"
-	TerminalCauseProviderFailed   TerminalCause = "provider_failed"
-	TerminalCauseToolLoopFailed   TerminalCause = "tool_loop_failed"
-	TerminalCauseIterationLimit   TerminalCause = "iteration_limit"
-	TerminalCauseBudgetHalted     TerminalCause = "budget_halted"
-	TerminalCauseDeadlineExceeded TerminalCause = "deadline_exceeded"
-	TerminalCauseContextCancelled TerminalCause = "context_cancelled"
-	TerminalCauseCallerDied       TerminalCause = "caller_died"
-	TerminalCauseCleanupFailed    TerminalCause = "cleanup_failed"
-	TerminalCauseInternalError    TerminalCause = "internal_error"
+	TerminalCauseCompleted               TerminalCause = "completed"
+	TerminalCauseRouteUnavailable        TerminalCause = "route_unavailable"
+	TerminalCauseSpawnFailed             TerminalCause = "spawn_failed"
+	TerminalCauseHarnessFailed           TerminalCause = "harness_failed"
+	TerminalCauseProviderFailed          TerminalCause = "provider_failed"
+	TerminalCauseToolLoopFailed          TerminalCause = "tool_loop_failed"
+	TerminalCauseIterationLimit          TerminalCause = "iteration_limit"
+	TerminalCauseBudgetHalted            TerminalCause = "budget_halted"
+	TerminalCauseContextCapacityExceeded TerminalCause = "context_capacity_exceeded"
+	TerminalCauseDeadlineExceeded        TerminalCause = "deadline_exceeded"
+	TerminalCauseContextCancelled        TerminalCause = "context_cancelled"
+	TerminalCauseCallerDied              TerminalCause = "caller_died"
+	TerminalCauseCleanupFailed           TerminalCause = "cleanup_failed"
+	TerminalCauseInternalError           TerminalCause = "internal_error"
 )
 
 // SessionStage is the Fizeau-owned lifecycle stage that determined a terminal
@@ -448,25 +482,26 @@ const (
 )
 
 type ServiceFinalData struct {
-	Status          string                  `json:"status"`
-	Outcome         SessionOutcome          `json:"outcome"`
-	Cause           TerminalCause           `json:"cause"`
-	Stage           SessionStage            `json:"stage"`
-	PrimaryOutcome  SessionOutcome          `json:"primary_outcome,omitempty"`
-	PrimaryCause    TerminalCause           `json:"primary_cause,omitempty"`
-	PrimaryStage    SessionStage            `json:"primary_stage,omitempty"`
-	ExitCode        int                     `json:"exit_code"`
-	Error           string                  `json:"error,omitempty"`
-	FinalText       string                  `json:"final_text,omitempty"`
-	DurationMS      int64                   `json:"duration_ms"`
-	Usage           *ServiceFinalUsage      `json:"usage,omitempty"`
-	Warnings        []ServiceFinalWarning   `json:"warnings,omitempty"`
-	CostUSD         *float64                `json:"cost_usd,omitempty"`
-	CostSource      CostSource              `json:"cost_source"`
-	SessionLogPath  string                  `json:"session_log_path,omitempty"`
-	RoutingActual   *ServiceRoutingActual   `json:"routing_actual,omitempty"`
-	ParentSessionID string                  `json:"parent_session_id,omitempty"`
-	Continuation    ContinuationDisposition `json:"continuation,omitempty"`
+	Status          string                      `json:"status"`
+	Outcome         SessionOutcome              `json:"outcome"`
+	Cause           TerminalCause               `json:"cause"`
+	Stage           SessionStage                `json:"stage"`
+	PrimaryOutcome  SessionOutcome              `json:"primary_outcome,omitempty"`
+	PrimaryCause    TerminalCause               `json:"primary_cause,omitempty"`
+	PrimaryStage    SessionStage                `json:"primary_stage,omitempty"`
+	ExitCode        int                         `json:"exit_code"`
+	Error           string                      `json:"error,omitempty"`
+	ContextCapacity *ServiceContextCapacityData `json:"context_capacity,omitempty"`
+	FinalText       string                      `json:"final_text,omitempty"`
+	DurationMS      int64                       `json:"duration_ms"`
+	Usage           *ServiceFinalUsage          `json:"usage,omitempty"`
+	Warnings        []ServiceFinalWarning       `json:"warnings,omitempty"`
+	CostUSD         *float64                    `json:"cost_usd,omitempty"`
+	CostSource      CostSource                  `json:"cost_source"`
+	SessionLogPath  string                      `json:"session_log_path,omitempty"`
+	RoutingActual   *ServiceRoutingActual       `json:"routing_actual,omitempty"`
+	ParentSessionID string                      `json:"parent_session_id,omitempty"`
+	Continuation    ContinuationDisposition     `json:"continuation,omitempty"`
 }
 
 // ServiceFinalUsage is the public token-usage payload emitted on service
@@ -549,6 +584,7 @@ type ServiceDecodedEvent struct {
 	Progress         *ServiceProgressData
 	RoutingDecision  *ServiceRoutingDecisionData
 	Stall            *ServiceStallData
+	ContextCapacity  *ServiceContextCapacityData
 	Final            *ServiceFinalData
 	Override         *ServiceOverrideData
 	RejectedOverride *ServiceOverrideData
@@ -604,6 +640,12 @@ func DecodeServiceEvent(ev ServiceEvent) (ServiceDecodedEvent, error) {
 			return decoded, err
 		}
 		decoded.Stall = &payload
+	case ServiceEventTypeContextCapacity:
+		var payload ServiceContextCapacityData
+		if err := decodeServicePayload(ev, &payload); err != nil {
+			return decoded, err
+		}
+		decoded.ContextCapacity = &payload
 	case ServiceEventTypeFinal:
 		var payload ServiceFinalData
 		if err := decodeServicePayload(ev, &payload); err != nil {
@@ -626,6 +668,21 @@ func DecodeServiceEvent(ev ServiceEvent) (ServiceDecodedEvent, error) {
 		return decoded, fmt.Errorf("decode service event %q: unknown type", ev.Type)
 	}
 	return decoded, nil
+}
+
+func serviceContextCapacityDataFromHarness(payload harnesses.ContextCapacityData) ServiceContextCapacityData {
+	return ServiceContextCapacityData{
+		Action:                 ServiceContextCapacityAction(payload.Action),
+		CallKind:               ServiceContextCapacityCallKind(payload.CallKind),
+		TurnIndex:              payload.TurnIndex,
+		AttemptIndex:           payload.AttemptIndex,
+		ContextWindow:          payload.ContextWindow,
+		EffectiveContextWindow: payload.EffectiveContextWindow,
+		EstimatedInputTokens:   payload.EstimatedInputTokens,
+		RequestedMaxTokens:     payload.RequestedMaxTokens,
+		EffectiveMaxTokens:     payload.EffectiveMaxTokens,
+		AvailableOutputTokens:  payload.AvailableOutputTokens,
+	}
 }
 
 func decodeServicePayload(ev ServiceEvent, dst any) error {

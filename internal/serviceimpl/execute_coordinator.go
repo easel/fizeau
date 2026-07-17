@@ -113,6 +113,7 @@ type ExecutePorts struct {
 
 	ResolveNativeProvider      func(NativeProviderRequest) NativeProviderResolution
 	ProviderNotConfiguredError func(NativeProviderRequest, NativeDecision) string
+	ProjectContextCapacity     func(harnesses.ContextCapacityData) any
 
 	ObserveRouteAttempt        func(harnesses.FinalData)
 	ObserveWrappedRouteAttempt func(harnesses.FinalData) error
@@ -395,6 +396,11 @@ func (state *executeRunState) runNative(ctx context.Context) {
 		ProviderNotConfiguredError: state.ports.ProviderNotConfiguredError,
 		ObserveAgentEvent:          observeAgentEvent,
 		EmitEvent: func(eventType harnesses.EventType, payload any) {
+			if eventType == harnesses.EventTypeContextCapacity && state.ports.ProjectContextCapacity != nil {
+				if capacity, ok := payload.(harnesses.ContextCapacityData); ok {
+					payload = state.ports.ProjectContextCapacity(capacity)
+				}
+			}
 			state.emitJSON(eventType, state.req.Metadata, payload)
 		},
 		BeforeFinal: func(final harnesses.FinalData) {
@@ -403,7 +409,9 @@ func (state *executeRunState) runNative(ctx context.Context) {
 			}
 		},
 		Finalize: func(final harnesses.FinalData, origin TerminalOrigin) {
-			state.observeRouteAttempt(final)
+			if origin != TerminalOriginContextCapacity {
+				state.observeRouteAttempt(final)
+			}
 			state.commitFinal(ctx, final, origin)
 		},
 		ToolWiringHook:          state.ports.ToolWiringHook,

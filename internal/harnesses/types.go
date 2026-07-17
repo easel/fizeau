@@ -64,6 +64,7 @@ const (
 	EventTypeProgress        EventType = "progress"
 	EventTypeRoutingDecision EventType = "routing_decision"
 	EventTypeStall           EventType = "stall"
+	EventTypeContextCapacity EventType = "context_capacity"
 	EventTypeFinal           EventType = "final"
 )
 
@@ -98,6 +99,21 @@ type ToolResultData struct {
 	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
+// ContextCapacityData is the API-neutral bridge for a service-owned native
+// context-capacity decision. Harness-native parsers never originate it.
+type ContextCapacityData struct {
+	Action                 string `json:"action"`
+	CallKind               string `json:"call_kind"`
+	TurnIndex              int    `json:"turn_index"`
+	AttemptIndex           int    `json:"attempt_index"`
+	ContextWindow          int    `json:"context_window"`
+	EffectiveContextWindow int    `json:"effective_context_window"`
+	EstimatedInputTokens   int    `json:"estimated_input_tokens"`
+	RequestedMaxTokens     int    `json:"requested_max_tokens"`
+	EffectiveMaxTokens     int    `json:"effective_max_tokens"`
+	AvailableOutputTokens  int    `json:"available_output_tokens"`
+}
+
 // SessionOutcome is the stable coarse result of one accepted Fizeau session.
 // It is distinct from FinalData.Status, which remains a compatibility/detail
 // field for older consumers.
@@ -114,19 +130,20 @@ const (
 type TerminalCause string
 
 const (
-	TerminalCauseCompleted        TerminalCause = "completed"
-	TerminalCauseRouteUnavailable TerminalCause = "route_unavailable"
-	TerminalCauseSpawnFailed      TerminalCause = "spawn_failed"
-	TerminalCauseHarnessFailed    TerminalCause = "harness_failed"
-	TerminalCauseProviderFailed   TerminalCause = "provider_failed"
-	TerminalCauseToolLoopFailed   TerminalCause = "tool_loop_failed"
-	TerminalCauseIterationLimit   TerminalCause = "iteration_limit"
-	TerminalCauseBudgetHalted     TerminalCause = "budget_halted"
-	TerminalCauseDeadlineExceeded TerminalCause = "deadline_exceeded"
-	TerminalCauseContextCancelled TerminalCause = "context_cancelled"
-	TerminalCauseCallerDied       TerminalCause = "caller_died"
-	TerminalCauseCleanupFailed    TerminalCause = "cleanup_failed"
-	TerminalCauseInternalError    TerminalCause = "internal_error"
+	TerminalCauseCompleted               TerminalCause = "completed"
+	TerminalCauseRouteUnavailable        TerminalCause = "route_unavailable"
+	TerminalCauseSpawnFailed             TerminalCause = "spawn_failed"
+	TerminalCauseHarnessFailed           TerminalCause = "harness_failed"
+	TerminalCauseProviderFailed          TerminalCause = "provider_failed"
+	TerminalCauseToolLoopFailed          TerminalCause = "tool_loop_failed"
+	TerminalCauseIterationLimit          TerminalCause = "iteration_limit"
+	TerminalCauseBudgetHalted            TerminalCause = "budget_halted"
+	TerminalCauseContextCapacityExceeded TerminalCause = "context_capacity_exceeded"
+	TerminalCauseDeadlineExceeded        TerminalCause = "deadline_exceeded"
+	TerminalCauseContextCancelled        TerminalCause = "context_cancelled"
+	TerminalCauseCallerDied              TerminalCause = "caller_died"
+	TerminalCauseCleanupFailed           TerminalCause = "cleanup_failed"
+	TerminalCauseInternalError           TerminalCause = "internal_error"
 )
 
 // SessionStage identifies the Fizeau-owned lifecycle stage that determined a
@@ -164,21 +181,22 @@ func normalizeFinalCostPair(cost *float64, source CostSource) (*float64, CostSou
 
 // FinalData is the payload for type=final events.
 type FinalData struct {
-	Status          string         `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
-	Outcome         SessionOutcome `json:"outcome"`
-	Cause           TerminalCause  `json:"cause"`
-	Stage           SessionStage   `json:"stage"`
-	PrimaryOutcome  SessionOutcome `json:"primary_outcome,omitempty"`
-	PrimaryCause    TerminalCause  `json:"primary_cause,omitempty"`
-	PrimaryStage    SessionStage   `json:"primary_stage,omitempty"`
-	ExitCode        int            `json:"exit_code"`
-	Error           string         `json:"error,omitempty"`
-	FinalText       string         `json:"final_text,omitempty"`
-	DurationMS      int64          `json:"duration_ms"`
-	Usage           *FinalUsage    `json:"usage,omitempty"`
-	Warnings        []FinalWarning `json:"warnings,omitempty"`
-	FinalCostUSD    *float64       `json:"cost_usd,omitempty"`
-	FinalCostSource CostSource     `json:"cost_source"`
+	Status          string               `json:"status"` // success|iteration_limit|failed|stalled|timed_out|cancelled
+	Outcome         SessionOutcome       `json:"outcome"`
+	Cause           TerminalCause        `json:"cause"`
+	Stage           SessionStage         `json:"stage"`
+	PrimaryOutcome  SessionOutcome       `json:"primary_outcome,omitempty"`
+	PrimaryCause    TerminalCause        `json:"primary_cause,omitempty"`
+	PrimaryStage    SessionStage         `json:"primary_stage,omitempty"`
+	ExitCode        int                  `json:"exit_code"`
+	Error           string               `json:"error,omitempty"`
+	ContextCapacity *ContextCapacityData `json:"context_capacity,omitempty"`
+	FinalText       string               `json:"final_text,omitempty"`
+	DurationMS      int64                `json:"duration_ms"`
+	Usage           *FinalUsage          `json:"usage,omitempty"`
+	Warnings        []FinalWarning       `json:"warnings,omitempty"`
+	FinalCostUSD    *float64             `json:"cost_usd,omitempty"`
+	FinalCostSource CostSource           `json:"cost_source"`
 	// CostUSD is a temporary compatibility bridge for in-memory consumers.
 	// Deprecated: use FinalCostUSD and FinalCostSource.
 	CostUSD        float64           `json:"-"`

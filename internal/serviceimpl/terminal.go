@@ -18,6 +18,7 @@ const (
 	TerminalOriginHarness
 	TerminalOriginProvider
 	TerminalOriginToolLoop
+	TerminalOriginContextCapacity
 )
 
 // ClassifyTerminalFinal is the single classification boundary for newly
@@ -28,6 +29,9 @@ func ClassifyTerminalFinal(final harnesses.FinalData, origin TerminalOrigin, ctx
 	final.Outcome = outcome
 	final.Cause = cause
 	final.Stage = stage
+	if cause != harnesses.TerminalCauseContextCapacityExceeded {
+		final.ContextCapacity = nil
+	}
 	// Until service-owned cleanup reports a superseding failure, primary facts
 	// are invalid. In particular, never trust a wrapped harness to populate
 	// these service-owned fields.
@@ -81,6 +85,7 @@ func ClassifyCallerDeath(final harnesses.FinalData) harnesses.FinalData {
 	final.PrimaryOutcome = ""
 	final.PrimaryCause = ""
 	final.PrimaryStage = ""
+	final.ContextCapacity = nil
 	return final
 }
 
@@ -103,6 +108,7 @@ func SupersedeWithCleanupFailure(primary harnesses.FinalData, diagnostic string)
 	final.Outcome = harnesses.SessionOutcomeFailed
 	final.Cause = harnesses.TerminalCauseCleanupFailed
 	final.Stage = harnesses.SessionStageCleanup
+	final.ContextCapacity = nil
 	if diagnostic != "" {
 		final.Error = diagnostic
 	}
@@ -128,6 +134,8 @@ func failedTuple(origin TerminalOrigin) (harnesses.SessionOutcome, harnesses.Ter
 		return harnesses.SessionOutcomeFailed, harnesses.TerminalCauseProviderFailed, harnesses.SessionStageProvider
 	case TerminalOriginToolLoop:
 		return harnesses.SessionOutcomeFailed, harnesses.TerminalCauseToolLoopFailed, harnesses.SessionStageToolLoop
+	case TerminalOriginContextCapacity:
+		return harnesses.SessionOutcomeFailed, harnesses.TerminalCauseContextCapacityExceeded, harnesses.SessionStageToolLoop
 	default:
 		return harnesses.SessionOutcomeFailed, harnesses.TerminalCauseInternalError, activeStage(origin)
 	}

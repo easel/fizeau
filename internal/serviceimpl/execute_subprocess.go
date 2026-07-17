@@ -141,6 +141,11 @@ func RunSubprocess(ctx context.Context, req SubprocessRequest, runner harnesses.
 			emitSubprocessFinal(ctx, req, cb, ev, final, TerminalOriginHarness)
 			return
 		}
+		// context_capacity is a service-owned projection of native core
+		// evidence. A subprocess harness cannot originate that public event.
+		if ev.Type == harnesses.EventTypeContextCapacity {
+			continue
+		}
 		if cb.ObserveEvent != nil {
 			ev = cb.ObserveEvent(ev)
 		}

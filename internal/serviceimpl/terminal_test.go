@@ -60,13 +60,19 @@ func TestExecuteTerminalClassificationAcrossFailureStages(t *testing.T) {
 }
 
 func TestClassifyCleanupFailurePreservesPrimaryTuple(t *testing.T) {
-	primary := ClassifyTerminalFinal(harnesses.FinalData{Status: "timed_out"}, TerminalOriginProvider, nil)
+	capacity := &harnesses.ContextCapacityData{Action: "rejected", CallKind: "main"}
+	primary := ClassifyTerminalFinal(harnesses.FinalData{
+		Status: "failed", ContextCapacity: capacity,
+	}, TerminalOriginContextCapacity, nil)
 	got := SupersedeWithCleanupFailure(primary, "containment still occupied")
 	if got.Outcome != harnesses.SessionOutcomeFailed || got.Cause != harnesses.TerminalCauseCleanupFailed || got.Stage != harnesses.SessionStageCleanup {
 		t.Fatalf("cleanup tuple = %q/%q/%q", got.Outcome, got.Cause, got.Stage)
 	}
 	if got.PrimaryOutcome != primary.Outcome || got.PrimaryCause != primary.Cause || got.PrimaryStage != primary.Stage {
 		t.Fatalf("primary tuple = %q/%q/%q, want %q/%q/%q", got.PrimaryOutcome, got.PrimaryCause, got.PrimaryStage, primary.Outcome, primary.Cause, primary.Stage)
+	}
+	if got.ContextCapacity != nil {
+		t.Fatalf("cleanup terminal retained capacity-only final payload: %#v", got.ContextCapacity)
 	}
 	again := SupersedeWithCleanupFailure(got, "recovery retry")
 	if again.PrimaryOutcome != primary.Outcome || again.PrimaryCause != primary.Cause || again.PrimaryStage != primary.Stage {
