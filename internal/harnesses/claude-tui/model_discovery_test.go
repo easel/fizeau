@@ -436,6 +436,32 @@ func TestParseClaudeTuiModelsCollapsedSpaceLabels(t *testing.T) {
 	}
 }
 
+func TestParseClaudeTuiModelsFable5CurrentSurface(t *testing.T) {
+	for name, text := range map[string]string{
+		"picker label": "Fable 5 with high effort · Claude Team · Synaptiq\n",
+		"full name":    "--model accepts a model's full name, for example claude-fable-5\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			models := ParseClaudeTuiModels(text)
+			if !contains(models, "fable-5") {
+				t.Fatalf("ParseClaudeTuiModels(%q) = %v, want fable-5", text, models)
+			}
+		})
+	}
+}
+
+func TestClaudeTuiModelDiscoveryCompleteRequiresRenderedPicker(t *testing.T) {
+	startup := "Fable 5 with high effort · API Usage Billing · Synaptiq"
+	if claudeTuiModelDiscoveryComplete(startup) {
+		t.Fatal("startup model card must not complete /model discovery")
+	}
+
+	picker := "Select model\n3. Fable Fable 5 · Most capable\nEnter to set as default · s to use this session only · Esc to cancel"
+	if !claudeTuiModelDiscoveryComplete(picker) {
+		t.Fatal("fully rendered picker must complete /model discovery")
+	}
+}
+
 // ---- helpers --------
 
 type testCache struct {

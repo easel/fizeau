@@ -1131,8 +1131,11 @@ func readClaudeTuiModelDiscoveryViaPTY(ctx context.Context, timeout time.Duratio
 		Command:      "/model\r",
 		ReadyMarkers: []string{"❯", "> "},
 		DoneWhen:     claudeTuiModelDiscoveryComplete,
-		Timeout:      timeout,
-		Size:         session.Size{Rows: 50, Cols: 220},
+		// The startup card contains the active model before /model is sent.
+		// Discard it so discovery evidence comes from the picker itself.
+		ResetBeforeCommand: true,
+		Timeout:            timeout,
+		Size:               session.Size{Rows: 50, Cols: 220},
 		Discovery: func(text string) (cassette.DiscoveryRecord, error) {
 			models := ParseClaudeTuiModels(text)
 			if len(models) == 0 {
@@ -1161,7 +1164,10 @@ func readClaudeTuiModelDiscoveryViaPTY(ctx context.Context, timeout time.Duratio
 }
 
 func claudeTuiModelDiscoveryComplete(text string) bool {
-	return len(ParseClaudeTuiModels(text)) > 0
+	lower := strings.ToLower(anthropic.StripANSI(strings.ReplaceAll(text, "\r\n", "\n")))
+	return len(ParseClaudeTuiModels(text)) > 0 &&
+		strings.Contains(lower, "enter to set") &&
+		strings.Contains(lower, "esc to cancel")
 }
 
 var (
@@ -1172,13 +1178,13 @@ var (
 	// or a git branch slug like `reliability/claude-tui-models`) can never be
 	// admitted as a "model". This replaces the old bare `claude-[a-z0-9...]`
 	// pattern that captured those tokens verbatim.
-	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku|fable)-([0-9]+)[.-]([0-9]{1,2})(?:\b|-)`)
+	claudeFullFamilyVersionPattern = regexp.MustCompile(`\bclaude-(sonnet|opus|haiku|fable)-([0-9]+)(?:[.-]([0-9]{1,2}))?(?:\b|-)`)
 	// claudeFamilyVersionPattern matches the human-facing picker labels
-	// (`Opus 4.8`, `Sonnet 4.6`, `Haiku 4.5`). The family/version separator is
+	// (`Opus 4.8`, `Sonnet 5`, `Fable 5`, `Haiku 4.5`). The family/version separator is
 	// OPTIONAL (`\s*`) because the live Claude Code PTY cell stream collapses
 	// the space, rendering `Opus4.8`/`Sonnet4.6`/`Haiku4.5`; requiring `\s+`
 	// dropped every version-bearing tier and left only bare aliases.
-	claudeFamilyVersionPattern = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku|fable)\s*([0-9]+[.-][0-9]+)\b`)
+	claudeFamilyVersionPattern = regexp.MustCompile(`\b(?:claude\s+)?(sonnet|opus|haiku|fable)\s*([0-9]+(?:[.-][0-9]+)?)\b`)
 	claudeAliasPattern         = regexp.MustCompile(`(?m)(?:^|[\s'"])(sonnet|opus|haiku|fable)(?:$|[\s'"])`)
 	claudeEffortPattern        = regexp.MustCompile(`--effort\s+<level>.*\(([^)]*)\)`)
 )
@@ -1194,7 +1200,11 @@ func ParseClaudeTuiModels(text string) []string {
 	var models []string
 	for _, match := range claudeFullFamilyVersionPattern.FindAllStringSubmatch(lower, -1) {
 		if len(match) > 3 {
-			models = appendUniqueString(models, match[1]+"-"+match[2]+"."+match[3])
+			version := match[2]
+			if match[3] != "" {
+				version += "." + match[3]
+			}
+			models = appendUniqueString(models, match[1]+"-"+version)
 		}
 	}
 	for _, match := range claudeFamilyVersionPattern.FindAllStringSubmatch(lower, -1) {

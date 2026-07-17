@@ -77,6 +77,9 @@ func supportedModelsForHarness(name string, cfg harnesses.HarnessConfig, cat *mo
 		models = appendUniqueModelIDs(models, cfg.DefaultModel)
 	}
 	models = appendUniqueModelIDs(models, subprocessHarnessModelIDs(name, cfg)...)
+	if name == "claude" || name == "claude-tui" {
+		models = serviceimpl.AppendClaudeModelEquivalents(models)
+	}
 	models = appendUniqueModelIDs(models, staticHarnessAliases(name)...)
 	if len(models) == 0 {
 		return nil

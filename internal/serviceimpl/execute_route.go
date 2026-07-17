@@ -494,9 +494,33 @@ func executeSupportedModels(input ExecuteRouteInput, name string, cfg harnesses.
 		discover = SubprocessHarnessModelIDs
 	}
 	models = AppendUniqueModelIDs(models, discover(name, cfg)...)
+	if name == "claude" || name == "claude-tui" {
+		models = AppendClaudeModelEquivalents(models)
+	}
 	models = AppendUniqueModelIDs(models, executeStaticHarnessAliases(name)...)
 	if len(models) == 0 {
 		return nil
+	}
+	return models
+}
+
+// AppendClaudeModelEquivalents preserves both the picker-facing family ID and
+// the full Claude CLI spelling for dynamically discovered versioned models.
+func AppendClaudeModelEquivalents(models []string) []string {
+	for _, model := range append([]string(nil), models...) {
+		model = strings.ToLower(strings.TrimSpace(model))
+		switch {
+		case strings.HasPrefix(model, "claude-opus-"),
+			strings.HasPrefix(model, "claude-sonnet-"),
+			strings.HasPrefix(model, "claude-haiku-"),
+			strings.HasPrefix(model, "claude-fable-"):
+			models = AppendUniqueModelIDs(models, strings.TrimPrefix(model, "claude-"))
+		case strings.HasPrefix(model, "opus-"),
+			strings.HasPrefix(model, "sonnet-"),
+			strings.HasPrefix(model, "haiku-"),
+			strings.HasPrefix(model, "fable-"):
+			models = AppendUniqueModelIDs(models, "claude-"+model)
+		}
 	}
 	return models
 }

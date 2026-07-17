@@ -90,6 +90,20 @@ func TestBuildLaunchArgsHonorsModel(t *testing.T) {
 	}
 }
 
+func TestBuildLaunchArgsHonorsDiscoveredFable5(t *testing.T) {
+	const settingsJSON = `{"hooks":{}}`
+	got := buildLaunchArgs(settingsJSON, claudeTuiLaunchModel("claude-fable-5"))
+	want := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON, "--model", "fable"}
+	if len(got) != len(want) {
+		t.Fatalf("buildLaunchArgs(..., claude-fable-5) = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("buildLaunchArgs(..., claude-fable-5)[%d] = %q, want %q (full: %q)", i, got[i], want[i], got)
+		}
+	}
+}
+
 // TestClaudeTuiLaunchModel proves resolved catalog tier IDs collapse to the
 // stable CLI alias so the launched session lands on the requested tier
 // regardless of catalog point-version drift (sonnet-4.6 -> sonnet, opus-4.8 ->
@@ -104,7 +118,9 @@ func TestClaudeTuiLaunchModel(t *testing.T) {
 		"claude-haiku-4-5":  "haiku",
 		"haiku":             "haiku",
 		"fable-1.0":         "fable",
+		"fable-5":           "fable",
 		"claude-fable-1-0":  "fable",
+		"claude-fable-5":    "fable",
 		"fable":             "fable",
 		"some-future-model": "some-future-model",
 	}

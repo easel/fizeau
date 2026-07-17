@@ -9,14 +9,41 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/easel/fizeau/internal/compaction"
 	"github.com/easel/fizeau/internal/discoverycache"
+	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/routing"
 )
+
+func TestSupportedModelsForHarnessExpandsDiscoveredClaudeNames(t *testing.T) {
+	previous := subprocessHarnessModelIDs
+	t.Cleanup(func() { subprocessHarnessModelIDs = previous })
+	subprocessHarnessModelIDs = func(name string, _ harnesses.HarnessConfig) []string {
+		if name == "claude-tui" {
+			return []string{"fable-5", "fable"}
+		}
+		return nil
+	}
+
+	cfg, ok := harnesses.NewRegistry().Get("claude-tui")
+	if !ok {
+		t.Fatal("claude-tui harness is not registered")
+	}
+	models := supportedModelsForHarness("claude-tui", cfg, nil)
+	for _, want := range []string{"fable-5", "claude-fable-5", "fable"} {
+		if !slices.Contains(models, want) {
+			t.Fatalf("supported models = %v, want %q", models, want)
+		}
+		if !modelSupportedForHarness("claude-tui", cfg, want, "") {
+			t.Fatalf("modelSupportedForHarness rejected discovered equivalent %q", want)
+		}
+	}
+}
 
 // TestResolveExecuteRouteWithEngineForwardsPromptShape is the sole
 // same-package seam for the public request-to-routing-engine adapter. Concrete

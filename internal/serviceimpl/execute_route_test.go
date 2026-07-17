@@ -290,6 +290,35 @@ func TestResolveExecuteRouteAcceptsClaudeFamilyWithoutDiscovery(t *testing.T) {
 	}
 }
 
+func TestResolveExecuteRouteAcceptsDiscoveredClaudeTUIFable5(t *testing.T) {
+	base := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
+	base.DiscoverModels = func(name string, _ harnesses.HarnessConfig) []string {
+		if name == "claude-tui" {
+			return []string{"fable-5", "fable"}
+		}
+		return nil
+	}
+
+	for _, model := range []string{"fable-5", "claude-fable-5"} {
+		t.Run(model, func(t *testing.T) {
+			input := base
+			input.Request = ExecuteRouteRequest{Harness: "claude-tui", Model: model}
+			got, failure := ResolveExecuteRoute(context.Background(), input)
+			if failure != nil {
+				t.Fatalf("ResolveExecuteRoute(%q) failure: %v", model, failure)
+			}
+			if got.Model != model {
+				t.Fatalf("Model = %q, want exact discovered pin %q", got.Model, model)
+			}
+		})
+	}
+
+	base.Request = ExecuteRouteRequest{Harness: "claude-tui", Model: "gpt-5.6-terra"}
+	if _, failure := ResolveExecuteRoute(context.Background(), base); failure == nil || failure.Kind != ExecuteRouteFailureHarnessModelIncompatible {
+		t.Fatalf("failure = %#v, want incompatible GPT pin", failure)
+	}
+}
+
 func TestResolveExecuteRouteEmptyModelUsesEngineAndValidatesDecision(t *testing.T) {
 	cat := loadRoutingInputsTestCatalog(t)
 
