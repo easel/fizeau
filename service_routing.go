@@ -186,6 +186,43 @@ func preserveRouteDecisionCapacityEvidence(decision *RouteDecision, req RouteReq
 	}).MinContextWindow()
 }
 
+func explicitNativeContextRequirementUnsatisfied(decision *RouteDecision) bool {
+	return decision != nil && decision.RequiredContext > 0 &&
+		(decision.ContextLength <= 0 || decision.ContextLength < decision.RequiredContext)
+}
+
+// gateExplicitNativeRequiredContext gives direct native pins the same typed
+// capacity rejection evidence as an engine-evaluated candidate. It consumes
+// the saturating RequiredContext already preserved on the decision; the gate
+// does not reconstruct request arithmetic or attempt another route.
+func gateExplicitNativeRequiredContext(decision *RouteDecision) error {
+	if decision == nil || decision.Harness != "fiz" || !explicitNativeContextRequirementUnsatisfied(decision) {
+		return nil
+	}
+	reason := fmt.Sprintf("context window %d < required %d", decision.ContextLength, decision.RequiredContext)
+	if decision.ContextLength <= 0 {
+		reason = fmt.Sprintf("context window unknown < required %d", decision.RequiredContext)
+	}
+	decision.Candidates = []RouteCandidate{{
+		Harness:        decision.Harness,
+		Provider:       decision.Provider,
+		Endpoint:       decision.Endpoint,
+		ServerInstance: decision.ServerInstance,
+		Model:          decision.Model,
+		Reason:         reason,
+		Eligible:       false,
+		FilterReason:   FilterReasonContextTooSmall,
+		ContextLength:  decision.ContextLength,
+		ContextSource:  decision.ContextSource,
+	}}
+	return withRouteCandidates(&routing.NoViableCandidateError{
+		Rejected: 1,
+		Model:    decision.Model,
+		Provider: decision.Provider,
+		Harness:  decision.Harness,
+	}, decision.Candidates)
+}
+
 func routeDecisionFromInternal(dec *routing.Decision, powerPolicy RoutePowerPolicy) *RouteDecision {
 	if dec == nil {
 		return nil

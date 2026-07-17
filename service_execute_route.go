@@ -67,6 +67,9 @@ func (s *service) resolveExecuteRouteInternal(ctx context.Context, req ServiceEx
 	result := publicExecuteRouteDecision(decision)
 	preserveRouteDecisionCapacityEvidence(result, executeRouteRequest(req))
 	s.resolveExplicitNativeRouteContext(ctx, result, catalog)
+	if err := gateExplicitNativeRequiredContext(result); err != nil {
+		return result, err
+	}
 	return result, nil
 }
 

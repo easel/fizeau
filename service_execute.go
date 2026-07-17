@@ -42,6 +42,19 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 	if err := validateServiceExecuteRequest(req); err != nil {
 		return nil, err
 	}
+	// Direct native pins resolve without the routing engine. Pre-resolve that
+	// bounded, cache-only path so a typed required-context failure returns
+	// before a session, override event, log, or provider can be created.
+	var decision *RouteDecision
+	if harnesses.ResolveHarnessAlias(req.Harness) == "fiz" &&
+		(req.EstimatedPromptTokens > 0 || req.MaxTokens > 0) {
+		preResolved, preflightErr := s.resolveExecuteRouteContext(ctx, req)
+		if preflightErr == nil {
+			decision = preResolved
+		} else if explicitNativeContextRequirementUnsatisfied(preResolved) {
+			return nil, preflightErr
+		}
+	}
 
 	// Generate a session ID and register it in the hub so TailSessionLog
 	// callers can subscribe before or during execution.
@@ -64,7 +77,10 @@ func (s *service) Execute(ctx context.Context, req ServiceExecuteRequest) (<-cha
 	s.recordRoutingQualityForRequest(overrideCtx)
 
 	// Resolve the route.
-	decision, err := s.resolveExecuteRouteContext(ctx, req)
+	var err error
+	if decision == nil {
+		decision, err = s.resolveExecuteRouteContext(ctx, req)
+	}
 	if err != nil {
 		// NoViableProviderForNow is a transient quota signal — DDx
 		// callers pause their drain loop on RetryAfter and resume.
