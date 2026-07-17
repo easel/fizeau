@@ -8,6 +8,7 @@ import (
 
 	agentConfig "github.com/easel/fizeau/internal/config"
 	"github.com/easel/fizeau/occompat"
+	"github.com/easel/fizeau/picompat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -190,6 +191,74 @@ default: retained
 		require.NotNil(t, cfg.ImportedFrom)
 		assert.Equal(t, "opencode", cfg.ImportedFrom.Source)
 	})
+}
+
+func TestTranslatedProductionConfigNeverPersistsOpenAICompat(t *testing.T) {
+	piDir := t.TempDir()
+	piAgentDir := filepath.Join(piDir, "agent")
+	require.NoError(t, os.MkdirAll(piAgentDir, 0o750))
+	writeOpenCodeImportJSON(t, filepath.Join(piAgentDir, "auth.json"), map[string]any{
+		"openrouter": map[string]any{"type": "api_key", "key": "pi-auth-key"},
+	})
+	writeOpenCodeImportJSON(t, filepath.Join(piAgentDir, "models.json"), map[string]any{
+		"providers": []map[string]any{
+			{
+				"name":    "openrouter",
+				"baseUrl": "https://custom-proxy.example.invalid/v1",
+				"api":     "openai-completions",
+				"models":  []string{"known-model"},
+			},
+			{
+				"name":    "protocol-only-unknown",
+				"baseUrl": "https://unknown.example.invalid/v1",
+				"api":     "openai-completions",
+				"models":  []string{"unknown-model"},
+			},
+		},
+	})
+
+	piResult, err := picompat.Translate(piDir)
+	require.NoError(t, err)
+	require.Contains(t, piResult.Providers, "openrouter")
+	assert.NotContains(t, piResult.Providers, "protocol-only-unknown")
+
+	openCodeDir := t.TempDir()
+	writeOpenCodeImportJSON(t, filepath.Join(openCodeDir, "opencode.json"), map[string]any{
+		"options": map[string]any{
+			"baseURL": "https://another-proxy.example.invalid/v1",
+			"npm":     "@ai-sdk/openai-compatible",
+		},
+	})
+	openCodeResult := occompat.TranslateProvider(openCodeDir, "openrouter", "opencode-auth-key")
+	require.True(t, openCodeResult.HasProvider)
+
+	unknownOpenCodeDir := t.TempDir()
+	writeOpenCodeImportJSON(t, filepath.Join(unknownOpenCodeDir, "opencode.json"), map[string]any{
+		"options": map[string]any{
+			"baseURL": "https://unknown.example.invalid/v1",
+			"npm":     "@ai-sdk/openai-compatible",
+		},
+	})
+	unknownOpenCodeResult := occompat.TranslateProvider(unknownOpenCodeDir, "protocol-only-unknown", "unknown-auth-key")
+	assert.False(t, unknownOpenCodeResult.HasProvider)
+
+	providers := make(map[string]agentConfig.ProviderConfig, len(piResult.Providers)+1)
+	for name, provider := range piResult.Providers {
+		providers[name] = provider
+	}
+	if openCodeResult.HasProvider {
+		providers["opencode"] = openCodeResult.Provider
+	}
+	if unknownOpenCodeResult.HasProvider {
+		providers["should-not-persist"] = unknownOpenCodeResult.Provider
+	}
+
+	for name, provider := range providers {
+		assert.NotEqual(t, "openai-compat", provider.Type, "provider %q", name)
+	}
+	serialized, err := agentConfig.Save(&agentConfig.Config{Providers: providers})
+	require.NoError(t, err)
+	assert.NotContains(t, string(serialized), "type: openai-compat")
 }
 
 func writeOpenCodeImportFixture(t *testing.T, sourceIdentity string, options map[string]any) (home, sourceDir, configPath string) {
