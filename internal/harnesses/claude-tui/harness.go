@@ -1565,6 +1565,11 @@ func matchedFatalLines(frame terminal.Frame, markers []string, prompt string) []
 
 func isUIOwnedFatalLine(line, marker string) bool {
 	normalizedLine := strings.ToLower(normalizeTerminalText(line))
+	// Claude Code 2.1.212 renders request failures as a bulleted status line,
+	// for example "● Please run /login · API Error: 401 ...". The bullet is
+	// fixed UI decoration, not caller or account evidence; remove only that
+	// observed prefix before applying the existing ownership checks.
+	normalizedLine = strings.TrimSpace(strings.TrimPrefix(normalizedLine, "●"))
 	normalizedMarker := strings.ToLower(normalizeTerminalText(marker))
 	for _, prefix := range []string{
 		"api error:", "authentication error:", "oauth error:",

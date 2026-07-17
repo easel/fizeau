@@ -1468,6 +1468,67 @@ func TestRunTurnAuthenticationFailureImmediatelyBeforePTYEOFFinalizesTypedExactl
 	}
 }
 
+func TestRunTurnClaudeBulletAuthenticationFailureBeforePTYEOFFinalizesTypedExactlyOnce(t *testing.T) {
+	const (
+		incident          = "● Please run /login · API Error: 401 OAuth access token is invalid."
+		sanitizedIncident = "● Please run /login · API Error: 401 OAuth access token: [REDACTED] invalid."
+	)
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+
+	f := newFakePTY()
+	f.setExitStatus(session.ExitStatus{Code: 1, Exited: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	producerErr := make(chan error, 1)
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		if err := waitForBracketedPaste(ctx, f); err != nil {
+			producerErr <- err
+			return
+		}
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;2H" + incident))
+		f.closeOutput()
+		producerErr <- nil
+	}()
+
+	events := claudetui.RunTurnForTestWithStopGrace(
+		ctx, f, harnesses.ExecuteRequest{Prompt: "decorated auth-exit regression", WorkDir: dir},
+		hookDir, stopPath, testTurnNonce("decorated-auth-exit"),
+		100*time.Millisecond, 5*time.Millisecond, 40*time.Millisecond, 2*time.Second,
+	)
+	if err := <-producerErr; err != nil {
+		t.Fatal(err)
+	}
+	final := requireExactlyOneFinal(t, events, "failed")
+	if final.ExitCode == 0 {
+		t.Fatal("authentication failure exit code is zero")
+	}
+	if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" ||
+		final.RoutingActual.FailureClass != "credential_invalid" {
+		t.Fatalf("routing actual = %+v, want claude-tui credential_invalid", final.RoutingActual)
+	}
+	if final.Error != sanitizedIncident {
+		t.Fatalf("retained authentication evidence = %q, want sanitized decorated incident line", final.Error)
+	}
+	if final.FinalText != "" || final.Usage != nil || final.FinalCostUSD != nil ||
+		final.FinalCostSource != harnesses.CostSourceUnknown {
+		t.Fatalf("authentication failure fabricated completion evidence: %+v", final)
+	}
+	for _, event := range events {
+		if event.Type == harnesses.EventTypeTextDelta {
+			t.Fatalf("authentication failure emitted fabricated text event: %+v", event)
+		}
+	}
+	if !f.wasKilled() {
+		t.Fatal("authentication failure did not evict the request-local PTY")
+	}
+}
+
 func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) {
 	t.Helper()
 	_ = requireExactlyOneFinal(t, events, wantStatus)
