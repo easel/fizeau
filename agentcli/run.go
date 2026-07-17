@@ -2005,6 +2005,10 @@ func importOpenCode(configPath string, diffOnly, merge bool) int {
 		return 1
 	}
 
+	return importOpenCodeFrom(opencodeDir, configPath, diffOnly, merge)
+}
+
+func importOpenCodeFrom(opencodeDir, configPath string, diffOnly, merge bool) int {
 	// Load auth
 	auth, err := occompat.LoadAuth(opencodeDir)
 	if err != nil {
@@ -2012,19 +2016,26 @@ func importOpenCode(configPath string, diffOnly, merge bool) int {
 		return 1
 	}
 
-	// Get the API key from auth (use first entry)
-	var authKey string
-	for _, entry := range auth {
+	// Get the provider identity and API key from auth (use first entry).
+	var sourceIdentity, authKey string
+	for name, entry := range auth {
+		sourceIdentity = name
 		authKey = entry.Key
 		break
 	}
 
 	// Translate
-	result := occompat.Translate(opencodeDir, authKey)
+	result := occompat.TranslateProvider(opencodeDir, sourceIdentity, authKey)
 
 	// Show diff if requested
 	if diffOnly {
 		return showOpenCodeDiff(result)
+	}
+	if !result.HasProvider {
+		for _, w := range result.Warnings {
+			fmt.Fprintf(os.Stderr, "%s: warning: %s\n", productinfo.BinaryName, w)
+		}
+		return 0
 	}
 
 	// Compute source hash
@@ -2111,20 +2122,22 @@ func showDiff(source string, result *picompat.TranslationResult) int {
 
 func showOpenCodeDiff(result *occompat.TranslationResult) int {
 	fmt.Printf("%s: opencode config -- what would be imported:\n", productinfo.BinaryName)
-	pc := result.Provider
-	redactedKey := redactKey(pc.APIKey)
-	fmt.Println("[opencode]")
-	fmt.Printf("  type:    %s\n", pc.Type)
-	if pc.BaseURL != "" {
-		fmt.Printf("  url:     %s\n", pc.BaseURL)
-	}
-	if redactedKey != "" {
-		fmt.Printf("  api_key: %s\n", redactedKey)
-	}
-	if len(pc.Headers) > 0 {
-		fmt.Println("  headers:")
-		for k, v := range pc.Headers {
-			fmt.Printf("    %s: %s\n", k, v)
+	if result.HasProvider {
+		pc := result.Provider
+		redactedKey := redactKey(pc.APIKey)
+		fmt.Println("[opencode]")
+		fmt.Printf("  type:    %s\n", pc.Type)
+		if pc.BaseURL != "" {
+			fmt.Printf("  url:     %s\n", pc.BaseURL)
+		}
+		if redactedKey != "" {
+			fmt.Printf("  api_key: %s\n", redactedKey)
+		}
+		if len(pc.Headers) > 0 {
+			fmt.Println("  headers:")
+			for k, v := range pc.Headers {
+				fmt.Printf("    %s: %s\n", k, v)
+			}
 		}
 	}
 	if len(result.Warnings) > 0 {
