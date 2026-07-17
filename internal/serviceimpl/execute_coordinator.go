@@ -20,14 +20,16 @@ import (
 // separately as pre-marshaled RoutingDecisionData; Candidates contains only
 // the subset required by native provider failover.
 type ExecuteDecision struct {
-	Harness        string
-	Provider       string
-	Endpoint       string
-	ServerInstance string
-	Model          string
-	Reason         string
-	Power          int
-	Candidates     []NativeRouteCandidate
+	Harness               string
+	Provider              string
+	Endpoint              string
+	ServerInstance        string
+	Model                 string
+	Reason                string
+	Power                 int
+	SelectedContextWindow int
+	SelectedContextSource string
+	Candidates            []NativeRouteCandidate
 }
 
 // ExecuteRequest is the API-neutral projection of one already-resolved public
@@ -682,11 +684,13 @@ func runnerDecision(decision ExecuteDecision) ExecuteRunnerDecision {
 
 func nativeDecisionFromExecute(decision ExecuteDecision) NativeDecision {
 	return NativeDecision{
-		Harness:        decision.Harness,
-		Provider:       decision.Provider,
-		ServerInstance: decision.ServerInstance,
-		Model:          decision.Model,
-		Candidates:     append([]NativeRouteCandidate(nil), decision.Candidates...),
+		Harness:               decision.Harness,
+		Provider:              decision.Provider,
+		ServerInstance:        decision.ServerInstance,
+		Model:                 decision.Model,
+		SelectedContextWindow: decision.SelectedContextWindow,
+		SelectedContextSource: decision.SelectedContextSource,
+		Candidates:            append([]NativeRouteCandidate(nil), decision.Candidates...),
 	}
 }
 

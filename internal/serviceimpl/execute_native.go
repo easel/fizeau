@@ -37,11 +37,13 @@ var nativeReadOnlyTools = map[string]bool{
 
 // NativeDecision is the API-neutral routing data needed by the native runner.
 type NativeDecision struct {
-	Harness        string
-	Provider       string
-	ServerInstance string
-	Model          string
-	Candidates     []NativeRouteCandidate
+	Harness               string
+	Provider              string
+	ServerInstance        string
+	Model                 string
+	SelectedContextWindow int
+	SelectedContextSource string
+	Candidates            []NativeRouteCandidate
 }
 
 // NativeRouteCandidate is the API-neutral subset of root RouteCandidate used

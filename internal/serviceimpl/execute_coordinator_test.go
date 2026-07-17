@@ -3,6 +3,10 @@ package serviceimpl
 import (
 	"context"
 	"encoding/json"
+	"go/parser"
+	"go/token"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +15,72 @@ import (
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/transcript"
 )
+
+func TestSelectedContextDispatchTypesAreAPINeutral(t *testing.T) {
+	wantFields := map[string]reflect.Type{
+		"SelectedContextWindow": reflect.TypeOf(int(0)),
+		"SelectedContextSource": reflect.TypeOf(""),
+	}
+	for _, typ := range []reflect.Type{
+		reflect.TypeOf(ExecuteDecision{}),
+		reflect.TypeOf(NativeDecision{}),
+	} {
+		for name, want := range wantFields {
+			field, ok := typ.FieldByName(name)
+			if !ok {
+				t.Errorf("%s is missing %s", typ.Name(), name)
+				continue
+			}
+			if field.Type != want || field.Type.PkgPath() != "" {
+				t.Errorf("%s.%s type = %v from %q, want API-neutral builtin %v",
+					typ.Name(), name, field.Type, field.Type.PkgPath(), want)
+			}
+		}
+	}
+
+	execute := ExecuteDecision{
+		Harness:               "fiz",
+		Provider:              "alpha",
+		ServerInstance:        "alpha-gpu-1",
+		Model:                 "fixture-model",
+		SelectedContextWindow: 123456,
+		SelectedContextSource: "provider_api",
+		Candidates: []NativeRouteCandidate{{
+			Provider: "alpha", Endpoint: "west", ServerInstance: "alpha-west-1", Model: "fixture-model", Eligible: true,
+		}},
+	}
+	native := nativeDecisionFromExecute(execute)
+	if native.Harness != execute.Harness || native.Provider != execute.Provider ||
+		native.ServerInstance != execute.ServerInstance || native.Model != execute.Model {
+		t.Fatalf("native decision identity = %#v, want execute identity %#v", native, execute)
+	}
+	if native.SelectedContextWindow != execute.SelectedContextWindow ||
+		native.SelectedContextSource != execute.SelectedContextSource {
+		t.Fatalf("native selected context = %d/%q, want %d/%q",
+			native.SelectedContextWindow, native.SelectedContextSource,
+			execute.SelectedContextWindow, execute.SelectedContextSource)
+	}
+	if len(native.Candidates) != 1 || native.Candidates[0] != execute.Candidates[0] {
+		t.Fatalf("native candidates = %#v, want unchanged %#v", native.Candidates, execute.Candidates)
+	}
+	native.Candidates[0].Model = "mutated"
+	if execute.Candidates[0].Model != "fixture-model" {
+		t.Fatal("native decision aliases execute candidate storage")
+	}
+
+	for _, path := range []string{"execute_coordinator.go", "execute_native.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		for _, imp := range file.Imports {
+			importPath := strings.Trim(imp.Path.Value, `"`)
+			if importPath == "github.com/easel/fizeau" || strings.Contains(importPath, "/internal/provider/") {
+				t.Errorf("%s imports non-neutral decision type surface %q", path, importPath)
+			}
+		}
+	}
+}
 
 type coordinatorSessionLog struct {
 	mu        sync.Mutex

@@ -114,6 +114,71 @@ func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 	}
 }
 
+func TestExecuteDecisionCarriesSelectedContext(t *testing.T) {
+	svc := newTestService(t, ServiceOptions{})
+	for _, test := range []struct {
+		name            string
+		selectedWindow  int
+		selectedSource  string
+		candidateWindow int
+		candidateSource string
+	}{
+		{
+			name:            "resolved provider evidence",
+			selectedWindow:  73728,
+			selectedSource:  ContextSourceProviderAPI,
+			candidateWindow: 0,
+			candidateSource: ContextSourceUnknown,
+		},
+		{
+			name:            "unknown is preserved exactly",
+			selectedWindow:  0,
+			selectedSource:  ContextSourceUnknown,
+			candidateWindow: 999,
+			candidateSource: ContextSourceCatalog,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			decision := RouteDecision{
+				Harness:        "fiz",
+				Provider:       "alpha",
+				Endpoint:       "west",
+				ServerInstance: "alpha-west-1",
+				Model:          "fixture-model",
+				ContextLength:  test.selectedWindow,
+				ContextSource:  test.selectedSource,
+				Candidates: []RouteCandidate{{
+					Harness:        "fiz",
+					Provider:       "alpha",
+					Endpoint:       "west",
+					ServerInstance: "alpha-west-1",
+					Model:          "fixture-model",
+					ContextLength:  test.candidateWindow,
+					ContextSource:  test.candidateSource,
+					Eligible:       true,
+				}},
+			}
+			req := ServiceExecuteRequest{CompactionContextWindow: 4096}
+			gotReq := svc.executeCoordinatorRequest(req, decision, "selected-context", nil)
+			got := gotReq.Decision
+			if got.Harness != decision.Harness || got.Provider != decision.Provider || got.Endpoint != decision.Endpoint ||
+				got.ServerInstance != decision.ServerInstance || got.Model != decision.Model {
+				t.Fatalf("execute decision identity = %#v, want selected route %#v", got, decision)
+			}
+			if got.SelectedContextWindow != decision.ContextLength || got.SelectedContextSource != decision.ContextSource {
+				t.Fatalf("execute decision selected context = %d/%q, want %d/%q",
+					got.SelectedContextWindow, got.SelectedContextSource, decision.ContextLength, decision.ContextSource)
+			}
+			if gotReq.CompactionContextWindow != req.CompactionContextWindow {
+				t.Fatalf("compaction override = %d, want raw %d", gotReq.CompactionContextWindow, req.CompactionContextWindow)
+			}
+			if len(got.Candidates) != 1 || got.Candidates[0].Model != decision.Model {
+				t.Fatalf("execute decision candidates = %#v, want selected-route trace", got.Candidates)
+			}
+		})
+	}
+}
+
 var requiredExecuteValidators = map[string]struct{}{
 	"validateMaxTokens":     {},
 	"ValidateCachePolicy":   {},
