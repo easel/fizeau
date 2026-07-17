@@ -471,6 +471,45 @@ type Harness interface {
 	Execute(ctx context.Context, req ExecuteRequest) (<-chan Event, error)
 }
 
+// ContinuationRequest asks the selected route-owned runner to resume the
+// completed Fizeau session identified by ParentSessionID. ParentSessionID is
+// the only conversation identifier on this boundary. Request is the fully
+// normalized execution request for the new child invocation; it carries no
+// continuation policy or harness-native continuation evidence.
+type ContinuationRequest struct {
+	ParentSessionID string
+	Request         ExecuteRequest
+}
+
+// PreparedContinuation is a single-use, route-private prepared resume. Start
+// follows the event-channel and setup-error rules of Harness.Execute. The
+// service calls Start only after creating the child Fizeau session and
+// acquiring that child's fresh lifecycle lease.
+type PreparedContinuation interface {
+	Start(context.Context) (<-chan Event, error)
+}
+
+// ContinuationHarness is the optional route-specific continuation capability.
+// PrepareContinuation resolves ParentSessionID through durable evidence owned
+// privately by this runner. Missing, unreadable, stale, or rejected evidence
+// returns ErrContinuationEvidenceUnavailable without creating a child,
+// acquiring a lease, spawning, or returning an event channel.
+type ContinuationHarness interface {
+	Harness
+
+	PrepareContinuation(context.Context, ContinuationRequest) (PreparedContinuation, error)
+}
+
+var (
+	// ErrContinuationRequestInvalid reports an empty parent Fizeau session ID
+	// or a child request that has not been normalized by service orchestration.
+	ErrContinuationRequestInvalid = errors.New("invalid continuation request")
+
+	// ErrContinuationEvidenceUnavailable reports that a continuation-capable
+	// route cannot reopen usable private evidence for the requested parent.
+	ErrContinuationEvidenceUnavailable = errors.New("continuation evidence unavailable")
+)
+
 // QuotaStateValue is the normalized state enumeration consumed by
 // CONTRACT-004 sub-interfaces. Only QuotaOK and QuotaStale carry
 // routing-usable signal; other values MUST NOT result in
