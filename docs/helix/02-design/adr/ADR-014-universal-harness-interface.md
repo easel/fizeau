@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
+    self_hash: 63c97bfb114774622e662d7f171c1c389776a4c5ff08cbe3c9d540dcbbdf8119
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
-      CONTRACT-004: 409f5c347ed33bd68caf004dd2eb4840a41e803f601a4e88f6e305ed8b30f89d
-    reviewed_at: "2026-07-16T21:41:14Z"
+      CONTRACT-004: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
+    reviewed_at: "2026-07-17T00:52:37Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -615,10 +615,12 @@ size, and SHA-256 all match an embedded reviewed record. Discovery stays
 offline and rejects a newer digest until its exact binary passes the isolated
 root/network-namespace probe. The probe has a missing-library negative case,
 and configuration inspection rejects installed plugin state even when no
-`enabledPlugins` map is present. Claude-TUI uses one classifier for its live
-PTY and portable environment policy: `CLAUDE_*` and locale/terminal names are
-inherited, `ANTHROPIC_*` is excluded, and host/platform path identities are
-regenerated during activation.
+`enabledPlugins` map is present. Claude-TUI uses one default-deny classifier
+for its live PTY and portable environment policy. Portable execution inherits
+only `TZ` and the reviewed OAuth/debug scalar names; `ANTHROPIC_*`, unknown
+Claude names, and parent/session control markers are excluded. Host/platform
+path identities, terminal/locale, and `CLAUDE_CONFIG_DIR` are regenerated
+during activation, and no broad environment prefix is declared.
 
 The first Claude registry entry is 2.1.210 Linux arm64, which has durable local
 same-target probe evidence. A publisher-authenticated amd64 checksum alone does
@@ -711,7 +713,7 @@ owner.
   digest and a closure missing one required library, reject external
   configuration/code-loading surfaces, prove shared
   Claude/Claude-TUI assets deduplicate, and prove the TUI environment projection
-  matches its real `CLAUDE_*` boundary.
+  matches its exact-name, parent-session-safe boundary.
 - OpenCode fixtures bind the exact reviewed 1.14.33 Linux arm64 payload across
   direct and npm layouts, run the emitted loader recipe in an isolated writable
   generated-state environment, and fail when a required library is removed.

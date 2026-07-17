@@ -5,6 +5,9 @@ package session
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"runtime"
@@ -24,6 +27,60 @@ type fakeClock struct {
 func (f *fakeClock) Now() time.Time {
 	f.t = f.t.Add(50 * time.Millisecond)
 	return f.t
+}
+
+func TestPTYSessionUsesSuppliedEnvironmentOnly(t *testing.T) {
+	parsed, err := parser.ParseFile(token.NewFileSet(), "session_unix.go", nil, 0)
+	require.NoError(t, err)
+
+	var start *ast.FuncDecl
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Name.Name == "Start" {
+			start = function
+			break
+		}
+	}
+	require.NotNil(t, start, "session_unix.go must declare Start")
+
+	startCalls := 0
+	ast.Inspect(start.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		owner, _ := selector.X.(*ast.Ident)
+		if owner != nil && owner.Name == "os" && selector.Sel.Name == "Environ" {
+			t.Error("PTY Start must not read or append os.Environ")
+		}
+		if owner == nil || owner.Name != "processlifecycle" || selector.Sel.Name != "StartPTYCommand" {
+			return true
+		}
+		startCalls++
+		require.Greater(t, len(call.Args), 4)
+		environment, ok := call.Args[4].(*ast.Ident)
+		if !ok || environment.Name != "env" {
+			t.Errorf("StartPTYCommand environment argument = %#v, want unmodified env identifier", call.Args[4])
+		}
+		return true
+	})
+	require.Equal(t, 1, startCalls, "Start must have one PTY launch boundary")
+
+	t.Setenv("FIZEAU_PTY_HOST_SENTINEL", "must-not-cross")
+	session, err := Start(context.Background(), "/usr/bin/env", nil, "", []string{"SUPPLIED_ONLY=child"}, Size{Rows: 10, Cols: 40})
+	require.NoError(t, err)
+	defer session.Close()
+	var output strings.Builder
+	for chunk := range session.Output() {
+		output.Write(chunk.Bytes)
+	}
+	require.Equal(t, 0, session.Wait().Code)
+	require.Contains(t, output.String(), "SUPPLIED_ONLY=child")
+	require.NotContains(t, output.String(), "FIZEAU_PTY_HOST_SENTINEL")
 }
 
 func TestStartFailureIsReported(t *testing.T) {

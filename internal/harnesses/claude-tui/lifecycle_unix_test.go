@@ -25,8 +25,6 @@ func TestClaudeTUIExecuteLeavesNoLiveSession(t *testing.T) {
 	grandchildFile := filepath.Join(dir, "claude-tui-grandchild.pid")
 	writeClaudeTUILifecycleFixture(t, dir)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("CLAUDE_TUI_TARGET_FILE", targetFile)
-	t.Setenv("CLAUDE_TUI_GRANDCHILD_FILE", grandchildFile)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	events, err := (&claudetui.Harness{}).Execute(ctx, harnesses.ExecuteRequest{
@@ -74,10 +72,10 @@ func writeClaudeTUILifecycleFixture(t *testing.T, dir string) {
 	t.Helper()
 	content := `#!/bin/sh
 trap '' TERM HUP INT
-printf '%s' "$$" > "$CLAUDE_TUI_TARGET_FILE"
+printf '%s' "$$" > claude-tui-target.pid
 sh -c 'trap "" TERM HUP INT; exec sleep 300' &
 child=$!
-printf '%s' "$child" > "$CLAUDE_TUI_GRANDCHILD_FILE"
+printf '%s' "$child" > claude-tui-grandchild.pid
 printf '\033[H\033[2J\033[2;1H> '
 wait "$child"
 `

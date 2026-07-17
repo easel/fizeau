@@ -12,15 +12,15 @@ ddx:
     - CONTRACT-004
   child_of: fizeau-67f2d585
   review:
-    self_hash: 7b6760fa222d244517cf807e75414d2bf8282531ade62b9ec7ea961bd17b21c1
+    self_hash: e9086db5ed1ca93bb9837c820fda3fdc444e7dfbbae9f8aacadb74d5e2b634c4
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
-      ADR-014: 5b7602f7878a63d491da79858dc22bca983b12015d95c676c904676e3d8ee749
+      ADR-014: 63c97bfb114774622e662d7f171c1c389776a4c5ff08cbe3c9d540dcbbdf8119
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
-      CONTRACT-004: 409f5c347ed33bd68caf004dd2eb4840a41e803f601a4e88f6e305ed8b30f89d
-    reviewed_at: "2026-07-16T21:41:14Z"
+      CONTRACT-004: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
+    reviewed_at: "2026-07-17T00:52:37Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 
@@ -505,19 +505,31 @@ channels that could be used to reclassify the request.
 The PTY session is started with the following environment, exactly:
 
 - Pass-through from the operator environment: `HOME`, `PATH`, `USER`,
-  `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `TZ`, `XDG_*` (any present
-  `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME`,
-  `XDG_RUNTIME_DIR`), and any environment variables under the `CLAUDE_`
-  prefix that the operator has already set in their shell (Fizeau itself
-  must not set these — passing through what the operator already exported
-  is acceptable because it represents the operator's normal shell state).
+  `LOGNAME`, `SHELL`, `LANG`, `LC_ALL`, `TZ`, `XDG_CONFIG_HOME`,
+  `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME`, `XDG_RUNTIME_DIR`,
+  and `CLAUDE_CONFIG_DIR` when present.
+- Claude-specific pass-through is default-deny and limited to the documented
+  scalar fresh-child set: `CLAUDE_CODE_OAUTH_TOKEN`,
+  `CLAUDE_CODE_OAUTH_REFRESH_TOKEN`, `CLAUDE_CODE_OAUTH_SCOPES`, and
+  `CLAUDE_CODE_DEBUG_LOG_LEVEL`. A refresh token is usable only with its
+  scopes. No prefix rule may expand this set.
 - Set by Fizeau if not already present: `TERM=xterm-256color` (default
   terminal type a modern shell would set), `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`
   (locale defaults; existing operator values win).
 
-Anything else is dropped. The cassette manifest's `env_allowlist` records
-the exact set used per recording so future spec amendments can be reviewed
-against captured evidence.
+Anything else is dropped. In particular, parent/session identity and control
+markers including `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
+`CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION`, and
+`CLAUDE_CODE_BRIDGE_SESSION_ID` never cross into the child, even when the
+operator launches Fizeau from an existing Claude session. Unknown future
+`CLAUDE_*` names are excluded until explicitly reviewed.
+
+Portable preparation consumes the same classifier. It may inherit only `TZ`
+and the approved OAuth/debug scalar names above; it declares no `CLAUDE_`
+prefix. Activation regenerates HOME, PATH, user identity, terminal/locale,
+the XDG paths, and `CLAUDE_CONFIG_DIR` from guest-owned state. The cassette
+manifest's `env_allowlist` records the exact native set used per recording so
+future spec amendments can be reviewed against captured evidence.
 
 ## Module Boundaries
 

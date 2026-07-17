@@ -106,19 +106,35 @@ func TestClaudePortableRuntimeCredentialSchema(t *testing.T) {
 
 func TestClaudeTUIPortableEnvironmentMatchesExecutionBoundary(t *testing.T) {
 	unsetAnthropicPortablePrefixes(t, "CLAUDE_", "ANTHROPIC_")
-	t.Setenv("CLAUDE_DEBUG", "")
+	t.Setenv("CLAUDE_CODE_DEBUG_LOG_LEVEL", "debug")
 	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "credential-secret")
+	t.Setenv("CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "refresh-secret")
+	t.Setenv("CLAUDE_CODE_OAUTH_SCOPES", "user:inference")
 	t.Setenv("ANTHROPIC_API_KEY", "must-not-cross-tui-boundary")
 
-	environment, credential, err := claudePortableEnvironment([]string{"CLAUDE_CODE_OAUTH_TOKEN"}, []string{"CLAUDE_"})
+	environment, credential, err := claudePortableEnvironment([]string{
+		"CLAUDE_CODE_OAUTH_TOKEN",
+		"CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
+		"CLAUDE_CODE_OAUTH_SCOPES",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL",
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []harnesses.PortableRuntimeEnvironment{{Name: "CLAUDE_CODE_OAUTH_TOKEN"}, {Name: "CLAUDE_DEBUG"}}
+	want := []harnesses.PortableRuntimeEnvironment{
+		{Name: "CLAUDE_CODE_DEBUG_LOG_LEVEL"},
+		{Name: "CLAUDE_CODE_OAUTH_REFRESH_TOKEN"},
+		{Name: "CLAUDE_CODE_OAUTH_SCOPES"},
+		{Name: "CLAUDE_CODE_OAUTH_TOKEN"},
+	}
 	if !reflect.DeepEqual(environment, want) || !credential {
 		t.Fatalf("TUI environment = %#v, credential=%v; want %#v, true", environment, credential, want)
 	}
-	serialized := strings.Join([]string{environment[0].Name, environment[1].Name}, ",")
+	var names []string
+	for _, projected := range environment {
+		names = append(names, projected.Name)
+	}
+	serialized := strings.Join(names, ",")
 	for _, forbidden := range []string{"credential-secret", "must-not-cross-tui-boundary", "ANTHROPIC_API_KEY="} {
 		if strings.Contains(serialized, forbidden) {
 			t.Fatalf("TUI environment leaked %q: %s", forbidden, serialized)

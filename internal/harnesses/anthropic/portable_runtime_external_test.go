@@ -34,7 +34,7 @@ func TestClaudePortableRuntimeSharedAssetsDeduplicate(t *testing.T) {
 	writeSharedClaudePortableFile(t, quota, `{"quota":"shared-quota-secret"}`)
 	t.Setenv("HOME", home)
 	t.Setenv("FIZEAU_CLAUDE_QUOTA_CACHE", quota)
-	t.Setenv("CLAUDE_DEBUG", "1")
+	t.Setenv("CLAUDE_CODE_DEBUG_LOG_LEVEL", "debug")
 	t.Setenv("ANTHROPIC_BASE_URL", "https://example.invalid")
 
 	target := harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH}
@@ -47,8 +47,7 @@ func TestClaudePortableRuntimeSharedAssetsDeduplicate(t *testing.T) {
 		t.Fatalf("Claude contribution error = %v", err)
 	}
 	tuiContribution, err := ClaudePortableRuntimeAssets(context.Background(), target, ClaudePortableRuntimeOptions{
-		Launcher: launcher, EnvironmentNames: []string{"CLAUDE_CODE_OAUTH_TOKEN"},
-		EnvironmentPrefixes: []string{"CLAUDE_"},
+		Launcher: launcher, EnvironmentNames: []string{"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_DEBUG_LOG_LEVEL"},
 	})
 	if err != nil {
 		t.Fatalf("Claude TUI contribution error = %v", err)

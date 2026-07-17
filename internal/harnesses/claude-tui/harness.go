@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -979,15 +980,17 @@ const (
 
 func classifyClaudeTUIEnvironment(name string) claudeTUIEnvironmentDisposition {
 	switch name {
-	case "LANG", "LC_ALL", "TZ", "TERM":
+	case "TZ",
+		"CLAUDE_CODE_OAUTH_TOKEN",
+		"CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
+		"CLAUDE_CODE_OAUTH_SCOPES",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL":
 		return claudeTUIEnvironmentInherited
-	case "HOME", "PATH", "USER", "LOGNAME", "SHELL",
+	case "HOME", "PATH", "USER", "LOGNAME", "SHELL", "TERM", "LANG", "LC_ALL",
+		"CLAUDE_CONFIG_DIR",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR":
 		return claudeTUIEnvironmentActivationGenerated
 	default:
-		if strings.HasPrefix(name, "CLAUDE_") {
-			return claudeTUIEnvironmentInherited
-		}
 		return claudeTUIEnvironmentExcluded
 	}
 }
@@ -996,10 +999,11 @@ func claudeTUIPortableInheritedEnvironmentNames() []string {
 	var names []string
 	for _, assignment := range os.Environ() {
 		name := strings.SplitN(assignment, "=", 2)[0]
-		if classifyClaudeTUIEnvironment(name) == claudeTUIEnvironmentInherited && !strings.HasPrefix(name, "CLAUDE_") {
+		if classifyClaudeTUIEnvironment(name) == claudeTUIEnvironmentInherited {
 			names = append(names, name)
 		}
 	}
+	sort.Strings(names)
 	return names
 }
 

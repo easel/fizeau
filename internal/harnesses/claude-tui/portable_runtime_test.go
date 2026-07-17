@@ -36,7 +36,7 @@ func TestClaudeTUIPortableRuntimeContribution(t *testing.T) {
 	}
 	productionDiscovery := discoverClaudeTUIPortableRuntime
 	discoverClaudeTUIPortableRuntime = func(ctx context.Context, gotTarget harnesses.PortableRuntimeTarget, options anthropic.ClaudePortableRuntimeOptions) (harnesses.PortableRuntimeContribution, error) {
-		if options.Launcher != launcher || len(options.Arguments) != 0 || options.InheritsProcessEnvironment || !reflect.DeepEqual(options.EnvironmentPrefixes, []string{"CLAUDE_"}) {
+		if options.Launcher != launcher || len(options.Arguments) != 0 || options.InheritsProcessEnvironment || len(options.EnvironmentPrefixes) != 0 || !reflect.DeepEqual(options.EnvironmentNames, []string{"CLAUDE_CODE_OAUTH_TOKEN"}) {
 			t.Fatalf("Claude TUI adapter options = %#v", options)
 		}
 		contribution, err := portableClaudeTUIFixtureContribution(ctx, gotTarget, launcher)
@@ -224,12 +224,16 @@ func runClaudeTUIPortableIsolated(t *testing.T, root, command string, arguments 
 }
 
 func TestClaudeTUIPortableEnvironmentClassifierMatchesExecutionBoundary(t *testing.T) {
-	for _, name := range []string{"LANG", "LC_ALL", "TZ", "TERM", "CLAUDE_DEBUG", "ANTHROPIC_API_KEY"} {
+	for _, name := range []string{"LANG", "LC_ALL", "TZ", "TERM", "CLAUDE_CODE_DEBUG_LOG_LEVEL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_SESSION_ID", "ANTHROPIC_API_KEY"} {
 		unsetClaudeTUIPortableEnvironment(t, name)
 	}
 	t.Setenv("LANG", "C.UTF-8")
 	t.Setenv("TERM", "xterm-256color")
-	t.Setenv("CLAUDE_DEBUG", "")
+	t.Setenv("TZ", "UTC")
+	t.Setenv("CLAUDE_CODE_DEBUG_LOG_LEVEL", "debug")
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "credential-secret")
+	t.Setenv("CLAUDE_CONFIG_DIR", "/home/operator/.claude")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "nested-session")
 	t.Setenv("ANTHROPIC_API_KEY", "must-not-cross")
 
 	actual := make(map[string]struct{})
@@ -238,21 +242,104 @@ func TestClaudeTUIPortableEnvironmentClassifierMatchesExecutionBoundary(t *testi
 		actual[name] = struct{}{}
 	}
 	portable := claudeTUIPortableInheritedEnvironmentNames()
-	for _, name := range []string{"LANG", "TERM"} {
+	for _, name := range []string{"TZ", "CLAUDE_CODE_DEBUG_LOG_LEVEL", "CLAUDE_CODE_OAUTH_TOKEN"} {
 		if _, ok := actual[name]; !ok || !containsClaudeTUIEnvironmentName(portable, name) {
 			t.Fatalf("inherited environment %q not shared by execution and portable classifier: actual=%v portable=%v", name, actual, portable)
 		}
 	}
-	if _, ok := actual["CLAUDE_DEBUG"]; !ok {
-		t.Fatal("execution classifier omitted CLAUDE_DEBUG")
-	}
-	for _, name := range []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL"} {
+	for _, name := range []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "CLAUDE_CONFIG_DIR"} {
 		if _, ok := actual[name]; ok && containsClaudeTUIEnvironmentName(portable, name) {
 			t.Fatalf("activation-generated environment %q was declared inherited", name)
 		}
 	}
-	if _, ok := actual["ANTHROPIC_API_KEY"]; ok || containsClaudeTUIEnvironmentName(portable, "ANTHROPIC_API_KEY") {
-		t.Fatal("ANTHROPIC_API_KEY crossed the TUI environment boundary")
+	for _, name := range []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_SESSION_ID"} {
+		if _, ok := actual[name]; ok || containsClaudeTUIEnvironmentName(portable, name) {
+			t.Fatalf("%s crossed the TUI environment boundary", name)
+		}
+	}
+}
+
+func TestClaudeTUIPortableEnvironmentDropsNestedSessionSentinels(t *testing.T) {
+	unsetClaudeTUIPortablePrefixes(t, "CLAUDE_", "CLAUDECODE")
+	unsetClaudeTUIPortableEnvironment(t, "TZ")
+	rejected := []string{
+		"CLAUDECODE",
+		"CLAUDE_CODE_ENTRYPOINT",
+		"CLAUDE_CODE_SESSION_ID",
+		"CLAUDE_CODE_CHILD_SESSION",
+		"CLAUDE_CODE_BRIDGE_SESSION_ID",
+	}
+	for _, name := range rejected {
+		t.Setenv(name, "must-not-cross")
+	}
+	approved := map[string]string{
+		"CLAUDE_CODE_OAUTH_TOKEN":         "oauth-token",
+		"CLAUDE_CODE_OAUTH_REFRESH_TOKEN": "refresh-token",
+		"CLAUDE_CODE_OAUTH_SCOPES":        "user:inference",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL":     "debug",
+	}
+	for name, value := range approved {
+		t.Setenv(name, value)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", "/host/account/.claude")
+
+	productionDiscovery := discoverClaudeTUIPortableRuntime
+	var captured anthropic.ClaudePortableRuntimeOptions
+	discoverClaudeTUIPortableRuntime = func(_ context.Context, _ harnesses.PortableRuntimeTarget, options anthropic.ClaudePortableRuntimeOptions) (harnesses.PortableRuntimeContribution, error) {
+		captured = options
+		contribution := harnesses.PortableRuntimeContribution{}
+		for _, name := range options.EnvironmentNames {
+			contribution.Environment = append(contribution.Environment, harnesses.PortableRuntimeEnvironment{Name: name})
+		}
+		contribution.ExecutionConstraints.Environment = append(contribution.ExecutionConstraints.Environment,
+			harnesses.PortableRuntimeEnvironmentConstraint{
+				Name: "CLAUDE_CONFIG_DIR",
+				Kind: harnesses.PortableRuntimeEnvironmentGuestPath,
+				GuestPath: harnesses.PortableRuntimeGuestPath{
+					Scope:  harnesses.PortableRuntimeGuestPathRuntime,
+					Target: "config/claude",
+				},
+			})
+		return contribution, nil
+	}
+	t.Cleanup(func() { discoverClaudeTUIPortableRuntime = productionDiscovery })
+
+	contribution, err := (&Harness{}).PortableRuntimeAssets(context.Background(), harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(captured.EnvironmentPrefixes) != 0 {
+		t.Fatalf("portable environment prefixes = %v, want none", captured.EnvironmentPrefixes)
+	}
+	wantNames := []string{"CLAUDE_CODE_DEBUG_LOG_LEVEL", "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "CLAUDE_CODE_OAUTH_SCOPES", "CLAUDE_CODE_OAUTH_TOKEN"}
+	if !reflect.DeepEqual(captured.EnvironmentNames, wantNames) {
+		t.Fatalf("portable environment names = %v, want %v", captured.EnvironmentNames, wantNames)
+	}
+	projected := make(map[string]bool)
+	for _, environment := range contribution.Environment {
+		projected[environment.Name] = true
+	}
+	for _, name := range rejected {
+		if projected[name] || containsClaudeTUIEnvironmentName(captured.EnvironmentNames, name) {
+			t.Errorf("nested-session environment %q crossed the portable boundary", name)
+		}
+	}
+	for _, name := range wantNames {
+		if !projected[name] {
+			t.Errorf("approved portable environment %q was omitted", name)
+		}
+	}
+	if projected["CLAUDE_CONFIG_DIR"] {
+		t.Fatal("host CLAUDE_CONFIG_DIR was inherited instead of guest-generated")
+	}
+	generatedConfig := false
+	for _, constraint := range contribution.ExecutionConstraints.Environment {
+		if constraint.Name == "CLAUDE_CONFIG_DIR" && constraint.Kind == harnesses.PortableRuntimeEnvironmentGuestPath {
+			generatedConfig = true
+		}
+	}
+	if !generatedConfig {
+		t.Fatal("portable CLAUDE_CONFIG_DIR guest-path constraint was omitted")
 	}
 }
 

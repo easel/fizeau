@@ -15,8 +15,7 @@ var discoverClaudeTUIPortableRuntime = anthropic.ClaudePortableRuntimeAssets
 // and state as the print-mode adapter while retaining the claude-tui identity.
 func (h *Harness) PortableRuntimeAssets(ctx context.Context, target harnesses.PortableRuntimeTarget) (harnesses.PortableRuntimeContribution, error) {
 	return discoverClaudeTUIPortableRuntime(ctx, target, anthropic.ClaudePortableRuntimeOptions{
-		Launcher:            h.Binary,
-		EnvironmentNames:    append([]string{"CLAUDE_CODE_OAUTH_TOKEN"}, claudeTUIPortableInheritedEnvironmentNames()...),
-		EnvironmentPrefixes: []string{"CLAUDE_"},
+		Launcher:         h.Binary,
+		EnvironmentNames: claudeTUIPortableInheritedEnvironmentNames(),
 	})
 }

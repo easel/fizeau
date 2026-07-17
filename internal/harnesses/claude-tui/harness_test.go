@@ -1123,20 +1123,22 @@ func TestClaudeTuiEnvironmentAllowlist(t *testing.T) {
 	// Clear environment and set test values
 	os.Clearenv()
 	testEnv := map[string]string{
-		"HOME":              "/home/test",
-		"PATH":              "/usr/bin:/bin",
-		"USER":              "testuser",
-		"LOGNAME":           "testuser",
-		"SHELL":             "/bin/bash",
-		"LANG":              "en_US.UTF-8",
-		"LC_ALL":            "en_US.UTF-8",
-		"TZ":                "UTC",
-		"XDG_CONFIG_HOME":   "/home/test/.config",
-		"XDG_CACHE_HOME":    "/home/test/.cache",
-		"CLAUDE_DEBUG":      "1",      // Should be allowed (operator pre-existing)
-		"ANTHROPIC_API_KEY": "secret", // Should NOT be allowed
-		"FIZEAU_AUTOMATED":  "true",   // Should NOT be allowed
-		"RANDOM_VAR":        "value",  // Should NOT be allowed
+		"HOME":                        "/home/test",
+		"PATH":                        "/usr/bin:/bin",
+		"USER":                        "testuser",
+		"LOGNAME":                     "testuser",
+		"SHELL":                       "/bin/bash",
+		"LANG":                        "en_US.UTF-8",
+		"LC_ALL":                      "en_US.UTF-8",
+		"TZ":                          "UTC",
+		"XDG_CONFIG_HOME":             "/home/test/.config",
+		"XDG_CACHE_HOME":              "/home/test/.cache",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL": "debug", // Documented scalar configuration.
+		"CLAUDE_CONFIG_DIR":           "/home/test/.claude",
+		"ANTHROPIC_API_KEY":           "secret", // Should NOT be allowed
+		"CLAUDE_PARENT_SENTINEL":      "nested", // Should NOT be allowed.
+		"FIZEAU_AUTOMATED":            "true",   // Should NOT be allowed
+		"RANDOM_VAR":                  "value",  // Should NOT be allowed
 	}
 
 	for k, v := range testEnv {
@@ -1154,7 +1156,7 @@ func TestClaudeTuiEnvironmentAllowlist(t *testing.T) {
 	}
 
 	// Verify allowed variables
-	allowed := []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "XDG_CONFIG_HOME", "CLAUDE_DEBUG"}
+	allowed := []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "XDG_CONFIG_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_DEBUG_LOG_LEVEL"}
 	for _, k := range allowed {
 		if _, ok := envMap[k]; !ok {
 			t.Errorf("allowed variable %q not found in allowlist", k)
@@ -1162,7 +1164,7 @@ func TestClaudeTuiEnvironmentAllowlist(t *testing.T) {
 	}
 
 	// Verify forbidden variables are NOT present
-	forbidden := []string{"ANTHROPIC_API_KEY", "FIZEAU_AUTOMATED", "RANDOM_VAR"}
+	forbidden := []string{"ANTHROPIC_API_KEY", "CLAUDE_PARENT_SENTINEL", "FIZEAU_AUTOMATED", "RANDOM_VAR"}
 	for _, k := range forbidden {
 		if _, ok := envMap[k]; ok {
 			t.Errorf("forbidden variable %q should not be in allowlist", k)
@@ -1178,13 +1180,55 @@ func TestClaudeTuiEnvironmentAllowlist(t *testing.T) {
 	}
 }
 
+func TestClaudeTUIEnvironmentDropsNestedSessionSentinels(t *testing.T) {
+	rejected := []string{
+		"CLAUDECODE",
+		"CLAUDE_CODE_ENTRYPOINT",
+		"CLAUDE_CODE_SESSION_ID",
+		"CLAUDE_CODE_CHILD_SESSION",
+		"CLAUDE_CODE_BRIDGE_SESSION_ID",
+		"CLAUDE_PARENT_SENTINEL",
+	}
+	for _, name := range rejected {
+		t.Setenv(name, "must-not-cross")
+	}
+	approved := map[string]string{
+		"CLAUDE_CODE_OAUTH_TOKEN":         "oauth-token",
+		"CLAUDE_CODE_OAUTH_REFRESH_TOKEN": "refresh-token",
+		"CLAUDE_CODE_OAUTH_SCOPES":        "user:inference",
+		"CLAUDE_CONFIG_DIR":               "/home/operator/.claude",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL":     "debug",
+	}
+	for name, value := range approved {
+		t.Setenv(name, value)
+	}
+
+	actual := make(map[string]string)
+	for _, assignment := range claudetui.BuildEnvironmentAllowlist() {
+		name, value, ok := strings.Cut(assignment, "=")
+		if ok {
+			actual[name] = value
+		}
+	}
+	for _, name := range rejected {
+		if _, exists := actual[name]; exists {
+			t.Errorf("nested-session environment %q crossed the Claude-TUI boundary", name)
+		}
+	}
+	for name, want := range approved {
+		if got, exists := actual[name]; !exists || got != want {
+			t.Errorf("approved environment %q = %q, present=%v; want %q", name, got, exists, want)
+		}
+	}
+}
+
 // TestBuildEnvironmentAllowlistExactSet proves the PTY environment allowlist
 // (ADR-013 §Environment Allowlist) admits ONLY documented keys and drops every
 // undocumented variable. It seeds a clean environment with exactly the documented
 // keys plus one deliberately undocumented variable (RANDOM_UNINTENDED) and asserts:
 //  1. the undocumented variable is dropped;
-//  2. the resulting allowlist's key set is a STRICT SUBSET of the documented set
-//     (documented exact keys + XDG_* + CLAUDE_* prefixes), so no surprise key
+//  2. the resulting allowlist's key set is a STRICT SUBSET of the documented
+//     exact-name set, so no surprise key
 //     leaks into the child process;
 //  3. every seeded documented key survives passthrough;
 //  4. the TERM/LANG/LC_ALL defaults are present.
@@ -1201,21 +1245,23 @@ func TestBuildEnvironmentAllowlistExactSet(t *testing.T) {
 	}()
 
 	os.Clearenv()
-	// Seed exactly the documented exact keys + one XDG_* + one CLAUDE_* + one
+	// Seed documented exact keys plus one unknown Claude name and one other
 	// deliberately undocumented variable that must be dropped.
 	seeded := map[string]string{
-		"HOME":              "/home/test",
-		"PATH":              "/usr/bin:/bin",
-		"USER":              "testuser",
-		"LOGNAME":           "testuser",
-		"SHELL":             "/bin/bash",
-		"LANG":              "en_US.UTF-8",
-		"LC_ALL":            "en_US.UTF-8",
-		"TZ":                "UTC",
-		"TERM":              "screen-256color",
-		"XDG_CONFIG_HOME":   "/home/test/.config",
-		"CLAUDE_DEBUG":      "1",
-		"RANDOM_UNINTENDED": "should-be-dropped",
+		"HOME":                        "/home/test",
+		"PATH":                        "/usr/bin:/bin",
+		"USER":                        "testuser",
+		"LOGNAME":                     "testuser",
+		"SHELL":                       "/bin/bash",
+		"LANG":                        "en_US.UTF-8",
+		"LC_ALL":                      "en_US.UTF-8",
+		"TZ":                          "UTC",
+		"TERM":                        "screen-256color",
+		"XDG_CONFIG_HOME":             "/home/test/.config",
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL": "debug",
+		"CLAUDE_CONFIG_DIR":           "/home/test/.claude",
+		"CLAUDE_PARENT_SENTINEL":      "nested",
+		"RANDOM_UNINTENDED":           "should-be-dropped",
 	}
 	for k, v := range seeded {
 		os.Setenv(k, v)
@@ -1239,23 +1285,25 @@ func TestBuildEnvironmentAllowlistExactSet(t *testing.T) {
 	documentedExact := map[string]bool{
 		"HOME": true, "PATH": true, "USER": true, "LOGNAME": true,
 		"SHELL": true, "LANG": true, "LC_ALL": true, "TZ": true, "TERM": true,
+		"XDG_CONFIG_HOME": true, "XDG_DATA_HOME": true, "XDG_CACHE_HOME": true,
+		"XDG_STATE_HOME": true, "XDG_RUNTIME_DIR": true,
+		"CLAUDE_CODE_OAUTH_TOKEN": true, "CLAUDE_CODE_OAUTH_REFRESH_TOKEN": true,
+		"CLAUDE_CODE_OAUTH_SCOPES": true, "CLAUDE_CONFIG_DIR": true,
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL": true,
 	}
 	isDocumented := func(k string) bool {
-		if documentedExact[k] {
-			return true
-		}
-		return strings.HasPrefix(k, "XDG_") || strings.HasPrefix(k, "CLAUDE_")
+		return documentedExact[k]
 	}
 
 	// (2) The allowlist key set must be a STRICT SUBSET of the documented set.
 	for k := range keys {
 		if !isDocumented(k) {
-			t.Errorf("allowlist contains undocumented key %q (not in HOME/PATH/USER/LOGNAME/SHELL/LANG/LC_ALL/TZ/TERM, XDG_*, CLAUDE_*)", k)
+			t.Errorf("allowlist contains undocumented key %q", k)
 		}
 	}
 
 	// (3) Every seeded documented key must survive passthrough.
-	for _, k := range []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "TERM", "XDG_CONFIG_HOME", "CLAUDE_DEBUG"} {
+	for _, k := range []string{"HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TZ", "TERM", "XDG_CONFIG_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_DEBUG_LOG_LEVEL"} {
 		if !keys[k] {
 			t.Errorf("documented key %q dropped from allowlist", k)
 		}

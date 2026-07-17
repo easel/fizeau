@@ -772,8 +772,10 @@ func claudePortableEnvironment(names, prefixes []string) ([]harnesses.PortableRu
 		"CLAUDE_CODE_OAUTH_REFRESH_TOKEN": true,
 	}
 	scalarNames := map[string]bool{
-		"ANTHROPIC_BASE_URL": true,
-		"LANG":               true, "LC_ALL": true, "TZ": true, "TERM": true,
+		"ANTHROPIC_BASE_URL":          true,
+		"CLAUDE_CODE_OAUTH_SCOPES":    true,
+		"CLAUDE_CODE_DEBUG_LOG_LEVEL": true,
+		"LANG":                        true, "LC_ALL": true, "TZ": true, "TERM": true,
 		"API_TIMEOUT_MS": true, "BASH_DEFAULT_TIMEOUT_MS": true, "BASH_MAX_TIMEOUT_MS": true,
 		"MAX_THINKING_TOKENS": true, "MCP_TIMEOUT": true, "MCP_TOOL_TIMEOUT": true,
 		"MAX_MCP_OUTPUT_TOKENS": true, "HTTP_PROXY": true, "HTTPS_PROXY": true,

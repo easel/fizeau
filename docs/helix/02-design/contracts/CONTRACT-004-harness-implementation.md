@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 0f2faca7256238049071349819e4a04bc136d591f4409dac2c6b56deea2c39b9
+    self_hash: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
     deps:
       CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-16T10:47:59Z"
+    reviewed_at: "2026-07-17T00:52:37Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -1006,10 +1006,17 @@ The initial reviewed release row is Claude Code 2.1.210 for Linux arm64. The
 signed manifest's amd64 checksum is not treated as verified-exact evidence
 until that exact amd64 artifact passes the same-target isolated probe.
 
-Claude-TUI inherits operator `CLAUDE_*` plus locale/terminal names. It excludes
-`ANTHROPIC_*`; activation regenerates HOME, PATH, USER, LOGNAME, SHELL, and XDG
-path variables inside the guest. One classifier drives both the live PTY
-allowlist and this inherited-versus-generated projection.
+Claude-TUI uses a default-deny exact-name policy rather than a `CLAUDE_`
+prefix. Portable execution may inherit `TZ`, `CLAUDE_CODE_OAUTH_TOKEN`,
+`CLAUDE_CODE_OAUTH_REFRESH_TOKEN`, `CLAUDE_CODE_OAUTH_SCOPES`, and
+`CLAUDE_CODE_DEBUG_LOG_LEVEL` when present. It excludes `ANTHROPIC_*`, every
+unknown Claude name, and all parent/session identity or control markers,
+including `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_ID`,
+`CLAUDE_CODE_CHILD_SESSION`, and `CLAUDE_CODE_BRIDGE_SESSION_ID`. Activation
+regenerates HOME, PATH, USER, LOGNAME, SHELL, TERM, LANG, LC_ALL,
+`CLAUDE_CONFIG_DIR`, and XDG path variables inside the guest. One classifier
+drives both the live PTY allowlist and this inherited-versus-generated
+projection; portable contributions declare no broad Claude prefix.
 
 Asset-kind consistency is validated before any copy. `credential` is always a
 sensitive regular file. `config`, `quota`, and `cache` files and trees are

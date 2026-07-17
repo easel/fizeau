@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,6 +92,73 @@ func TestLiveClaudeTuiRunsToolUnattended(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Errorf("proof file %s is empty", proofPath)
+	}
+}
+
+// TestLiveClaudeTuiRunsToolFromNestedParent is the release canary for the
+// parent-session environment boundary. Once explicitly enabled, missing live
+// prerequisites are failures rather than skips so a release cannot pass on a
+// canary that never ran.
+func TestLiveClaudeTuiRunsToolFromNestedParent(t *testing.T) {
+	if os.Getenv("FIZEAU_TEST_LIVE_CLAUDE_TUI") == "" {
+		t.Skip("FIZEAU_TEST_LIVE_CLAUDE_TUI not set; skipping live nested-parent canary")
+	}
+	if _, err := exec.LookPath("claude"); err != nil {
+		t.Fatalf("FIZEAU_TEST_LIVE_CLAUDE_TUI is set but claude is unavailable: %v", err)
+	}
+	for _, name := range []string{
+		"CLAUDECODE",
+		"CLAUDE_CODE_ENTRYPOINT",
+		"CLAUDE_CODE_SESSION_ID",
+		"CLAUDE_CODE_CHILD_SESSION",
+		"CLAUDE_CODE_BRIDGE_SESSION_ID",
+	} {
+		t.Setenv(name, "nested-parent-must-not-cross")
+	}
+
+	workDir := t.TempDir()
+	proofName := "nested_parent_proof.txt"
+	proofPath := filepath.Join(workDir, proofName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	events, err := (&claudetui.Harness{}).Execute(ctx, harnesses.ExecuteRequest{
+		Prompt:  "Use the Write tool to create " + proofName + " in the current directory with exactly this single line: nested-parent-ok. Do not ask for confirmation.",
+		WorkDir: workDir,
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	finals := 0
+	sawWrite := false
+	for event := range events {
+		switch event.Type {
+		case harnesses.EventTypeToolCall:
+			var call harnesses.ToolCallData
+			if err := json.Unmarshal(event.Data, &call); err != nil {
+				t.Fatalf("decode tool_call: %v", err)
+			}
+			sawWrite = sawWrite || call.Name == "Write"
+		case harnesses.EventTypeFinal:
+			finals++
+			if status := finalStatusOf(event.Data); status != "success" {
+				t.Errorf("final status = %q, want success", status)
+			}
+		}
+	}
+	if finals != 1 {
+		t.Errorf("final event count = %d, want exactly one", finals)
+	}
+	if !sawWrite {
+		t.Error("no Write tool_call observed")
+	}
+	contents, err := os.ReadFile(proofPath)
+	if err != nil {
+		t.Fatalf("proof file was not created unattended: %v", err)
+	}
+	if got := strings.TrimSpace(string(contents)); got != "nested-parent-ok" {
+		t.Errorf("proof file contents = %q, want %q", got, "nested-parent-ok")
 	}
 }
 
