@@ -12,18 +12,18 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 36f499ce136bcd8c2c2f53f69c75f1e625ab4c2a059c38700ca9cc17411df476
+    self_hash: b011723470aafca504222189dd55bb74b3cfc5f52d293e8cad69999a8834dc56
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-013: e9086db5ed1ca93bb9837c820fda3fdc444e7dfbbae9f8aacadb74d5e2b634c4
       ADR-014: 63c97bfb114774622e662d7f171c1c389776a4c5ff08cbe3c9d540dcbbdf8119
-      CONTRACT-003: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
+      CONTRACT-003: 4b053cfd0c66bafac8dedbda6c6d32b724f27ec2db13ec2eff37a9b6683dbb24
       CONTRACT-004: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      implementation-plan: e2b7f6eac62a08c680ce6257711bd24b828aa33e34abb4b1664a49a8b8aa9973
-    reviewed_at: "2026-07-17T00:52:37Z"
+      implementation-plan: 7445d5d5def31b959666eef118154237d4fe373b8e82a3d7e3057a79a79ae626
+    reviewed_at: "2026-07-17T06:25:57Z"
 ---
 # Release Checklist — Fizeau
 
@@ -61,7 +61,7 @@ ddx:
 | Default Claude-TUI launch | An unpinned `Policy=default`, `Permissions=unrestricted` Claude request selects and dispatches `claude-tui`; the production launch boundary receives `--permission-mode bypassPermissions`, generated hook settings, and the resolved model without `--print` | `TestExecuteDefaultClaudeUnrestrictedLaunchesTUIYolo`; `TestExecuteDefaultClaudeUnrestrictedSelectsClaudeTUI`; `TestClaudeTuiDefaultSupportsUnrestrictedPermissions`; `TestExplicitClaudePinBeatsTuiDefault`; `TestRoutingSurfacePreference`; `TestDispatcherCallsClaudeTui`; `TestBuildLaunchArgsBypassPermissions` | [ ] |
 | Context evidence | Selected-route context comes from candidate/config, cached type-gated provider evidence, catalog metadata, or the documented default; route and execution hot paths make no synchronous limit probe | SD-005/SD-006 conformance evidence; structural probe-path review | [ ] |
 | Capacity enforcement | The selected context value/source is authoritative, a positive compaction bound only tightens it, and every provider-call path applies the canonical estimate and fixed capacity envelope | CONTRACT-003 obligations 17–20; focused route/core evidence | [ ] |
-| One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, accepted-session capacity failure never dispatches the next ranked candidate and semantic retry is a new caller request | CONTRACT-003 obligations 17, 20, and 21; service dispatch evidence | [ ] |
+| One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, service preflight rejection and residual provider overflow never dispatch the next ranked candidate. Residual overflow is exact-route `capability` evidence, may retry the same route once only after measured compaction, does not poison endpoint reachability or provider-wide availability, and semantic rerouting is a new caller request | CONTRACT-003 obligations 17, 20, and 21; `TestNativeResidualContextOverflowProjectsCapabilityAndSingleRoute`; `TestExecuteResidualContextOverflowIsCapabilityAndCallerOwnsCrossRouteRetry` | [ ] |
 | Cost presence and provenance | Final, override, durable session, CLI, service-backed comparison evidence, and its benchmark-runner ingestion preserve unknown, known zero, positive amount, and mandatory normalized source without a behavior-losing migration slice, negative producer values, or numeric presence inference | Final/override/session conformance suite; `TestRunResultCostSourceIngressCompile`; `TestBenchmarkFinalCostPresence`; `TestBenchmarkEvidenceCostPresence`; `TestBenchmarkReportCostPresence` | [ ] |
 | v0.15 public compatibility | Core-to-`internal/harnesses`-to-root capacity mapping is exhaustive; additive capacity events/final values preserve unknown JSON enums; external mocks implement both new `Continue` and `PreparePortableRuntime` methods; all three public cost types use pointer literals and nil/source-aware selectors | CONTRACT-003 obligations 21–30; `TestV015CostPointerMigrationCompile`; public AST and JSON fixtures | [ ] |
 | Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |

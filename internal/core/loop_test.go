@@ -1949,7 +1949,7 @@ func (p *overflowProvider) Chat(ctx context.Context, messages []Message, tools [
 	}
 	p.calls++
 	if p.calls <= p.failCount {
-		return Response{}, errors.New("context length exceeded: reduce your message length")
+		return Response{}, errors.New("HTTP 500: context length exceeded; reduce your message length")
 	}
 	return p.success, nil
 }
@@ -1964,8 +1964,11 @@ func TestRun_OverflowTriggersCompactionAndRetrySucceeds(t *testing.T) {
 	compactionCalls := 0
 	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
-		// Return a shorter message list to signal compaction occurred.
-		shortened := input.History[:1]
+		if compactionCalls == 1 {
+			return input.History, nil, nil
+		}
+		// The overflow-triggered pass measurably reduces the provider input.
+		shortened := input.History[:0]
 		return shortened, &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
 	}
 
@@ -1979,7 +1982,7 @@ func TestRun_OverflowTriggersCompactionAndRetrySucceeds(t *testing.T) {
 	assert.Equal(t, "done after compaction", result.Output)
 	// Pre-turn compaction runs once (no-op since not over budget), overflow
 	// compaction runs once after the overflow error.
-	assert.GreaterOrEqual(t, compactionCalls, 1, "compaction should have been triggered")
+	assert.Equal(t, 2, compactionCalls, "pre-turn no-op plus overflow compaction")
 	assert.Equal(t, 2, provider.calls, "provider should have been called twice: once failing, once succeeding")
 }
 
@@ -1998,6 +2001,40 @@ func TestRun_OverflowWithNoCompactorReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, StatusError, result.Status)
 	assert.Contains(t, err.Error(), "provider error")
+	assert.Equal(t, 1, provider.calls, "overflow without effective compaction must not retry")
+	var capabilityErr *ProviderCapabilityMissingError
+	require.ErrorAs(t, err, &capabilityErr)
+	assert.Equal(t, ProviderCapabilityMissingErrorCode, capabilityErr.Code)
+	assert.Equal(t, ProviderCapabilityContextCapacity, capabilityErr.Capability)
+	assert.ErrorIs(t, err, ErrProviderCapabilityMissing)
+}
+
+func TestRun_OverflowNoOpCompactionDoesNotRetry(t *testing.T) {
+	provider := &overflowProvider{
+		failCount: 99,
+		success:   Response{Content: "should not reach"},
+	}
+
+	compactionCalls := 0
+	compactor := func(_ context.Context, input CompactionInput, _ Provider) ([]Message, *CompactionResult, error) {
+		compactionCalls++
+		return input.History, &CompactionResult{
+			Summary:      "unchanged",
+			TokensBefore: input.EstimatedProviderCallTokens,
+			TokensAfter:  input.EstimatedProviderCallTokens,
+		}, nil
+	}
+
+	result, err := Run(context.Background(), Request{
+		Prompt:    "test overflow after ineffective compaction",
+		Provider:  provider,
+		Compactor: compactor,
+	})
+	require.Error(t, err)
+	assert.Equal(t, StatusError, result.Status)
+	assert.Equal(t, 1, provider.calls, "unchanged token load must not retry the selected provider")
+	assert.Equal(t, 2, compactionCalls, "pre-turn and overflow-triggered compaction should both run")
+	assert.ErrorIs(t, err, ErrProviderCapabilityMissing)
 }
 
 func TestRun_OverflowCompactionNoFitReturnsError(t *testing.T) {
@@ -2031,6 +2068,7 @@ func TestRun_OverflowCompactionNoFitReturnsError(t *testing.T) {
 	// (pre-turn no-op, then overflow recovery ErrCompactionNoFit).
 	assert.Equal(t, 1, provider.calls)
 	assert.Equal(t, 2, compactionCalls)
+	assert.ErrorIs(t, err, ErrProviderCapabilityMissing)
 }
 
 // TestRun_NoOpCompactionEmitsNoEvents verifies that when the compactor
@@ -2086,11 +2124,10 @@ func TestRun_OverflowCompactionSuccessRetryStillOverflowsReturnsError(t *testing
 	compactionCalls := 0
 	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
-		// Return a shorter list to signal compaction occurred.
-		if len(input.History) > 1 {
-			return input.History[:1], &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
+		if compactionCalls == 1 {
+			return input.History, nil, nil
 		}
-		return input.History, nil, nil
+		return input.History[:0], &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
 	}
 
 	result, err := Run(context.Background(), Request{
@@ -2101,9 +2138,10 @@ func TestRun_OverflowCompactionSuccessRetryStillOverflowsReturnsError(t *testing
 	require.Error(t, err)
 	assert.Equal(t, StatusError, result.Status)
 	assert.Contains(t, err.Error(), "provider error")
-	// Provider should be called at most twice: once initially overflows,
-	// compaction runs, retry still overflows — no infinite loop.
-	assert.LessOrEqual(t, provider.calls, 3, "must not loop indefinitely on repeated overflow")
+	// Provider is called exactly twice: once initially, then once more after
+	// measured token reduction. The residual overflow is terminal.
+	assert.Equal(t, 2, provider.calls)
+	assert.ErrorIs(t, err, ErrProviderCapabilityMissing)
 }
 
 func TestRun_ToolCallLoopDetection(t *testing.T) {

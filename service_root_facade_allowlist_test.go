@@ -104,6 +104,7 @@ func TestRootFacadeTestAllowlist(t *testing.T) {
 		"service_aliveness_test.go",
 		"service_cleanup_options_test.go",
 		"service_context_capacity_test.go",
+		"service_context_overflow_test.go",
 		"service_continuation_internal_test.go",
 		"service_contract_post_refactor_structural_test.go",
 		"service_contract_pre_refactor_baseline_test.go",

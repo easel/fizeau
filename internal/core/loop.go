@@ -662,23 +662,32 @@ func Run(ctx context.Context, req Request) (Result, error) {
 				// per turn to prevent infinite loops.
 				if IsContextOverflowError(err) && !overflowCompacted && req.Compactor != nil {
 					overflowCompacted = true
-					compacted, _, compErr := runCompaction(false)
+					compacted, compactionResult, compErr := runCompaction(false)
 					if compErr != nil {
 						// ErrCompactionNoFit or other fatal compaction error.
 						result.Status = StatusError
-						result.Error = fmt.Errorf("agent: provider error: %w", err)
+						result.Error = fmt.Errorf("agent: provider error: %w", providerContextCapacityError(err))
 						result.Duration = time.Since(start)
 						snapshotMessages()
 						emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
 						return result, result.Error
 					}
-					if compacted {
+					if compacted && compactionReducedTokenLoad(compactionResult) {
 						// Rebuild providerMessages from the freshly compacted history.
 						providerMessages = providerMessagesFor(req.SystemPrompt, messages)
 						attempt = 0 // incremented to 1 by the loop header
 						continue providerRetry
 					}
 					// Compactor ran but produced no shorter history — fall through to error.
+				}
+
+				if IsContextOverflowError(err) {
+					result.Status = StatusError
+					result.Error = fmt.Errorf("agent: provider error: %w", providerContextCapacityError(err))
+					result.Duration = time.Since(start)
+					snapshotMessages()
+					emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
+					return result, result.Error
 				}
 
 				// Connect-time failures (dial refused, ETIMEDOUT, host unreachable)
@@ -1081,6 +1090,15 @@ func emitSessionEnd(cb EventCallback, sessionID string, seq *int, result Result,
 		Data:      mustMarshal(data),
 	})
 	*seq++
+}
+
+// compactionReducedTokenLoad reports whether a completed compaction produced
+// authoritative evidence that the next provider call is smaller. Overflow
+// recovery may retry the selected route only after that reduction; a compactor
+// that merely ran (or returned incomplete accounting) cannot justify another
+// identical provider call.
+func compactionReducedTokenLoad(result *CompactionResult) bool {
+	return result != nil && result.TokensBefore > result.TokensAfter
 }
 
 func applyRoutingReport(provider Provider, result *Result) {

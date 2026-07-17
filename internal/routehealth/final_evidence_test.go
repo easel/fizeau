@@ -39,7 +39,7 @@ func TestFinalEvidenceSuccessAdmission(t *testing.T) {
 }
 
 func TestFinalEvidenceTypedFailureClasses(t *testing.T) {
-	for _, class := range []string{"availability", "protocol", "transport", "credential_invalid", "quota_exhausted"} {
+	for _, class := range []string{"availability", "protocol", "transport", "credential_invalid", "quota_exhausted", "capability"} {
 		t.Run(class, func(t *testing.T) {
 			attempt, ok := AttemptFromFinal(failedFinal("  "+class+"  ", "diagnostic"), FinalEvidenceTypedOnly)
 			if !ok || attempt.Reason != class {
@@ -132,7 +132,7 @@ func TestFinalEvidenceDispatchClassPredicate(t *testing.T) {
 			t.Errorf("class %q should be dispatch evidence", class)
 		}
 	}
-	for _, class := range []string{"", "credential_invalid", "quota_exhausted", "unknown"} {
+	for _, class := range []string{"", "credential_invalid", "quota_exhausted", "capability", "unknown"} {
 		if IsDispatchFailureClass(class) {
 			t.Errorf("class %q should not be dispatch evidence", class)
 		}

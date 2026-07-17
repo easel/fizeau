@@ -399,7 +399,11 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	}
 	origin := nativeTerminalOrigin(runErr)
 	if origin != TerminalOriginContextCapacity && final.Status == "failed" && final.Error != "" && final.RoutingActual != nil {
-		final.RoutingActual.FailureClass = classifyDispatchFailure(final.Error)
+		if errors.Is(runErr, agentcore.ErrProviderCapabilityMissing) {
+			final.RoutingActual.FailureClass = "capability"
+		} else {
+			final.RoutingActual.FailureClass = classifyDispatchFailure(final.Error)
+		}
 	}
 	if final.RoutingActual != nil && final.Usage != nil && cb.ObserveTokenUsage != nil {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
@@ -784,6 +788,9 @@ func finalUsageTotalTokens(u *harnesses.FinalUsage) int {
 
 func endpointProviderRef(providerName, endpointName string) string {
 	if endpointName == "" {
+		return providerName
+	}
+	if base, existingEndpoint, ok := strings.Cut(providerName, "@"); ok && base != "" && existingEndpoint != "" {
 		return providerName
 	}
 	return providerName + "@" + endpointName

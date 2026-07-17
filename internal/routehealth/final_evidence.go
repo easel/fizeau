@@ -72,7 +72,7 @@ func AttemptFromFinal(final harnesses.FinalData, mode FinalEvidenceMode) (Attemp
 // feedback. Unknown and semantic task failures are deliberately excluded.
 func IsFeedbackFailureClass(class string) bool {
 	switch strings.ToLower(strings.TrimSpace(class)) {
-	case "availability", "protocol", "transport", "credential_invalid", "quota_exhausted":
+	case "availability", "protocol", "transport", "credential_invalid", "quota_exhausted", "capability":
 		return true
 	default:
 		return false
@@ -80,8 +80,8 @@ func IsFeedbackFailureClass(class string) bool {
 }
 
 // IsDispatchFailureClass reports whether class can describe dispatch
-// mechanics. Credential and quota failures affect route selection but must
-// not independently mark an endpoint unreachable.
+// mechanics. Credential, quota, and capability failures affect route selection
+// but must not independently mark an endpoint unreachable.
 func IsDispatchFailureClass(class string) bool {
 	switch strings.ToLower(strings.TrimSpace(class)) {
 	case "availability", "protocol", "transport":

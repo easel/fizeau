@@ -357,7 +357,7 @@ func TestDispatchFeedbackRecordsExactProbe(t *testing.T) {
 		}
 	})
 
-	for _, class := range []string{"credential_invalid", "quota_exhausted"} {
+	for _, class := range []string{"credential_invalid", "quota_exhausted", "capability"} {
 		t.Run(class+" class blocks catalog and probe", func(t *testing.T) {
 			store := NewStore()
 			var persistCalls, lookupCalls, catalogCalls, probeCalls int

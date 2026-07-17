@@ -6,10 +6,11 @@ import (
 )
 
 // ErrProviderCapabilityMissing is the sentinel for a provider/server reporting
-// that a feature required to serve the request is not implemented for the
-// active model+config combination (for example, mlx_lm's
-// "NotImplementedError: RotatingKVCache Quantization NYI"). The condition is
-// deterministic for a given provider+model, so the agent loop must not retry.
+// that a feature or capacity required to serve the request is unavailable on
+// the active route (for example, mlx_lm's "NotImplementedError:
+// RotatingKVCache Quantization NYI" or a residual context overflow). The
+// condition is deterministic for the same route and request, so the agent loop
+// must not retry without an effective compaction or changed caller constraints.
 var ErrProviderCapabilityMissing = errors.New("agent: provider capability missing")
 
 // ProviderCapabilityMissingErrorCode is the stable string code carried on
@@ -17,10 +18,14 @@ var ErrProviderCapabilityMissing = errors.New("agent: provider capability missin
 // without depending on Go type identity.
 const ProviderCapabilityMissingErrorCode = "PROVIDER_CAPABILITY_MISSING"
 
+// ProviderCapabilityContextCapacity identifies a provider/model route whose
+// accepted request still exceeds the upstream server's context capacity.
+const ProviderCapabilityContextCapacity = "context_capacity"
+
 // ProviderCapabilityMissingError reports that an upstream provider rejected
-// the request because the server cannot implement a capability the model
-// requires under the current configuration. It carries a stable Code, the
-// extracted Capability name (when one can be parsed out of the server
+// the request because the selected route cannot supply a required feature or
+// capacity under the current request and configuration. It carries a stable
+// Code, the extracted Capability name (when one can be parsed out of the server
 // message), and the raw ServerMessage so logs and tests can inspect either.
 //
 // Use errors.As to extract Code/Capability/ServerMessage in routing or
@@ -69,4 +74,16 @@ func (e *ProviderCapabilityMissingError) Is(target error) bool {
 		return true
 	}
 	return false
+}
+
+func providerContextCapacityError(cause error) error {
+	if cause == nil {
+		return nil
+	}
+	return &ProviderCapabilityMissingError{
+		Code:          ProviderCapabilityMissingErrorCode,
+		Capability:    ProviderCapabilityContextCapacity,
+		ServerMessage: cause.Error(),
+		Cause:         cause,
+	}
 }

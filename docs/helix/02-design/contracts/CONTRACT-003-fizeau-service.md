@@ -703,8 +703,8 @@ A main provider call rejected by capacity preflight maps to
 ### Executing-surface route-failure evidence
 
 `ServiceFinalData.RoutingActual.FailureClass` is extensible, typed evidence
-about a failure observed by the surface that actually executed. Claude batch
-and Claude TUI classifiers produce these stable values:
+about a failure observed by the surface that actually executed. Stable values
+currently produced by native and wrapped executing surfaces include:
 
 - `credential_invalid` — the executing surface rejected or could not refresh
   credentials, including HTTP 401 evidence. This is distinct from
@@ -718,6 +718,11 @@ and Claude TUI classifiers produce these stable values:
 - `protocol` — an infrastructure protocol failure such as a malformed service
   response or non-authentication HTTP error. Model output quality, task
   failure, and other semantic failures are never `protocol`.
+- `capability` — the native selected provider/model route deterministically
+  could not serve the accepted request. A residual context overflow after no
+  effective compaction, or after the one same-route retry justified by measured
+  token reduction, uses this class. It is exact-route feedback and never marks
+  the endpoint unreachable or creates provider-wide availability cooldown.
 - `unknown` — the executing surface failed without evidence sufficient for a
   more specific class.
 
