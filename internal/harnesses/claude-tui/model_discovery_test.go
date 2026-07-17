@@ -68,6 +68,71 @@ func TestDefaultModelSnapshotDrivesLivePTY(t *testing.T) {
 	}
 }
 
+func TestDefaultModelSnapshotIgnoresIncompletePickerCacheGeneration(t *testing.T) {
+	testCache := newTestCache(t)
+	defer testCache.cleanup()
+
+	legacySnapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		Models:          []string{"fable"},
+		Source:          "pty",
+		FreshnessWindow: "24h",
+	}
+	legacyData, err := json.Marshal(legacySnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacySource := modelDiscoveryCacheSource
+	legacySource.Name = "claude-tui"
+	if err := testCache.cache.Refresh(legacySource, func(context.Context) ([]byte, error) {
+		return legacyData, nil
+	}); err != nil {
+		t.Fatalf("seed legacy cache: %v", err)
+	}
+
+	var probeCount int32
+	completeSnapshot := harnesses.ModelDiscoverySnapshot{
+		CapturedAt:      time.Now().UTC(),
+		Models:          []string{"fable-5", "fable"},
+		Source:          "pty",
+		FreshnessWindow: "24h",
+	}
+	completeData, err := json.Marshal(completeSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	previousCache := modelDiscoveryCache
+	modelDiscoveryCache = testCache.cache
+	restore := SetModelDiscoveryRefresherForTest(func(context.Context) ([]byte, error) {
+		atomic.AddInt32(&probeCount, 1)
+		return completeData, nil
+	})
+	t.Cleanup(func() {
+		restore()
+		modelDiscoveryCache = previousCache
+	})
+
+	snapshot, err := (&Harness{}).DefaultModelSnapshot()
+	if err != nil {
+		t.Fatalf("DefaultModelSnapshot: %v", err)
+	}
+	if !contains(snapshot.Models, "fable-5") {
+		t.Fatalf("models = %v, want new-generation fable-5", snapshot.Models)
+	}
+	if got := atomic.LoadInt32(&probeCount); got != 1 {
+		t.Fatalf("model discovery probes = %d, want 1", got)
+	}
+	for _, path := range []string{
+		filepath.Join(testCache.tmpDir, "discovery", "claude-tui.json"),
+		filepath.Join(testCache.tmpDir, "discovery", "claude-tui-v2.json"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected cache generation %s: %v", path, err)
+		}
+	}
+}
+
 // TestDefaultModelSnapshotSingleFlightConcurrency verifies AC#3:
 // Concurrent DefaultModelSnapshot calls coalesce to one PTY probe via the
 // discoverycache layer. Verified by a goroutine race test that counts

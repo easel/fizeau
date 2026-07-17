@@ -66,7 +66,7 @@ var modelDiscoveryCache *discoverycache.Cache
 // modelDiscoveryCacheSource is the Source descriptor for the cache.
 var modelDiscoveryCacheSource = discoverycache.Source{
 	Tier:            "discovery",
-	Name:            "claude-tui",
+	Name:            "claude-tui-v2",
 	TTL:             modelDiscoveryTTL,
 	RefreshDeadline: modelDiscoveryRefreshDeadline,
 }

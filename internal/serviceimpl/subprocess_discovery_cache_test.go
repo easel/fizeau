@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -210,6 +211,88 @@ func TestCachedSubprocessDiscoveryColdCacheFailsOpenAsync(t *testing.T) {
 			t.Fatalf("warm cache did not serve payload within deadline (async commit did not land)")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestCachedSubprocessDiscoveryIgnoresIncompletePickerCacheGeneration(t *testing.T) {
+	for _, name := range []string{"claude-tui", "codex"} {
+		t.Run(name, func(t *testing.T) {
+			completeModels := map[string][]string{
+				"claude-tui": {"fable-5", "fable"},
+				"codex":      {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+			}[name]
+			incompleteModels := map[string][]string{
+				"claude-tui": {"fable"},
+				"codex":      {"gpt-5.6-sol"},
+			}[name]
+			calls, root := withTestDiscoveryCache(t, subprocessDiscoveryPayload{
+				CapturedAt: time.Now().UTC(),
+				Models:     completeModels,
+				Source:     "pty",
+			})
+
+			legacySource := discoverycache.Source{
+				Tier:            "discovery",
+				Name:            name + "-models",
+				TTL:             subprocessDiscoveryTTL,
+				RefreshDeadline: subprocessDiscoveryRefreshDeadline,
+			}
+			legacyPayload, err := json.Marshal(subprocessDiscoveryPayload{
+				CapturedAt: time.Now().UTC(),
+				Models:     incompleteModels,
+				Source:     "pty",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := (&discoverycache.Cache{Root: root}).Refresh(legacySource, func(context.Context) ([]byte, error) {
+				return legacyPayload, nil
+			}); err != nil {
+				t.Fatalf("seed legacy cache: %v", err)
+			}
+
+			if got, ok := cachedSubprocessDiscovery(name, nil); ok || len(got.Models) != 0 {
+				t.Fatalf("legacy generation was served: ok=%v models=%v", ok, got.Models)
+			}
+			waitForRefresherCalls(t, calls, 1)
+
+			deadline := time.Now().Add(2 * time.Second)
+			for {
+				got, ok := cachedSubprocessDiscovery(name, nil)
+				if ok {
+					if !slices.Equal(got.Models, completeModels) {
+						t.Fatalf("new generation models = %v, want %v", got.Models, completeModels)
+					}
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("new cache generation did not warm")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			for _, path := range []string{
+				filepath.Join(root, "discovery", name+"-models.json"),
+				filepath.Join(root, "discovery", subprocessDiscoveryCacheSourceName(name)+".json"),
+			} {
+				if _, err := os.Stat(path); err != nil {
+					t.Fatalf("expected cache generation %s: %v", path, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSubprocessDiscoveryCacheSourceNamePreservesUnaffectedHarnesses(t *testing.T) {
+	for name, want := range map[string]string{
+		"claude":     "claude-models",
+		"gemini":     "gemini-models",
+		"claude-tui": "claude-tui-models-v2",
+		"codex":      "codex-models-v2",
+	} {
+		if got := subprocessDiscoveryCacheSourceName(name); got != want {
+			t.Errorf("subprocessDiscoveryCacheSourceName(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 

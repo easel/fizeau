@@ -21,6 +21,8 @@ const subprocessDiscoveryTTL = 24 * time.Hour
 // hot path; a refresh that exceeds this deadline is abandoned.
 const subprocessDiscoveryRefreshDeadline = 60 * time.Second
 
+const completePickerDiscoveryCacheGeneration = "v2"
+
 // subprocessDiscoveryPayload is the JSON shape persisted in the discovery
 // cache for a subprocess harness. It carries the full discovery snapshot
 // evidence so the read path can resolve any alias locally (pure CPU) without
@@ -125,7 +127,7 @@ func cachedSubprocessDiscovery(name string, mdh harnesses.ModelDiscoveryHarness)
 
 	src := discoverycache.Source{
 		Tier:            "discovery",
-		Name:            name + "-models",
+		Name:            subprocessDiscoveryCacheSourceName(name),
 		TTL:             subprocessDiscoveryTTL,
 		RefreshDeadline: subprocessDiscoveryRefreshDeadline,
 	}
@@ -155,6 +157,15 @@ func cachedSubprocessDiscovery(name string, mdh harnesses.ModelDiscoveryHarness)
 	// concurrent cold callers coalesce into one bounded PTY scrape.
 	go func() { _ = cache.Refresh(src, refresher) }()
 	return subprocessDiscoveryPayload{}, false
+}
+
+func subprocessDiscoveryCacheSourceName(name string) string {
+	switch name {
+	case "claude-tui", "codex":
+		return name + "-models-" + completePickerDiscoveryCacheGeneration
+	default:
+		return name + "-models"
+	}
 }
 
 func decodeSubprocessDiscoveryPayload(data []byte) (subprocessDiscoveryPayload, bool) {
