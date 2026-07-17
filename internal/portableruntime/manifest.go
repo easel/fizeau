@@ -24,6 +24,7 @@ type Manifest struct {
 	EnvironmentNames    []string                      `json:"environment_names"`
 	Providers           ProviderSnapshot              `json:"providers"`
 	ProviderSecretsFile ManifestContentReference      `json:"provider_secrets_file"`
+	NamespaceLauncher   *ManifestContentReference     `json:"namespace_launcher,omitempty"`
 }
 
 type ManifestContentReference struct {

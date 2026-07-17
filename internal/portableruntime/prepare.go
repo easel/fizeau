@@ -66,7 +66,7 @@ func Prepare(ctx context.Context, request Request) (_ *Bundle, err error) {
 		}
 	}()
 
-	manifest, plans, err := buildPlan(ctx, request)
+	manifest, plans, launcher, err := buildPlan(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +100,12 @@ func Prepare(ctx context.Context, request Request) (_ *Bundle, err error) {
 		}
 		manifest.Assets[index].MaterializedSHA256 = materializedDigest
 		receipts[index] = receipt
+	}
+	if launcher != nil {
+		launcherDigest, writeErr := writeGeneratedFileWithMode(stage, namespaceLauncherTarget, launcher, 0o700)
+		if writeErr != nil || manifest.NamespaceLauncher == nil || launcherDigest != manifest.NamespaceLauncher.ContentSHA256 {
+			return nil, closureError("embedded runtime persistence", -1)
+		}
 	}
 
 	secretBytes, err := marshalProviderSecrets(request.ProviderSecrets)
@@ -179,7 +185,7 @@ func portableRuntimeCommitError(cause error) error {
 	return requestFailure
 }
 
-func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, error) {
+func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, []byte, error) {
 	manifest := Manifest{
 		Version:      manifestVersion,
 		TargetGOOS:   request.Target.GOOS,
@@ -189,7 +195,7 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 		Entrypoints:  make(map[string]ManifestEntrypoint),
 	}
 	if err := validateProviders(request.Providers, request.ProviderSecrets); err != nil {
-		return Manifest{}, nil, err
+		return Manifest{}, nil, nil, err
 	}
 
 	rows := append([]harnesses.PortableRuntimeSurface(nil), request.Inventory...)
@@ -212,10 +218,10 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 	}
 	for rowIndex, row := range rows {
 		if err := checkContext(ctx); err != nil {
-			return Manifest{}, nil, err
+			return Manifest{}, nil, nil, err
 		}
 		if err := validateSurface(row, rowIndex, seenRows); err != nil {
-			return Manifest{}, nil, err
+			return Manifest{}, nil, nil, err
 		}
 		seenRows[row.Name] = struct{}{}
 		manifest.Inventory = append(manifest.Inventory, ManifestSurface{Name: row.Name, Transport: row.Transport, Inclusion: row.Inclusion})
@@ -224,27 +230,27 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 		}
 		contributor, ok := row.Instance.(harnesses.PortableRuntimeHarness)
 		if !ok {
-			return Manifest{}, nil, closureError("required contributor capability", rowIndex)
+			return Manifest{}, nil, nil, closureError("required contributor capability", rowIndex)
 		}
 		contribution, err := contributor.PortableRuntimeAssets(ctx, request.Target)
 		if err != nil {
-			return Manifest{}, nil, closureError("required contributor discovery", rowIndex)
+			return Manifest{}, nil, nil, closureError("required contributor discovery", rowIndex)
 		}
 		normalized, err := harnesses.NormalizePortableRuntimeContribution(request.Target, contribution)
 		if err != nil {
-			return Manifest{}, nil, closureError("required contributor normalization", rowIndex)
+			return Manifest{}, nil, nil, closureError("required contributor normalization", rowIndex)
 		}
 		manifest.Entrypoints[row.Name] = manifestEntrypoint(row.Name, normalized)
 		for _, environment := range normalized.Environment {
 			value, present := os.LookupEnv(environment.Name)
 			if !present {
-				return Manifest{}, nil, closureError("required inherited environment", rowIndex)
+				return Manifest{}, nil, nil, closureError("required inherited environment", rowIndex)
 			}
 			environmentNames[environment.Name] = struct{}{}
 			forbiddenValues = append(forbiddenValues, value)
 		}
 		if err := mergeProjectionClaims(&projectionClaims, projectionAssets, &projectionOutputs, &requiredAbsent, normalized); err != nil {
-			return Manifest{}, nil, closureError("state projection conflict", rowIndex)
+			return Manifest{}, nil, nil, closureError("state projection conflict", rowIndex)
 		}
 		localProjected := make(map[string]struct{})
 		for _, projection := range normalized.StateProjections {
@@ -257,13 +263,13 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 			if mutableAsset(asset.Kind) {
 				_, projected := localProjected[asset.Target]
 				if previous, exists := mutableUsage[asset.Target]; exists && previous.projected != projected {
-					return Manifest{}, nil, closureError("mutable seed ownership conflict", rowIndex)
+					return Manifest{}, nil, nil, closureError("mutable seed ownership conflict", rowIndex)
 				}
 				mutableUsage[asset.Target] = mutableSeedUsage{projected: projected, owner: row.Name}
 			}
 			forbiddenValues = append(forbiddenValues, asset.Source)
 			if err := mergeAssetPlan(assets, asset); err != nil {
-				return Manifest{}, nil, closureError("asset target conflict", rowIndex)
+				return Manifest{}, nil, nil, closureError("asset target conflict", rowIndex)
 			}
 		}
 	}
@@ -274,10 +280,21 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 	}
 	sort.Strings(targets)
 	if err := validateTargetDisjointness(targets); err != nil {
-		return Manifest{}, nil, err
+		return Manifest{}, nil, nil, err
 	}
-	if err := validateAbsentRuntimeTargets(requiredAbsent, targets); err != nil {
-		return Manifest{}, nil, err
+	var launcher []byte
+	runtimeTargets := append([]string(nil), targets...)
+	if len(manifest.Entrypoints) > 0 {
+		artifact, artifactErr := namespaceLauncherForTarget(request.Target)
+		if artifactErr != nil {
+			return Manifest{}, nil, nil, closureError("embedded runtime identity", -1)
+		}
+		launcher = artifact.bytes
+		manifest.NamespaceLauncher = &ManifestContentReference{Target: namespaceLauncherTarget, ContentSHA256: artifact.digest}
+		runtimeTargets = append(runtimeTargets, namespaceLauncherTarget)
+	}
+	if err := validateAbsentRuntimeTargets(requiredAbsent, runtimeTargets); err != nil {
+		return Manifest{}, nil, nil, err
 	}
 	plans := make([]assetPlan, 0, len(targets))
 	for _, target := range targets {
@@ -285,7 +302,7 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 		plans = append(plans, plan)
 		disposition, err := seedDisposition(plan.asset, projectedSeeds)
 		if err != nil {
-			return Manifest{}, nil, err
+			return Manifest{}, nil, nil, err
 		}
 		manifest.Assets = append(manifest.Assets, ManifestAsset{
 			Kind:            plan.asset.Kind,
@@ -301,12 +318,12 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 	}
 	sort.Strings(manifest.EnvironmentNames)
 	if err := validateActivationGeneratedPaths(manifest); err != nil {
-		return Manifest{}, nil, closureError("generated path conflicts with required-absent path", -1)
+		return Manifest{}, nil, nil, closureError("generated path conflicts with required-absent path", -1)
 	}
 	if err := validateManifestText(manifest, forbiddenValues); err != nil {
-		return Manifest{}, nil, err
+		return Manifest{}, nil, nil, err
 	}
-	return manifest, plans, nil
+	return manifest, plans, launcher, nil
 }
 
 func mutableAsset(kind harnesses.PortableRuntimeAssetKind) bool {
@@ -434,6 +451,9 @@ func manifestTextFields(manifest Manifest) []string {
 		manifest.Providers.SessionLogDir.Field, manifest.Providers.SessionLogDir.Treatment,
 		manifest.Providers.SessionLogDir.Reason,
 	}
+	if manifest.NamespaceLauncher != nil {
+		fields = append(fields, manifest.NamespaceLauncher.Target, manifest.NamespaceLauncher.ContentSHA256)
+	}
 	fields = append(fields, manifest.EnvironmentNames...)
 	fields = append(fields, manifest.Providers.ProviderNames...)
 	for _, surface := range manifest.Inventory {
@@ -546,7 +566,7 @@ func mergeAssetPlan(plans map[string]*assetPlan, asset harnesses.PortableRuntime
 }
 
 func validateTargetDisjointness(targets []string) error {
-	reserved := []string{".fizeau", manifestTarget, manifestSum, providerSecrets}
+	reserved := []string{".fizeau", manifestTarget, manifestSum, providerSecrets, namespaceLauncherTarget}
 	for index, target := range targets {
 		for _, privateTarget := range reserved {
 			if pathsOverlap(target, privateTarget) {
@@ -612,6 +632,10 @@ func marshalProviderSecrets(secrets []ProviderSecret) ([]byte, error) {
 }
 
 func writeGeneratedFile(stage *stageHandle, target string, data []byte) (string, error) {
+	return writeGeneratedFileWithMode(stage, target, data, 0o600)
+}
+
+func writeGeneratedFileWithMode(stage *stageHandle, target string, data []byte, mode uint32) (string, error) {
 	if stage == nil || stage.file == nil {
 		return "", errors.New("staging handle is unavailable")
 	}
@@ -620,7 +644,7 @@ func writeGeneratedFile(stage *stageHandle, target string, data []byte) (string,
 		return "", err
 	}
 	defer closeDescriptor(parentFD)
-	fd, err := openExclusiveRegularAt(parentFD, leaf, 0o600)
+	fd, err := openExclusiveRegularAt(parentFD, leaf, mode)
 	if err != nil {
 		return "", err
 	}
@@ -703,6 +727,9 @@ func verifyStagedBundle(stage *stageHandle, expected Manifest, expectedDigest st
 			return errors.New("materialized asset content changed")
 		}
 	}
+	if err := verifyStagedNamespaceLauncher(stage, actual); err != nil {
+		return err
+	}
 	for _, target := range []string{manifestTarget, manifestSum, providerSecrets} {
 		file, err := openTargetRegular(descriptorFD(stage.file), target)
 		if err != nil {
@@ -715,6 +742,27 @@ func verifyStagedBundle(stage *stageHandle, expected Manifest, expectedDigest st
 		}
 	}
 	return verifyRestrictiveTree(stage)
+}
+
+func verifyStagedNamespaceLauncher(stage *stageHandle, manifest Manifest) error {
+	if manifest.NamespaceLauncher == nil {
+		return nil
+	}
+	artifact, err := namespaceLauncherForTarget(harnesses.PortableRuntimeTarget{GOOS: manifest.TargetGOOS, GOARCH: manifest.TargetGOARCH})
+	if err != nil || manifest.NamespaceLauncher.Target != namespaceLauncherTarget || manifest.NamespaceLauncher.ContentSHA256 != artifact.digest {
+		return errors.New("embedded runtime identity changed")
+	}
+	file, err := openTargetRegular(descriptorFD(stage.file), namespaceLauncherTarget)
+	if err != nil {
+		return err
+	}
+	info, statErr := file.Stat()
+	data, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+	if statErr != nil || readErr != nil || closeErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o700 || !bytes.Equal(data, artifact.bytes) {
+		return errors.New("embedded runtime content changed")
+	}
+	return nil
 }
 
 func decodeManifest(manifestBytes, sumBytes []byte, expected Manifest) (Manifest, error) {

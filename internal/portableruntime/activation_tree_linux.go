@@ -68,7 +68,7 @@ func activationTreeDigestWithHook(root *safefs.NoFollowRoot, target string, afte
 	return hex.EncodeToString(manifest.Sum(nil)), nil
 }
 
-func validateActivationDeclaredPaths(root *safefs.NoFollowRoot, assets []ManifestAsset) error {
+func validateActivationDeclaredPaths(root *safefs.NoFollowRoot, assets []ManifestAsset, includeNamespaceLauncher bool) error {
 	directory, err := root.OpenDirectoryNoFollow("")
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func validateActivationDeclaredPaths(root *safefs.NoFollowRoot, assets []Manifes
 		return err
 	}
 	for _, record := range records {
-		if activationPrivatePathAllowed(record) || activationAssetPathAllowed(record, assets) {
+		if activationPrivatePathAllowed(record, includeNamespaceLauncher) || activationAssetPathAllowed(record, assets) {
 			continue
 		}
 		return os.ErrInvalid
@@ -90,13 +90,15 @@ func validateActivationDeclaredPaths(root *safefs.NoFollowRoot, assets []Manifes
 	return nil
 }
 
-func activationPrivatePathAllowed(record activationTreeRecord) bool {
+func activationPrivatePathAllowed(record activationTreeRecord, includeNamespaceLauncher bool) bool {
 	if record.name == ".fizeau" {
 		return record.kind == 'd'
 	}
 	switch record.name {
 	case manifestTarget, manifestSum, providerSecrets:
 		return record.kind == 'f'
+	case namespaceLauncherTarget:
+		return includeNamespaceLauncher && record.kind == 'f'
 	default:
 		return false
 	}

@@ -81,3 +81,36 @@ func TestPortableRuntimeMaterializerHasNoExecutionSideEffects(t *testing.T) {
 		t.Fatalf("Renameat2 commit call count = %d, want exactly 1", renameCount)
 	}
 }
+
+func TestPortableRuntimeNamespaceLauncherSelectionIsTargetOnly(t *testing.T) {
+	_, current, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate portable runtime package")
+	}
+	file := filepath.Join(filepath.Dir(current), "namespace_launcher.go")
+	parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, imported := range parsed.Imports {
+		value, err := strconv.Unquote(imported.Path.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"os", "os/exec", "runtime", "/internal/config", "/internal/provider", "/internal/routing", "/internal/harnesses/"} {
+			if value == forbidden || strings.Contains(value, forbidden) {
+				t.Errorf("namespace launcher selection imports forbidden discovery dependency %q", value)
+			}
+		}
+	}
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		literal, ok := node.(*ast.BasicLit)
+		if ok && literal.Kind == token.STRING {
+			value, err := strconv.Unquote(literal.Value)
+			if err == nil && (value == "PATH" || strings.Contains(value, "os.Executable") || strings.Contains(value, "LookPath")) {
+				t.Errorf("namespace launcher selection references host discovery value %q", value)
+			}
+		}
+		return true
+	})
+}

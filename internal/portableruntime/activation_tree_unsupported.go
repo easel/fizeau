@@ -14,6 +14,6 @@ func activationTreeDigestWithHook(*safefs.NoFollowRoot, string, func()) (string,
 	return "", safefs.ErrNoFollowRootUnsupported
 }
 
-func validateActivationDeclaredPaths(*safefs.NoFollowRoot, []ManifestAsset) error {
+func validateActivationDeclaredPaths(*safefs.NoFollowRoot, []ManifestAsset, bool) error {
 	return safefs.ErrNoFollowRootUnsupported
 }

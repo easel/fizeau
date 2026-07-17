@@ -209,6 +209,9 @@ func validateActivationManifest(runtimeRoot string, root *safefs.NoFollowRoot, m
 	if err := validateActivationInventory(manifest); err != nil {
 		return err
 	}
+	if err := validateActivationNamespaceLauncher(root, manifest); err != nil {
+		return err
+	}
 	if err := validateActivationAssets(runtimeRoot, root, manifest); err != nil {
 		return err
 	}
@@ -315,7 +318,7 @@ func validateActivationAssets(runtimeRoot string, root *safefs.NoFollowRoot, man
 	if err := validateTargetDisjointness(targets); err != nil {
 		return activationError("asset target overlap")
 	}
-	if err := validateActivationDeclaredPaths(root, manifest.Assets); err != nil {
+	if err := validateActivationDeclaredPaths(root, manifest.Assets, manifest.NamespaceLauncher != nil); err != nil {
 		return activationError("undeclared runtime content")
 	}
 
@@ -406,8 +409,38 @@ func validateActivationAssets(runtimeRoot string, root *safefs.NoFollowRoot, man
 			return err
 		}
 	}
-	if err := validateAbsentRuntimeTargets(requiredAbsent, targets); err != nil {
+	runtimeTargets := append([]string(nil), targets...)
+	if manifest.NamespaceLauncher != nil {
+		runtimeTargets = append(runtimeTargets, namespaceLauncherTarget)
+	}
+	if err := validateAbsentRuntimeTargets(requiredAbsent, runtimeTargets); err != nil {
 		return activationError("required-absent runtime path")
+	}
+	return nil
+}
+
+func validateActivationNamespaceLauncher(root *safefs.NoFollowRoot, manifest Manifest) error {
+	if len(manifest.Entrypoints) == 0 {
+		if manifest.NamespaceLauncher != nil {
+			return activationError("private runtime cardinality")
+		}
+		return nil
+	}
+	if manifest.NamespaceLauncher == nil || manifest.NamespaceLauncher.Target != namespaceLauncherTarget {
+		return activationError("private runtime reference")
+	}
+	artifact, err := namespaceLauncherForTarget(harnesses.PortableRuntimeTarget{GOOS: manifest.TargetGOOS, GOARCH: manifest.TargetGOARCH})
+	if err != nil || manifest.NamespaceLauncher.ContentSHA256 != artifact.digest {
+		return activationError("private runtime identity")
+	}
+	if err := verifyActivationAsset(root, ManifestAsset{
+		PathKind:           harnesses.PortableRuntimePathFile,
+		Target:             namespaceLauncherTarget,
+		ContentSHA256:      artifact.digest,
+		MaterializedSHA256: artifact.digest,
+		Executable:         true,
+	}); err != nil {
+		return activationError("private runtime content")
 	}
 	return nil
 }
@@ -492,6 +525,10 @@ func cloneProviderSecrets(src []ProviderSecret) []ProviderSecret {
 
 func cloneManifest(src Manifest) Manifest {
 	out := src
+	if src.NamespaceLauncher != nil {
+		reference := *src.NamespaceLauncher
+		out.NamespaceLauncher = &reference
+	}
 	out.Inventory = append([]ManifestSurface(nil), src.Inventory...)
 	out.Assets = append([]ManifestAsset(nil), src.Assets...)
 	out.EnvironmentNames = append([]string(nil), src.EnvironmentNames...)

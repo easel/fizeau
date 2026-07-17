@@ -23,10 +23,11 @@ const (
 	SessionLogDirField       = "SessionLogDir"
 	SessionLogExcludedReason = "service session logs are not portable"
 
-	manifestVersion = 1
-	manifestTarget  = ".fizeau/activation.json"
-	manifestSum     = ".fizeau/activation.sha256"
-	providerSecrets = ".fizeau/provider-secrets.json" // #nosec G101 -- private guest-relative filename, not a credential value.
+	manifestVersion         = 1
+	manifestTarget          = ".fizeau/activation.json"
+	manifestSum             = ".fizeau/activation.sha256"
+	providerSecrets         = ".fizeau/provider-secrets.json" // #nosec G101 -- private guest-relative filename, not a credential value.
+	namespaceLauncherTarget = ".fizeau/namespace-launcher"
 )
 
 var (
