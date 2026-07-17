@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
+    self_hash: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
     deps:
-      CONTRACT-003: 4b053cfd0c66bafac8dedbda6c6d32b724f27ec2db13ec2eff37a9b6683dbb24
+      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-17T06:25:57Z"
+    reviewed_at: "2026-07-17T10:48:01Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -653,9 +653,34 @@ config, quota state, cache state, required runtime support, and inherited
 environment names. It also owns declaration of execution constraints required
 to keep that closure closed. The neutral materializer owns generic validation,
 canonical private persistence, copying, permissions, staging, rollback,
-public-plan projection, and cleanup. Activation owns generic enforcement of the
-persisted constraints. Service and activation code MUST NOT reproduce an
+public-plan projection, and cleanup. For every bundle with a structurally
+included subprocess, the neutral preparation layer also owns exactly one
+service-level, content-addressed namespace launcher. It is a target-specific,
+statically linked, single-threaded artifact built from versioned Fizeau Zig
+source and embedded with a compile-time digest; preparation copies those bytes
+to the fixed `.fizeau/namespace-launcher` target and never discovers a host
+executable. Harness assets may not claim an exact, ancestor, or descendant
+overlap with that target. This support closure is not attributed to a harness,
+surface, or candidate and is not repeated per entrypoint. Activation
+owns generic backing-storage assembly and compilation
+of the persisted constraints into a per-entrypoint namespace recipe; the
+exact endpoint-aware canonical runner binding owns application of that recipe
+at its sole `internal/processlifecycle` child-creation seam before harness exec.
+No dispatcher wrapper, fresh runner, or parallel instance map may apply it.
+Service and activation code MUST NOT reproduce an
 OpenCode-, Claude-, Codex-, Gemini-, or other harness-specific rule.
+
+The checked launcher source is
+`internal/portableruntime/nslauncher/main.zig`. The only update path is
+`scripts/generate-portable-namespace-launcher.sh --write`; the
+`make portable-namespace-launcher-check` gate requires Zig 0.16.0 and rebuilds
+both `x86_64-linux-musl`/`linux-amd64` and
+`aarch64-linux-musl`/`linux-arm64` with `-O ReleaseSmall`, `-static`, `-fstrip`,
+`-fsingle-threaded`, and no build ID. It compares every byte and generated
+digest. Ordinary tests verify checked bytes, digest, ELF/arch/static shape,
+single-thread startup, reserved-target collision rejection, and manifest copy.
+The required `portable-namespace-launcher` workflow job and release gate run
+the same check command.
 
 ### Portable runtime execution constraints
 
@@ -714,19 +739,78 @@ an asset source. Contributor discovery verifies the original source, and the
 materializer revalidates source identity, content, file type, and symlink
 absence while copying and persists the normalized projection.
 
-Activation MUST assemble each projection through a filesystem or mount-
-namespace enforcement boundary. The projection directory's identity MUST
-resist unlink, rename, replacement, and shadowing by the harness UID. Every
-`config` member MUST resist write, unlink, rename, replacement, and shadowing,
-while credential/quota/cache members remain refreshable and declared lock files
-plus unprojected siblings remain creatable in the directory. Owner-only or
-read-only mode bits on ordinary files inside a writable parent are
-insufficient: that parent would still permit unlink, rename, replacement, or
-shadowing. Activation therefore MUST make the projection root and immutable
-members namespace-owned boundaries while selectively exposing writable state
-members and sibling space; it MUST verify these properties before process
-start. Configuration assets outside a state projection remain read-only
-runtime assets and do not use either state-seed rule.
+Activation MUST assemble each projection's backing storage and compile a
+generic mount-namespace recipe. The production spawn path MUST apply that
+recipe before the harness executable starts. The projection directory's
+identity MUST resist unlink, rename, replacement, and shadowing by the harness
+UID. Every `config` member MUST resist write, unlink, rename, replacement, and
+shadowing, while credential/quota/cache members remain refreshable and
+declared lock files plus unprojected siblings remain creatable in the
+directory. Owner-only or read-only mode bits on ordinary files inside a
+writable parent are insufficient: that parent would still permit unlink,
+rename, replacement, or shadowing.
+
+The namespace recipe MUST descriptor-pin every identity-bearing activation
+directory or mountpoint and each required-absent parent; mutable credential,
+quota, and cache leaves deliberately remain replaceable. It then read-only
+binds each exact verified runtime config asset at its declared output.
+Protecting only the leaf or projection directory is insufficient because a
+writable ancestor could be renamed to shadow the whole subtree. Before any
+bind, the service-owned namespace launcher makes mount propagation recursively
+private and uses descriptor-relative `open_tree`, `move_mount`, and
+`mount_setattr` operations so path replacement cannot retarget the recipe.
+Immutable-member binds apply last.
+
+The activation process's current effective UID and primary GID are the mapping
+authority. Both MUST be nonzero and its supplementary-group list MUST be empty;
+process-free activation rejects any other identity. The canonical spawn seam
+atomically creates the single-threaded launcher with
+`CLONE_NEWUSER|CLONE_NEWNS|CLONE_NEWPID`, gates it while the parent writes the
+single-ID setup maps `0 <activation-euid> 1` and
+`0 <activation-egid> 1` (`setgroups=deny` before `gid_map`), and releases it as
+namespace UID/GID 0 only after parent and child both verify the empty group
+list. The same lifecycle-owned direct child remains the outer session leader
+and lifecycle target process-group leader while becoming PID 1 inside the new
+namespace. It mounts a private `/proc`, applies the descriptor-pinned recipe,
+and remains sole owner of lifecycle control, gate, mount, recipe, and pidfd
+descriptors.
+
+PID 1 clones a second stage into a nested single-ID user namespace with maps
+`<activation-euid> 0 1` and `<activation-egid> 0 1`. That namespace inherits
+and verifies the permanent `setgroups=deny` state and empty group list. Both
+launcher processes prove they have exactly one task before authority drop. PID
+1 sets `PR_SET_DUMPABLE=0`, sets and locks `NOROOT`, `NO_SETUID_FIXUP`,
+`KEEP_CAPS` off, and `NO_CAP_AMBIENT_RAISE` plus their corresponding securebits
+locks, then clears every inheritable, effective, permitted, bounding, and
+ambient capability, sets `no_new_privs`, installs a persistent filter that
+forbids later thread/namespace/mount creation or mutation, and closes setup
+descriptors. The second stage independently applies
+the same single-threaded authority drop, duplicates the exact batch-pipe or
+PTY-slave attachment onto descriptors 0, 1, and 2, and closes every other
+descriptor including lifecycle control, gate, recipe, mount descriptors, and
+pidfds before exec. Its persistent filter rejects `unshare`, `setns`, mount
+mutation, `ptrace`, `process_vm_readv`, `process_vm_writev`, `pidfd_getfd`, and
+`clone` with `CLONE_NEWUSER`; `clone3` returns `ENOSYS` so ordinary threading
+can fall back to permitted non-namespace `clone`. It returns `EPERM` for
+`kill(1, ...)`, `kill(-1, ...)`, `tkill(1, ...)`, any `tgkill` whose thread
+group or thread ID is 1, `rt_sigqueueinfo` whose target is 1 or -1, any
+`rt_tgsigqueueinfo` whose thread group or thread ID is 1, `pidfd_open(1, ...)`,
+and every `pidfd_send_signal`. Ordinary signalling of harness descendants
+remains available, but the untrusted harness cannot directly or indirectly
+signal its trusted namespace PID 1. All prohibited operations return `EPERM`.
+
+The launcher is the lifecycle target/session leader. The harness uses a
+distinct process group. PID 1 exclusively bridges supervisor-originated cleanup
+signals from its own target group to the harness group, so the harness never
+receives both a direct and forwarded copy. For PTY execution PID 1 owns the
+controlling terminal and makes the harness group foreground; terminal
+job-control signals therefore reach the harness directly. PID 1 reaps the full
+namespace through terminal descendant cleanup and then mirrors the primary
+harness child's exact `WaitStatus`. The launcher performs no shell or ambient
+`PATH` selection and passes the activation-owned closed environment. Namespace
+setup or authority-drop failure is fail-closed. Configuration assets outside a
+state projection remain read-only runtime assets and do not use either
+state-seed rule.
 
 Typed environment treatments have these exact meanings:
 
@@ -774,11 +858,19 @@ path MUST be disjoint from every declared asset, read-only path, explicitly
 generated `guest_path`, concrete state-projection output, and other
 required-absent path under exact, ancestor, and descendant comparison. The
 containing writable state-projection directory is not itself a conflict, so a
-contributor can forbid an undeclared generated sibling. Activation MUST verify every declared path
-immediately before every harness process start, including the first; an earlier
-launch creating a path in a writable generated scope therefore prevents every
-later launch until the runtime is destroyed. Fizeau's activation and service
-code MUST NOT create a declared path between validation and process start.
+contributor can forbid an undeclared generated sibling. A portable activation
+root has one exclusive subprocess lease: every portable subprocess invocation
+acquires it before namespace/path revalidation and retains it through terminal
+descendant cleanup. This intentionally serializes portable subprocesses that
+share writable backing storage and removes another harness invocation as an
+absence-check race actor. Activation MUST verify every declared path as the
+final namespace-stage filesystem operation before every harness `execve`,
+including the first. Absence is a launch-time precondition, not a lifetime
+reservation against the trusted embedding caller or the launched harness
+itself. An earlier launch that created the path before a later launch's final
+check therefore prevents that later launch until the path or runtime is
+destroyed. Fizeau's activation and service code MUST NOT create a declared path
+between validation and process start.
 
 Environment constraints sort by `Name`; read-only and required-absent paths
 sort by `Scope`, then `Target`. Duplicate or conflicting rules fail with
@@ -1677,6 +1769,27 @@ by `go vet`-shaped tooling:
     identity and symlinks. Activation/OCI tests prove projected config cannot be
     written, unlinked, renamed, replaced, or shadowed while credential refresh,
     lock creation, and sibling state creation succeed.
+    `TestPortableRuntimeNamespaceLauncherArtifactParity` proves the
+    target-indexed static launcher's checked-in bytes match its digest, are a
+    same-target static single-threaded ELF, occupy the exact collision-proof
+    `.fizeau/namespace-launcher` target exactly when subprocesses are present,
+    and remain absent from public/diagnostic surfaces.
+    `make portable-namespace-launcher-check` and its required workflow job
+    rebuild both supported targets and prove source/version-to-byte parity.
+    `TestPortableRuntimeNamespaceLauncherDropsAuthority`,
+    `TestPortableRuntimeNamespaceLauncherLifecycle`,
+    `TestPortableRuntimeExclusiveSubprocessLease`, and the required OCI
+    projection adversaries prove descriptor-relative private mount setup,
+    immutable ancestor/config behavior, exclusive activation leasing,
+    required-absent timing, rejected zero UID/GID or non-empty supplementary
+    groups, both namespace stages' UID/GID and every task's capability/
+    `NoNewPrivs`/seccomp state, single-threaded PID 1, ordinary harness
+    threading, descriptor closure, non-dumpable supervisor plus ptrace/process-
+    VM/proc-fd/pidfd isolation, distinct launcher/harness process groups,
+    non-duplicated signal bridging, PTY foreground ownership, exact mirrored
+    status/caller-death propagation, descendant reaping, mutable atomic refresh
+    and sibling creation, and fail-closed setup without harness exec. Both
+    Linux architectures execute this adversary matrix natively.
 29. `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`,
     `TestPortableRuntimeNodeInterpreterIdentity`, and
     `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove that interpreted

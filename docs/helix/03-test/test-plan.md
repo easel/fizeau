@@ -3,6 +3,8 @@ ddx:
   id: TP-001
   depends_on:
     - helix.prd
+    - CONTRACT-003
+    - CONTRACT-004
     - US-001
     - US-002
     - US-003
@@ -12,8 +14,10 @@ ddx:
     - US-007
     - US-008
   review:
-    self_hash: 6c4ab91699f822620ed7176769f969bc7f54b3ed1b1233e4d0643548f40cfdb9
+    self_hash: 2cc79f66b979ddee32ac4016b9aa7ce73fff45ba12b223584961eabc3bef9958
     deps:
+      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
+      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
       US-001: 83ee6bdfd89336cf77cb0dd2a1f6d8250baf1de494605112a56ef21b835c9b83
       US-002: 6d7fad544c6ba871e42c6b6b2b4926d9e2a78b7c1e69f294fd14d46cca157aff
       US-003: f204f2e58a405ef53c8a3bab96afcf242e755ec10bbe85b1d7985e81b95abe81
@@ -23,7 +27,7 @@ ddx:
       US-007: f7d77406d905f1c80b62432b28060e560dc7c8d811124159f3650ff2ab914ebf
       US-008: ec847be580408d23190b47f052551b4f7638365ab373de68e57d8ee06fb2bc4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T11:01:22Z"
+    reviewed_at: "2026-07-17T10:48:02Z"
 ---
 # Test Plan — Fizeau
 
@@ -88,6 +92,28 @@ parses zero packages is a measurement error, never a passing zero-row report.
 4. Per-turn measurement, replay, and explicit unknown cost semantics.
 5. CLI delegation through the public facade.
 
+### Portable Runtime Lane Allocation
+
+Portable activation has native non-skipping amd64 and arm64 Linux security jobs
+in addition to ordinary and race tests. The lanes divide evidence as follows:
+
+| Lane | Required evidence |
+|---|---|
+| Ordinary repository tests | Manifest/provider verification; closed per-entrypoint environment; unsafe activation UID/GID/group rejection; owner-only scope creation; prefix/projection seed mapping and double-copy prevention; checked-in launcher bytes/digest/ELF/GOARCH/static/single-thread shape and exact reserved target; public and diagnostic opacity; `PortableRuntimeBundle.Close` ownership |
+| Focused race tests | `TestPortableRuntimeExclusiveSubprocessLease` proves same-root serialization through descendant cleanup, queued cancellation without spawn, terminal-path release, independent-root concurrency, and teardown cleanup |
+| `portable-namespace-launcher` generation job | `make portable-namespace-launcher-check` requires Zig 0.16.0 and rebuilds both x86_64-linux-musl/linux-amd64 and aarch64-linux-musl/linux-arm64 with the governed static, stripped, single-threaded flags; every checked artifact byte and digest must match |
+| Native `portable-runtime-oci-{amd64,arm64}` jobs | `make test-portable-runtime-oci` on `ubuntu-24.04` and `ubuntu-24.04-arm` verifies the repo-pinned Docker 29.6.2/runc toolchain and Linux >=6.12 feature preflight, then runs static/dynamic/interpreted unpinned Execute; every governed ancestor and config mutation/shadow attack including `RENAME_EXCHANGE`; mutable in-place/truncate/atomic replacement plus locks and siblings; final required-absent check under the exclusive lease; exact two-stage UID/GID maps and empty groups; every PID-1/harness task's CapInh/Prm/Eff/Bnd/Amb, securebits, `NoNewPrivs`, and seccomp state; single-threaded non-dumpable PID 1; ptrace/process-VM/proc-mem/proc-fd/pidfd isolation; descriptor closure and private `/proc`; `EPERM` for direct, queued, thread-directed, process-group, and pidfd signal paths to PID 1; seccomp errno and ordinary-thread fallback; setup failure without harness exec; distinct process groups, non-duplicated signal bridging, PTY foreground, exact status/caller-death/grandchild cleanup; OpenCode auth plus log/database siblings |
+
+Each native OCI job fails rather than skips on an architecture mismatch,
+unpinned runtime, Linux below 6.12, or failed namespace/syscall/seccomp feature
+preflight. It builds its `FROM scratch` fixture without a pull and invokes the
+consumer as `65532:65532` with no supplementary groups, all capabilities
+dropped, no network, a read-only root, exact mounts, and no privileged/cap-add
+option. A sentinel environment value must appear only in the
+child environment, never launcher argv, sealed-recipe diagnostics, JSON, or
+public plan data. Recipe tamper, map/gate failure, and unsupported mount syscalls
+must fail before the governed harness target executes.
+
 ### Known Contract-to-Code Gaps
 
 These desired contracts are intentionally not counted as passing evidence:
@@ -144,7 +170,7 @@ relevant assertion is `ASSERTED_UNBACKED`.
 |---|---|
 | CI tool | GitHub Actions using Go from `go.mod` |
 | Services | None for the default suite; local servers and subprocess cassettes only |
-| Platform jobs | Linux default/race; Linux and macOS installer acceptance |
+| Platform jobs | Linux default/race; pinned `portable-namespace-launcher`; native `portable-runtime-oci-amd64` and `portable-runtime-oci-arm64`; Linux and macOS installer acceptance |
 | Browser | Hugo plus Playwright Chromium for workbench smoke |
 
 ## Risks
@@ -170,7 +196,8 @@ contract check remains `UNIMPLEMENTED`.
 ## Build Handoff
 
 **Commands**: `go test -count=1 ./...` | `make test-race` |
-`make coverage-ratchet`
+`make coverage-ratchet` | `make portable-namespace-launcher-check` |
+`make test-portable-runtime-oci`
 
 **Priority**: focused structural acceptance first, then repository gates.
 

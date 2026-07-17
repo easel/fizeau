@@ -315,15 +315,46 @@ candidate set.
 
 The generated private manifest records structural candidate identities,
 entrypoints relative to `PortableRuntimeGuestRoot()`, environment requirements,
-and a field-exhaustive effective provider projection. `NewFromPortableRuntime`
-is the only public activation entrypoint. It reads that manifest from the fixed
-guest root, verifies its version and content identities, reconstructs the
-service config and the production execution-dispatch launch mapping, creates
-owner-only guest-private writable overlays for unprojected prefix-preserving
-credential, quota, and cache state seeds, assembles projection-consumed mixed
-native state directories through the immutable-member enforcement boundary
-defined by CONTRACT-004, and
-supplies Fizeau-owned path and locale variables to harness launches. A
+and a field-exhaustive effective provider projection. Every bundle with a
+structurally included subprocess also includes exactly one service-owned,
+content-addressed namespace launcher. The launcher is a target-specific,
+statically linked, single-threaded artifact built from versioned Fizeau Zig
+source and embedded in the module for the selected GOOS/GOARCH; preparation
+copies those embedded bytes and verifies their compile-time digest rather than
+discovering a host executable. It is a generic activation dependency, not a
+harness contribution, and is invoked only at the fixed private target
+`.fizeau/namespace-launcher` beneath `PortableRuntimeGuestRoot()`, never through
+ambient `PATH`. Harness contributions may not claim that target or any exact,
+ancestor, or descendant overlap. A target without an embedded verified launcher
+fails as an incomplete closure.
+
+The checked source is `internal/portableruntime/nslauncher/main.zig`.
+`make portable-namespace-launcher-check` requires Zig 0.16.0, invokes
+`scripts/generate-portable-namespace-launcher.sh --check` for both
+`x86_64-linux-musl`/`linux-amd64` and
+`aarch64-linux-musl`/`linux-arm64`, and fails unless its `-O ReleaseSmall`,
+`-static`, `-fstrip`, `-fsingle-threaded`, and no-build-id outputs equal every
+checked-in artifact and generated SHA-256 digest. The corresponding `--write`
+mode is the only update path. Ordinary tests verify checked bytes, digest, ELF
+shape, static linkage, and the absence of any second thread before authority
+drop. The required `portable-namespace-launcher` job in
+`.github/workflows/ci.yml` runs the check command; the release gate runs it
+again before packaging.
+
+`NewFromPortableRuntime` is the only public activation entrypoint. It reads
+that manifest from the fixed guest root, verifies its version and content
+identities, reconstructs the service config and the production
+execution-dispatch launch mapping, creates owner-only guest-private writable
+backing storage for unprojected prefix-preserving credential, quota, and cache
+state seeds, assembles projection-consumed mutable seeds at their native
+targets, and compiles the generic per-entrypoint namespace recipe defined by
+CONTRACT-004. The constructor supplies Fizeau-owned path and locale variables
+to harness launches but does not enter a namespace or start a process. The
+namespace recipe becomes effective atomically in the production spawn path:
+the verified service-owned launcher creates the child user and mount
+namespaces, applies the projection boundaries, removes setup capabilities,
+sets `no_new_privs`, and only then executes the governed harness command as the
+mapped non-root UID. A
 scheduler-only refresh map is insufficient: the later `Execute` must consume the
 activated launch recipe. Activation does not depend on the
 application-only `internal/config` loader. That overlay belongs to the external
@@ -343,11 +374,37 @@ no route, contacts no provider, and starts no harness. A separately built
 public-package consumer can therefore construct the in-runtime service without
 importing an internal package or understanding a harness/provider path.
 
-The external runtime MUST map the preparing numeric UID as the guest execution
-UID, or provide an equivalent user-namespace identity that can read and execute
-the owner-only mounted tree without changing its modes. The required Linux OCI
-job runs the consumer as a mapped non-root UID. Broadening bundle permissions or
-running the conformance consumer as container root is not accepted evidence.
+The activation process's current effective UID and primary GID are the mapping
+authority. Both MUST be nonzero and its supplementary-group list MUST be empty;
+`NewFromPortableRuntime` validates those facts without starting a process before
+constructing service state. The external runtime MUST give that identity read
+and execute access to the owner-only mounted tree without broadening its modes.
+The required Linux OCI jobs run the consumer as exact UID/GID `65532:65532`
+with no supplementary groups. Running the consumer as container root, with
+primary group zero, or with any supplementary group is invalid activation and
+not accepted evidence.
+The outer runtime MUST also permit the verified namespace launcher to create
+the nested user, mount, and PID namespaces needed for a child invocation.
+Activation never requests a privileged outer container or a host
+`CAP_SYS_ADMIN`; an unavailable nested-user-namespace facility fails closed
+before the harness executable starts. The v0.15 Linux floor includes
+`open_tree(2)`, `move_mount(2)`, and recursive `mount_setattr(2)` support.
+
+The non-skipping workflow jobs `portable-runtime-oci-amd64` and
+`portable-runtime-oci-arm64` run natively on GitHub's `ubuntu-24.04` and
+`ubuntu-24.04-arm` labels. `make test-portable-runtime-oci` invokes
+`scripts/test-portable-runtime-oci.sh`, verifies the pinned Docker Engine/CLI
+29.6.2 and runc version/checksums recorded in
+`scripts/toolchains/portable-runtime.env`, rejects a kernel older than 6.12,
+and runs live feature preflights for user/mount/PID namespaces, seccomp filter,
+`open_tree`, `move_mount`, and recursive `mount_setattr`. It builds a checked
+`FROM scratch` fixture without network or image pulls, then invokes it with
+`--user 65532:65532`, `--cap-drop=ALL`, `--network=none`, `--read-only`, exact
+read-only bundle plus writable activation mounts, and only
+`seccomp=unconfined`/`apparmor=unconfined` outer security options so the inner
+launcher can install its stricter policy. The script rejects `--privileged`,
+`--cap-add`, an architecture mismatch, a non-empty `Groups:` line, skipped
+tests, or any failed feature probe.
 
 ### Materialization, secrecy, and cleanup
 
@@ -377,6 +434,79 @@ unprojected state asset such as `data/opencode/auth.json` becomes `auth.json`
 beneath the generated OpenCode data directory, while a projected Gemini or Pi
 seed uses its exact projection entry. Validation failure, copy failure,
 context cancellation, or commit failure removes every staging artifact.
+
+Activation persists no ambient namespace-helper path. Its private recipe names
+only the verified launcher closure under `PortableRuntimeGuestRoot()`, generated
+scope and projection targets, and immutable runtime asset targets. Every
+identity-bearing activation directory or mountpoint and each required-absent
+parent is descriptor-pinned; mutable credential, quota, and cache leaves remain
+replaceable. Otherwise the harness could rename an ancestor and shadow the
+protected descendant. The launcher first makes mount propagation recursively
+private, uses descriptor-relative `open_tree`, `move_mount`, and
+`mount_setattr` operations rather than path re-resolution, and read-only binds
+each projected config member last.
+
+The canonical spawn seam atomically creates the single-threaded launcher with
+`CLONE_NEWUSER|CLONE_NEWNS|CLONE_NEWPID`, gates it while the parent writes the
+single-ID setup maps `0 <activation-euid> 1` and
+`0 <activation-egid> 1` (`setgroups=deny` before `gid_map`), then releases it as
+namespace UID/GID 0. Parent and child both verify the activation process's
+supplementary-group list was empty; mapping or gate failure releases no harness
+executable. The same `internal/processlifecycle`-owned direct child remains the
+lifecycle target, outer session leader, and target process-group leader while
+becoming PID 1 inside the new PID namespace. It mounts a private `/proc`, makes
+mount propagation private, applies the descriptor-pinned recipe, and remains
+the only owner of lifecycle control, gate, mount, recipe, and pidfd descriptors.
+
+PID 1 then clones its second stage into a nested single-ID user namespace whose
+maps are `<activation-euid> 0 1` and `<activation-egid> 0 1`. The nested
+namespace inherits and verifies the permanent `setgroups=deny` state and the
+empty supplementary-group list. Before releasing that stage, both launcher
+processes prove `/proc/<pid>/task` contains exactly one thread. PID 1 sets
+`PR_SET_DUMPABLE=0`, then sets and locks the restrictive securebits word:
+`NOROOT`, `NO_SETUID_FIXUP`, `KEEP_CAPS` off, and `NO_CAP_AMBIENT_RAISE`, with
+each corresponding lock bit. Only then does it clear every inheritable,
+effective, permitted, bounding, and ambient capability, set `no_new_privs`,
+install its persistent post-setup seccomp filter, and close setup descriptors.
+Its filter rejects all later thread/namespace/mount creation or mutation. The second stage
+independently performs the same single-threaded authority drop, retaining only
+file descriptors 0, 1, and 2 after exact batch-pipe or PTY-slave duplication;
+it never inherits the lifecycle channel, gate, recipe, mount descriptors, or
+pidfds. It closes its sealed recipe input before harness exec and installs a
+persistent filter that rejects `unshare`, `setns`, mount mutation, `ptrace`,
+`process_vm_readv`, `process_vm_writev`, `pidfd_getfd`, and `clone` with
+`CLONE_NEWUSER`. `clone3` returns `ENOSYS` so ordinary threading can fall back
+to permitted non-namespace `clone`. The filter also returns `EPERM` for
+`kill(1, ...)`, `kill(-1, ...)`, `tkill(1, ...)`, any `tgkill` whose thread
+group or thread ID is 1, `rt_sigqueueinfo` whose target is 1 or -1, any
+`rt_tgsigqueueinfo` whose thread group or thread ID is 1, `pidfd_open(1, ...)`,
+and every `pidfd_send_signal`. This target-aware rule leaves ordinary
+harness-child signalling available but prevents the untrusted harness from
+driving its trusted PID-1 supervisor. All prohibited operations return
+`EPERM`.
+
+The harness stage enters a distinct process group. PID 1 alone receives
+supervisor-originated cleanup signals sent to the lifecycle target group and
+bridges each to the harness group, preventing direct-plus-forwarded duplicates.
+For PTY execution PID 1 owns the controlling terminal and transfers foreground
+ownership to the harness group, so terminal job-control signals reach that
+foreground group directly. PID 1 reaps the entire namespace, waits for terminal
+descendant cleanup, and only then mirrors the primary harness child's exact
+`WaitStatus`; caller-death and cancellation use the same bridge. It passes the
+closed environment through the child environment rather than command-line
+assignments. Namespace setup or authority-drop failure is fail-closed and no
+harness command starts. All portable subprocess launches sharing one activation
+root use the single exclusive subprocess lease defined by CONTRACT-004 from
+pre-spawn revalidation through terminal descendant cleanup.
+
+Ownership has three non-overlapping layers. `PortableRuntimeBundle` owns only
+the prepared host `runtime` child and its staging remnants. The external
+runtime owns the successful activation backing root and destroys it only after
+stopping the service runtime. Each launcher invocation owns only its ephemeral
+user, mount, and PID namespaces, which disappear after its supervised process
+tree exits. Activation failure removes its partial backing-storage staging;
+successful activation and namespace teardown never write back to or remove the
+read-only bundle.
 
 The caller applies the one mount and inherited environment names verbatim
 without interpreting provider or harness semantics, then calls
@@ -1859,7 +1989,7 @@ that prove:
     `Close`; they prove only the committed child and Fizeau staging remnants are
     removed, the caller-owned destination becomes empty, and cleanup neither
     stops an external container nor touches process-lifecycle ownership.
-29. A required Linux OCI job builds a public-package consumer without pulling
+29. Required native Linux amd64 and arm64 OCI jobs build a public-package consumer without pulling
     an image, applies the one read-only generic mount and inherited names, calls
     `NewFromPortableRuntime`, and performs a credential-free unpinned `Execute`.
     Hermetic fixtures cover static-symlink, dynamic-ELF, and
@@ -1868,11 +1998,52 @@ that prove:
     structurally included subprocess in one table case, and
     `TestPortableRuntimeActivationFeedsProductionDispatch` proves its unpinned
     `Execute` consumes the activated typed launch recipe rather than a fresh
-    default runner. The consumer runs as the mapped preparing non-root UID. The
-    job proves preparation made no route decision and that in-runtime structural
+    default runner. The consumer runs as activation UID/GID `65532:65532` with
+    an empty supplementary-group list;
+    `TestPortableRuntimeRejectsUnsafeActivationIdentity` proves zero UID, zero
+    GID, or any supplementary group fails before service construction. Each job
+    proves preparation made no route decision and that in-runtime structural
     candidate identities match the prepared set; it does not equate
-    network/quota health with structural parity. The opted-in job fails rather
-    than skips when OCI is unavailable.
+    network/quota health with structural parity. Each opted-in job fails rather
+    than skips when OCI, its native architecture, the pinned runtime, or a
+    required kernel feature is unavailable.
+    `TestPortableRuntimeNamespaceLauncherArtifactParity` proves checked-in
+    bytes, compile-time digest, ELF class/GOARCH/static/single-thread shape,
+    exact `.fizeau/namespace-launcher` target,
+    zero/one bundle cardinality, tamper rejection, and public diagnostic
+    opacity. `make portable-namespace-launcher-check` and its required workflow
+    job rebuild both supported targets and prove source/version-to-byte parity.
+    Both required native OCI jobs also run
+    `TestPortableRuntimeProjectionDeniesConfigMutation`,
+    `TestPortableRuntimeProjectionAllowsMutableState`,
+    `TestPortableRuntimeNamespaceLauncherDropsAuthority`,
+    `TestPortableRuntimeNamespaceLauncherLifecycle`, and
+    `TestPortableRuntimeNamespaceSetupFailureDoesNotExec` without skips. Those
+    fixtures attack config and every governed ancestor with write, truncate,
+    unlink, rename, rename-over, `RENAME_EXCHANGE`, hard-link, mount, and
+    namespace-shadow attempts; prove mutable in-place and atomic refresh plus
+    lock/file/directory siblings; prove the activation UID/GID maps and empty
+    `Groups:`, private `/proc`, final required-absent check, exclusive activation
+    lease, and every PID-1/harness `/proc/<pid>/task/*/status` has zero `Cap*`,
+    locked securebits, `NoNewPrivs`, and the expected seccomp state. They prove
+    PID 1 is single-threaded and non-dumpable, stage 2 owns only descriptors
+    0/1/2, and `ptrace`, process-VM, `/proc/1/mem`, `/proc/1/fd`, and
+    `pidfd_getfd` attacks fail. Direct, queued, thread-directed, process-group,
+    and pidfd signal attempts against namespace PID 1 also fail with `EPERM`
+    without changing supervisor state. They also prove
+    `clone3`/prohibited-operation errno with ordinary thread creation,
+    setup-gate fail-closed behavior, distinct launcher/harness process groups,
+    no duplicate cleanup signal,
+    PTY foreground job control, exact mirrored `WaitStatus`, cancellation/
+    caller-death cleanup, descendant reaping, and OpenCode auth plus sibling
+    database/log writes.
+    A public structural fixture proves launcher identity, paths, digests, and
+    namespace recipes add no exported field, environment-name entry,
+    diagnostic, `String`, JSON, or caller-interpreted plan value.
+    `TestPortableRuntimeExclusiveSubprocessLease` runs under `-race` and proves
+    same-root serialization through descendant cleanup, queued cancellation
+    without spawn, release after success/failure/setup-failure/cancellation,
+    independent-root concurrency, and no lease surviving runtime teardown.
 30. `TestV015CostPointerMigrationCompile` builds an external
     `package fizeau_test` consumer that uses keyed pointer literals, nil
     branching, dereference, and `CostSource` inspection for
@@ -1902,7 +2073,10 @@ that prove:
       named tests.
 - [ ] Portable-runtime public opacity, complete harness/provider inventory,
       same-target dependency closures, restrictive atomic materialization,
-      redaction, retryable cleanup, and non-skipping Linux OCI execution have
+      embedded-launcher parity, descriptor-pinned namespace enforcement,
+      authority removal, lifecycle preservation, exclusive subprocess leasing,
+      redaction, retryable cleanup, and non-skipping native amd64/arm64 Linux
+      OCI execution have
       named tests.
 - [ ] The full repository test gate passes with the public conformance suite.
 - [ ] Non-normative implementation notes cannot override this contract.

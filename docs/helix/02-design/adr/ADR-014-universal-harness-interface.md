@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 41637577d153fcf077372c0402fa92fd42cea6af64fa4f24aa7f237addd9308b
+    self_hash: 42efefd3b240ecfde8e39830eace0ef29e9c75a298de2d6454925978c0736123
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: 4b053cfd0c66bafac8dedbda6c6d32b724f27ec2db13ec2eff37a9b6683dbb24
-      CONTRACT-004: cc55033051ce62515c520700c1cf70df539f0f8c1db6750795134728394cb881
-    reviewed_at: "2026-07-17T08:14:13Z"
+      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
+      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
+    reviewed_at: "2026-07-17T10:48:01Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -638,25 +638,46 @@ constraints, and cleanup. The public root facade maps that result to
 CONTRACT-003's opaque generic bundle: one atomically committed host child, one
 fixed guest-root read-only mount, and inherited environment names without
 values. The typed constraints remain private manifest state rather than a new
-caller-interpreted plan surface. `NewFromPortableRuntime` is the public
-activation seam that verifies the mounted manifest, reconstructs a closed-world
-child environment, enforces read-only/absent path rules, and reconstructs the
-configured service in the new process without the application-only config
-loader. It also copies unprojected target-prefixed credential, quota, and cache
-state seeds into owner-only writable generated data/state/cache scopes and
-assembles projection-consumed mixed directories generically. For a mixed
-directory, activation makes the directory root identity and config members
-mount/filesystem-owned boundaries. The root identity denies unlink, rename,
-replacement, and shadowing; config members additionally deny writes. Writable
-member refresh, locks, and generated siblings remain permitted. Chmod on
-ordinary files inside a writable parent is not sufficient. The read-only mount
-remains the source of truth.
-Activation installs the typed launch recipes and ordered fixed flag plus
-option/value prefixes into the production `Execute` dispatcher, not only a
-refresh/scheduler instance map. The embedding caller applies the opaque plan,
-orchestrates the external container as the mapped preparing UID, destroys its
-writable storage, and only then performs bundle cleanup; it never resolves a
-harness path, execution constraint, or provider field.
+caller-interpreted plan surface. Every bundle with a structurally included
+subprocess also carries exactly one target-indexed, reproducibly built,
+statically linked, single-threaded Fizeau namespace launcher from embedded Zig
+bytes at `.fizeau/namespace-launcher`; it is neither a harness contribution nor
+a routing surface.
+
+`NewFromPortableRuntime` is the public activation seam that verifies the
+mounted manifest, reconstructs a closed-world child environment and configured
+service without the application config loader, copies unprojected
+target-prefixed mutable seeds into owner-only generated scopes, assembles
+projection-consumed mutable members, and compiles an opaque per-entrypoint
+namespace recipe. It remains process-free. The exact endpoint-aware canonical
+runner binding applies that recipe only at its existing lifecycle-owned spawn
+seam. Activation first rejects zero effective UID/GID or any supplementary
+group. A two-stage launcher creates private user/mount/PID state, pins governed
+directory identities with descriptor-relative mount APIs, read-only binds
+projected config last, enters the activation UID/GID mapping, installs
+persistent post-setup syscall filters, closes private descriptors, clears all
+capability sets after setting and locking the restrictive securebits word, sets
+`no_new_privs`, and execs the exact typed launch.
+The non-dumpable PID-1 launcher remains lifecycle session/process-group leader;
+the harness has a distinct foreground group, inherits only descriptors 0/1/2,
+and cannot ptrace, inspect supervisor memory/descriptors, or signal namespace
+PID 1 through direct, queued, thread-directed, process-group, or pidfd signal
+operations. PID 1 exclusively bridges cleanup signals, reaps the namespace,
+and mirrors the exact primary `WaitStatus`. Chmod inside a writable parent is never treated as the
+immutable boundary. A per-activation exclusive subprocess lease makes the
+final required-absent check race-free with respect to other harness
+invocations while retaining mutable refresh, lock, and sibling creation.
+
+Activation installs typed launch recipes and ordered fixed flag plus
+option/value prefixes into the same authoritative registered runner that later
+creates the selected route; no dispatcher wrapper or scheduler-only instance
+map competes with it. The embedding caller applies the opaque plan,
+orchestrates the external container as the exact nonzero activation UID/GID
+with an empty supplementary-group list, stops that
+runtime, destroys its writable activation root, and only then performs bundle
+cleanup. Namespace teardown owns only ephemeral mounts; bundle `Close` owns
+only the prepared host child. The caller never resolves a harness path,
+execution constraint, launcher identity, or provider field.
 
 This opacity is a programming boundary, not a confidentiality boundary against
 the embedding caller. The caller owns the source environment and destination
@@ -691,10 +712,31 @@ owner.
   structural candidate identities rather than transient health or reachability.
 - `TestPortableRuntimeActivationFeedsProductionDispatch` makes each closure
   class the sole unpinned candidate in turn and proves `Execute` consumes the
-  activated launch recipe rather than constructing an unconfigured fresh runner.
-- Linux OCI fixtures execute static-symlink, dynamic-ELF, and
-  interpreter/package-tree closures without credentials or network as a mapped
-  non-root UID.
+  activated launch recipe through the canonical endpoint-aware runner rather
+  than constructing an unconfigured fresh runner or dispatcher wrapper.
+- `TestPortableRuntimeNamespaceLauncherArtifactParity` and
+  `make portable-namespace-launcher-check` under pinned Zig 0.16.0 rebuild both
+  supported Linux architectures and prove the checked-in single-threaded static
+  launcher's digest, ELF/GOARCH shape, exact reserved target, collision-proof
+  zero/one bundle cardinality, public opacity, and reproducible
+  source/version-to-byte identity.
+- Closed-environment and seed fixtures prove per-entrypoint inherited-name
+  filtering, typed generated values, owner-only prefix/projection assembly,
+  exactly-once mapping, no mount writeback, and external writable-root ownership.
+- `TestPortableRuntimeExclusiveSubprocessLease` runs under `-race` and proves
+  same-root serialization through descendant cleanup, queued cancellation,
+  terminal-path release, independent-root concurrency, and teardown cleanup.
+- Native amd64 and arm64 Linux OCI adversaries execute static-symlink,
+  dynamic-ELF, and interpreter/package-tree closures as UID/GID `65532:65532`
+  with no supplementary groups; attack every
+  governed ancestor/config identity; exercise mutable atomic refresh, locks,
+  and siblings; and prove final absence, both namespace stages' authority drop,
+  private proc, all-task authority state, non-dumpable supervisor isolation,
+  descriptor closure, ordinary threading plus namespace/mount syscall denial,
+  denial of every direct, queued, thread-directed, process-group, and pidfd
+  signal path to PID 1, setup failure without exec, distinct process groups,
+  non-duplicated cleanup signal bridging, PTY foreground behavior, exact mirrored status/caller-death
+  behavior, descendant reaping, and OpenCode auth plus sibling writes.
 - `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`,
   `TestPortableRuntimeNodeInterpreterIdentity`, and
   `TestPortableRuntimeNodeInterpreterRejectsRPATH` prove explicit interpreter
