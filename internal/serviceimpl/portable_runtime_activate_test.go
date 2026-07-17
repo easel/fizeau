@@ -95,10 +95,10 @@ func TestPortableRuntimeActivationIsRouteNeutralAndProcessFree(t *testing.T) {
 func TestPortableRuntimeActivationAssemblesServiceStorage(t *testing.T) {
 	bundle, expected := prepareServiceActivationFixture(t)
 	writableRoot := t.TempDir()
-	activation, err := AssemblePortableRuntimeActivation(context.Background(), bundle.RuntimeRoot(), writableRoot, func(string) (string, bool) {
+	activation, err := assemblePortableRuntimeActivationWithIdentity(context.Background(), bundle.RuntimeRoot(), writableRoot, func(string) (string, bool) {
 		t.Fatal("activation looked up an undeclared environment name")
 		return "", false
-	})
+	}, testPortableRuntimeActivationIdentity)
 	if err != nil {
 		t.Fatalf("AssemblePortableRuntimeActivation() error = %v", err)
 	}
@@ -400,14 +400,18 @@ func preparePortableRuntimeBindingFixture(t *testing.T) PortableRuntimeActivatio
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = bundle.Close() })
-	activation, err := AssemblePortableRuntimeActivation(context.Background(), bundle.RuntimeRoot(), t.TempDir(), func(string) (string, bool) {
+	activation, err := assemblePortableRuntimeActivationWithIdentity(context.Background(), bundle.RuntimeRoot(), t.TempDir(), func(string) (string, bool) {
 		t.Fatal("binding fixture unexpectedly requested inherited environment")
 		return "", false
-	})
+	}, testPortableRuntimeActivationIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return activation
+}
+
+func testPortableRuntimeActivationIdentity() (int, int, []int, error) {
+	return 65532, 65532, nil, nil
 }
 
 func assertPortableActivationSourcesArePure(t *testing.T) {

@@ -137,6 +137,14 @@ func AssemblePortableRuntimeActivation(ctx context.Context, runtimeRoot, writabl
 	return portableRuntimeActivationFromPlan(plan)
 }
 
+func assemblePortableRuntimeActivationWithIdentity(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool), reader portableruntime.ActivationIdentityReader) (PortableRuntimeActivation, error) {
+	plan, err := portableruntime.AssembleActivationWithIdentityReader(ctx, runtimeRoot, writableRoot, lookupEnv, reader)
+	if err != nil {
+		return PortableRuntimeActivation{}, err
+	}
+	return portableRuntimeActivationFromPlan(plan)
+}
+
 func portableRuntimeActivationFromPlan(plan portableruntime.ActivationPlan) (PortableRuntimeActivation, error) {
 	snapshot := plan.ProviderSnapshot()
 	secrets := plan.ProviderSecrets()

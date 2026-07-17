@@ -39,11 +39,11 @@ func TestPortableRuntimeActivationBuildsClosedEnvironment(t *testing.T) {
 	writable := emptyActivationWritableRoot(t)
 	lookups := make([]string, 0, 2)
 	values := map[string]string{fixture.environmentKey: fixture.environmentVal, secondEnvironment: secondValue}
-	plan, err := AssembleActivation(context.Background(), bundle.RuntimeRoot(), writable, func(name string) (string, bool) {
+	plan, err := AssembleActivationWithIdentityReader(context.Background(), bundle.RuntimeRoot(), writable, func(name string) (string, bool) {
 		lookups = append(lookups, name)
 		value, ok := values[name]
 		return value, ok
-	})
+	}, testActivationIdentityReader)
 	if err != nil {
 		t.Fatalf("AssembleActivation() error = %v", err)
 	}
@@ -125,7 +125,7 @@ func TestPortableRuntimeActivationCopiesPrefixSeeds(t *testing.T) {
 	bundle := prepareMaterializerFixture(t, fixture)
 	runtimeRoot := bundle.RuntimeRoot()
 	writable := emptyActivationWritableRoot(t)
-	plan, err := AssembleActivation(context.Background(), runtimeRoot, writable, os.LookupEnv)
+	plan, err := AssembleActivationWithIdentityReader(context.Background(), runtimeRoot, writable, os.LookupEnv, testActivationIdentityReader)
 	if err != nil {
 		t.Fatalf("AssembleActivation() error = %v", err)
 	}
@@ -212,7 +212,7 @@ func TestPortableRuntimeActivationAssemblesProjectionSeeds(t *testing.T) {
 	})
 	bundle := prepareMaterializerFixture(t, fixture)
 	writable := emptyActivationWritableRoot(t)
-	plan, err := AssembleActivation(context.Background(), bundle.RuntimeRoot(), writable, os.LookupEnv)
+	plan, err := AssembleActivationWithIdentityReader(context.Background(), bundle.RuntimeRoot(), writable, os.LookupEnv, testActivationIdentityReader)
 	if err != nil {
 		t.Fatalf("AssembleActivation() error = %v", err)
 	}
@@ -354,6 +354,121 @@ func TestPortableRuntimeActivationCommitErrorPreservesCleanupOwnership(t *testin
 	}
 }
 
+func TestPortableRuntimeRejectsUnsafeActivationIdentity(t *testing.T) {
+	fixture := newActivationFixture(t)
+	bundle := prepareMaterializerFixture(t, fixture)
+
+	for _, test := range []struct {
+		name     string
+		identity activationIdentity
+		groups   []int
+	}{
+		{name: "zero-effective-uid", identity: activationIdentity{effectiveUID: 0, primaryGID: 65532}},
+		{name: "zero-primary-gid", identity: activationIdentity{effectiveUID: 65532, primaryGID: 0}},
+		{name: "supplementary-group", identity: activationIdentity{effectiveUID: 65532, primaryGID: 65532}, groups: []int{4}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			lookups := 0
+			writable := emptyActivationWritableRoot(t)
+			_, err := AssembleActivationWithIdentityReader(context.Background(), bundle.RuntimeRoot(), writable, func(string) (string, bool) {
+				lookups++
+				return fixture.environmentVal, true
+			}, func() (int, int, []int, error) {
+				return test.identity.effectiveUID, test.identity.primaryGID, append([]int(nil), test.groups...), nil
+			})
+			if !errors.Is(err, ErrActivationInvalid) {
+				t.Fatalf("assembleActivationWithIdentity() error = %v", err)
+			}
+			if lookups != 0 {
+				t.Fatalf("unsafe identity performed %d runtime environment lookups", lookups)
+			}
+			assertDirectoryEmpty(t, writable)
+		})
+	}
+
+	writable := emptyActivationWritableRoot(t)
+	plan, err := AssembleActivationWithIdentityReader(context.Background(), bundle.RuntimeRoot(), writable, func(string) (string, bool) {
+		return fixture.environmentVal, true
+	}, testActivationIdentityReader)
+	if err != nil {
+		t.Fatalf("safe identity rejected: %v", err)
+	}
+	recipe, ok := plan.EntrypointRecipe("fixture")
+	if !ok || recipe.identity != (activationIdentity{effectiveUID: 65532, primaryGID: 65532}) || recipe.lease == nil {
+		t.Fatalf("activation recipe did not capture safe identity and lease: %#v, %t", recipe.identity, recipe.lease != nil)
+	}
+	diagnostics := fmt.Sprintf("%v %+v %#v %s", plan, recipe, recipe, mustActivationJSON(t, recipe))
+	for _, forbidden := range []string{"65532", writable, bundle.RuntimeRoot()} {
+		if strings.Contains(diagnostics, forbidden) {
+			t.Fatalf("activation diagnostics leak %q: %s", forbidden, diagnostics)
+		}
+	}
+}
+
+func TestPortableRuntimeExclusiveSubprocessLease(t *testing.T) {
+	fixture := newActivationFixture(t)
+	bundle := prepareMaterializerFixture(t, fixture)
+	assemble := func() ActivationRecipe {
+		t.Helper()
+		plan, err := AssembleActivationWithIdentityReader(context.Background(), bundle.RuntimeRoot(), emptyActivationWritableRoot(t), func(string) (string, bool) {
+			return fixture.environmentVal, true
+		}, testActivationIdentityReader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recipe, ok := plan.EntrypointRecipe("fixture")
+		if !ok {
+			t.Fatal("activation recipe missing")
+		}
+		return recipe
+	}
+
+	first := assemble()
+	clone := cloneActivationRecipe(first)
+	releaseFirst, err := first.lease.acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	queued, cancelQueued := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	secondResult := make(chan error, 1)
+	go func() {
+		close(started)
+		_, err := clone.lease.acquire(queued)
+		secondResult <- err
+	}()
+	<-started
+	cancelQueued()
+	if err := <-secondResult; !errors.Is(err, ErrActivationInvalid) {
+		t.Fatalf("canceled queued acquire error = %v", err)
+	}
+	releaseFirst()
+	releaseFirst()
+	releaseClone, err := clone.lease.acquire(context.Background())
+	if err != nil {
+		t.Fatalf("released clone lease acquire error = %v", err)
+	}
+	releaseClone()
+
+	releaseHeld, err := first.lease.acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	independent := assemble()
+	releaseIndependent, err := independent.lease.acquire(context.Background())
+	if err != nil {
+		t.Fatalf("independent activation root was serialized with first root: %v", err)
+	}
+	releaseIndependent()
+	releaseHeld()
+
+	first.lease.close()
+	if _, err := first.lease.acquire(context.Background()); !errors.Is(err, ErrActivationInvalid) {
+		t.Fatalf("closed activation lease acquire error = %v", err)
+	}
+}
+
 func emptyActivationWritableRoot(t *testing.T) string {
 	t.Helper()
 	writable := filepath.Join(t.TempDir(), "writable")
@@ -368,4 +483,8 @@ func canceledActivationContext(t *testing.T) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
+}
+
+func testActivationIdentityReader() (int, int, []int, error) {
+	return 65532, 65532, nil, nil
 }

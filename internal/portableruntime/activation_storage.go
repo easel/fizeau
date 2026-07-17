@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/easel/fizeau/internal/harnesses"
 )
@@ -24,6 +25,73 @@ type activationEntrypoint struct {
 	recipe      ActivationRecipe
 }
 
+// activationIdentity is the process-free mapping authority captured for a
+// portable activation. It deliberately has no diagnostic representation: the
+// later namespace-launch bridge consumes it as opaque recipe state.
+type activationIdentity struct {
+	effectiveUID int
+	primaryGID   int
+}
+
+type activationIdentityReader func() (activationIdentity, []int, error)
+
+// ActivationIdentityReader supplies the process-free identity snapshot used
+// to authorize portable namespace maps. It is exported only within Fizeau's
+// internal package tree so service composition can inject deterministic test
+// identities without weakening the production OS reader.
+type ActivationIdentityReader func() (effectiveUID, primaryGID int, supplementaryGroups []int, err error)
+
+// activationSubprocessLease serializes portable subprocesses that share one
+// writable activation root. It is intentionally in-memory: the activation
+// service owns both its lifetime and every recipe that can acquire it.
+type activationSubprocessLease struct {
+	available chan struct{}
+	mu        sync.Mutex
+	closed    bool
+}
+
+func newActivationSubprocessLease() *activationSubprocessLease {
+	lease := &activationSubprocessLease{available: make(chan struct{}, 1)}
+	lease.available <- struct{}{}
+	return lease
+}
+
+func (l *activationSubprocessLease) acquire(ctx context.Context) (func(), error) {
+	if l == nil {
+		return nil, activationError("subprocess lease")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return nil, activationError("subprocess lease canceled")
+	case <-l.available:
+	}
+
+	l.mu.Lock()
+	closed := l.closed
+	l.mu.Unlock()
+	if closed {
+		l.available <- struct{}{}
+		return nil, activationError("subprocess lease closed")
+	}
+
+	var once sync.Once
+	return func() {
+		once.Do(func() { l.available <- struct{}{} })
+	}, nil
+}
+
+func (l *activationSubprocessLease) close() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.closed = true
+	l.mu.Unlock()
+}
+
 // ActivationRecipe is opaque, service-owned namespace input. Its fields stay
 // private so neither callers nor diagnostics can interpret runtime assets,
 // writable paths, or enforcement details.
@@ -32,6 +100,8 @@ type ActivationRecipe struct {
 	immutableBindings []activationImmutableBinding
 	readOnlyPaths     []harnesses.PortableRuntimeGuestPath
 	requiredAbsent    []harnesses.PortableRuntimeGuestPath
+	identity          activationIdentity
+	lease             *activationSubprocessLease
 }
 
 // PortableRuntimeNamespaceRecipe marks this value as the opaque recipe that
@@ -90,17 +160,48 @@ func (p ActivationPlan) EntrypointRecipe(name string) (ActivationRecipe, bool) {
 // caller-owned activation child into an existing empty writable root. It does
 // not start a process or enter a namespace.
 func AssembleActivation(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool)) (plan ActivationPlan, err error) {
-	return assembleActivation(ctx, runtimeRoot, writableRoot, lookupEnv, nil)
+	return AssembleActivationWithIdentityReader(ctx, runtimeRoot, writableRoot, lookupEnv, currentActivationIdentity)
+}
+
+// AssembleActivationWithIdentityReader is the internal composition seam used
+// by tests. Production callers use AssembleActivation, which reads the actual
+// effective UID, primary GID, and supplementary groups before any runtime or
+// writable-root access.
+func AssembleActivationWithIdentityReader(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool), reader ActivationIdentityReader) (plan ActivationPlan, err error) {
+	if reader == nil {
+		return ActivationPlan{}, activationError("activation identity")
+	}
+	return assembleActivationWithIdentity(ctx, runtimeRoot, writableRoot, lookupEnv, nil, func() (activationIdentity, []int, error) {
+		effectiveUID, primaryGID, groups, readErr := reader()
+		return activationIdentity{effectiveUID: effectiveUID, primaryGID: primaryGID}, append([]int(nil), groups...), readErr
+	})
 }
 
 type activationCopyHook func(copied int) error
 
 func assembleActivation(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool), hook activationCopyHook) (plan ActivationPlan, err error) {
+	return assembleActivationWithIdentity(ctx, runtimeRoot, writableRoot, lookupEnv, hook, nil)
+}
+
+// assembleActivationWithIdentity is internal testability plumbing for the
+// process-free identity gate.
+func assembleActivationWithIdentity(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool), hook activationCopyHook, identityReader activationIdentityReader) (plan ActivationPlan, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if writableRoot == "" || !filepath.IsAbs(writableRoot) || filepath.Clean(writableRoot) != writableRoot {
 		return ActivationPlan{}, activationError("writable root")
+	}
+	var identity activationIdentity
+	if identityReader != nil {
+		var groups []int
+		identity, groups, err = identityReader()
+		if err != nil {
+			return ActivationPlan{}, activationError("activation identity")
+		}
+		if err := validateActivationIdentity(identity, groups); err != nil {
+			return ActivationPlan{}, err
+		}
 	}
 	if err := activationContext(ctx); err != nil {
 		return ActivationPlan{}, err
@@ -207,6 +308,7 @@ func assembleActivation(ctx context.Context, runtimeRoot, writableRoot string, l
 	}
 	sort.Strings(entrypointNames)
 	entrypoints := make(map[string]activationEntrypoint, len(entrypointNames))
+	lease := newActivationSubprocessLease()
 	assembledProjections := make(map[harnesses.PortableRuntimeGuestPath]struct{})
 	for _, name := range entrypointNames {
 		entrypoint := plan.manifest.Entrypoints[name]
@@ -218,6 +320,8 @@ func assembleActivation(ctx context.Context, runtimeRoot, writableRoot string, l
 			scopes:         cloneActivationScopes(scopes),
 			readOnlyPaths:  append([]harnesses.PortableRuntimeGuestPath(nil), entrypoint.ExecutionConstraints.ReadOnlyPaths...),
 			requiredAbsent: append([]harnesses.PortableRuntimeGuestPath(nil), entrypoint.ExecutionConstraints.RequiredAbsentPaths...),
+			identity:       identity,
+			lease:          lease,
 		}
 		for _, projection := range entrypoint.StateProjections {
 			projectionTarget := activationRelativeGuestPath(projection.Directory)
@@ -397,6 +501,8 @@ func cloneActivationRecipe(src ActivationRecipe) ActivationRecipe {
 		immutableBindings: append([]activationImmutableBinding(nil), src.immutableBindings...),
 		readOnlyPaths:     append([]harnesses.PortableRuntimeGuestPath(nil), src.readOnlyPaths...),
 		requiredAbsent:    append([]harnesses.PortableRuntimeGuestPath(nil), src.requiredAbsent...),
+		identity:          src.identity,
+		lease:             src.lease,
 	}
 }
 
