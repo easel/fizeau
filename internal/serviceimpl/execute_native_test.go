@@ -3,6 +3,7 @@ package serviceimpl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -128,6 +129,87 @@ func TestNativeContextDispatchPreservesRawCompactionOverride(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServiceImplRejectsNegativeCompactionContextWindow(t *testing.T) {
+	resolveCalls := 0
+	var events []agentcore.Event
+	var final harnesses.FinalData
+	RunNative(context.Background(), NativeRequest{
+		CompactionContextWindow: -7,
+		Decision: NativeDecision{
+			Harness:  "fiz",
+			Provider: "alpha",
+			Model:    "fixture-model",
+		},
+		Started: time.Now(),
+	}, NativeCallbacks{
+		ResolveProvider: func(NativeProviderRequest) NativeProviderResolution {
+			resolveCalls++
+			return NativeProviderResolution{}
+		},
+		ObserveAgentEvent: func(event agentcore.Event) { events = append(events, event) },
+		Finalize:          func(got harnesses.FinalData, _ TerminalOrigin) { final = got },
+	})
+
+	assert.Zero(t, resolveCalls, "invalid input must be rejected before provider resolution")
+	assert.Empty(t, events, "invalid input must be rejected before core session.start")
+	assert.Equal(t, "failed", final.Status)
+	_, err := resolveNativeWorkingContextWindow(NativeRequest{
+		SelectedContextWindow:   8192,
+		CompactionContextWindow: -7,
+	})
+	assert.ErrorIs(t, err, agentcore.ErrContextCapacityInputInvalid)
+	var inputErr *agentcore.ContextCapacityInputError
+	require.True(t, errors.As(err, &inputErr))
+	assert.Equal(t, -7, inputErr.Value)
+}
+
+func TestCompactionContextWindowCannotEnlargeSelectedRoute(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		selected int
+		override int
+		want     int
+	}{
+		{name: "larger override cannot enlarge", selected: 4096, override: 8192, want: 4096},
+		{name: "smaller override tightens", selected: 8192, override: 4096, want: 4096},
+		{name: "zero preserves selected", selected: 8192, override: 0, want: 8192},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			native, coreReq := propagatedContextRequests(test.selected, test.override)
+			working, err := agentcore.ResolveWorkingContextWindow(coreReq.SelectedContextWindow, coreReq.CompactionContextWindow)
+			require.NoError(t, err)
+			assert.Equal(t, test.want, working)
+			assert.Equal(t, working, nativeCompactionConfig(native, working).ContextWindow)
+		})
+	}
+}
+
+func TestCompactionContextWindowSuppliesUnknownRoute(t *testing.T) {
+	native, coreReq := propagatedContextRequests(0, 4096)
+	working, err := agentcore.ResolveWorkingContextWindow(coreReq.SelectedContextWindow, coreReq.CompactionContextWindow)
+	require.NoError(t, err)
+	assert.Equal(t, 4096, working)
+	assert.Equal(t, working, nativeCompactionConfig(native, working).ContextWindow)
+}
+
+func propagatedContextRequests(selectedWindow, rawOverride int) (NativeRequest, agentcore.Request) {
+	execute := ExecuteRequest{
+		CompactionContextWindow: rawOverride,
+		Decision: ExecuteDecision{
+			Harness:               "fiz",
+			Provider:              "alpha",
+			Model:                 "fixture-model",
+			SelectedContextWindow: selectedWindow,
+			SelectedContextSource: "fixture",
+		},
+	}
+	native := NativeRequest{Decision: nativeDecisionFromExecute(execute.Decision)}
+	projectExecuteContextToNative(&native, execute)
+	var coreReq agentcore.Request
+	projectNativeDispatchToCore(&coreReq, native, native.Decision.Provider, native.Decision.Model)
+	return native, coreReq
 }
 
 type nativeNoStreamCapacityProvider struct {

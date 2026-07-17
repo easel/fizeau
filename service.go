@@ -495,6 +495,13 @@ func validateMaxTokens(maxTokens int) error {
 	return nil
 }
 
+func validateCompactionContextWindow(contextWindow int) error {
+	if contextWindow < 0 {
+		return fmt.Errorf("invalid CompactionContextWindow %d: must be >= 0", contextWindow)
+	}
+	return nil
+}
+
 // RouteDecision is the result of ResolveRoute.
 type RouteDecision struct {
 	// RequestedPolicy is the caller-supplied policy, when any.

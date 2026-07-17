@@ -180,11 +180,12 @@ func TestExecuteDecisionCarriesSelectedContext(t *testing.T) {
 }
 
 var requiredExecuteValidators = map[string]struct{}{
-	"validateMaxTokens":     {},
-	"ValidateCachePolicy":   {},
-	"ValidatePowerBounds":   {},
-	"ValidateRole":          {},
-	"ValidateCorrelationID": {},
+	"validateMaxTokens":               {},
+	"validateCompactionContextWindow": {},
+	"ValidateCachePolicy":             {},
+	"ValidatePowerBounds":             {},
+	"ValidateRole":                    {},
+	"ValidateCorrelationID":           {},
 }
 
 func findRootFunction(files map[string]*ast.File, name string) *ast.FuncDecl {

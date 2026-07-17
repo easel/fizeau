@@ -42,3 +42,18 @@ func TestExecuteRejectsNegativeMaxTokensBeforeSession(t *testing.T) {
 		t.Fatalf("Execute events=%#v err=%v, want pre-session MaxTokens validation", events, err)
 	}
 }
+
+func TestExecuteRejectsNegativeCompactionContextWindowBeforeSession(t *testing.T) {
+	// A nil receiver is intentional: side-effect-free request validation must
+	// return before Execute can touch session, routing, hub, or dispatch state.
+	var service *service
+	events, err := service.Execute(context.Background(), ServiceExecuteRequest{CompactionContextWindow: -1})
+	if events != nil || err == nil || err.Error() != "invalid CompactionContextWindow -1: must be >= 0" {
+		t.Fatalf("Execute events=%#v err=%v, want pre-session CompactionContextWindow validation", events, err)
+	}
+	for _, value := range []int{0, 4096} {
+		if err := validateServiceExecuteRequest(ServiceExecuteRequest{CompactionContextWindow: value}); err != nil {
+			t.Fatalf("CompactionContextWindow %d rejected: %v", value, err)
+		}
+	}
+}

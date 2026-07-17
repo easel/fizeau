@@ -13,7 +13,6 @@ import (
 	"github.com/easel/fizeau/internal/compaction"
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
-	"github.com/easel/fizeau/internal/modelcatalog"
 )
 
 const (
@@ -132,6 +131,21 @@ type NativeCallbacks struct {
 // RunNative drives the in-process agent loop without depending on root public
 // service types.
 func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
+	workingContextWindow, contextWindowErr := resolveNativeWorkingContextWindow(req)
+	if contextWindowErr != nil {
+		finalize(cb, harnesses.FinalData{
+			Status:     "failed",
+			Error:      contextWindowErr.Error(),
+			DurationMS: time.Since(req.Started).Milliseconds(),
+			RoutingActual: &harnesses.RoutingActual{
+				Harness:        req.Decision.Harness,
+				Provider:       req.Decision.Provider,
+				ServerInstance: req.Decision.ServerInstance,
+				Model:          req.Decision.Model,
+			},
+		}, TerminalOriginToolLoop)
+		return
+	}
 	provider := nativeExecutionProvider(req, cb.ResolveProvider)
 	actualHarness := req.Decision.Harness
 	if actualHarness == "" {
@@ -238,7 +252,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	if cb.Compactor != nil {
 		compactor = cb.Compactor(actualModel)
 	} else {
-		compactor = newNativeCompactor(req, actualModel)
+		compactor = newNativeCompactor(req, workingContextWindow)
 	}
 	var temperature *float64
 	if req.Temperature != nil {
@@ -415,10 +429,18 @@ func normalizeProjectedFinalCost(cost *float64, source harnesses.CostSource) (*f
 	}
 }
 
-func newNativeCompactor(req NativeRequest, model string) agentcore.Compactor {
+func resolveNativeWorkingContextWindow(req NativeRequest) (int, error) {
+	return agentcore.ResolveWorkingContextWindow(req.SelectedContextWindow, req.CompactionContextWindow)
+}
+
+func newNativeCompactor(req NativeRequest, workingContextWindow int) agentcore.Compactor {
+	return compaction.NewCompactor(nativeCompactionConfig(req, workingContextWindow))
+}
+
+func nativeCompactionConfig(req NativeRequest, workingContextWindow int) compaction.Config {
 	cfg := compaction.DefaultConfig()
-	if req.CompactionContextWindow > 0 {
-		cfg.ContextWindow = req.CompactionContextWindow
+	if workingContextWindow > 0 {
+		cfg.ContextWindow = workingContextWindow
 		if cfg.ReserveTokens >= cfg.ContextWindow {
 			cfg.ReserveTokens = 0
 		}
@@ -429,12 +451,7 @@ func newNativeCompactor(req NativeRequest, model string) agentcore.Compactor {
 	if req.CompactionReserveTokens > 0 {
 		cfg.ReserveTokens = req.CompactionReserveTokens
 	}
-	if catalog, err := modelcatalog.Default(); err == nil && catalog != nil && model != "" && req.CompactionContextWindow <= 0 {
-		if contextWindow := catalog.ContextWindowForModel(model); contextWindow > 0 {
-			cfg.ContextWindow = contextWindow
-		}
-	}
-	return compaction.NewCompactor(cfg)
+	return cfg
 }
 
 func nativeExecutionProvider(req NativeRequest, resolver func(NativeProviderRequest) NativeProviderResolution) agentcore.Provider {

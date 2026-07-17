@@ -17,9 +17,31 @@ const (
 	ContextCapacityActionClamped         = "clamped"
 	ContextCapacityActionPlanningSkipped = "planning_skipped"
 	ContextCapacityActionRejected        = "rejected"
+
+	ContextCapacityInputCompactionContextWindow = "CompactionContextWindow"
 )
 
-var ErrContextCapacityExceeded = errors.New("agent: context capacity exceeded")
+var (
+	ErrContextCapacityExceeded     = errors.New("agent: context capacity exceeded")
+	ErrContextCapacityInputInvalid = errors.New("agent: invalid context capacity input")
+)
+
+// ContextCapacityInputError identifies an invalid raw input before a core
+// session starts. It is distinct from ContextCapacityError, which means a
+// valid provider-call envelope exhausted the selected route's capacity.
+type ContextCapacityInputError struct {
+	Field string
+	Value int
+}
+
+func (e *ContextCapacityInputError) Error() string {
+	if e == nil {
+		return ErrContextCapacityInputInvalid.Error()
+	}
+	return fmt.Sprintf("%s: %s=%d must be >= 0", ErrContextCapacityInputInvalid, e.Field, e.Value)
+}
+
+func (*ContextCapacityInputError) Unwrap() error { return ErrContextCapacityInputInvalid }
 
 // ContextCapacityError reports the exact provider-call envelope that could
 // not fit within the selected route's effective context window.
@@ -51,7 +73,10 @@ func (*ContextCapacityError) Code() string { return ContextCapacityErrorCode }
 // enlarging known selected-route capacity.
 func ResolveWorkingContextWindow(selectedWindow, compactionOverride int) (int, error) {
 	if compactionOverride < 0 {
-		return 0, fmt.Errorf("agent: compaction context window must be non-negative: %d", compactionOverride)
+		return 0, &ContextCapacityInputError{
+			Field: ContextCapacityInputCompactionContextWindow,
+			Value: compactionOverride,
+		}
 	}
 	if compactionOverride == 0 {
 		return selectedWindow, nil

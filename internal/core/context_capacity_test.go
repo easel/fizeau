@@ -101,6 +101,31 @@ func TestEstimateProviderCallTokensCoversMessagesAndTools(t *testing.T) {
 	assert.Equal(t, want, EstimateProviderCallTokens(messages, tools), "assistant tool-call IDs are not in the canonical envelope")
 }
 
+func TestResolveWorkingContextWindowRejectsNegativeOverride(t *testing.T) {
+	working, err := ResolveWorkingContextWindow(8192, -1)
+	require.Error(t, err)
+	assert.Zero(t, working)
+	assert.ErrorIs(t, err, ErrContextCapacityInputInvalid)
+	var inputErr *ContextCapacityInputError
+	require.ErrorAs(t, err, &inputErr)
+	assert.Equal(t, ContextCapacityInputCompactionContextWindow, inputErr.Field)
+	assert.Equal(t, -1, inputErr.Value)
+
+	provider := &capacityRecordingProvider{}
+	var events []Event
+	result, runErr := Run(context.Background(), Request{
+		Prompt:                  "must not run",
+		Provider:                provider,
+		SelectedContextWindow:   8192,
+		CompactionContextWindow: -1,
+		Callback:                func(event Event) { events = append(events, event) },
+	})
+	assert.ErrorIs(t, runErr, ErrContextCapacityInputInvalid)
+	assert.ErrorIs(t, result.Error, ErrContextCapacityInputInvalid)
+	assert.Zero(t, provider.calls)
+	assert.Empty(t, events, "invalid input must be rejected before session.start")
+}
+
 func TestRunClampsPositiveMaxTokensToInitialHeadroom(t *testing.T) {
 	provider := &capacityRecordingProvider{responses: []Response{{Content: "done"}}}
 	var events []Event

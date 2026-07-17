@@ -133,6 +133,9 @@ func validateServiceExecuteRequest(req ServiceExecuteRequest) error {
 	if err := validateMaxTokens(req.MaxTokens); err != nil {
 		return err
 	}
+	if err := validateCompactionContextWindow(req.CompactionContextWindow); err != nil {
+		return err
+	}
 	// Boundary validation: reject unknown CachePolicy values before any
 	// session state is opened or events are emitted. Beads C/D consume this
 	// field; an unknown value is a caller programming error.
