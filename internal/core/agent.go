@@ -381,6 +381,17 @@ type Request struct {
 	// ResolvedModel is the resolved concrete model selected before the run.
 	ResolvedModel string
 
+	// SelectedContextWindow and SelectedContextSource are the authoritative
+	// selected-route context-capacity evidence resolved before the core run.
+	// Core capacity enforcement owns their interpretation.
+	SelectedContextWindow int
+	SelectedContextSource string
+
+	// CompactionContextWindow is the raw operator override supplied at the
+	// public execution boundary. It remains separate from selected-route
+	// evidence so capacity logic can preserve its provenance.
+	CompactionContextWindow int
+
 	// MaxTokens is the maximum number of tokens the model may generate per turn.
 	// Zero means no explicit limit (provider default applies).
 	MaxTokens int

@@ -80,6 +80,8 @@ type NativeRequest struct {
 	MaxIterations             int
 	MaxTokens                 int
 	ReasoningByteLimit        int
+	SelectedContextWindow     int
+	SelectedContextSource     string
 	CompactionContextWindow   int
 	CompactionReserveTokens   int
 	ProviderTimeout           time.Duration
@@ -256,8 +258,6 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		Callback:           loopCB,
 		Metadata:           req.Metadata,
 		MaxIterations:      maxIter,
-		ResolvedModel:      actualModel,
-		SelectedProvider:   actualProvider,
 		Temperature:        temperature,
 		TopP:               req.TopP,
 		TopK:               req.TopK,
@@ -274,6 +274,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		PlanningMode:       req.PlanningMode,
 		CostCapUSD:         req.CostCapUSD,
 	}
+	projectNativeDispatchToCore(&loopReq, req, actualProvider, actualModel)
 	result, runErr := agentcore.Run(cancelCtx, loopReq)
 	if shouldRetryNativeNoStream(req.NoStream, result, runErr) {
 		loopReq.NoStream = true
@@ -373,6 +374,18 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 		cb.ObserveTokenUsage(final.RoutingActual.Provider, finalUsageTotalTokens(final.Usage), time.Now())
 	}
 	finalize(cb, final, nativeTerminalOrigin(runErr))
+}
+
+// projectNativeDispatchToCore copies resolved dispatch identity, selected
+// context evidence, and the raw public override into the core request without
+// applying capacity policy. Working-window arithmetic and validation belong to
+// the core capacity boundary.
+func projectNativeDispatchToCore(dst *agentcore.Request, req NativeRequest, actualProvider, actualModel string) {
+	dst.SelectedProvider = actualProvider
+	dst.ResolvedModel = actualModel
+	dst.SelectedContextWindow = req.SelectedContextWindow
+	dst.SelectedContextSource = req.SelectedContextSource
+	dst.CompactionContextWindow = req.CompactionContextWindow
 }
 
 func projectNativeFinalCost(result agentcore.Result) (*float64, harnesses.CostSource) {

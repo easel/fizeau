@@ -3,6 +3,7 @@ package serviceimpl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -92,6 +93,39 @@ func TestExecuteNativeRemovesBenchmarkPresetPlanning(t *testing.T) {
 // ToolPreset=="benchmark" does not force PlanningMode on.
 func TestExecuteNative_NoPlanningModeLeak(t *testing.T) {
 	TestExecuteNativeRemovesBenchmarkPresetPlanning(t)
+}
+
+func TestNativeContextDispatchPreservesRawCompactionOverride(t *testing.T) {
+	const (
+		selectedWindow = 8192
+		selectedSource = "provider_api"
+	)
+	for _, rawOverride := range []int{0, 16384, -7} {
+		t.Run(fmt.Sprintf("raw_%d", rawOverride), func(t *testing.T) {
+			execute := ExecuteRequest{
+				CompactionContextWindow: rawOverride,
+				Decision: ExecuteDecision{
+					Provider:              "alpha",
+					Model:                 "fixture-model",
+					SelectedContextWindow: selectedWindow,
+					SelectedContextSource: selectedSource,
+				},
+			}
+			native := NativeRequest{Decision: nativeDecisionFromExecute(execute.Decision)}
+			projectExecuteContextToNative(&native, execute)
+			var coreReq agentcore.Request
+			projectNativeDispatchToCore(&coreReq, native, native.Decision.Provider, native.Decision.Model)
+
+			if native.CompactionContextWindow != rawOverride || coreReq.CompactionContextWindow != rawOverride {
+				t.Fatalf("raw override native/core = %d/%d, want unchanged %d",
+					native.CompactionContextWindow, coreReq.CompactionContextWindow, rawOverride)
+			}
+			if coreReq.SelectedContextWindow != selectedWindow || coreReq.SelectedContextSource != selectedSource {
+				t.Fatalf("selected context changed while carrying raw override: %d/%q, want %d/%q",
+					coreReq.SelectedContextWindow, coreReq.SelectedContextSource, selectedWindow, selectedSource)
+			}
+		})
+	}
 }
 
 // ServiceExecuteRequest is the API request shape for Execute

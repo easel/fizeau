@@ -355,7 +355,7 @@ func (state *executeRunState) runNative(ctx context.Context) {
 	if tools == nil {
 		tools = tool.BuiltinToolsForPreset(state.req.WorkDir, state.req.ToolPreset, tool.BashOutputFilterConfig{})
 	}
-	RunNative(ctx, NativeRequest{
+	nativeReq := NativeRequest{
 		Prompt:                    state.req.Prompt,
 		SystemPrompt:              state.req.SystemPrompt,
 		Model:                     state.req.RequestedModel,
@@ -378,7 +378,6 @@ func (state *executeRunState) runNative(ctx context.Context) {
 		MaxIterations:             state.req.MaxIterations,
 		MaxTokens:                 state.req.MaxTokens,
 		ReasoningByteLimit:        state.req.ReasoningByteLimit,
-		CompactionContextWindow:   state.req.CompactionContextWindow,
 		CompactionReserveTokens:   state.req.CompactionReserveTokens,
 		ProviderTimeout:           state.req.ProviderTimeout,
 		Timeout:                   state.req.Timeout,
@@ -389,7 +388,9 @@ func (state *executeRunState) runNative(ctx context.Context) {
 		Decision:                  nativeDecisionFromExecute(state.req.Decision),
 		Started:                   state.start,
 		SessionID:                 state.req.SessionID,
-	}, NativeCallbacks{
+	}
+	projectExecuteContextToNative(&nativeReq, state.req)
+	RunNative(ctx, nativeReq, NativeCallbacks{
 		ResolveProvider:            state.ports.ResolveNativeProvider,
 		ProviderNotConfiguredError: state.ports.ProviderNotConfiguredError,
 		ObserveAgentEvent:          observeAgentEvent,
@@ -410,6 +411,15 @@ func (state *executeRunState) runNative(ctx context.Context) {
 		CompactionAssertionHook: state.ports.CompactionAssertionHook,
 		ObserveTokenUsage:       state.ports.ObserveTokenUsage,
 	})
+}
+
+// projectExecuteContextToNative carries the already-resolved selected-route
+// context evidence and the raw public override across the coordinator/native
+// seam without interpreting either value.
+func projectExecuteContextToNative(dst *NativeRequest, req ExecuteRequest) {
+	dst.SelectedContextWindow = req.Decision.SelectedContextWindow
+	dst.SelectedContextSource = req.Decision.SelectedContextSource
+	dst.CompactionContextWindow = req.CompactionContextWindow
 }
 
 func (state *executeRunState) runSubprocess(ctx context.Context, runner harnesses.Harness) {

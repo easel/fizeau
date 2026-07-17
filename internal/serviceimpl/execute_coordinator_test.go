@@ -24,6 +24,8 @@ func TestSelectedContextDispatchTypesAreAPINeutral(t *testing.T) {
 	for _, typ := range []reflect.Type{
 		reflect.TypeOf(ExecuteDecision{}),
 		reflect.TypeOf(NativeDecision{}),
+		reflect.TypeOf(NativeRequest{}),
+		reflect.TypeOf(agentcore.Request{}),
 	} {
 		for name, want := range wantFields {
 			field, ok := typ.FieldByName(name)
@@ -35,6 +37,20 @@ func TestSelectedContextDispatchTypesAreAPINeutral(t *testing.T) {
 				t.Errorf("%s.%s type = %v from %q, want API-neutral builtin %v",
 					typ.Name(), name, field.Type, field.Type.PkgPath(), want)
 			}
+		}
+	}
+	for _, typ := range []reflect.Type{
+		reflect.TypeOf(NativeRequest{}),
+		reflect.TypeOf(agentcore.Request{}),
+	} {
+		field, ok := typ.FieldByName("CompactionContextWindow")
+		if !ok {
+			t.Errorf("%s is missing CompactionContextWindow", typ.Name())
+			continue
+		}
+		if field.Type != reflect.TypeOf(int(0)) || field.Type.PkgPath() != "" {
+			t.Errorf("%s.CompactionContextWindow type = %v from %q, want API-neutral builtin int",
+				typ.Name(), field.Type, field.Type.PkgPath())
 		}
 	}
 
@@ -79,6 +95,59 @@ func TestSelectedContextDispatchTypesAreAPINeutral(t *testing.T) {
 				t.Errorf("%s imports non-neutral decision type surface %q", path, importPath)
 			}
 		}
+	}
+}
+
+func TestExecuteSelectedContextReachesNativeCore(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		window int
+		source string
+	}{
+		{name: "provider evidence", window: 73728, source: "provider_api"},
+		{name: "unknown evidence remains exact", window: 0, source: "unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			execute := ExecuteRequest{
+				CompactionContextWindow: 4096,
+				Decision: ExecuteDecision{
+					Harness:               "fiz",
+					Provider:              "alpha",
+					ServerInstance:        "alpha-gpu-1",
+					Model:                 "fixture-model",
+					SelectedContextWindow: test.window,
+					SelectedContextSource: test.source,
+				},
+			}
+			native := NativeRequest{Decision: nativeDecisionFromExecute(execute.Decision)}
+			projectExecuteContextToNative(&native, execute)
+
+			var coreReq agentcore.Request
+			projectNativeDispatchToCore(&coreReq, native, native.Decision.Provider, native.Decision.Model)
+
+			if native.Decision.Harness != execute.Decision.Harness ||
+				native.Decision.Provider != execute.Decision.Provider ||
+				native.Decision.ServerInstance != execute.Decision.ServerInstance ||
+				native.Decision.Model != execute.Decision.Model {
+				t.Fatalf("native route identity = %#v, want execute identity %#v", native.Decision, execute.Decision)
+			}
+			if native.SelectedContextWindow != test.window || native.SelectedContextSource != test.source {
+				t.Fatalf("native selected context = %d/%q, want %d/%q",
+					native.SelectedContextWindow, native.SelectedContextSource, test.window, test.source)
+			}
+			if coreReq.SelectedContextWindow != test.window || coreReq.SelectedContextSource != test.source {
+				t.Fatalf("core selected context = %d/%q, want %d/%q",
+					coreReq.SelectedContextWindow, coreReq.SelectedContextSource, test.window, test.source)
+			}
+			if coreReq.SelectedProvider != execute.Decision.Provider || coreReq.ResolvedModel != execute.Decision.Model {
+				t.Fatalf("core route identity = %q/%q, want %q/%q",
+					coreReq.SelectedProvider, coreReq.ResolvedModel, execute.Decision.Provider, execute.Decision.Model)
+			}
+			if coreReq.CompactionContextWindow != execute.CompactionContextWindow {
+				t.Fatalf("core compaction override = %d, want raw %d",
+					coreReq.CompactionContextWindow, execute.CompactionContextWindow)
+			}
+		})
 	}
 }
 
