@@ -250,6 +250,48 @@ func (s *service) resolveSelectedRouteContext(decision *RouteDecision, snapshot 
 	return compaction.DefaultContextWindow, routing.ContextSourceDefault
 }
 
+// resolveExplicitNativeRouteContext applies the same selected-context
+// authority as engine-selected native routes without turning an explicit
+// execute pin into a discovery or routing operation. Cached provider evidence
+// is read synchronously; absent or unreadable cache entries fall through to
+// catalog and default authority without starting a provider probe.
+func (s *service) resolveExplicitNativeRouteContext(ctx context.Context, decision *RouteDecision, catalog *modelcatalog.Catalog) {
+	if s == nil || decision == nil || decision.Harness != "fiz" {
+		return
+	}
+
+	var snapshot modelsnapshot.ModelSnapshot
+	if s.opts.ServiceConfig != nil {
+		if cacheRoot, err := serviceSnapshotCacheRoot(); err == nil {
+			snapshot, _ = assembleModelSnapshotFromServiceConfigWithOptions(
+				ctx,
+				s.opts.ServiceConfig,
+				catalog,
+				cacheRoot,
+				modelsnapshot.AssembleOptions{Refresh: modelsnapshot.RefreshNone},
+			)
+		}
+	}
+	lookup := *decision
+	if s.opts.ServiceConfig != nil {
+		if providerName, provider, ok := selectConfiguredNativeProvider(s.opts.ServiceConfig, ServiceExecuteRequest{
+			Provider: decision.Provider,
+			Model:    decision.Model,
+		}); ok {
+			lookup.Provider = providerName
+			if lookup.Model == "" {
+				lookup.Model = provider.Model
+			}
+			if _, _, qualified := splitEndpointProviderRef(providerName); !qualified &&
+				strings.TrimSpace(provider.BaseURL) != "" && len(provider.Endpoints) == 0 {
+				lookup.Endpoint = providerName
+				lookup.ServerInstance = serverinstance.Normalize(provider.BaseURL, provider.ServerInstance)
+			}
+		}
+	}
+	decision.ContextLength, decision.ContextSource = s.resolveSelectedRouteContext(&lookup, snapshot, catalog)
+}
+
 func selectedRouteSnapshotEvidence(candidate RouteCandidate, snapshot modelsnapshot.ModelSnapshot) (modelsnapshot.KnownModel, bool) {
 	provider := strings.TrimSpace(candidate.Provider)
 	endpoint := strings.TrimSpace(candidate.Endpoint)
