@@ -171,12 +171,12 @@ func TestRun_FailsClosedWhenToolOutputMakesCompactionNoFit(t *testing.T) {
 	}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, messages []agent.Message, provider agent.Provider, toolCalls []agent.ToolCallLog) ([]agent.Message, *agent.CompactionResult, error) {
+	compactor := func(ctx context.Context, input agent.CompactionInput, provider agent.Provider) ([]agent.Message, *agent.CompactionResult, error) {
 		compactionCalls++
 		if compactionCalls == 2 {
-			return messages, nil, agent.ErrCompactionNoFit
+			return input.History, nil, agent.ErrCompactionNoFit
 		}
-		return messages, nil, nil
+		return input.History, nil, nil
 	}
 
 	result, err := agent.Run(context.Background(), agent.Request{
@@ -213,13 +213,13 @@ func TestRun_CompactionStuckPropagatesAsFatalError(t *testing.T) {
 
 	compactionCalls := 0
 	stuckThreshold := 3
-	compactor := func(ctx context.Context, messages []agent.Message, prov agent.Provider, toolCalls []agent.ToolCallLog) ([]agent.Message, *agent.CompactionResult, error) {
+	compactor := func(ctx context.Context, input agent.CompactionInput, prov agent.Provider) ([]agent.Message, *agent.CompactionResult, error) {
 		compactionCalls++
 		if compactionCalls >= stuckThreshold {
-			return messages, nil, agent.ErrCompactionStuck
+			return input.History, nil, agent.ErrCompactionStuck
 		}
 		// Noop — ShouldCompact said yes but compaction couldn't produce a result.
-		return messages, nil, nil
+		return input.History, nil, nil
 	}
 
 	result, err := agent.Run(context.Background(), agent.Request{

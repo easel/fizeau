@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/easel/fizeau/internal/compactionctx"
 	agent "github.com/easel/fizeau/internal/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -153,8 +152,7 @@ func TestCompactor_SystemPromptPrefixFitKeepsActivePromptAndBudget(t *testing.T)
 	cfg.EffectivePercent = 100
 
 	systemPrompt := strings.Repeat("P", 120)
-	prefixTokens := EstimateMessageTokens(agent.Message{Role: agent.RoleSystem, Content: systemPrompt})
-	ctx := compactionctx.WithPrefixTokens(context.Background(), prefixTokens)
+	ctx := context.Background()
 
 	var messages []agent.Message
 	for i := 0; i < 5; i++ {
@@ -163,7 +161,8 @@ func TestCompactor_SystemPromptPrefixFitKeepsActivePromptAndBudget(t *testing.T)
 	}
 	messages = append(messages, agent.Message{Role: agent.RoleUser, Content: "DO-THE-THING"})
 
-	newMsgs, result, err := NewCompactor(cfg)(ctx, messages, provider, nil)
+	providerMessages := append([]agent.Message{{Role: agent.RoleSystem, Content: systemPrompt}}, messages...)
+	newMsgs, result, err := NewCompactor(cfg)(ctx, testCompactionInput(messages, providerMessages, nil, nil), provider)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.LessOrEqual(t, result.TokensAfter, cfg.ContextWindow*cfg.EffectivePercent/100-cfg.ReserveTokens)
@@ -190,8 +189,7 @@ func TestCompactor_SystemPromptPrefixNoFitFailsClosed(t *testing.T) {
 	cfg.EffectivePercent = 100
 
 	systemPrompt := strings.Repeat("P", 260)
-	prefixTokens := EstimateMessageTokens(agent.Message{Role: agent.RoleSystem, Content: systemPrompt})
-	ctx := compactionctx.WithPrefixTokens(context.Background(), prefixTokens)
+	ctx := context.Background()
 
 	messages := []agent.Message{
 		{Role: agent.RoleUser, Content: strings.Repeat("A", 120)},
@@ -199,7 +197,8 @@ func TestCompactor_SystemPromptPrefixNoFitFailsClosed(t *testing.T) {
 		{Role: agent.RoleUser, Content: "DO-THE-THING"},
 	}
 
-	newMsgs, result, err := NewCompactor(cfg)(ctx, messages, provider, nil)
+	providerMessages := append([]agent.Message{{Role: agent.RoleSystem, Content: systemPrompt}}, messages...)
+	newMsgs, result, err := NewCompactor(cfg)(ctx, testCompactionInput(messages, providerMessages, nil, nil), provider)
 	require.ErrorIs(t, err, agent.ErrCompactionNoFit)
 	assert.Nil(t, result, "compaction should fail closed when the prefix leaves no fit")
 	assert.Equal(t, messages, newMsgs)

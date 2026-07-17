@@ -10,6 +10,8 @@ import (
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestExecuteNativeRemovesBenchmarkPresetPlanning verifies that PlanningMode
@@ -126,6 +128,65 @@ func TestNativeContextDispatchPreservesRawCompactionOverride(t *testing.T) {
 			}
 		})
 	}
+}
+
+type nativeNoStreamCapacityProvider struct {
+	streamOpts []agentcore.Options
+	chatOpts   []agentcore.Options
+}
+
+func (p *nativeNoStreamCapacityProvider) Chat(_ context.Context, _ []agentcore.Message, _ []agentcore.ToolDef, opts agentcore.Options) (agentcore.Response, error) {
+	p.chatOpts = append(p.chatOpts, opts)
+	return agentcore.Response{Content: "done"}, nil
+}
+
+func (p *nativeNoStreamCapacityProvider) ChatStream(_ context.Context, _ []agentcore.Message, _ []agentcore.ToolDef, opts agentcore.Options) (<-chan agentcore.StreamDelta, error) {
+	p.streamOpts = append(p.streamOpts, opts)
+	stream := make(chan agentcore.StreamDelta, 1)
+	stream <- agentcore.StreamDelta{Done: true}
+	close(stream)
+	return stream, nil
+}
+
+func TestRunNativeNoStreamRerunContinuesCapacityAttempts(t *testing.T) {
+	provider := &nativeNoStreamCapacityProvider{}
+	var requestAttempts []int
+	var final harnesses.FinalData
+	RunNative(context.Background(), NativeRequest{
+		Prompt:                "x",
+		Permissions:           "unrestricted",
+		MaxTokens:             200,
+		SelectedContextWindow: 100,
+		Decision: NativeDecision{
+			Harness:  "fiz",
+			Provider: "alpha",
+			Model:    "fixture-model",
+		},
+		Started: time.Now(),
+	}, NativeCallbacks{
+		ResolveProvider: func(NativeProviderRequest) NativeProviderResolution {
+			return NativeProviderResolution{Provider: provider, Name: "alpha", Model: "fixture-model"}
+		},
+		ObserveAgentEvent: func(event agentcore.Event) {
+			if event.Type != agentcore.EventLLMRequest {
+				return
+			}
+			var payload struct {
+				AttemptIndex int `json:"attempt_index"`
+			}
+			if err := json.Unmarshal(event.Data, &payload); err == nil {
+				requestAttempts = append(requestAttempts, payload.AttemptIndex)
+			}
+		},
+		Finalize: func(got harnesses.FinalData, _ TerminalOrigin) { final = got },
+	})
+
+	require.Len(t, provider.streamOpts, 1)
+	require.Len(t, provider.chatOpts, 1)
+	assert.Equal(t, 93, provider.streamOpts[0].MaxTokens)
+	assert.Equal(t, 93, provider.chatOpts[0].MaxTokens)
+	assert.Equal(t, []int{1, 2}, requestAttempts)
+	assert.Equal(t, "success", final.Status)
 }
 
 // ServiceExecuteRequest is the API request shape for Execute

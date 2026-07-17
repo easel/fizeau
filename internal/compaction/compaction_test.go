@@ -12,6 +12,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func testCompactionInput(history, providerMessages []agent.Message, toolCalls []agent.ToolCallLog, tools []agent.ToolDef) agent.CompactionInput {
+	if providerMessages == nil {
+		providerMessages = history
+	}
+	return agent.CompactionInput{
+		History:                     history,
+		ProviderMessages:            providerMessages,
+		ExecutedToolCalls:           toolCalls,
+		ToolDefinitions:             tools,
+		EstimatedProviderCallTokens: agent.EstimateProviderCallTokens(providerMessages, tools),
+	}
+}
+
 // multiTurnProvider simulates a multi-turn conversation. It returns tool calls
 // for the first N calls, then a text response.
 type multiTurnProvider struct {
@@ -74,7 +87,7 @@ func TestCompactor_TriggersOnLargeConversation(t *testing.T) {
 	// Simulate the agent loop
 	for i := 0; i < 15; i++ {
 		// Check compaction
-		newMsgs, _, err := compactor(context.Background(), messages, provider, toolCalls)
+		newMsgs, _, err := compactor(context.Background(), testCompactionInput(messages, nil, toolCalls, nil), provider)
 		require.NoError(t, err)
 		if len(newMsgs) < len(messages) {
 			compactionCount++
@@ -137,9 +150,40 @@ func TestCompactor_NoCompactionWhenDisabled(t *testing.T) {
 		messages = append(messages, agent.Message{Role: agent.RoleUser, Content: string(make([]byte, 1000))})
 	}
 
-	result, _, err := compactor(context.Background(), messages, nil, nil)
+	result, _, err := compactor(context.Background(), testCompactionInput(messages, nil, nil, nil), nil)
 	require.NoError(t, err)
 	assert.Equal(t, len(messages), len(result))
+}
+
+func TestCompactorUsesSuppliedProviderCallEstimate(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ContextWindow = 100
+	cfg.EffectivePercent = 100
+	cfg.ReserveTokens = 0
+	cfg.KeepRecentTokens = 1
+	provider := &multiTurnProvider{}
+	compactor := NewCompactor(cfg)
+
+	history := []agent.Message{
+		{Role: agent.RoleUser, Content: "one"},
+		{Role: agent.RoleAssistant, Content: "two"},
+		{Role: agent.RoleUser, Content: "three"},
+		{Role: agent.RoleAssistant, Content: "four"},
+		{Role: agent.RoleUser, Content: "active"},
+	}
+	input := testCompactionInput(history, nil, nil, nil)
+	input.EstimatedProviderCallTokens = 0
+	unchanged, result, err := compactor(context.Background(), input, provider)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, history, unchanged)
+	assert.Zero(t, provider.summarizeCount, "compactor must not recompute its trigger from history")
+
+	input.EstimatedProviderCallTokens = 101
+	_, result, err = compactor(context.Background(), input, provider)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Greater(t, provider.summarizeCount, 0, "supplied above-threshold estimate must trigger compaction")
 }
 
 func TestCompactor_SkipsRecompaction(t *testing.T) {
@@ -157,7 +201,7 @@ func TestCompactor_SkipsRecompaction(t *testing.T) {
 		InjectSummary("## Goal\nJust compacted"),
 	}
 
-	result, _, err := compactor(context.Background(), messages, provider, nil)
+	result, _, err := compactor(context.Background(), testCompactionInput(messages, nil, nil, nil), provider)
 	require.NoError(t, err)
 	assert.Equal(t, len(messages), len(result), "should skip re-compaction")
 }
@@ -183,7 +227,7 @@ func TestEndToEnd_AgentLoopWithCompaction(t *testing.T) {
 
 	for iteration := 0; iteration < 20; iteration++ {
 		// Pre-iteration compaction check
-		newMsgs, _, err := compactor(context.Background(), messages, provider, allToolCalls)
+		newMsgs, _, err := compactor(context.Background(), testCompactionInput(messages, nil, allToolCalls, tools), provider)
 		require.NoError(t, err)
 		if len(newMsgs) < len(messages) {
 			events = append(events, fmt.Sprintf("compacted at iteration %d: %d -> %d msgs", iteration, len(messages), len(newMsgs)))
@@ -344,7 +388,7 @@ func TestCompact_UserMessageTailReInclusion(t *testing.T) {
 	messages = append(messages, agent.Message{Role: agent.RoleUser, Content: "Final step: wrap up"})
 
 	compactor := NewCompactor(cfg)
-	newMsgs, result, err := compactor(context.Background(), messages, provider, nil)
+	newMsgs, result, err := compactor(context.Background(), testCompactionInput(messages, nil, nil, nil), provider)
 	require.NoError(t, err)
 	require.NotNil(t, result, "compaction should have triggered")
 
@@ -410,7 +454,7 @@ func TestCompactor_ReturnsErrCompactionStuckAfterThreshold(t *testing.T) {
 
 	var lastErr error
 	for i := 0; i < cfg.StuckThreshold+2; i++ {
-		_, _, lastErr = compactor(context.Background(), messages, &stuckProvider{}, nil)
+		_, _, lastErr = compactor(context.Background(), testCompactionInput(messages, nil, nil, nil), &stuckProvider{})
 		if lastErr != nil {
 			break
 		}
@@ -439,7 +483,7 @@ func TestCompactor_StuckCounterResetsOnSuccess(t *testing.T) {
 
 	// Accumulate some failed attempts (but below threshold).
 	for i := 0; i < cfg.StuckThreshold-1; i++ {
-		_, _, err := compactor(context.Background(), smallMessages, provider, nil)
+		_, _, err := compactor(context.Background(), testCompactionInput(smallMessages, nil, nil, nil), provider)
 		require.NoError(t, err, "should not error before threshold")
 	}
 
@@ -457,14 +501,14 @@ func TestCompactor_StuckCounterResetsOnSuccess(t *testing.T) {
 		})
 	}
 
-	newMsgs, result, err := compactor(context.Background(), bigMessages, provider, nil)
+	newMsgs, result, err := compactor(context.Background(), testCompactionInput(bigMessages, nil, nil, nil), provider)
 	require.NoError(t, err)
 	require.NotNil(t, result, "compaction should succeed and reset the counter")
 	require.Less(t, len(newMsgs), len(bigMessages))
 
 	// After reset, the small-message noop should be tolerated again.
 	for i := 0; i < cfg.StuckThreshold-1; i++ {
-		_, _, err := compactor(context.Background(), smallMessages, provider, nil)
+		_, _, err := compactor(context.Background(), testCompactionInput(smallMessages, nil, nil, nil), provider)
 		require.NoError(t, err, "should not error after counter reset")
 	}
 }
@@ -492,17 +536,17 @@ func TestCompactor_StuckCounterResetsWhenBelowThreshold(t *testing.T) {
 
 	// Accumulate failures just below the threshold.
 	for i := 0; i < cfg.StuckThreshold-1; i++ {
-		_, _, err := compactor(context.Background(), bigMessages, &stuckProvider{}, nil)
+		_, _, err := compactor(context.Background(), testCompactionInput(bigMessages, nil, nil, nil), &stuckProvider{})
 		require.NoError(t, err)
 	}
 
 	// A call where ShouldCompact returns false resets the counter.
-	_, _, err := compactor(context.Background(), smallMessages, &stuckProvider{}, nil)
+	_, _, err := compactor(context.Background(), testCompactionInput(smallMessages, nil, nil, nil), &stuckProvider{})
 	require.NoError(t, err)
 
 	// Now we should tolerate another threshold-1 failures.
 	for i := 0; i < cfg.StuckThreshold-1; i++ {
-		_, _, err := compactor(context.Background(), bigMessages, &stuckProvider{}, nil)
+		_, _, err := compactor(context.Background(), testCompactionInput(bigMessages, nil, nil, nil), &stuckProvider{})
 		require.NoError(t, err)
 	}
 }

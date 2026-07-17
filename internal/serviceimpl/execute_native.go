@@ -278,6 +278,7 @@ func RunNative(ctx context.Context, req NativeRequest, cb NativeCallbacks) {
 	result, runErr := agentcore.Run(cancelCtx, loopReq)
 	if shouldRetryNativeNoStream(req.NoStream, result, runErr) {
 		loopReq.NoStream = true
+		loopReq.InitialCapacityAttempts = result.CapacityAttempts
 		result, runErr = agentcore.Run(cancelCtx, loopReq)
 	}
 

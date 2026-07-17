@@ -1962,10 +1962,10 @@ func TestRun_OverflowTriggersCompactionAndRetrySucceeds(t *testing.T) {
 	}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, msgs []Message, prov Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error) {
+	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
 		// Return a shorter message list to signal compaction occurred.
-		shortened := msgs[:1]
+		shortened := input.History[:1]
 		return shortened, &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
 	}
 
@@ -2009,14 +2009,14 @@ func TestRun_OverflowCompactionNoFitReturnsError(t *testing.T) {
 	}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, msgs []Message, prov Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error) {
+	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
 		if compactionCalls == 1 {
 			// Pre-turn compaction: no-op (not over budget).
-			return msgs, nil, nil
+			return input.History, nil, nil
 		}
 		// Overflow-triggered compaction: can't fit.
-		return msgs, nil, ErrCompactionNoFit
+		return input.History, nil, ErrCompactionNoFit
 	}
 
 	result, err := Run(context.Background(), Request{
@@ -2050,10 +2050,10 @@ func TestRun_NoOpCompactionEmitsNoEvents(t *testing.T) {
 	}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, msgs []Message, prov Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error) {
+	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
 		// Pure no-op: tell the loop nothing happened.
-		return msgs, nil, nil
+		return input.History, nil, nil
 	}
 
 	var compactionEvents []Event
@@ -2084,13 +2084,13 @@ func TestRun_OverflowCompactionSuccessRetryStillOverflowsReturnsError(t *testing
 	}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, msgs []Message, prov Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error) {
+	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
 		// Return a shorter list to signal compaction occurred.
-		if len(msgs) > 1 {
-			return msgs[:1], &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
+		if len(input.History) > 1 {
+			return input.History[:1], &CompactionResult{Summary: "compacted", TokensBefore: 100, TokensAfter: 20}, nil
 		}
-		return msgs, nil, nil
+		return input.History, nil, nil
 	}
 
 	result, err := Run(context.Background(), Request{
@@ -2293,19 +2293,19 @@ func TestRun_MidTurnOverflowRetry(t *testing.T) {
 	rp := &retryProvider{outcomes: outcomes}
 
 	compactionCalls := 0
-	compactor := func(ctx context.Context, msgs []Message, prov Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error) {
+	compactor := func(ctx context.Context, input CompactionInput, prov Provider) ([]Message, *CompactionResult, error) {
 		compactionCalls++
 		// Calls 1, 2, 3 are pre-turn iter 0, mid-turn iter 0, and pre-turn iter 1
 		// respectively — all no-ops. Call 4 is the overflow-triggered compaction
 		// in iteration 1 and is where we actually compact.
 		if compactionCalls < 4 {
-			return msgs, nil, nil
+			return input.History, nil, nil
 		}
 		// Overflow-triggered compaction: shorten the history.
-		if len(msgs) <= 1 {
-			return msgs, nil, nil
+		if len(input.History) <= 1 {
+			return input.History, nil, nil
 		}
-		shortened := msgs[:1]
+		shortened := input.History[:1]
 		return shortened, &CompactionResult{Summary: "overflow compaction", TokensBefore: 200, TokensAfter: 10}, nil
 	}
 

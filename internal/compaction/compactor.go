@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/easel/fizeau/internal/compactionctx"
 	agent "github.com/easel/fizeau/internal/core"
 )
 
@@ -19,7 +18,7 @@ type state struct {
 
 // NewCompactor creates a Compactor function suitable for agent.Request.Compactor.
 // It uses the provided config to determine when and how to compact.
-func NewCompactor(cfg Config) func(ctx context.Context, messages []agent.Message, provider agent.Provider, toolCalls []agent.ToolCallLog) ([]agent.Message, *agent.CompactionResult, error) {
+func NewCompactor(cfg Config) agent.Compactor {
 	s := &state{}
 
 	stuckThreshold := cfg.StuckThreshold
@@ -27,18 +26,15 @@ func NewCompactor(cfg Config) func(ctx context.Context, messages []agent.Message
 		stuckThreshold = DefaultStuckThreshold
 	}
 
-	return func(ctx context.Context, messages []agent.Message, provider agent.Provider, toolCalls []agent.ToolCallLog) ([]agent.Message, *agent.CompactionResult, error) {
+	return func(ctx context.Context, input agent.CompactionInput, provider agent.Provider) ([]agent.Message, *agent.CompactionResult, error) {
+		messages := input.History
 		if !cfg.Enabled {
 			return messages, nil, nil
 		}
 
-		prefixTokens := compactionctx.PrefixTokens(ctx)
-
-		// Estimate current token count
-		estimated := EstimateConversationTokens(messages) + prefixTokens
-
-		// Check if compaction is needed
-		if !ShouldCompact(estimated, cfg.ContextWindow, cfg.EffectivePercent, cfg.ReserveTokens) {
+		// Core supplies the exact prospective provider-call estimate, including
+		// system-prefix messages and current tool definitions.
+		if !ShouldCompact(input.EstimatedProviderCallTokens, cfg.ContextWindow, cfg.EffectivePercent, cfg.ReserveTokens) {
 			// Below threshold — reset the stuck counter since conditions changed.
 			s.mu.Lock()
 			s.consecutiveFailedAttempts = 0
@@ -55,9 +51,15 @@ func NewCompactor(cfg Config) func(ctx context.Context, messages []agent.Message
 		prevSummary := s.previousSummary
 		prevOps := s.previousFileOps
 		s.mu.Unlock()
+		prefixCount := len(input.ProviderMessages) - len(input.History)
+		if prefixCount < 0 {
+			prefixCount = 0
+		}
+		prefixMessages := input.ProviderMessages[:prefixCount]
+		fixedEnvelopeTokens := agent.EstimateProviderCallTokens(prefixMessages, input.ToolDefinitions)
 
 		newMessages, result, err := compactMessages(
-			ctx, provider, messages, toolCalls, prevSummary, prevOps, cfg, prefixTokens,
+			ctx, provider, messages, input.ExecutedToolCalls, prevSummary, prevOps, cfg, fixedEnvelopeTokens,
 		)
 		if err != nil {
 			// compactMessages failed — count this as a failed attempt unless
@@ -85,10 +87,11 @@ func NewCompactor(cfg Config) func(ctx context.Context, messages []agent.Message
 			return messages, nil, nil
 		}
 
-		if prefixTokens > 0 {
-			result.TokensBefore += prefixTokens
-			result.TokensAfter += prefixTokens
-		}
+		result.TokensBefore = input.EstimatedProviderCallTokens
+		providerMessagesAfter := make([]agent.Message, 0, len(prefixMessages)+len(newMessages))
+		providerMessagesAfter = append(providerMessagesAfter, prefixMessages...)
+		providerMessagesAfter = append(providerMessagesAfter, newMessages...)
+		result.TokensAfter = agent.EstimateProviderCallTokens(providerMessagesAfter, input.ToolDefinitions)
 
 		s.mu.Lock()
 		s.previousSummary = result.Summary

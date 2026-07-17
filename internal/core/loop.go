@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/easel/fizeau/internal/compactionctx"
 	"github.com/easel/fizeau/internal/reasoning"
 	"github.com/easel/fizeau/telemetry"
 )
@@ -36,6 +35,19 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		ReasoningIntent:  req.Reasoning,
 		CostCapUSD:       req.CostCapUSD,
 		FinalCostSource:  SessionCostSourceUnknown,
+	}
+	workingContextWindow, contextWindowErr := ResolveWorkingContextWindow(req.SelectedContextWindow, req.CompactionContextWindow)
+	if contextWindowErr != nil {
+		result.Status = StatusError
+		result.Error = contextWindowErr
+		return result, result.Error
+	}
+	capacity := newContextCapacityController(workingContextWindow, req.InitialCapacityAttempts)
+	result.CapacityAttempts = capacity.attempts
+	if req.MaxTokens < 0 {
+		result.Status = StatusError
+		result.Error = fmt.Errorf("agent: max_tokens must be non-negative: %d", req.MaxTokens)
+		return result, result.Error
 	}
 
 	if req.Provider == nil {
@@ -160,11 +172,6 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		anyUnknownCostObserved bool
 	)
 
-	compactionCtx := ctx
-	if req.SystemPrompt != "" {
-		compactionCtx = compactionctx.WithPrefixTokens(compactionCtx, estimateCompactionPrefixTokens(req.SystemPrompt))
-	}
-
 	// Planning turn: one no-tool LLM call before the main loop. Failure is
 	// non-fatal — the run continues without a plan.
 	if req.PlanningMode {
@@ -173,72 +180,87 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			planMessages = append(planMessages, Message{Role: RoleSystem, Content: req.SystemPrompt})
 		}
 		planMessages = append(planMessages, Message{Role: RoleUser, Content: planningPromptFor(req.Prompt)})
-
-		emitCallback(req.Callback, Event{
-			SessionID: sessionID,
-			Seq:       seq,
-			Type:      EventLLMRequest,
-			Timestamp: time.Now().UTC(),
-			Data: mustMarshal(map[string]any{
-				"planning":           true,
-				"messages":           planMessages,
-				"tools":              nil,
-				"model":              opts.Model,
-				"temperature":        opts.Temperature,
-				"top_p":              opts.TopP,
-				"top_k":              opts.TopK,
-				"min_p":              opts.MinP,
-				"repetition_penalty": opts.RepetitionPenalty,
-				"max_tokens":         opts.MaxTokens,
-				"seed":               opts.Seed,
-				"sampling_source":    opts.SamplingSource,
-				"stop":               opts.Stop,
-				"reasoning":          opts.Reasoning,
-				"reasoning_intent":   opts.Reasoning,
-				"cache_policy":       opts.CachePolicy,
-			}),
-		})
-		seq++
-
-		planStart := time.Now()
-		planResp, planErr := req.Provider.Chat(ctx, planMessages, nil, opts)
-		planDuration := time.Since(planStart)
-
-		if planErr != nil {
-			slog.Warn("planning call failed, continuing without plan", "error", planErr)
-		} else {
-			result.Tokens.Add(planResp.Usage)
+		planCapacity := capacity.preflight(ContextCapacityCallPlanning, 0, planMessages, nil, opts)
+		if planCapacity.Event != nil {
 			emitCallback(req.Callback, Event{
 				SessionID: sessionID,
 				Seq:       seq,
-				Type:      EventLLMResponse,
+				Type:      EventContextCapacity,
 				Timestamp: time.Now().UTC(),
-				Data: mustMarshal(map[string]any{
-					"planning":      true,
-					"content":       planResp.Content,
-					"usage":         planResp.Usage,
-					"latency_ms":    planDuration.Milliseconds(),
-					"model":         planResp.Model,
-					"finish_reason": planResp.FinishReason,
-				}),
+				Data:      mustMarshal(planCapacity.Event),
 			})
 			seq++
+		}
+		if planCapacity.Event == nil || planCapacity.Event.Action != ContextCapacityActionPlanningSkipped {
+			planOpts := planCapacity.Options
 			emitCallback(req.Callback, Event{
 				SessionID: sessionID,
 				Seq:       seq,
-				Type:      EventPlanningTurn,
+				Type:      EventLLMRequest,
 				Timestamp: time.Now().UTC(),
 				Data: mustMarshal(map[string]any{
-					"plan":  planResp.Content,
-					"usage": planResp.Usage,
-					"model": planResp.Model,
+					"planning":           true,
+					"attempt_index":      planCapacity.AttemptIndex,
+					"messages":           planMessages,
+					"tools":              nil,
+					"model":              planOpts.Model,
+					"temperature":        planOpts.Temperature,
+					"top_p":              planOpts.TopP,
+					"top_k":              planOpts.TopK,
+					"min_p":              planOpts.MinP,
+					"repetition_penalty": planOpts.RepetitionPenalty,
+					"max_tokens":         planOpts.MaxTokens,
+					"seed":               planOpts.Seed,
+					"sampling_source":    planOpts.SamplingSource,
+					"stop":               planOpts.Stop,
+					"reasoning":          planOpts.Reasoning,
+					"reasoning_intent":   planOpts.Reasoning,
+					"cache_policy":       planOpts.CachePolicy,
 				}),
 			})
 			seq++
-			messages = append(messages, Message{
-				Role:    RoleAssistant,
-				Content: "<plan>\n" + planResp.Content + "\n</plan>",
-			})
+
+			planStart := time.Now()
+			planResp, planErr := req.Provider.Chat(ctx, planMessages, nil, planOpts)
+			planDuration := time.Since(planStart)
+
+			if planErr != nil {
+				slog.Warn("planning call failed, continuing without plan", "error", planErr)
+			} else {
+				result.Tokens.Add(planResp.Usage)
+				emitCallback(req.Callback, Event{
+					SessionID: sessionID,
+					Seq:       seq,
+					Type:      EventLLMResponse,
+					Timestamp: time.Now().UTC(),
+					Data: mustMarshal(map[string]any{
+						"planning":      true,
+						"attempt_index": planCapacity.AttemptIndex,
+						"content":       planResp.Content,
+						"usage":         planResp.Usage,
+						"latency_ms":    planDuration.Milliseconds(),
+						"model":         planResp.Model,
+						"finish_reason": planResp.FinishReason,
+					}),
+				})
+				seq++
+				emitCallback(req.Callback, Event{
+					SessionID: sessionID,
+					Seq:       seq,
+					Type:      EventPlanningTurn,
+					Timestamp: time.Now().UTC(),
+					Data: mustMarshal(map[string]any{
+						"plan":  planResp.Content,
+						"usage": planResp.Usage,
+						"model": planResp.Model,
+					}),
+				})
+				seq++
+				messages = append(messages, Message{
+					Role:    RoleAssistant,
+					Content: "<plan>\n" + planResp.Content + "\n</plan>",
+				})
+			}
 		}
 	}
 
@@ -259,7 +281,16 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		}
 
 		messagesBefore := len(messages)
-		compacted, compResult, compErr := req.Compactor(compactionCtx, messages, req.Provider, result.ToolCalls)
+		history := append([]Message(nil), messages...)
+		providerMessages := providerMessagesFor(req.SystemPrompt, history)
+		compactionInput := CompactionInput{
+			History:                     history,
+			ProviderMessages:            providerMessages,
+			ExecutedToolCalls:           append([]ToolCallLog(nil), result.ToolCalls...),
+			ToolDefinitions:             append([]ToolDef(nil), toolDefs...),
+			EstimatedProviderCallTokens: EstimateProviderCallTokens(providerMessages, toolDefs),
+		}
+		compacted, compResult, compErr := req.Compactor(ctx, compactionInput, req.Provider)
 
 		if compErr == nil && compResult == nil {
 			return false, nil, nil
@@ -373,31 +404,45 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			return result, compErr
 		}
 
-		providerMessages := append([]Message(nil), messages...)
-		if req.SystemPrompt != "" {
-			providerMessages = append([]Message{{
-				Role:    RoleSystem,
-				Content: req.SystemPrompt,
-			}}, providerMessages...)
-		}
+		providerMessages := providerMessagesFor(req.SystemPrompt, messages)
 
 		var resp Response
 		var err error
 		overflowCompacted := false
 	providerRetry:
 		for attempt := 1; attempt <= maxProviderAttempts; attempt++ {
+			callCapacity := capacity.preflight(ContextCapacityCallMain, iteration+1, providerMessages, toolDefs, opts)
+			if callCapacity.Event != nil {
+				emitCallback(req.Callback, Event{
+					SessionID: sessionID,
+					Seq:       seq,
+					Type:      EventContextCapacity,
+					Timestamp: time.Now().UTC(),
+					Data:      mustMarshal(callCapacity.Event),
+				})
+				seq++
+			}
+			if callCapacity.Err != nil {
+				result.Status = StatusError
+				result.Error = callCapacity.Err
+				result.Duration = time.Since(start)
+				snapshotMessages()
+				emitFinalSessionEnd(req.Callback, sessionID, &seq, req.Provider, &result, req.Metadata)
+				return result, result.Error
+			}
+			callOpts := callCapacity.Options
 			chatStart := time.Now()
 			chatAttrs := telemetry.ChatSpan{
 				HarnessName:     telemetry.ServiceName,
 				SessionID:       sessionID,
 				ConversationID:  sessionID,
 				TurnIndex:       iteration + 1,
-				AttemptIndex:    attempt,
+				AttemptIndex:    callCapacity.AttemptIndex,
 				StartTime:       chatStart,
 				ProviderName:    sessionProvider,
 				ProviderSystem:  chatProviderSystem,
 				RequestedModel:  sessionModel,
-				ReasoningIntent: string(opts.Reasoning),
+				ReasoningIntent: string(callOpts.Reasoning),
 				ServerAddress:   chatServerAddress,
 				ServerPort:      chatServerPort,
 			}
@@ -409,22 +454,22 @@ func Run(ctx context.Context, req Request) (Result, error) {
 				Type:      EventLLMRequest,
 				Timestamp: time.Now().UTC(),
 				Data: mustMarshal(map[string]any{
-					"attempt_index":      attempt,
+					"attempt_index":      callCapacity.AttemptIndex,
 					"messages":           providerMessages,
 					"tools":              toolDefs,
-					"model":              opts.Model,
-					"temperature":        opts.Temperature,
-					"top_p":              opts.TopP,
-					"top_k":              opts.TopK,
-					"min_p":              opts.MinP,
-					"repetition_penalty": opts.RepetitionPenalty,
-					"max_tokens":         opts.MaxTokens,
-					"seed":               opts.Seed,
-					"sampling_source":    opts.SamplingSource,
-					"stop":               opts.Stop,
-					"reasoning":          opts.Reasoning,
-					"reasoning_intent":   opts.Reasoning,
-					"cache_policy":       opts.CachePolicy,
+					"model":              callOpts.Model,
+					"temperature":        callOpts.Temperature,
+					"top_p":              callOpts.TopP,
+					"top_k":              callOpts.TopK,
+					"min_p":              callOpts.MinP,
+					"repetition_penalty": callOpts.RepetitionPenalty,
+					"max_tokens":         callOpts.MaxTokens,
+					"seed":               callOpts.Seed,
+					"sampling_source":    callOpts.SamplingSource,
+					"stop":               callOpts.Stop,
+					"reasoning":          callOpts.Reasoning,
+					"reasoning_intent":   callOpts.Reasoning,
+					"cache_policy":       callOpts.CachePolicy,
 				}),
 			})
 			seq++
@@ -432,7 +477,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 			llmStart := time.Now()
 			if sp, ok := req.Provider.(StreamingProvider); ok && !req.NoStream {
 				budgetTokens := 0
-				if p, err2 := reasoning.ParseString(string(opts.Reasoning)); err2 == nil {
+				if p, err2 := reasoning.ParseString(string(callOpts.Reasoning)); err2 == nil {
 					if b, err2 := reasoning.BudgetFor(p, nil, 0); err2 == nil {
 						budgetTokens = b
 					}
@@ -441,22 +486,22 @@ func Run(ctx context.Context, req Request) (Result, error) {
 				if stallTimeout == 0 {
 					stallTimeout = DefaultReasoningStallTimeout
 				}
-				resp, err = consumeStream(chatCtx, sp, providerMessages, toolDefs, opts, req.Callback, sessionID, chatStart, &seq, streamThresholds{
+				resp, err = consumeStream(chatCtx, sp, providerMessages, toolDefs, callOpts, req.Callback, sessionID, chatStart, &seq, streamThresholds{
 					reasoningByteLimit:    req.ReasoningByteLimit,
 					reasoningStallTimeout: stallTimeout,
 					reasoningBudgetTokens: budgetTokens,
 					modelName:             sessionModel,
-					promptID:              fmt.Sprintf("%s/i%d/a%d", sessionID, iteration+1, attempt),
+					promptID:              fmt.Sprintf("%s/i%d/a%d", sessionID, iteration+1, callCapacity.AttemptIndex),
 				})
 			} else {
-				resp, err = req.Provider.Chat(chatCtx, providerMessages, toolDefs, opts)
+				resp, err = req.Provider.Chat(chatCtx, providerMessages, toolDefs, callOpts)
 			}
 			llmDuration := time.Since(llmStart)
 
 			if resp.Attempt == nil {
 				resp.Attempt = &AttemptMetadata{}
 			}
-			resp.Attempt.AttemptIndex = attempt
+			resp.Attempt.AttemptIndex = callCapacity.AttemptIndex
 			resp.Attempt.ReasoningIntent = string(req.Reasoning)
 			if resp.Attempt.ProviderName == "" {
 				resp.Attempt.ProviderName = req.SelectedProvider
@@ -582,7 +627,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 					Type:      EventLLMResponse,
 					Timestamp: time.Now().UTC(),
 					Data: mustMarshal(map[string]any{
-						"attempt_index": attempt,
+						"attempt_index": callCapacity.AttemptIndex,
 						"error":         err.Error(),
 						"latency_ms":    llmDuration.Milliseconds(),
 					}),
@@ -629,13 +674,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 					}
 					if compacted {
 						// Rebuild providerMessages from the freshly compacted history.
-						providerMessages = append([]Message(nil), messages...)
-						if req.SystemPrompt != "" {
-							providerMessages = append([]Message{{
-								Role:    RoleSystem,
-								Content: req.SystemPrompt,
-							}}, providerMessages...)
-						}
+						providerMessages = providerMessagesFor(req.SystemPrompt, messages)
 						attempt = 0 // incremented to 1 by the loop header
 						continue providerRetry
 					}
@@ -690,7 +729,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 
 			// Emit LLM response event with full tool call bodies.
 			responseData := map[string]any{
-				"attempt_index":     attempt,
+				"attempt_index":     callCapacity.AttemptIndex,
 				"content":           resp.Content,
 				"tool_calls":        resp.ToolCalls,
 				"usage":             resp.Usage,
@@ -982,12 +1021,17 @@ func min(a, b int) int {
 	return b
 }
 
-func estimateCompactionPrefixTokens(systemPrompt string) int {
-	return estimateCompactionTextTokens(string(RoleSystem)) + estimateCompactionTextTokens(systemPrompt)
-}
-
-func estimateCompactionTextTokens(s string) int {
-	return (len(s) + 3) / 4
+func providerMessagesFor(systemPrompt string, history []Message) []Message {
+	capacity := len(history)
+	if systemPrompt != "" {
+		capacity++
+	}
+	providerMessages := make([]Message, 0, capacity)
+	if systemPrompt != "" {
+		providerMessages = append(providerMessages, Message{Role: RoleSystem, Content: systemPrompt})
+	}
+	providerMessages = append(providerMessages, history...)
+	return providerMessages
 }
 
 func emitCallback(cb EventCallback, e Event) {

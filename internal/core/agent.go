@@ -206,6 +206,7 @@ const (
 	EventLLMDelta        EventType = "llm.delta"
 	EventCompactionStart EventType = "compaction.start"
 	EventCompactionEnd   EventType = "compaction.end"
+	EventContextCapacity EventType = "context_capacity"
 	// EventOverride and EventRejectedOverride mirror the service-stream
 	// override / rejected_override events into the session log so windowed
 	// reporting (UsageReport, ADR-006 §5) can rebuild routing-quality
@@ -326,8 +327,29 @@ type RoutingReporter interface {
 	RoutingReport() RoutingReport
 }
 
+// CompactionInput describes the exact prospective provider call at a
+// compaction boundary. History excludes the separately owned system prompt;
+// ProviderMessages includes it exactly once.
+type CompactionInput struct {
+	History                     []Message
+	ProviderMessages            []Message
+	ExecutedToolCalls           []ToolCallLog
+	ToolDefinitions             []ToolDef
+	EstimatedProviderCallTokens int
+}
+
 // Compactor is the internal callback shape used by Request.Compactor.
-type Compactor func(ctx context.Context, messages []Message, provider Provider, toolCalls []ToolCallLog) ([]Message, *CompactionResult, error)
+type Compactor func(ctx context.Context, input CompactionInput, provider Provider) ([]Message, *CompactionResult, error)
+
+// CapacityAttemptKey identifies one logical planning or main provider call.
+type CapacityAttemptKey struct {
+	CallKind  string
+	TurnIndex int
+}
+
+// CapacityAttemptState stores the last assigned one-based attempt index for
+// each logical call. Request state is copied before a run mutates it.
+type CapacityAttemptState map[CapacityAttemptKey]int
 
 // Request configures a single internal agent loop.
 type Request struct {
@@ -391,6 +413,10 @@ type Request struct {
 	// public execution boundary. It remains separate from selected-route
 	// evidence so capacity logic can preserve its provenance.
 	CompactionContextWindow int
+
+	// InitialCapacityAttempts resumes capacity attempt indexes across a
+	// service-owned no-stream rerun.
+	InitialCapacityAttempts CapacityAttemptState
 
 	// MaxTokens is the maximum number of tokens the model may generate per turn.
 	// Zero means no explicit limit (provider default applies).
@@ -530,6 +556,10 @@ type Result struct {
 
 	// FailoverCount records how many times routing advanced to another candidate.
 	FailoverCount int `json:"failover_count,omitempty"`
+
+	// CapacityAttempts is the last assigned preflight attempt index for each
+	// logical planning or main call in this run.
+	CapacityAttempts CapacityAttemptState `json:"-"`
 
 	// Error is non-nil when Status is StatusError.
 	Error error `json:"-"`

@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// charsPerToken is the conservative heuristic for token estimation.
-	// Overestimates slightly, which is safer for compaction trigger timing.
+	// charsPerToken converts compaction retention token budgets back to a
+	// conservative byte budget. Estimation itself is owned by core.
 	charsPerToken = 4
 
 	// imageTokenEstimate is the fixed token estimate for image content.
@@ -21,53 +21,44 @@ const (
 
 // EstimateTokens estimates the token count for a string using chars/4.
 func EstimateTokens(s string) int {
-	n := len(s)
-	return (n + charsPerToken - 1) / charsPerToken // ceiling division
+	return agent.EstimateTextTokens(s)
 }
 
 // EstimateMessageTokens estimates the token count for a single message,
 // including role, content, tool calls, and tool call arguments.
 func EstimateMessageTokens(msg agent.Message) int {
-	tokens := EstimateTokens(string(msg.Role))
-	tokens += EstimateTokens(msg.Content)
-	for _, tc := range msg.ToolCalls {
-		tokens += EstimateTokens(tc.Name)
-		tokens += EstimateTokens(string(tc.Arguments))
-	}
-	if msg.ToolCallID != "" {
-		tokens += EstimateTokens(msg.ToolCallID)
-	}
-	return tokens
+	return agent.EstimateMessageTokens(msg)
 }
 
 // EstimateConversationTokens estimates the total tokens for a slice of messages.
 func EstimateConversationTokens(messages []agent.Message) int {
-	total := 0
-	for _, msg := range messages {
-		total += EstimateMessageTokens(msg)
-	}
-	return total
-}
-
-// EffectiveTokenCount computes the effective context consumption from
-// provider-reported token usage. Includes all four components since they
-// all contribute to context window consumption.
-func EffectiveTokenCount(usage agent.TokenUsage) int {
-	return usage.Input + usage.Output + usage.CacheRead + usage.CacheWrite
+	return agent.EstimateProviderCallTokens(messages, nil)
 }
 
 // ShouldCompact returns true if the conversation should be compacted.
-// effectiveWindow = contextWindow * effectivePercent / 100.
+// effectiveWindow uses overflow-safe quotient/remainder scaling.
 func ShouldCompact(estimatedTokens, contextWindow, effectivePercent, reserveTokens int) bool {
 	if contextWindow <= 0 || effectivePercent <= 0 {
 		return false
 	}
-	effectiveWindow := contextWindow * effectivePercent / 100
+	effectiveWindow := scalePercent(contextWindow, effectivePercent)
 	threshold := effectiveWindow - reserveTokens
-	if threshold <= 0 {
-		return false
+	if threshold < 0 {
+		threshold = 0
 	}
 	return estimatedTokens > threshold
+}
+
+func scalePercent(value, percent int) int {
+	if value <= 0 || percent <= 0 {
+		return 0
+	}
+	if percent >= 100 {
+		return value
+	}
+	quotient := value / 100
+	remainder := value % 100
+	return quotient*percent + remainder*percent/100
 }
 
 // TruncateToolResult truncates a tool result string to maxChars,

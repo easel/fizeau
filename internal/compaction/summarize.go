@@ -300,7 +300,10 @@ func compactMessages(
 	}
 
 	tokensBefore := EstimateConversationTokens(messages)
-	effectiveWindow := cfg.ContextWindow*cfg.EffectivePercent/100 - cfg.ReserveTokens
+	effectiveWindow := scalePercent(cfg.ContextWindow, cfg.EffectivePercent) - cfg.ReserveTokens
+	if effectiveWindow < 0 {
+		effectiveWindow = 0
+	}
 	lastUserIndex := findLastUserMessageIndex(messages)
 
 	cutIndex := FindCutPoint(messages, cfg.KeepRecentTokens)

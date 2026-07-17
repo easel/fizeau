@@ -25,6 +25,7 @@ func TestEstimateMessageTokens(t *testing.T) {
 	}
 	tokens := EstimateMessageTokens(msg)
 	assert.Greater(t, tokens, 0)
+	assert.Equal(t, agent.EstimateMessageTokens(msg), tokens)
 
 	// Should be more than just content
 	contentOnly := EstimateTokens("I'll read that file.")
@@ -38,16 +39,7 @@ func TestEstimateConversationTokens(t *testing.T) {
 	}
 	tokens := EstimateConversationTokens(msgs)
 	assert.Greater(t, tokens, 0)
-}
-
-func TestEffectiveTokenCount(t *testing.T) {
-	usage := agent.TokenUsage{
-		Input:      1000,
-		Output:     500,
-		CacheRead:  200,
-		CacheWrite: 100,
-	}
-	assert.Equal(t, 1800, EffectiveTokenCount(usage))
+	assert.Equal(t, agent.EstimateProviderCallTokens(msgs, nil), tokens)
 }
 
 func TestShouldCompact(t *testing.T) {
@@ -58,7 +50,7 @@ func TestShouldCompact(t *testing.T) {
 	// Edge cases
 	assert.False(t, ShouldCompact(100, 0, 95, 8192))    // zero window
 	assert.False(t, ShouldCompact(100, 32768, 0, 8192)) // zero percent
-	assert.False(t, ShouldCompact(100, 100, 95, 10000)) // reserve > effective
+	assert.True(t, ShouldCompact(100, 100, 95, 10000))  // zero threshold
 }
 
 func TestTruncateToolResult(t *testing.T) {
