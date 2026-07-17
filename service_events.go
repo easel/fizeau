@@ -172,6 +172,8 @@ func routingDecisionEventCandidates(in []RouteCandidate) []ServiceRoutingDecisio
 			Eligible:                      c.Eligible,
 			Reason:                        c.Reason,
 			FilterReason:                  c.FilterReason,
+			ContextLength:                 c.ContextLength,
+			ContextSource:                 c.ContextSource,
 			ScoreComponents:               copyScoreComponents(c.ScoreComponents),
 			SourceStatus:                  c.SourceStatus,
 			AutoRoutable:                  c.AutoRoutable,
@@ -237,7 +239,11 @@ func serviceRoutingDecisionDataFromDecision(req ServiceExecuteRequest, decision 
 		MinPower:              req.MinPower,
 		MaxPower:              req.MaxPower,
 		RequiresTools:         req.RequiresTools,
-		EstimatedPromptTokens: req.EstimatedPromptTokens,
+		EstimatedPromptTokens: decision.EstimatedPromptTokens,
+		MaxTokens:             decision.MaxTokens,
+		RequiredContext:       decision.RequiredContext,
+		ContextLength:         decision.ContextLength,
+		ContextSource:         decision.ContextSource,
 		Permissions:           req.Permissions,
 		Role:                  req.Role,
 		CorrelationID:         req.CorrelationID,
@@ -265,6 +271,10 @@ func serviceRoutingDecisionDataFromDecision(req ServiceExecuteRequest, decision 
 	return data
 }
 
+// ServiceRoutingDecisionData is the public routing-decision event payload.
+// Capacity evidence uses omitempty: zero numeric values and an empty source
+// are absent from JSON, while a typed nonempty source such as "unknown"
+// remains explicit.
 type ServiceRoutingDecisionData struct {
 	Harness               string                         `json:"harness"`
 	Provider              string                         `json:"provider,omitempty"`
@@ -286,6 +296,10 @@ type ServiceRoutingDecisionData struct {
 	MaxPower              int                            `json:"max_power,omitempty"`
 	RequiresTools         bool                           `json:"requires_tools,omitempty"`
 	EstimatedPromptTokens int                            `json:"estimated_prompt_tokens,omitempty"`
+	MaxTokens             int                            `json:"max_tokens,omitempty"`
+	RequiredContext       int                            `json:"required_context,omitempty"`
+	ContextLength         int                            `json:"context_length,omitempty"`
+	ContextSource         string                         `json:"context_source,omitempty"`
 	Permissions           string                         `json:"permissions,omitempty"`
 	Role                  string                         `json:"role,omitempty"`
 	CorrelationID         string                         `json:"correlation_id,omitempty"`
@@ -302,7 +316,9 @@ type ServiceRoutingDecisionData struct {
 
 // ServiceRoutingDecisionCandidate is one entry in the routing-decision
 // event's candidates list. Mirrors RouteCandidate but with JSON tags
-// suited for event consumers.
+// suited for event consumers. ContextLength is raw candidate evidence: zero
+// remains unknown and is omitted from JSON, while ContextSource is emitted
+// whenever it is nonempty.
 type ServiceRoutingDecisionCandidate struct {
 	Harness                       string                           `json:"harness"`
 	Provider                      string                           `json:"provider,omitempty"`
@@ -319,6 +335,8 @@ type ServiceRoutingDecisionCandidate struct {
 	Eligible                      bool                             `json:"eligible"`
 	Reason                        string                           `json:"reason,omitempty"`
 	FilterReason                  string                           `json:"filter_reason,omitempty"`
+	ContextLength                 int                              `json:"context_length,omitempty"`
+	ContextSource                 string                           `json:"context_source,omitempty"`
 	ScoreComponents               map[string]float64               `json:"score_components,omitempty"`
 	SourceStatus                  string                           `json:"source_status,omitempty"`
 	AutoRoutable                  bool                             `json:"auto_routable,omitempty"`

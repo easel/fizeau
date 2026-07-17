@@ -399,6 +399,186 @@ models:
 	}
 }
 
+func TestRouteDecisionPreservesRequiredContextEvidence(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-16T00:00:00Z
+catalog_version: required-context-evidence-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  budget-model:
+    family: fixture
+    status: active
+    power: 5
+    context_window: 151
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+
+	newCapacityService := func(contextWindow int) *service {
+		t.Helper()
+		return newTestService(t, ServiceOptions{ServiceConfig: &fakeServiceConfig{
+			providers: map[string]ServiceProviderEntry{
+				"alpha": {
+					Type:                "test",
+					Model:               "budget-model",
+					ContextWindow:       contextWindow,
+					IncludeByDefault:    true,
+					IncludeByDefaultSet: true,
+				},
+			},
+			names:       []string{"alpha"},
+			defaultName: "alpha",
+		}})
+	}
+	request := RouteRequest{
+		Harness: "fiz", Provider: "alpha", Model: "budget-model",
+		EstimatedPromptTokens: 100, MaxTokens: 26,
+	}
+	assertCapacity := func(t *testing.T, decision *RouteDecision, estimated, maxTokens, required int) {
+		t.Helper()
+		if decision == nil {
+			t.Fatal("ResolveRoute returned nil decision evidence")
+		}
+		if decision.EstimatedPromptTokens != estimated || decision.MaxTokens != maxTokens || decision.RequiredContext != required {
+			t.Fatalf("capacity evidence=%d+%d=>%d, want %d+%d=>%d",
+				decision.EstimatedPromptTokens, decision.MaxTokens, decision.RequiredContext,
+				estimated, maxTokens, required)
+		}
+	}
+
+	t.Run("success", func(t *testing.T) {
+		decision, err := newCapacityService(151).ResolveRoute(context.Background(), request)
+		if err != nil {
+			t.Fatalf("ResolveRoute equality: %v", err)
+		}
+		assertCapacity(t, decision, 100, 26, 151)
+	})
+
+	t.Run("typed context failure", func(t *testing.T) {
+		decision, err := newCapacityService(150).ResolveRoute(context.Background(), request)
+		if err == nil {
+			t.Fatal("ResolveRoute one-token-short candidate succeeded")
+		}
+		assertCapacity(t, decision, 100, 26, 151)
+		if len(decision.Candidates) != 1 || decision.Candidates[0].FilterReason != FilterReasonContextTooSmall || decision.Candidates[0].Eligible {
+			t.Fatalf("failed candidates=%#v, want one typed context_too_small rejection", decision.Candidates)
+		}
+		if decision.Candidates[0].ContextLength != 150 || decision.Candidates[0].ContextSource != routing.ContextSourceProviderConfig {
+			t.Fatalf("failed candidate context=%d/%q, want raw 150/%q",
+				decision.Candidates[0].ContextLength, decision.Candidates[0].ContextSource, routing.ContextSourceProviderConfig)
+		}
+	})
+
+	t.Run("policy failure saturates", func(t *testing.T) {
+		req := request
+		req.Policy = "missing-policy"
+		req.EstimatedPromptTokens = math.MaxInt
+		req.MaxTokens = 1
+		decision, err := newCapacityService(151).ResolveRoute(context.Background(), req)
+		if err == nil {
+			t.Fatal("ResolveRoute unknown policy succeeded")
+		}
+		assertCapacity(t, decision, math.MaxInt, 1, math.MaxInt)
+	})
+
+	t.Run("model failure", func(t *testing.T) {
+		req := request
+		req.Model = "missing-model"
+		decision, err := newCapacityService(151).ResolveRoute(context.Background(), req)
+		if err == nil {
+			t.Fatal("ResolveRoute missing model succeeded")
+		}
+		assertCapacity(t, decision, 100, 26, 151)
+	})
+
+	for _, test := range []struct {
+		name string
+		req  RouteRequest
+	}{
+		{
+			name: "unknown harness preflight",
+			req: RouteRequest{
+				Harness: "missing-harness", Model: "budget-model",
+				EstimatedPromptTokens: 100, MaxTokens: 26,
+			},
+		},
+		{
+			name: "harness model preflight",
+			req: RouteRequest{
+				Harness: "gemini", Model: "minimax/minimax-m2.7",
+				EstimatedPromptTokens: 100, MaxTokens: 26,
+			},
+		},
+		{
+			name: "harness policy preflight",
+			req: RouteRequest{
+				Harness: "fiz", Policy: "smart",
+				EstimatedPromptTokens: 100, MaxTokens: 26,
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			decision, err := newCapacityService(151).ResolveRoute(context.Background(), test.req)
+			if err == nil {
+				t.Fatal("ResolveRoute explicit preflight succeeded")
+			}
+			assertCapacity(t, decision, 100, 26, 151)
+		})
+	}
+}
+
+func TestServiceRoutingDecisionProjectsRequiredContextEvidence(t *testing.T) {
+	req := ServiceExecuteRequest{
+		// Deliberately differ from the decision so this test fails if the event
+		// adapter bypasses the preserved decision evidence.
+		EstimatedPromptTokens: 999,
+		MaxTokens:             888,
+	}
+	decision := RouteDecision{
+		Harness: "fiz", Provider: "alpha", Model: "budget-model", Reason: "selected",
+		EstimatedPromptTokens: 100,
+		MaxTokens:             26,
+		RequiredContext:       151,
+		ContextLength:         512,
+		ContextSource:         routing.ContextSourceProviderConfig,
+		Candidates: []RouteCandidate{
+			{
+				Harness: "fiz", Provider: "unknown", Model: "budget-model",
+				ContextLength: 0, ContextSource: routing.ContextSourceUnknown,
+			},
+			{
+				Harness: "fiz", Provider: "alpha", Model: "budget-model", Eligible: true,
+				ContextLength: 512, ContextSource: routing.ContextSourceProviderConfig,
+			},
+		},
+	}
+
+	data := serviceRoutingDecisionDataFromDecision(req, decision, "capacity-session")
+	if data.EstimatedPromptTokens != 100 || data.MaxTokens != 26 || data.RequiredContext != 151 {
+		t.Fatalf("routing event request capacity=%d+%d=>%d, want 100+26=>151",
+			data.EstimatedPromptTokens, data.MaxTokens, data.RequiredContext)
+	}
+	if data.ContextLength != 512 || data.ContextSource != routing.ContextSourceProviderConfig {
+		t.Fatalf("routing event selected context=%d/%q, want 512/%q",
+			data.ContextLength, data.ContextSource, routing.ContextSourceProviderConfig)
+	}
+	if len(data.Candidates) != 2 {
+		t.Fatalf("routing event candidates=%#v, want two", data.Candidates)
+	}
+	if data.Candidates[0].ContextLength != 0 || data.Candidates[0].ContextSource != routing.ContextSourceUnknown {
+		t.Fatalf("unknown candidate context=%d/%q, want raw 0/%q",
+			data.Candidates[0].ContextLength, data.Candidates[0].ContextSource, routing.ContextSourceUnknown)
+	}
+	if data.Candidates[1].ContextLength != 512 || data.Candidates[1].ContextSource != routing.ContextSourceProviderConfig {
+		t.Fatalf("selected candidate context=%d/%q, want raw 512/%q",
+			data.Candidates[1].ContextLength, data.Candidates[1].ContextSource, routing.ContextSourceProviderConfig)
+	}
+}
+
 func selectedContextTestDecision(model string) *RouteDecision {
 	return selectedContextTestDecisionFor("alpha@west", "west", "server-west", model)
 }

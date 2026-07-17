@@ -61,9 +61,12 @@ func (s *service) resolveExecuteRouteInternal(ctx context.Context, req ServiceEx
 
 	if engineDecision != nil {
 		applyServiceImplExecuteRouteDecision(engineDecision, decision)
+		preserveRouteDecisionCapacityEvidence(engineDecision, executeRouteRequest(req))
 		return engineDecision, nil
 	}
-	return publicExecuteRouteDecision(decision), nil
+	result := publicExecuteRouteDecision(decision)
+	preserveRouteDecisionCapacityEvidence(result, executeRouteRequest(req))
+	return result, nil
 }
 
 func executeRouteRequest(req ServiceExecuteRequest) RouteRequest {

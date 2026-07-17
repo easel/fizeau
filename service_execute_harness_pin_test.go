@@ -1,6 +1,9 @@
 package fizeau
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // TestResolveExecuteRouteWithEngineForwardsPromptShape is the sole
 // same-package seam for the public request-to-routing-engine adapter. Concrete
@@ -67,6 +70,48 @@ models:
 	noTools := findRouteCandidateByHarnessAndModel(t, decision, "codex", "gpt-5.4-mini")
 	if noTools.Eligible || noTools.FilterReason != FilterReasonNoToolSupport {
 		t.Fatalf("gpt-5.4-mini candidate=%#v, want no-tools rejection", noTools)
+	}
+}
+
+func TestResolveExecuteRouteExplicitPreservesRequiredContextEvidence(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-16T00:00:00Z
+catalog_version: explicit-required-context-test
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  budget-model:
+    family: fixture
+    status: active
+    power: 5
+    context_window: 512
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+	svc := newTestService(t, ServiceOptions{ServiceConfig: &fakeServiceConfig{
+		providers: map[string]ServiceProviderEntry{
+			"alpha": {Type: "test", Model: "budget-model", ContextWindow: 512},
+		},
+		names:       []string{"alpha"},
+		defaultName: "alpha",
+	}})
+
+	decision, err := svc.resolveExecuteRouteInternal(context.Background(), ServiceExecuteRequest{
+		Harness: "fiz", Provider: "alpha", Model: "budget-model",
+		EstimatedPromptTokens: 100, MaxTokens: 26,
+	})
+	if err != nil {
+		t.Fatalf("resolve explicit execute route: %v", err)
+	}
+	if decision == nil {
+		t.Fatal("resolve explicit execute route returned nil decision")
+	}
+	if decision.EstimatedPromptTokens != 100 || decision.MaxTokens != 26 || decision.RequiredContext != 151 {
+		t.Fatalf("explicit capacity evidence=%d+%d=>%d, want 100+26=>151",
+			decision.EstimatedPromptTokens, decision.MaxTokens, decision.RequiredContext)
 	}
 }
 

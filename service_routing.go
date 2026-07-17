@@ -41,24 +41,29 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 	if err := ValidateCorrelationID(req.CorrelationID); err != nil {
 		return nil, err
 	}
+	decisionFailure := func(err error) (*RouteDecision, error) {
+		result := &RouteDecision{RequestedPolicy: req.Policy}
+		preserveRouteDecisionCapacityEvidence(result, req)
+		return result, err
+	}
 	if req.Harness != "" && req.Model != "" {
 		canonical := harnesses.ResolveHarnessAlias(req.Harness)
 		if !s.registry.Has(canonical) {
-			return nil, fmt.Errorf("unknown harness %q", req.Harness)
+			return decisionFailure(fmt.Errorf("unknown harness %q", req.Harness))
 		}
 		cfg, _ := s.registry.Get(canonical)
 		if err := validateExplicitHarnessModel(canonical, cfg, req.Model, req.Provider); err != nil {
-			return nil, err
+			return decisionFailure(err)
 		}
 	}
 	if req.Harness != "" && req.Policy != "" {
 		canonical := harnesses.ResolveHarnessAlias(req.Harness)
 		if !s.registry.Has(canonical) {
-			return nil, fmt.Errorf("unknown harness %q", req.Harness)
+			return decisionFailure(fmt.Errorf("unknown harness %q", req.Harness))
 		}
 		cfg, _ := s.registry.Get(canonical)
 		if err := validateExplicitHarnessPolicy(canonical, cfg, req.Policy); err != nil {
-			return nil, err
+			return decisionFailure(err)
 		}
 	}
 	cat := serviceRoutingCatalog()
@@ -76,10 +81,12 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		MaxPower:   policyResult.PowerPolicy.MaxPower,
 	}
 	if policyFailure != nil {
-		return &RouteDecision{
+		result := &RouteDecision{
 			RequestedPolicy: req.Policy,
 			PowerPolicy:     powerPolicy,
-		}, publicCatalogPolicyError(policyFailure)
+		}
+		preserveRouteDecisionCapacityEvidence(result, req)
+		return result, publicCatalogPolicyError(policyFailure)
 	}
 	in, snapshot := s.routingInputs(ctx, cat, modelsnapshot.RefreshBackground)
 
@@ -90,6 +97,7 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 			PowerPolicy:     powerPolicy,
 			Candidates:      modelCandidates,
 		}
+		preserveRouteDecisionCapacityEvidence(result, req)
 		s.annotateRouteDecisionEvidence(result)
 		return result, publicRoutingError(modelErr, result.Candidates, req.Policy)
 	}
@@ -122,11 +130,13 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 		}
 		result.RequestedPolicy = req.Policy
 		result.PowerPolicy = powerPolicy
+		preserveRouteDecisionCapacityEvidence(result, req)
 		s.annotateRouteDecisionEvidence(result)
 		s.annotateOpenrouterCreditFreshness(result)
 		return result, publicRoutingError(err, result.Candidates, req.Policy)
 	}
 	if result != nil {
+		preserveRouteDecisionCapacityEvidence(result, req)
 		result.ContextLength, result.ContextSource = s.resolveSelectedRouteContext(result, snapshot, cat)
 	}
 	if result != nil && s != nil && s.routeSticky != nil {
@@ -162,6 +172,18 @@ func (s *service) ResolveRoute(ctx context.Context, req RouteRequest) (*RouteDec
 	}
 	s.cacheRouteDecision(req.Model, result)
 	return result, nil
+}
+
+func preserveRouteDecisionCapacityEvidence(decision *RouteDecision, req RouteRequest) {
+	if decision == nil {
+		return
+	}
+	decision.EstimatedPromptTokens = req.EstimatedPromptTokens
+	decision.MaxTokens = req.MaxTokens
+	decision.RequiredContext = (routing.Request{
+		EstimatedPromptTokens: req.EstimatedPromptTokens,
+		MaxTokens:             req.MaxTokens,
+	}).MinContextWindow()
 }
 
 func routeDecisionFromInternal(dec *routing.Decision, powerPolicy RoutePowerPolicy) *RouteDecision {

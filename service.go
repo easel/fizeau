@@ -518,6 +518,15 @@ type RouteDecision struct {
 	ServerInstance string
 	// Model is the selected concrete model.
 	Model string
+	// EstimatedPromptTokens preserves the caller's exact prompt-token estimate
+	// used by the routing context-capacity gate.
+	EstimatedPromptTokens int
+	// MaxTokens preserves the caller's exact requested output-token budget used
+	// by the routing context-capacity gate. Zero means provider default.
+	MaxTokens int
+	// RequiredContext is the saturating minimum context window computed from
+	// EstimatedPromptTokens and MaxTokens for this resolution.
+	RequiredContext int
 	// ContextLength is the resolved execution context window for the selected
 	// route. It may be greater than the raw selected-candidate value when that
 	// candidate carried unknown context evidence.
@@ -587,9 +596,10 @@ type RouteCandidate struct {
 	// FilterReason names the gate that disqualified an ineligible candidate.
 	// Empty when Eligible. See the FilterReason* constants.
 	FilterReason string
-	// ContextLength is the resolved maximum context window for the candidate.
+	// ContextLength is the candidate's raw known maximum context window. Zero
+	// means unknown; selected-route fallback resolution does not replace it.
 	ContextLength int
-	// ContextSource records where ContextLength came from.
+	// ContextSource records where the raw ContextLength came from.
 	ContextSource string
 	// SourceStatus records the model snapshot status for this candidate.
 	SourceStatus string
