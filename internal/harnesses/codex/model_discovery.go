@@ -95,7 +95,11 @@ func testCodexModelDiscovery() harnesses.ModelDiscoverySnapshot {
 }
 
 func codexModelDiscoveryComplete(text string) bool {
-	return len(parseCodexModels(text)) > 0
+	lower := strings.ToLower(stripANSI(strings.ReplaceAll(text, "\r\n", "\n")))
+	return len(parseCodexModels(text)) > 0 &&
+		strings.Contains(lower, "select model and effort") &&
+		strings.Contains(lower, "press enter to confirm") &&
+		strings.Contains(lower, "esc to go back")
 }
 
 func codexDiscoveryFromText(text, source string) harnesses.ModelDiscoverySnapshot {

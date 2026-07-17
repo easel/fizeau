@@ -103,6 +103,56 @@ EOF
 	}
 }
 
+func TestRunner_Execute_PreservesCodex56ExactPins(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "capture.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  i=0
+  for arg in "$@"; do
+    printf 'ARG[%%s]=%%s\n' "$i" "$arg"
+    i=$((i + 1))
+  done
+} > %q
+cat <<'EOF'
+{"type":"output","item":{"type":"agent_message","text":"ok"}}
+{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":2}}
+EOF
+`, capture)
+	binary := filepath.Join(dir, "fake-codex")
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &Runner{Binary: binary}
+	for _, model := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+		t.Run(model, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			events, err := runner.Execute(ctx, harnesses.ExecuteRequest{Prompt: "proof", Model: model})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			for range events {
+			}
+
+			raw, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(raw)
+			for _, want := range []string{"ARG[2]=-m", "ARG[3]=" + model} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("capture missing %q:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
 func TestRunner_Execute_SnapsReasoningToDiscoveryLevels(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")

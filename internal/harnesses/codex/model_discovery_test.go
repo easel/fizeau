@@ -125,8 +125,16 @@ func processReaped(pid int) bool {
 }
 
 func TestParseCodexModels(t *testing.T) {
-	models := parseCodexModels("Select model\r\n> gpt-5.4\r\n  gpt-5.4-mini\r\n  gpt-5.4\r\n")
-	require.Equal(t, []string{"gpt-5.4", "gpt-5.4-mini"}, models)
+	models := parseCodexModels("Select Model and Effort\r\n> gpt-5.6-terra\r\n  gpt-5.6-sol\r\n  gpt-5.6-luna\r\n  gpt-5.6-terra\r\n")
+	require.Equal(t, []string{"gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"}, models)
+}
+
+func TestCodexModelDiscoveryCompleteRequiresRenderedPicker(t *testing.T) {
+	startup := "gpt-5.6-terra medium · ~/Projects/fizeau"
+	require.False(t, codexModelDiscoveryComplete(startup), "startup footer must not complete /model discovery")
+
+	picker := "Select Model and Effort\n1. gpt-5.6-sol (default)\n2. gpt-5.6-terra (current)\n3. gpt-5.6-luna\nPress enter to confirm or esc to go back"
+	require.True(t, codexModelDiscoveryComplete(picker), "fully rendered picker must complete /model discovery")
 }
 
 func TestDefaultCodexModelDiscovery_IncludesCurrentFrontier(t *testing.T) {
@@ -156,14 +164,14 @@ func TestReadCodexModelDiscoveryViaPTYRecordsDiscovery(t *testing.T) {
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
 printf '› '
 IFS= read line
-printf '/model\r\nSelect model\r\n> gpt-5.4\r\n  gpt-5.4-mini\r\n› '
+printf '/model\r\nSelect Model and Effort\r\n> gpt-5.6-sol\r\n  gpt-5.6-terra\r\n  gpt-5.6-luna\r\nPress enter to confirm or esc to go back\r\n'
 sleep 1
 `), 0o700))
 	cassetteDir := filepath.Join(dir, "cassette")
 
 	snapshot, err := ReadCodexModelDiscoveryViaPTY(2*time.Second, WithQuotaPTYCommand(script), WithQuotaPTYCassetteDir(cassetteDir))
 	require.NoError(t, err)
-	require.Equal(t, []string{"gpt-5.4", "gpt-5.4-mini"}, snapshot.Models)
+	require.Equal(t, []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}, snapshot.Models)
 	require.Contains(t, snapshot.ReasoningLevels, "high")
 
 	replayed, err := ReadCodexModelDiscoveryFromCassette(cassetteDir)
@@ -213,4 +221,7 @@ func TestReadCodexModelDiscoveryFromModelSurfaceCassette(t *testing.T) {
 	require.Equal(t, "ok", rec.Status)
 	require.NotEmpty(t, rec.Models)
 	require.NotEmpty(t, rec.ReasoningLevels)
+	for _, model := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+		require.Contains(t, rec.Models, model)
+	}
 }

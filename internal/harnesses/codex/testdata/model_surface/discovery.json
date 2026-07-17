@@ -2,7 +2,13 @@
   "source": "pty",
   "status": "ok",
   "models": [
-    "gpt-5.6-sol"
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex-spark"
   ],
   "reasoning_levels": [
     "low",
@@ -11,7 +17,7 @@
     "xhigh",
     "max"
   ],
-  "captured_at": "2026-07-14T04:08:37Z",
+  "captured_at": "2026-07-17T14:16:18Z",
   "freshness_window": "24h0m0s",
   "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
   "metadata": {

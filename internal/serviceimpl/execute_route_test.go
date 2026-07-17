@@ -290,6 +290,30 @@ func TestResolveExecuteRouteAcceptsClaudeFamilyWithoutDiscovery(t *testing.T) {
 	}
 }
 
+func TestResolveExecuteRouteAcceptsCodex56ExactPins(t *testing.T) {
+	base := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
+	base.DiscoverModels = func(name string, _ harnesses.HarnessConfig) []string {
+		if name == "codex" {
+			return []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
+		}
+		return nil
+	}
+
+	for _, model := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+		t.Run(model, func(t *testing.T) {
+			input := base
+			input.Request = ExecuteRouteRequest{Harness: "codex", Model: model}
+			got, failure := ResolveExecuteRoute(context.Background(), input)
+			if failure != nil {
+				t.Fatalf("ResolveExecuteRoute(%q) failure: %v", model, failure)
+			}
+			if got.Model != model {
+				t.Fatalf("Model = %q, want exact pin %q", got.Model, model)
+			}
+		})
+	}
+}
+
 func TestResolveExecuteRouteAcceptsDiscoveredClaudeTUIFable5(t *testing.T) {
 	base := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
 	base.DiscoverModels = func(name string, _ harnesses.HarnessConfig) []string {

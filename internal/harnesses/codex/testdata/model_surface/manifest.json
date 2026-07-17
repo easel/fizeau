@@ -2,7 +2,7 @@
   "version": 1,
   "id": "codex-quota",
   "content_digest": {
-    "sha256": "281d75fd42696695c283a8d6651339e49246edf612163e95efa12846ea622299"
+    "sha256": "35f72d2f6f5e62b42cf676c5b65890cbf04ac82356583616fc806aaaef0c22e8"
   },
   "harness": {
     "name": "codex",
@@ -42,7 +42,7 @@
   "provenance": {
     "os": "linux",
     "arch": "arm64",
-    "recorded_at": "2026-07-14T04:08:37Z",
+    "recorded_at": "2026-07-17T14:16:16Z",
     "recorder_version": "quota-pty-v1"
   }
 }
