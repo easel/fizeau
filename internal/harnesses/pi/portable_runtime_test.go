@@ -104,7 +104,7 @@ func TestPiPortableRuntimeContribution(t *testing.T) {
 		t.Fatalf("absent auth fabricated a state projection: %#v", contribution.StateProjections)
 	}
 
-	command, arguments, err := harnesses.BuildPortableRuntimeLaunchCommand("/portable", contribution, append(append([]string(nil), contribution.ExecutionConstraints.FixedArguments...), "--version"))
+	command, arguments, err := harnesses.BuildPortableRuntimeLaunchCommand("/portable", contribution, []string{"--version"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,8 +411,7 @@ func runPiPortableContributionProbe(t *testing.T, contribution harnesses.Portabl
 			`const {loadPhoton}=await import("file:///` + piPortablePackageTarget + `/dist/utils/photon.js"); const photon=await loadPhoton(); if (!photon || typeof photon.PhotonImage !== "function") { console.error("pi-portable-photon-wasm-missing"); process.exit(41); } process.stdout.write("pi-portable-photon-ok");`,
 		}
 	} else {
-		request := append(append([]string(nil), contribution.ExecutionConstraints.FixedArguments...), "--version")
-		command, commandArguments, err = harnesses.BuildPortableRuntimeLaunchCommand(guestRoot, contribution, request)
+		command, commandArguments, err = harnesses.BuildPortableRuntimeLaunchCommand(guestRoot, contribution, []string{"--version"})
 		if err != nil {
 			t.Fatal(err)
 		}

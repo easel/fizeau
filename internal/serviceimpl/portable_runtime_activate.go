@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/modelcatalog"
 	"github.com/easel/fizeau/internal/portableruntime"
 )
@@ -40,6 +41,79 @@ func (a PortableRuntimeActivation) EntrypointEnvironment(name string) (map[strin
 
 func (a PortableRuntimeActivation) EntrypointRecipe(name string) (portableruntime.ActivationRecipe, bool) {
 	return a.plan.EntrypointRecipe(name)
+}
+
+// BindPortableRuntimeRouteRunners installs manifest-owned launch state on the
+// same structural prototypes that RouteRunnerAuthority later exact-clones.
+// It is deliberately process-free and uses only the generic runner binder.
+func (a PortableRuntimeActivation) BindPortableRuntimeRouteRunners(
+	structural map[string]harnesses.Harness,
+	factory harnesses.RouteRunnerFactory,
+) (*harnesses.RouteRunnerAuthority, error) {
+	manifest := a.plan.Manifest()
+	surfaces := make(map[string]portableruntime.ManifestSurface, len(manifest.Inventory))
+	for _, surface := range manifest.Inventory {
+		surfaces[surface.Name] = surface
+	}
+	bound := make(map[string]harnesses.Harness, len(structural))
+	for name, prototype := range structural {
+		surface, exists := surfaces[name]
+		if !exists || prototype == nil {
+			return nil, portableRuntimeRunnerBindingError("structural prototype identity")
+		}
+		binder, ok := prototype.(harnesses.PortableRuntimeRunnerBinder)
+		if !ok {
+			return nil, portableRuntimeRunnerBindingError("structural prototype binding capability")
+		}
+		structure := harnesses.PortableRuntimeStructure{Name: name, Transport: surface.Transport}
+		switch surface.Inclusion {
+		case harnesses.PortableRuntimeInclusionRequired:
+			structure.Mode = harnesses.PortableRuntimeStructuralUnpinned
+		case harnesses.PortableRuntimeInclusionExactPinOnly:
+			structure.Mode = harnesses.PortableRuntimeStructuralExactPinOnly
+		case harnesses.PortableRuntimeInclusionNonSubprocess:
+			structure.Mode = harnesses.PortableRuntimeStructuralNonSubprocess
+		default:
+			return nil, portableRuntimeRunnerBindingError("structural prototype inclusion")
+		}
+		input := harnesses.PortableRuntimeRunnerBindingInput{Structure: structure}
+		if surface.Transport == harnesses.PortableRuntimeTransportSubprocess {
+			entrypoint, entrypointExists := manifest.Entrypoints[name]
+			environment, environmentExists := a.plan.EntrypointEnvironment(name)
+			recipe, recipeExists := a.plan.EntrypointRecipe(name)
+			if !entrypointExists || !environmentExists || !recipeExists {
+				return nil, portableRuntimeRunnerBindingError("subprocess entrypoint binding")
+			}
+			input.GuestRoot = manifest.GuestRoot
+			input.ClosureClass = entrypoint.ClosureClass
+			input.Launch = entrypoint.Launch
+			input.FixedArguments = entrypoint.ExecutionConstraints.FixedArguments
+			input.FixedOptionValues = entrypoint.ExecutionConstraints.FixedOptionValues
+			input.Environment = environment
+			input.NamespaceRecipe = recipe
+		} else if _, entrypointExists := manifest.Entrypoints[name]; entrypointExists {
+			return nil, portableRuntimeRunnerBindingError("non-subprocess entrypoint binding")
+		}
+		binding, err := harnesses.NewPortableRuntimeRunnerBinding(input)
+		if err != nil || binder.BindPortableRuntime(binding) != nil {
+			return nil, portableRuntimeRunnerBindingError("structural prototype binding")
+		}
+		descriptor, ok := prototype.(harnesses.PortableRuntimeStructuralHarness)
+		if !ok || descriptor.PortableRuntimeStructure() != structure {
+			return nil, portableRuntimeRunnerBindingError("manifest transport binding")
+		}
+		bound[name] = prototype
+	}
+	for name := range manifest.Entrypoints {
+		if bound[name] == nil {
+			return nil, portableRuntimeRunnerBindingError("required structural prototype")
+		}
+	}
+	return harnesses.NewRouteRunnerAuthority(bound, factory), nil
+}
+
+func portableRuntimeRunnerBindingError(reason string) error {
+	return fmt.Errorf("%w: %s", portableruntime.ErrActivationInvalid, reason)
 }
 
 // LoadPortableRuntimeActivation verifies the private bundle and reconstructs

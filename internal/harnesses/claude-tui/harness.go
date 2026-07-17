@@ -66,6 +66,8 @@ var emptyModelSnapshot harnesses.ModelDiscoverySnapshot
 // harnesses.AccountHarness, and harnesses.ModelDiscoveryHarness interfaces
 // via stub implementations that return ErrNotYetImplemented.
 type Harness struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the claude executable. When empty the
 	// harness resolves "claude" from PATH for both execution and portable
 	// runtime discovery.

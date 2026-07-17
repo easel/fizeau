@@ -48,26 +48,35 @@ func NewRouteRunner(key harnesses.RouteRunnerKey, prototype harnesses.Harness) (
 	switch runner := prototype.(type) {
 	case *claudeharness.Runner:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		clone.NativeTools = append([]agentcore.Tool(nil), runner.NativeTools...)
+		if _, activated := clone.PortableRuntimeBinding(); activated {
+			return &clone, nil
+		}
 		return configureClaudeRouteRunner(&clone)
 	case *claudetui.Harness:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		return &clone, nil
 	case *codexharness.Runner:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		return &clone, nil
 	case *geminiharness.Runner:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		return &clone, nil
 	case *opencodeharness.Runner:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		return &clone, nil
 	case *piharness.Runner:
 		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		return &clone, nil
 	case nil:

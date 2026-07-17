@@ -25,6 +25,8 @@ const fallbackDefaultModel = "gpt-5.4"
 // exec --json mode, parses each JSONL line into harness Events, and emits
 // a final Event when the subprocess exits.
 type Runner struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the codex executable. When empty the
 	// runner resolves "codex" via PATH at Execute time.
 	Binary string

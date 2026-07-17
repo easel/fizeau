@@ -24,6 +24,8 @@ const defaultEventBuffer = 64
 // When the output is valid JSON with a stats.models token block, usage is
 // extracted per the DDx ExtractUsage("gemini", ...) shape.
 type Runner struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the gemini executable. When empty the
 	// runner resolves "gemini" via PATH at Execute time.
 	Binary string

@@ -37,6 +37,8 @@ const defaultIdleTimeout = 0 // 0 = no idle cap; rely on Timeout / ctx.
 // (and any forked children belonging to its process group) is signalled
 // SIGTERM and reaped so PTY/tool children don't outlive the request.
 type Runner struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the claude executable. When empty the
 	// runner resolves "claude" via PATH at Execute time.
 	Binary string
@@ -90,9 +92,24 @@ type Runner struct {
 	NativeMaxIterations int
 }
 
+// BindPortableRuntime makes the manifest transport authoritative without
+// consulting construction-time environment controls.
+func (r *Runner) BindPortableRuntime(binding harnesses.PortableRuntimeRunnerBinding) error {
+	if err := r.PortableRuntimeRunnerState.BindPortableRuntime(binding); err != nil {
+		return err
+	}
+	r.NativeMode = binding.Structure().Transport == harnesses.PortableRuntimeTransportNative
+	r.NativeAPIKey = ""
+	r.NativeBaseURL = ""
+	return nil
+}
+
 // PortableRuntimeStructure reports the transport selected on this actual
 // runner instance without probing PATH or contacting Anthropic.
 func (r *Runner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	if binding, ok := r.PortableRuntimeBinding(); ok {
+		return binding.Structure()
+	}
 	if r.NativeMode {
 		return harnesses.PortableRuntimeStructure{
 			Name:      "claude",

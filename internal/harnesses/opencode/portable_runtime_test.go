@@ -90,7 +90,7 @@ func TestOpenCodePortableRuntimeContribution(t *testing.T) {
 		}
 		if command != "/runtime/"+opencodePortableLoaderTarget || !reflect.DeepEqual(arguments, []string{
 			"--library-path", "/runtime/" + opencodePortableLibraryTarget,
-			"/runtime/" + opencodePortableEntrypointTarget, "run", "fixture",
+			"/runtime/" + opencodePortableEntrypointTarget, "--pure", "run", "fixture",
 		}) {
 			t.Fatalf("launch command = %q %q", command, arguments)
 		}
@@ -467,7 +467,7 @@ func TestOpenCodePortableRuntimeVerifiedReleaseEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	command, arguments, err := harnesses.BuildPortableRuntimeLaunchCommand(root, contribution, []string{"--pure", "--version"})
+	command, arguments, err := harnesses.BuildPortableRuntimeLaunchCommand(root, contribution, []string{"--version"})
 	if err != nil {
 		t.Fatal(err)
 	}

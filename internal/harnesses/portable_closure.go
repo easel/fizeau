@@ -826,14 +826,41 @@ func verifyPortableRuntimeNativeAddonSnapshots(packageRoots []portableRuntimeIns
 }
 
 // BuildPortableRuntimeLaunchCommand expands a typed launch recipe below one
-// fixed guest root. It never consults PATH, PT_INTERP, or a shebang.
+// fixed guest root. requestArgv follows the manifest-owned fixed prefix. It
+// never consults PATH, PT_INTERP, or a shebang.
 func BuildPortableRuntimeLaunchCommand(guestRoot string, contribution PortableRuntimeContribution, requestArgv []string) (string, []string, error) {
+	return BuildPortableRuntimeLaunchCommandWithArguments(guestRoot, contribution, nil, requestArgv)
+}
+
+// BuildPortableRuntimeLaunchCommandWithArguments preserves the distinct
+// manifest-fixed, registry, and request argument boundaries.
+func BuildPortableRuntimeLaunchCommandWithArguments(guestRoot string, contribution PortableRuntimeContribution, registryArgv, requestArgv []string) (string, []string, error) {
 	if guestRoot == "" || !filepath.IsAbs(guestRoot) || filepath.Clean(guestRoot) != guestRoot {
 		return "", nil, closureError("launch has invalid guest root")
 	}
 	if err := validatePortableRuntimeLaunch(contribution); err != nil {
 		return "", nil, err
 	}
+	if err := validatePortableRuntimeFixedPrefix(contribution.ExecutionConstraints); err != nil {
+		return "", nil, err
+	}
+	return buildPortableRuntimeLaunchCommand(
+		guestRoot, contribution.ClosureClass, contribution.Launch,
+		contribution.ExecutionConstraints.FixedArguments,
+		contribution.ExecutionConstraints.FixedOptionValues,
+		registryArgv, requestArgv,
+	)
+}
+
+func buildPortableRuntimeLaunchCommand(
+	guestRoot string,
+	closureClass PortableRuntimeClosureClass,
+	launch PortableRuntimeLaunch,
+	fixedArguments []string,
+	fixedOptionValues []PortableRuntimeFixedOptionValue,
+	registryArgv []string,
+	requestArgv []string,
+) (string, []string, error) {
 	guestTarget := func(target string) (string, error) {
 		if !validPortableRuntimeTargetPath(target) {
 			return "", closureError("launch contains an invalid guest target")
@@ -845,46 +872,51 @@ func BuildPortableRuntimeLaunchCommand(guestRoot string, contribution PortableRu
 		}
 		return joined, nil
 	}
-	entrypoint, err := guestTarget(contribution.Launch.EntrypointTarget)
+	entrypoint, err := guestTarget(launch.EntrypointTarget)
 	if err != nil {
 		return "", nil, err
 	}
-	for _, argument := range requestArgv {
+	for _, argument := range append(append([]string(nil), registryArgv...), requestArgv...) {
 		if strings.ContainsRune(argument, '\x00') {
-			return "", nil, closureError("request argument contains an invalid byte")
+			return "", nil, closureError("later argument contains an invalid byte")
 		}
 	}
-	requestCopy := append([]string(nil), requestArgv...)
+	fixedPrefix := append([]string(nil), fixedArguments...)
+	for _, pair := range fixedOptionValues {
+		fixedPrefix = append(fixedPrefix, pair.Option, pair.Value)
+	}
+	laterArguments := append(fixedPrefix, registryArgv...)
+	laterArguments = append(laterArguments, requestArgv...)
 
-	switch contribution.ClosureClass {
+	switch closureClass {
 	case PortableRuntimeClosureStatic:
-		return entrypoint, requestCopy, nil
+		return entrypoint, laterArguments, nil
 	case PortableRuntimeClosureDynamic:
-		loader, roots, err := expandPortableRuntimeLoaderRecipe(guestTarget, contribution.Launch)
+		loader, roots, err := expandPortableRuntimeLoaderRecipe(guestTarget, launch)
 		if err != nil {
 			return "", nil, err
 		}
 		arguments := []string{"--library-path", strings.Join(roots, ":"), entrypoint}
-		return loader, append(arguments, requestCopy...), nil
+		return loader, append(arguments, laterArguments...), nil
 	case PortableRuntimeClosureInterpreted:
-		interpreter, err := guestTarget(contribution.Launch.InterpreterTarget)
+		interpreter, err := guestTarget(launch.InterpreterTarget)
 		if err != nil {
 			return "", nil, err
 		}
-		arguments := make([]string, 0, len(contribution.Launch.RuntimeArgs)+len(requestCopy)+2)
-		if contribution.Launch.LoaderTarget != "" {
-			loader, roots, loaderErr := expandPortableRuntimeLoaderRecipe(guestTarget, contribution.Launch)
+		arguments := make([]string, 0, len(launch.RuntimeArgs)+len(laterArguments)+2)
+		if launch.LoaderTarget != "" {
+			loader, roots, loaderErr := expandPortableRuntimeLoaderRecipe(guestTarget, launch)
 			if loaderErr != nil {
 				return "", nil, loaderErr
 			}
 			arguments = append(arguments, "--library-path", strings.Join(roots, ":"), interpreter)
-			arguments = append(arguments, contribution.Launch.RuntimeArgs...)
+			arguments = append(arguments, launch.RuntimeArgs...)
 			arguments = append(arguments, entrypoint)
-			return loader, append(arguments, requestCopy...), nil
+			return loader, append(arguments, laterArguments...), nil
 		}
-		arguments = append(arguments, contribution.Launch.RuntimeArgs...)
+		arguments = append(arguments, launch.RuntimeArgs...)
 		arguments = append(arguments, entrypoint)
-		return interpreter, append(arguments, requestCopy...), nil
+		return interpreter, append(arguments, laterArguments...), nil
 	default:
 		return "", nil, closureError("launch has unknown closure class")
 	}

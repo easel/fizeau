@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,30 @@ import (
 
 type activationPureHarness struct {
 	contribution harnesses.PortableRuntimeContribution
+}
+
+type activationBindingHarness struct {
+	harnesses.PortableRuntimeRunnerState
+	name string
+}
+
+func (h *activationBindingHarness) Info() harnesses.HarnessInfo {
+	panic("portable binding called Info")
+}
+func (h *activationBindingHarness) HealthCheck(context.Context) error {
+	panic("portable binding called HealthCheck")
+}
+func (h *activationBindingHarness) Execute(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	panic("portable binding called Execute")
+}
+func (h *activationBindingHarness) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	if binding, ok := h.PortableRuntimeBinding(); ok {
+		return binding.Structure()
+	}
+	return harnesses.PortableRuntimeStructure{
+		Name: h.name, Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode: harnesses.PortableRuntimeStructuralUnpinned,
+	}
 }
 
 func (activationPureHarness) Info() harnesses.HarnessInfo { panic("activation called Info") }
@@ -93,6 +118,296 @@ func TestPortableRuntimeActivationAssemblesServiceStorage(t *testing.T) {
 		got.DefaultProviderName != expected.DefaultProviderName || !reflect.DeepEqual(got.Providers, expected.Providers) {
 		t.Fatalf("assembled provider structure = %#v, want %#v", got, expected)
 	}
+}
+
+func TestPortableRuntimeActivationRegistersTypedLaunchRecipes(t *testing.T) {
+	activation := preparePortableRuntimeBindingFixture(t)
+	prototypes := portableRuntimeBindingPrototypes()
+	authority, err := activation.BindPortableRuntimeRouteRunners(prototypes, cloneActivationBindingHarness)
+	if err != nil {
+		t.Fatalf("BindPortableRuntimeRouteRunners() error = %v", err)
+	}
+
+	poisonedPath := filepath.Join(t.TempDir(), "poisoned-path")
+	t.Setenv("PATH", poisonedPath)
+	tests := []struct {
+		name       string
+		command    string
+		recipeArgs []string
+	}{
+		{name: "static", command: "/opt/fizeau/runtime/static/tool"},
+		{name: "dynamic", command: "/opt/fizeau/runtime/dynamic/loader", recipeArgs: []string{
+			"--library-path", "/opt/fizeau/runtime/dynamic/lib", "/opt/fizeau/runtime/dynamic/tool",
+		}},
+		{name: "interpreted", command: "/opt/fizeau/runtime/interpreted/interpreter", recipeArgs: []string{
+			"--runtime-fixed", "/opt/fizeau/runtime/interpreted/tool.js",
+		}},
+		{name: "nested", command: "/opt/fizeau/runtime/nested/loader", recipeArgs: []string{
+			"--library-path", "/opt/fizeau/runtime/nested/lib", "/opt/fizeau/runtime/nested/interpreter",
+			"--runtime-fixed", "/opt/fizeau/runtime/nested/tool.js",
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			keys := []harnesses.RouteRunnerKey{
+				{Harness: test.name, Endpoint: "east", Model: "model-a"},
+				{Harness: test.name, Endpoint: "west", Model: "model-a"},
+			}
+			bindings := make([]harnesses.RouteRunnerBinding, len(keys))
+			errors := make([]error, len(keys))
+			var wait sync.WaitGroup
+			for i := range keys {
+				wait.Add(1)
+				go func(index int) {
+					defer wait.Done()
+					bindings[index], errors[index] = authority.Bind(keys[index])
+				}(i)
+			}
+			wait.Wait()
+			for i, bindErr := range errors {
+				if bindErr != nil {
+					t.Fatalf("Bind(%d) error = %v", i, bindErr)
+				}
+			}
+			if bindings[0].Runner() == bindings[1].Runner() || bindings[0].Runner() == prototypes[test.name] {
+				t.Fatal("exact runner was not cloned from the activated structural prototype")
+			}
+			for _, exact := range bindings {
+				runner := exact.Runner().(*activationBindingHarness)
+				binding, ok := runner.PortableRuntimeBinding()
+				if !ok || binding.NamespaceRecipe() == nil {
+					t.Fatal("exact runner lost portable launch or opaque namespace state")
+				}
+				child, buildErr := binding.BuildCommand([]string{"registry-arg"}, []string{"request-arg"})
+				if buildErr != nil {
+					t.Fatal(buildErr)
+				}
+				wantArgs := append(append([]string(nil), test.recipeArgs...),
+					"--fixed", "--verbose", "-e", "none", "registry-arg", "request-arg")
+				if child.Command() != test.command || !reflect.DeepEqual(child.Arguments(), wantArgs) {
+					t.Fatalf("child command = %q %q, want %q %q", child.Command(), child.Arguments(), test.command, wantArgs)
+				}
+				joined := strings.Join(append([]string{child.Command()}, child.Arguments()...), " ")
+				for _, forbidden := range []string{poisonedPath, "/host/copied-pt-interp", "/host/absolute-shebang", "/bin/sh -c"} {
+					if strings.Contains(joined, forbidden) {
+						t.Fatalf("final command consulted forbidden launch source %q: %s", forbidden, joined)
+					}
+				}
+				if environment := child.Environment(); len(environment) == 0 || !containsActivationEnvironment(environment, "HOME=") ||
+					!containsActivationEnvironment(environment, "PATH=/opt/fizeau/runtime/") {
+					t.Fatalf("child did not receive the activation-owned closed environment: %q", environment)
+				}
+			}
+		})
+	}
+}
+
+func TestPortableRuntimeActivationBuildsFixedPrefix(t *testing.T) {
+	activation := preparePortableRuntimeBindingFixture(t)
+	prototypes := portableRuntimeBindingPrototypes()
+	authority, err := activation.BindPortableRuntimeRouteRunners(prototypes, cloneActivationBindingHarness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exact, err := authority.Bind(harnesses.RouteRunnerKey{Harness: "nested", Provider: "provider", Endpoint: "endpoint", Model: "model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, ok := exact.Runner().(*activationBindingHarness).PortableRuntimeBinding()
+	if !ok {
+		t.Fatal("exact runner has no portable binding")
+	}
+	child, err := binding.BuildCommand([]string{"registry-one", "registry-two"}, []string{"request-one", "request-two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"--library-path", "/opt/fizeau/runtime/nested/lib", "/opt/fizeau/runtime/nested/interpreter",
+		"--runtime-fixed", "/opt/fizeau/runtime/nested/tool.js",
+		"--fixed", "--verbose", "-e", "none",
+		"registry-one", "registry-two", "request-one", "request-two",
+	}
+	if !reflect.DeepEqual(child.Arguments(), want) {
+		t.Fatalf("fixed-prefix order = %q, want %q", child.Arguments(), want)
+	}
+	for _, token := range []string{"--fixed", "--verbose", "-e", "none"} {
+		count := 0
+		for _, argument := range child.Arguments() {
+			if argument == token {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("fixed token %q applied %d times", token, count)
+		}
+	}
+
+	// Accessors and exact clones return owned data rather than aliases.
+	arguments := child.Arguments()
+	environment := binding.Environment()
+	arguments[0] = "mutated"
+	environment["HOME"] = "mutated"
+	again, err := binding.BuildCommand([]string{"registry-one", "registry-two"}, []string{"request-one", "request-two"})
+	if err != nil || !reflect.DeepEqual(again.Arguments(), want) || strings.Contains(strings.Join(again.Environment(), "\n"), "HOME=mutated") {
+		t.Fatal("portable binding state aliases returned command or environment data")
+	}
+}
+
+func containsActivationEnvironment(environment []string, prefix string) bool {
+	for _, assignment := range environment {
+		if strings.HasPrefix(assignment, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func portableRuntimeBindingPrototypes() map[string]harnesses.Harness {
+	return map[string]harnesses.Harness{
+		"static":      &activationBindingHarness{name: "static"},
+		"dynamic":     &activationBindingHarness{name: "dynamic"},
+		"interpreted": &activationBindingHarness{name: "interpreted"},
+		"nested":      &activationBindingHarness{name: "nested"},
+	}
+}
+
+func cloneActivationBindingHarness(_ harnesses.RouteRunnerKey, prototype harnesses.Harness) (harnesses.Harness, error) {
+	runner, ok := prototype.(*activationBindingHarness)
+	if !ok {
+		return nil, harnesses.ErrRouteRunnerUnavailable
+	}
+	clone := *runner
+	clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
+	return &clone, nil
+}
+
+func preparePortableRuntimeBindingFixture(t *testing.T) PortableRuntimeActivation {
+	t.Helper()
+	destination := filepath.Join(t.TempDir(), "destination")
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	assetRoot := t.TempDir()
+	writeFile := func(name, contents string, executable bool) harnesses.PortableRuntimeAsset {
+		t.Helper()
+		source := filepath.Join(assetRoot, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(source), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		mode := os.FileMode(0o600)
+		if executable {
+			mode = 0o700
+		}
+		if err := os.WriteFile(source, []byte(contents), mode); err != nil {
+			t.Fatal(err)
+		}
+		digest, err := harnesses.PortableRuntimeFileDigest(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return harnesses.PortableRuntimeAsset{
+			Kind: harnesses.PortableRuntimeAssetSupport, PathKind: harnesses.PortableRuntimePathFile,
+			Source: source, Target: name, ContentSHA256: digest, Executable: executable,
+		}
+	}
+	writeTree := func(name string) harnesses.PortableRuntimeAsset {
+		t.Helper()
+		source := filepath.Join(assetRoot, filepath.FromSlash(name))
+		if err := os.MkdirAll(source, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(source, "libfixture.so"), []byte("library\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		digest, err := harnesses.PortableRuntimeTreeDigest(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return harnesses.PortableRuntimeAsset{
+			Kind: harnesses.PortableRuntimeAssetSupport, PathKind: harnesses.PortableRuntimePathTree,
+			Source: source, Target: name, ContentSHA256: digest,
+		}
+	}
+	fixed := harnesses.PortableRuntimeExecutionConstraints{
+		FixedArguments:    []string{"--fixed", "--verbose"},
+		FixedOptionValues: []harnesses.PortableRuntimeFixedOptionValue{{Option: "-e", Value: "none"}},
+	}
+	contributions := map[string]harnesses.PortableRuntimeContribution{
+		"static": {
+			ClosureClass:         harnesses.PortableRuntimeClosureStatic,
+			Launch:               harnesses.PortableRuntimeLaunch{EntrypointTarget: "static/tool"},
+			Assets:               []harnesses.PortableRuntimeAsset{writeFile("static/tool", "#!/host/absolute-shebang\n", true)},
+			ExecutionConstraints: fixed,
+		},
+		"dynamic": {
+			ClosureClass: harnesses.PortableRuntimeClosureDynamic,
+			Launch: harnesses.PortableRuntimeLaunch{
+				EntrypointTarget: "dynamic/tool", LoaderTarget: "dynamic/loader",
+				LibraryRootTargets: []string{"dynamic/lib"},
+			},
+			Assets: []harnesses.PortableRuntimeAsset{
+				writeFile("dynamic/tool", "copied PT_INTERP=/host/copied-pt-interp\n", true),
+				writeFile("dynamic/loader", "loader\n", true), writeTree("dynamic/lib"),
+			},
+			ExecutionConstraints: fixed,
+		},
+		"interpreted": {
+			ClosureClass: harnesses.PortableRuntimeClosureInterpreted,
+			Launch: harnesses.PortableRuntimeLaunch{
+				EntrypointTarget: "interpreted/tool.js", InterpreterTarget: "interpreted/interpreter",
+				RuntimeArgs: []string{"--runtime-fixed"},
+			},
+			Assets: []harnesses.PortableRuntimeAsset{
+				writeFile("interpreted/tool.js", "#!/host/absolute-shebang\n", false),
+				writeFile("interpreted/interpreter", "interpreter\n", true),
+			},
+			ExecutionConstraints: fixed,
+		},
+		"nested": {
+			ClosureClass: harnesses.PortableRuntimeClosureInterpreted,
+			Launch: harnesses.PortableRuntimeLaunch{
+				EntrypointTarget: "nested/tool.js", InterpreterTarget: "nested/interpreter",
+				LoaderTarget: "nested/loader", LibraryRootTargets: []string{"nested/lib"},
+				RuntimeArgs: []string{"--runtime-fixed"},
+			},
+			Assets: []harnesses.PortableRuntimeAsset{
+				writeFile("nested/tool.js", "#!/host/absolute-shebang\n", false),
+				writeFile("nested/interpreter", "interpreter PT_INTERP=/host/copied-pt-interp\n", true),
+				writeFile("nested/loader", "loader\n", true), writeTree("nested/lib"),
+			},
+			ExecutionConstraints: fixed,
+		},
+	}
+	names := []string{"static", "dynamic", "interpreted", "nested"}
+	inventory := make([]harnesses.PortableRuntimeSurface, 0, len(names))
+	for _, name := range names {
+		inventory = append(inventory, harnesses.PortableRuntimeSurface{
+			Name: name, Transport: harnesses.PortableRuntimeTransportSubprocess,
+			Inclusion: harnesses.PortableRuntimeInclusionRequired,
+			Instance:  activationPureHarness{contribution: contributions[name]},
+		})
+	}
+	configured, err := BuildPortableRuntimeConfiguredProviders(PortableRuntimeConfiguredProvidersInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := PreparePortableRuntime(context.Background(), PortableRuntimePrepareInput{
+		DestinationRoot: destination,
+		Target:          harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: runtime.GOARCH},
+		Inventory:       inventory, ConfiguredProviders: configured,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = bundle.Close() })
+	activation, err := AssemblePortableRuntimeActivation(context.Background(), bundle.RuntimeRoot(), t.TempDir(), func(string) (string, bool) {
+		t.Fatal("binding fixture unexpectedly requested inherited environment")
+		return "", false
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return activation
 }
 
 func assertPortableActivationSourcesArePure(t *testing.T) {

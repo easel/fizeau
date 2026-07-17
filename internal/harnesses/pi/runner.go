@@ -26,6 +26,8 @@ const defaultEventBuffer = 64
 //   - type=text_end or type=text_delta carries message.usage or partial.usage
 //   - Final output text is in the last line's response field
 type Runner struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the pi executable. When empty the
 	// runner resolves "pi" via PATH at Execute time.
 	Binary string

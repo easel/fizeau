@@ -34,6 +34,10 @@ type ActivationRecipe struct {
 	requiredAbsent    []harnesses.PortableRuntimeGuestPath
 }
 
+// PortableRuntimeNamespaceRecipe marks this value as the opaque recipe that
+// runner bindings may retain for the canonical spawn seam.
+func (ActivationRecipe) PortableRuntimeNamespaceRecipe() {}
+
 type activationImmutableBinding struct {
 	runtimeGuestTarget string
 	contentSHA256      string

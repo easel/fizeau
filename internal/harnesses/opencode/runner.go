@@ -26,6 +26,8 @@ const defaultEventBuffer = 64
 // opencode run auto-approves all tool permissions; no extra flags are needed
 // for any permission level.
 type Runner struct {
+	harnesses.PortableRuntimeRunnerState
+
 	// Binary is the absolute path to the opencode executable. When empty the
 	// runner resolves "opencode" via PATH at Execute time.
 	Binary string
