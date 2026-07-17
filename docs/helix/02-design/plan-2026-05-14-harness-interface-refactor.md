@@ -6,6 +6,14 @@
 **Supersedes scope of**: ADR-013 (withdrawn pending this refactor)
 **Rough size**: 12 numbered steps totaling ~20–25 PRs over 6–10 weeks for one engineer serialized (less with parallelism across the per-harness migrations after Step 4 lands); Steps 5/6/7 each land as 4–6 sub-PRs
 
+> **Implementation-reference note (2026-07-17):** This dated refactor plan
+> records the migration sequence. Its former dispatcher constructor exception
+> is superseded by ADR-014 and CONTRACT-004's endpoint-aware route authority:
+> production concrete construction now lives only under
+> `internal/harnesses/builtin`, and dispatch consumes an exact registered
+> binding. Where the historical inventory below describes the old exception,
+> read it as pre-authority implementation context rather than current design.
+
 ## Problem Statement
 
 The service depends on roughly 80 exported symbols across the per-harness
@@ -33,8 +41,8 @@ the boundary with a lint rule.
 - Service-side code reads quota, routing preference, account state,
   and model discovery exclusively through the interfaces. No file in
   `service*.go`, `internal/serviceimpl/`, `internal/runtimesignals/`,
-  or `cmd/` imports per-harness package symbols beyond the runner
-  constructor used by the dispatcher.
+  or `cmd/` imports per-harness package symbols. Concrete construction is
+  confined to `internal/harnesses/builtin`.
 - Per-harness `*QuotaSnapshot`, `*QuotaRoutingDecision`,
   `*QuotaCachePath`, `Read*Quota*`, `Write*Quota*`,
   `Default*QuotaStaleAfter`, `Decide*QuotaRouting`,
@@ -102,7 +110,7 @@ and the symbols each uses.
 | `service_providers.go:22-23` | `claudeharness`, `codexharness` | `ReadClaudeQuotaViaPTY`, `ClaudeQuotaCachePath`, `ReadClaudeQuotaFrom`, `DecideClaudeQuotaRouting`, `ClaudeQuotaSnapshot{}` (constructor), `WriteClaudeQuota` (×2), codex equivalents | All cache I/O and snapshot construction moves behind `QuotaHarness.RefreshQuota`. Health-check callbacks at lines 37, 41-45 become `qh.RefreshQuota(ctx)` calls. |
 | `service_models.go:19-21` | `claudeharness`, `codexharness`, `geminiharness` | `DefaultClaudeModelDiscovery`, `ResolveClaudeFamilyAlias`, codex/gemini equivalents | Replace with `mdh, ok := h.(harnesses.ModelDiscoveryHarness); if ok { snap := mdh.DefaultModelSnapshot(); model, err := mdh.ResolveModelAlias(family, snap) }`. |
 | `service_subscription_quota.go:7-9` | `claudeharness`, `codexharness`, `geminiharness` | `ReadClaudeQuotaRoutingDecision`, `ReadCodexQuotaRoutingDecision`, `ReadGeminiQuotaRoutingDecision`, type assertion `*claudeharness.ClaudeQuotaSnapshot` at line 79 | Replace decision reads with `QuotaStatus.RoutingPreference`. The `claudeQuotaMaxUsedPercent` helper at line 79 currently computes max-used over snapshot fields (`FiveHourRemaining`, `WeeklyRemaining`); under the refactor this becomes derivation over `QuotaStatus.Windows[i].UsedPercent`, which both claude and codex expose uniformly. Decided in Step 4 (claude migration) — not deferred. |
-| `internal/serviceimpl/execute_dispatch.go:9-13` | All five `*harness` packages | `&claudeharness.Runner{}`, `&codexharness.Runner{}`, etc. (constructor only) | **Retained.** This is the explicit runner-constructor seam allowed by CONTRACT-004. The dispatcher continues to know concrete runner types. |
+| `internal/serviceimpl/execute_dispatch.go:9-13` | All five `*harness` packages | `&claudeharness.Runner{}`, `&codexharness.Runner{}`, etc. (constructor only) | **Superseded.** Construction moved to `internal/harnesses/builtin`; dispatch now accepts an authority-issued exact route binding and knows no concrete runner type. |
 | `internal/runtimesignals/collect.go:11-13` | `claudecache`, `codexcache`, `geminicache` | Per-harness cache reads for runtime-signal collection | Replace with `qh, ok := h.(harnesses.QuotaHarness); if ok { qs, _ := qh.QuotaStatus(ctx, now); ... }`. |
 
 ### Tests that consume per-harness packages
@@ -116,7 +124,7 @@ and the symbols each uses.
 | `service_routing_errors_test.go` | `claudeharness` | Synthetic `QuotaHarness`. |
 | `service_providers_test.go` | `claudeharness`, `codexharness` | Synthetic `QuotaHarness` plus fixture cache writes for refresh tests. |
 | `service_routing_test.go` | `claudeharness` | Synthetic `QuotaHarness`. |
-| `service_execute_dispatch_test.go` | All five package strings (lines 45-49) | No change — test asserts dispatcher recognizes harness names; package paths remain. |
+| `service_execute_dispatch_test.go` | All five package strings (lines 45-49) | Superseded by structural authority and exact registered-instance tests; production dispatch has no concrete package path. |
 | `internal/harnesses/runner_info_parity_test.go` | `claudeharness` | Moves into Step 2's conformance suite as a shared assertion. |
 | `internal/runtimesignals/collect_test.go` | `claudecache` | Synthetic `QuotaHarness` or fixture cache. |
 | `internal/harnesses/<name>/*_test.go` | Currently mixed `package <name>` and `package <name>_test` | All harness-local tests run as `package <name>` (white-box) so they access unexported helpers after the refactor. Black-box tests that exist today are reviewed and either flipped to white-box or rewritten against the public interface. |
@@ -382,8 +390,7 @@ cache files. Run Step 0 fixtures with structural diff; assert no
 unintentional shape changes.
 
 **Acceptance** (the sub-sequence as a whole):
-- No file outside `internal/harnesses/claude/` and
-  `internal/serviceimpl/execute_dispatch.go` imports
+- No production file outside `internal/harnesses/` imports
   `internal/harnesses/claude`.
 - Step 0 fixtures pass structural diff (claude rows).
 - `go test ./...` passes; runtime baseline tracked.
@@ -478,8 +485,8 @@ Same 5a–5f sub-sequence shape.
   pass) that fails if any `.go` file outside `internal/harnesses/`
   imports `internal/harnesses/claude`, `internal/harnesses/codex`,
   `internal/harnesses/gemini`, `internal/harnesses/opencode`, or
-  `internal/harnesses/pi`, with one allow-listed exception:
-  `internal/serviceimpl/execute_dispatch.go`.
+  `internal/harnesses/pi`. Test files may use concrete imports for fixture
+  identity; production service files have no exception.
 - Wire the check into `lefthook.yml` and CI.
 
 **Acceptance**: Lint runs in CI; introducing a forbidden import fails
@@ -613,9 +620,8 @@ Each step's PR is independently revertable.
    universal types per CONTRACT-004.
 2. Every existing harness implements the interfaces appropriate to it
    (verified by the Step 2 conformance suite).
-3. No `.go` file outside `internal/harnesses/` imports a symbol from
-   `internal/harnesses/<name>/` except
-   `internal/serviceimpl/execute_dispatch.go`.
+3. No production `.go` file outside `internal/harnesses/` imports a symbol
+   from `internal/harnesses/<name>/`.
 4. Per-harness `*QuotaSnapshot` types are lowercase.
 5. Per-harness `*QuotaRoutingDecision` types are deleted.
 6. Per-harness cache I/O functions are unexported.

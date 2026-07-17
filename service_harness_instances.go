@@ -21,9 +21,7 @@ var harnessInstanceHook func(map[string]harnesses.Harness) map[string]harnesses.
 // treats absence as "no QuotaHarness/AccountHarness behavior".
 //
 // This file intentionally stays on the interface side of CONTRACT-004:
-// concrete runner construction lives under internal/harnesses/, and the
-// dispatcher in internal/serviceimpl/execute_dispatch.go remains the only
-// allowed non-harness import seam for per-harness packages.
+// concrete runner construction lives under internal/harnesses/.
 func defaultHarnessInstances() map[string]harnesses.Harness {
 	instances := builtin.Instances()
 	if harnessInstanceHook != nil {
@@ -32,12 +30,22 @@ func defaultHarnessInstances() map[string]harnesses.Harness {
 	return instances
 }
 
+// defaultRouteRunnerAuthority creates the service's sole runner authority.
+// Structural inventory and exact execution bindings share this owner, while
+// concrete construction stays inside the built-in marketplace boundary.
+func defaultRouteRunnerAuthority() *harnesses.RouteRunnerAuthority {
+	return harnesses.NewRouteRunnerAuthority(defaultHarnessInstances(), builtin.NewRouteRunner)
+}
+
 // portableRuntimeInventory joins registry metadata to this service's actual
 // runner-instance map. Preparation will consume this seam in a later bead;
 // keeping the join here prevents a second static runner registry from becoming
 // a competing authority.
 func (s *service) portableRuntimeInventory() ([]harnesses.PortableRuntimeSurface, error) {
-	return harnesses.BuildPortableRuntimeInventory(s.registry, s.harnessInstances)
+	if s == nil || s.routeRunners == nil {
+		return harnesses.BuildPortableRuntimeInventory(s.registry, nil)
+	}
+	return harnesses.BuildPortableRuntimeInventory(s.registry, s.routeRunners.StructuralInstances())
 }
 
 // portableRuntimeConfiguredProviders projects the effective ServiceConfig

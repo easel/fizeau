@@ -17,15 +17,17 @@
 > - The CONTRACT-004 sub-interfaces (`QuotaHarness`, `AccountHarness`,
 >   `ModelDiscoveryHarness`) are declared in `internal/harnesses/types.go`
 >   and implemented by claude/codex/gemini/opencode/pi.
-> - The lint rule that forbids per-harness imports outside the dispatcher
+> - The lint rule that forbids production per-harness imports outside
+>   `internal/harnesses/`
 >   exists at `internal/lint/harnessimports/analyzer.go`.
 >
 > Therefore the `claude-tui` harness lands as a sibling
 > `internal/harnesses/claude-tui/` package implementing
 > `Harness + QuotaHarness + AccountHarness + ModelDiscoveryHarness`
 > against the merged contract. No service-side changes are required;
-> the dispatcher already constructs runners through the registered-name
-> seam (`internal/serviceimpl/execute_dispatch.go`).
+> the built-in factory constructs it for the endpoint-aware route authority;
+> `internal/serviceimpl/execute_dispatch.go` consumes only the resulting exact
+> registered binding.
 >
 > The implementation steps below remain the right shape. They are
 > re-anchored against the merged contract in §"CONTRACT-004 Alignment"

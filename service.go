@@ -978,12 +978,9 @@ type StallPolicy struct {
 type service struct {
 	opts     ServiceOptions
 	registry *harnesses.Registry
-	// harnessInstances holds the registered Harness implementation for
-	// each known harness name. The refresh scheduler iterates over this
-	// map, type-asserting each instance to the optional CONTRACT-004
-	// sub-interfaces (QuotaHarness, AccountHarness). harnessByName is
-	// the consultation seam.
-	harnessInstances map[string]harnesses.Harness
+	// routeRunners is the single authority for both route-neutral capability
+	// inventory and exact five-field execution instances.
+	routeRunners     *harnesses.RouteRunnerAuthority
 	refreshScheduler *routehealth.RefreshScheduler
 	hub              *serviceimpl.SessionHub
 
@@ -1099,11 +1096,11 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		opts.ServiceConfig = sc
 	}
 	svc := &service{
-		opts:             opts,
-		registry:         harnesses.NewRegistry(),
-		harnessInstances: defaultHarnessInstances(),
-		hub:              serviceimpl.NewSessionHub(),
-		runtime:          serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
+		opts:         opts,
+		registry:     harnesses.NewRegistry(),
+		routeRunners: defaultRouteRunnerAuthority(),
+		hub:          serviceimpl.NewSessionHub(),
+		runtime:      serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
 		catalog: serviceimpl.NewCatalogCache(serviceimpl.CatalogCacheOptions{
 			AsyncRefreshTimeout:  opts.catalogRefreshTimeout(),
 			DiscoveryUnsupported: ErrDiscoveryUnsupported(),
@@ -1177,10 +1174,10 @@ func logPersistRouteHealthWarning(w io.Writer, path string, err error) {
 // failed assertions mean the harness has not implemented that capability
 // (yet) and the caller MUST tolerate the absence.
 func (s *service) harnessByName(name string) harnesses.Harness {
-	if s == nil {
+	if s == nil || s.routeRunners == nil {
 		return nil
 	}
-	return s.harnessInstances[name]
+	return s.routeRunners.StructuralInstance(name)
 }
 
 // harnessType returns "native" for HTTP/embedded harnesses, "subprocess" for CLI-invoked ones.

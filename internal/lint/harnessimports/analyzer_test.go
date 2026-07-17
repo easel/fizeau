@@ -35,12 +35,12 @@ func TestScanFlagsExternalHarnessImport(t *testing.T) {
 	if !strings.Contains(findings[0].Message, contractMessage) {
 		t.Fatalf("message = %q, want %q", findings[0].Message, contractMessage)
 	}
-	if !strings.Contains(findings[0].Message, "internal/serviceimpl/execute_dispatch.go") {
+	if !strings.Contains(findings[0].Message, "only packages under internal/harnesses/") {
 		t.Fatalf("message = %q, want allowed seam hint", findings[0].Message)
 	}
 }
 
-func TestScanAllowsExecuteDispatchSeam(t *testing.T) {
+func TestScanFlagsExecuteDispatchConcreteImport(t *testing.T) {
 	root := t.TempDir()
 	writeLintFixture(t, root, filepath.Join("internal", "serviceimpl", "execute_dispatch.go"), strings.Join([]string{
 		"package serviceimpl",
@@ -52,8 +52,8 @@ func TestScanAllowsExecuteDispatchSeam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan() error = %v", err)
 	}
-	if len(findings) != 0 {
-		t.Fatalf("findings = %#v, want none", findings)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %#v, want one concrete-import violation", findings)
 	}
 }
 

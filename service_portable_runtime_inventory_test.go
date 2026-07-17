@@ -87,27 +87,32 @@ func TestPortableRuntimeInventoryUsesConfiguredServiceInstances(t *testing.T) {
 	}
 
 	required := 0
+	instances := svc.routeRunners.StructuralInstances()
 	for _, row := range rows {
 		if row.Inclusion != harnesses.PortableRuntimeInclusionRequired {
 			continue
 		}
 		required++
-		if row.Instance != svc.harnessInstances[row.Name] {
+		if row.Instance != instances[row.Name] {
 			t.Errorf("row %q did not retain the configured service runner instance", row.Name)
 		}
 		if row.Name == "codex" && row.Instance != sentinel {
 			t.Error("codex inventory row did not retain the hook-substituted service instance")
 		}
 	}
-	if required != len(svc.harnessInstances) {
-		t.Fatalf("required subprocess rows = %d, configured service instances = %d", required, len(svc.harnessInstances))
+	if required != len(instances) {
+		t.Fatalf("required subprocess rows = %d, configured service instances = %d", required, len(instances))
 	}
 	if svc.harnessByName("codex") != sentinel {
 		t.Fatal("service lookup and portable inventory do not share the same configured instance authority")
 	}
+	coordinatorRequest := svc.executeCoordinatorRequest(ServiceExecuteRequest{}, RouteDecision{Harness: "codex"}, "fixture-session", nil)
+	if !coordinatorRequest.RouteRunner.Valid() || coordinatorRequest.RouteRunner.Runner() != sentinel {
+		t.Fatal("custom authority prototype was not retained for exact execution")
+	}
 }
 
-func TestPortableRuntimeInventoryUsesGeminiAndPiDispatchInstances(t *testing.T) {
+func TestPortableRuntimeInventoryDerivesGeminiAndPiDispatchInstances(t *testing.T) {
 	t.Setenv("FIZEAU_CLAUDE_TRANSPORT", "subprocess")
 	svc := newTestService(t, ServiceOptions{})
 	rows, err := svc.portableRuntimeInventory()
@@ -122,13 +127,16 @@ func TestPortableRuntimeInventoryUsesGeminiAndPiDispatchInstances(t *testing.T) 
 			continue
 		}
 		seen[row.Name] = true
-		configured := svc.harnessInstances[row.Name]
+		configured := svc.routeRunners.StructuralInstance(row.Name)
 		if row.Instance != configured || svc.harnessByName(row.Name) != configured {
 			t.Fatalf("%s inventory and dispatch do not share the configured service instance", row.Name)
 		}
 		coordinatorRequest := svc.executeCoordinatorRequest(ServiceExecuteRequest{}, RouteDecision{Harness: row.Name}, "fixture-session", nil)
-		if coordinatorRequest.ConfiguredHarness != configured {
-			t.Fatalf("%s execute coordinator did not receive the inventory-owned instance", row.Name)
+		if !coordinatorRequest.RouteRunner.Valid() || coordinatorRequest.RouteRunner.Key().Harness != row.Name {
+			t.Fatalf("%s execute coordinator did not receive an exact authority binding", row.Name)
+		}
+		if coordinatorRequest.RouteRunner.Runner() == configured {
+			t.Fatalf("%s exact route runner aliases the route-neutral structural prototype", row.Name)
 		}
 		if configured.Info().Name != row.Name {
 			t.Fatalf("%s configured service instance reports identity %q", row.Name, configured.Info().Name)
@@ -236,6 +244,9 @@ func TestPortableRuntimePlanIsRouteNeutralAndOpaque(t *testing.T) {
 			APIKey: apiKey, Headers: map[string]string{"Authorization": headerValue},
 		}},
 	}
+	instances := map[string]harnesses.Harness{
+		"codex": runner, "claude-tui": secondaryRunner,
+	}
 	svc := &service{
 		opts: ServiceOptions{
 			ServiceConfig: config, Logger: &logger,
@@ -243,10 +254,8 @@ func TestPortableRuntimePlanIsRouteNeutralAndOpaque(t *testing.T) {
 				panic("portable preparation must not probe a provider")
 			},
 		},
-		registry: harnesses.NewRegistryForTest("codex", "claude-tui"),
-		harnessInstances: map[string]harnesses.Harness{
-			"codex": runner, "claude-tui": secondaryRunner,
-		},
+		registry:     harnesses.NewRegistryForTest("codex", "claude-tui"),
+		routeRunners: harnesses.NewRouteRunnerAuthority(instances, nil),
 	}
 	destination := filepath.Join(t.TempDir(), "destination")
 	if err := os.Mkdir(destination, 0o700); err != nil {

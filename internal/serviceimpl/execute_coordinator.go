@@ -38,10 +38,11 @@ type ExecuteDecision struct {
 // terminal ordering.
 type ExecuteRequest struct {
 	SessionID string
-	// ConfiguredHarness is the exact service-owned runner for the resolved
-	// harness. Dispatch consumes it for inventory-backed contributors instead
-	// of constructing a competing runner instance.
-	ConfiguredHarness harnesses.Harness
+	// RouteRunner is the authority-issued exact-key binding for the resolved
+	// subprocess route. RouteRunnerError preserves a first-bind construction
+	// failure for terminal dispatch projection.
+	RouteRunner      harnesses.RouteRunnerBinding
+	RouteRunnerError error
 
 	Prompt            string
 	SystemPrompt      string
@@ -217,9 +218,10 @@ func (c ExecuteCoordinator) runResolved(ctx context.Context, req ExecuteRequest,
 func (c ExecuteCoordinator) dispatch(ctx context.Context, state *executeRunState) {
 	req := state.req
 	DispatchExecuteRun(ctx, ExecuteDispatchRequest{
-		Decision:          runnerDecision(req.Decision),
-		ConfiguredHarness: req.ConfiguredHarness,
-		Started:           state.start,
+		Decision:         runnerDecision(req.Decision),
+		RouteRunner:      req.RouteRunner,
+		RouteRunnerError: req.RouteRunnerError,
+		Started:          state.start,
 	}, ExecuteDispatchCallbacks{
 		RunNative: func(ctx context.Context) {
 			state.runNative(ctx)
@@ -695,6 +697,7 @@ func runnerDecision(decision ExecuteDecision) ExecuteRunnerDecision {
 	return ExecuteRunnerDecision{
 		Harness:        decision.Harness,
 		Provider:       decision.Provider,
+		Endpoint:       decision.Endpoint,
 		ServerInstance: decision.ServerInstance,
 		Model:          decision.Model,
 	}

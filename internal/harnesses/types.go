@@ -471,6 +471,33 @@ type Harness interface {
 	Execute(ctx context.Context, req ExecuteRequest) (<-chan Event, error)
 }
 
+// RouteRunnerKey is the exact identity of one service-owned subprocess route.
+// Empty fields are literal identity values: callers must not substitute
+// defaults, wildcards, display names, or partial-key fallbacks.
+type RouteRunnerKey struct {
+	Harness        string
+	Provider       string
+	Endpoint       string
+	ServerInstance string
+	Model          string
+}
+
+// RouteRunnerBinding couples an exact route identity to the runner instance
+// registered for it. Only RouteRunnerAuthority can create a binding.
+type RouteRunnerBinding struct {
+	key    RouteRunnerKey
+	runner Harness
+}
+
+// Key returns the exact route identity represented by the binding.
+func (b RouteRunnerBinding) Key() RouteRunnerKey { return b.key }
+
+// Runner returns the service-owned runner registered for the exact key.
+func (b RouteRunnerBinding) Runner() Harness { return b.runner }
+
+// Valid reports whether the binding contains a registered runner.
+func (b RouteRunnerBinding) Valid() bool { return b.runner != nil }
+
 // ContinuationRequest asks the selected route-owned runner to resume the
 // completed Fizeau session identified by ParentSessionID. ParentSessionID is
 // the only conversation identifier on this boundary. Request is the fully

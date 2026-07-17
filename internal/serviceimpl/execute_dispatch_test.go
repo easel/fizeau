@@ -35,21 +35,29 @@ func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var native, virtual, script bool
 			var subprocess string
-			var configured harnesses.Harness
-			if tc.harness == "gemini" || tc.harness == "pi" {
-				configured = builtin.New(tc.harness)
+			decision := ExecuteRunnerDecision{Harness: tc.harness}
+			var binding harnesses.RouteRunnerBinding
+			var registered harnesses.Harness
+			if tc.wantSubprocess != "" {
+				registered = builtin.New(tc.harness)
+				authority := harnesses.NewRouteRunnerAuthority(nil, nil)
+				var err error
+				binding, err = authority.Register(routeRunnerKeyFromDecision(decision), registered)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
-				Decision:          ExecuteRunnerDecision{Harness: tc.harness},
-				ConfiguredHarness: configured,
-				Started:           time.Now(),
+				Decision:    decision,
+				RouteRunner: binding,
+				Started:     time.Now(),
 			}, ExecuteDispatchCallbacks{
 				RunNative: func(context.Context) {
 					native = true
 				},
 				RunSubprocess: func(_ context.Context, runner harnesses.Harness) {
-					if configured != nil && runner != configured {
-						t.Fatalf("dispatch runner = %p, want exact configured instance %p", runner, configured)
+					if registered != nil && runner != registered {
+						t.Fatalf("dispatch runner = %p, want exact registered instance %p", runner, registered)
 					}
 					subprocess = runner.Info().Name
 				},
@@ -73,22 +81,23 @@ func TestDispatchExecuteRunSelectsExplicitHarnessRunner(t *testing.T) {
 	}
 }
 
-func TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner(t *testing.T) {
-	for _, name := range []string{"gemini", "pi"} {
+func TestDispatchExecuteRunRejectsMissingOrMismatchedRouteBinding(t *testing.T) {
+	for _, name := range []string{"claude", "claude-tui", "codex", "gemini", "opencode", "pi"} {
 		for _, tc := range []struct {
-			name       string
-			configured harnesses.Harness
+			name    string
+			binding harnesses.RouteRunnerBinding
 		}{
 			{name: "missing"},
-			{name: "mismatched", configured: builtin.New("codex")},
+			{name: "mismatched", binding: mustRouteRunnerBinding(t,
+				ExecuteRunnerDecision{Harness: name, Endpoint: "other"}, builtin.New(name))},
 		} {
 			t.Run(name+"/"+tc.name, func(t *testing.T) {
 				var subprocess bool
 				var final harnesses.FinalData
 				DispatchExecuteRun(context.Background(), ExecuteDispatchRequest{
-					Decision:          ExecuteRunnerDecision{Harness: name, Model: "fixture-model"},
-					ConfiguredHarness: tc.configured,
-					Started:           time.Now(),
+					Decision:    ExecuteRunnerDecision{Harness: name, Model: "fixture-model"},
+					RouteRunner: tc.binding,
+					Started:     time.Now(),
 				}, ExecuteDispatchCallbacks{
 					RunSubprocess: func(context.Context, harnesses.Harness) { subprocess = true },
 					Finalize:      func(got harnesses.FinalData) { final = got },
@@ -99,4 +108,14 @@ func TestDispatchExecuteRunRejectsMissingConfiguredInventoryRunner(t *testing.T)
 			})
 		}
 	}
+}
+
+func mustRouteRunnerBinding(t *testing.T, decision ExecuteRunnerDecision, runner harnesses.Harness) harnesses.RouteRunnerBinding {
+	t.Helper()
+	authority := harnesses.NewRouteRunnerAuthority(nil, nil)
+	binding, err := authority.Register(routeRunnerKeyFromDecision(decision), runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return binding
 }

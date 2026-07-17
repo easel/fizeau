@@ -3,54 +3,18 @@ package serviceimpl
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
-	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
-	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
-	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
-	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
 )
-
-// anthropicAPIKeyEnv / anthropicBaseURLEnv are the canonical env vars for the
-// Anthropic provider, mirroring the source used by the provider registry.
-const (
-	// #nosec G101 -- this is an environment variable name, not a credential value.
-	anthropicAPIKeyEnv  = "ANTHROPIC_API_KEY"
-	anthropicBaseURLEnv = "ANTHROPIC_BASE_URL"
-)
-
-// newClaudeRunner constructs the metered claude harness Runner with the
-// transport selected by claudeharness.NativeTransportSelected. The default
-// (subprocess) build is the zero-value Runner — identical to the prior
-// &claudeharness.Runner{}.
-//
-// When native transport is selected, the Anthropic API key must be present in
-// the environment; a missing key is surfaced as a clear early error rather than
-// a late nil-deref or opaque failure mid-turn.
-func newClaudeRunner() (*claudeharness.Runner, error) {
-	if claudeharness.NativeTransportSelected() {
-		key := strings.TrimSpace(os.Getenv(anthropicAPIKeyEnv))
-		if key == "" {
-			return nil, fmt.Errorf("FIZEAU_CLAUDE_TRANSPORT=native but no Anthropic API key found; set ANTHROPIC_API_KEY")
-		}
-		return &claudeharness.Runner{
-			NativeMode:    true,
-			NativeAPIKey:  key,
-			NativeBaseURL: os.Getenv(anthropicBaseURLEnv),
-		}, nil
-	}
-	return &claudeharness.Runner{NativeMode: false}, nil
-}
 
 // ExecuteDispatchRequest carries API-neutral data needed to choose the
 // concrete execute runner.
 type ExecuteDispatchRequest struct {
-	Decision          ExecuteRunnerDecision
-	ConfiguredHarness harnesses.Harness
-	Started           time.Time
+	Decision         ExecuteRunnerDecision
+	RouteRunner      harnesses.RouteRunnerBinding
+	RouteRunnerError error
+	Started          time.Time
 }
 
 // ExecuteDispatchCallbacks connect the internal dispatcher to root-owned
@@ -71,33 +35,8 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 		if cb.RunNative != nil {
 			cb.RunNative(ctx)
 		}
-	case "claude":
-		runner, err := newClaudeRunner()
-		if err != nil {
-			finalizeDispatch(cb, harnesses.FinalData{
-				Status:     "failed",
-				Error:      err.Error(),
-				DurationMS: time.Since(req.Started).Milliseconds(),
-				RoutingActual: &harnesses.RoutingActual{
-					Harness:        req.Decision.Harness,
-					Provider:       req.Decision.Provider,
-					ServerInstance: req.Decision.ServerInstance,
-					Model:          req.Decision.Model,
-				},
-			})
-			return
-		}
-		runSubprocess(ctx, cb, runner)
-	case "claude-tui":
-		runSubprocess(ctx, cb, &claudetuiharness.Harness{})
-	case "codex":
-		runSubprocess(ctx, cb, &codexharness.Runner{})
-	case "gemini":
-		runConfiguredSubprocess(ctx, req, cb)
-	case "opencode":
-		runSubprocess(ctx, cb, &opencodeharness.Runner{})
-	case "pi":
-		runConfiguredSubprocess(ctx, req, cb)
+	case "claude", "claude-tui", "codex", "gemini", "opencode", "pi":
+		runRegisteredSubprocess(ctx, req, cb)
 	case "virtual":
 		if cb.RunVirtual != nil {
 			cb.RunVirtual(ctx)
@@ -127,24 +66,47 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 	}
 }
 
-func runConfiguredSubprocess(ctx context.Context, req ExecuteDispatchRequest, cb ExecuteDispatchCallbacks) {
-	runner := req.ConfiguredHarness
+func runRegisteredSubprocess(ctx context.Context, req ExecuteDispatchRequest, cb ExecuteDispatchCallbacks) {
+	if req.RouteRunnerError != nil {
+		finalizeRunnerBindingFailure(req, cb, req.RouteRunnerError.Error())
+		return
+	}
+	wantKey := routeRunnerKeyFromDecision(req.Decision)
+	if !req.RouteRunner.Valid() || req.RouteRunner.Key() != wantKey {
+		finalizeRunnerBindingFailure(req, cb, fmt.Sprintf("harness %q has no matching exact registered route runner", req.Decision.Harness))
+		return
+	}
+	runner := req.RouteRunner.Runner()
 	descriptor, ok := runner.(harnesses.PortableRuntimeStructuralHarness)
 	if !ok || descriptor.PortableRuntimeStructure().Name != req.Decision.Harness {
-		finalizeDispatch(cb, harnesses.FinalData{
-			Status:     "failed",
-			Error:      fmt.Sprintf("harness %q has no matching configured service runner", req.Decision.Harness),
-			DurationMS: time.Since(req.Started).Milliseconds(),
-			RoutingActual: &harnesses.RoutingActual{
-				Harness:        req.Decision.Harness,
-				Provider:       req.Decision.Provider,
-				ServerInstance: req.Decision.ServerInstance,
-				Model:          req.Decision.Model,
-			},
-		})
+		finalizeRunnerBindingFailure(req, cb, fmt.Sprintf("harness %q registered route runner has mismatched structure", req.Decision.Harness))
 		return
 	}
 	runSubprocess(ctx, cb, runner)
+}
+
+func routeRunnerKeyFromDecision(decision ExecuteRunnerDecision) harnesses.RouteRunnerKey {
+	return harnesses.RouteRunnerKey{
+		Harness:        decision.Harness,
+		Provider:       decision.Provider,
+		Endpoint:       decision.Endpoint,
+		ServerInstance: decision.ServerInstance,
+		Model:          decision.Model,
+	}
+}
+
+func finalizeRunnerBindingFailure(req ExecuteDispatchRequest, cb ExecuteDispatchCallbacks, message string) {
+	finalizeDispatch(cb, harnesses.FinalData{
+		Status:     "failed",
+		Error:      message,
+		DurationMS: time.Since(req.Started).Milliseconds(),
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:        req.Decision.Harness,
+			Provider:       req.Decision.Provider,
+			ServerInstance: req.Decision.ServerInstance,
+			Model:          req.Decision.Model,
+		},
+	})
 }
 
 func runSubprocess(ctx context.Context, cb ExecuteDispatchCallbacks, runner harnesses.Harness) {

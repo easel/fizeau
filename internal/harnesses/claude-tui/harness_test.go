@@ -206,11 +206,10 @@ func checkPackageNoImports(t *testing.T, pkgPath string, forbidden []string) {
 	}
 }
 
-// TestDispatcherRecognizesClaudeTui asserts internal/serviceimpl/execute_dispatch.go
-// routes harness="claude-tui" to the claude-tui constructor and that the diff
-// against main shows no other service-side file changed.
+// TestDispatcherRecognizesClaudeTui asserts internal/serviceimpl dispatches
+// harness="claude-tui" through the route-runner authority without importing
+// its concrete constructor.
 func TestDispatcherRecognizesClaudeTui(t *testing.T) {
-	// Verify the dispatcher imports claudetuiharness.
 	repoRoot := findRepoRoot(t)
 	fset := token.NewFileSet()
 	dispatchPath := filepath.Join(repoRoot, "internal", "serviceimpl", "execute_dispatch.go")
@@ -219,16 +218,11 @@ func TestDispatcherRecognizesClaudeTui(t *testing.T) {
 		t.Fatalf("parse %s: %v", dispatchPath, err)
 	}
 
-	foundImport := false
 	for _, imp := range dispatchFile.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
 		if importPath == "github.com/easel/fizeau/internal/harnesses/claude-tui" {
-			foundImport = true
-			break
+			t.Error("execute_dispatch.go imports concrete claude-tui runner; construction belongs to the runner authority")
 		}
-	}
-	if !foundImport {
-		t.Error("execute_dispatch.go missing import of internal/harnesses/claude-tui")
 	}
 
 	// Verify the case for claude-tui exists in DispatchExecuteRun.
@@ -254,8 +248,7 @@ func TestDispatcherRecognizesClaudeTui(t *testing.T) {
 }
 
 // TestHarnessImportsLintClaudeTui asserts internal/build/harnessimports passes
-// and that no service*.go file imports internal/harnesses/claude-tui beyond
-// the runner-constructor seam in execute_dispatch.go.
+// and that no production service*.go file imports internal/harnesses/claude-tui.
 func TestHarnessImportsLintClaudeTui(t *testing.T) {
 	// Find repo root by looking for go.mod.
 	repoRoot := findRepoRoot(t)
@@ -270,7 +263,7 @@ func TestHarnessImportsLintClaudeTui(t *testing.T) {
 		t.Errorf("harnessimports: %s:%d: %s", finding.Path, finding.Line, finding.Message)
 	}
 
-	// Verify no service*.go file (other than execute_dispatch.go) imports claude-tui.
+	// Verify no production service*.go file imports claude-tui.
 	forbidden := "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	err = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -279,11 +272,8 @@ func TestHarnessImportsLintClaudeTui(t *testing.T) {
 		if d.IsDir() {
 			return nil
 		}
-		if !strings.HasPrefix(filepath.Base(path), "service_") || filepath.Ext(path) != ".go" {
+		if !strings.HasPrefix(filepath.Base(path), "service_") || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
 			return nil
-		}
-		if strings.Contains(path, "execute_dispatch.go") {
-			return nil // This file is allowed to import claude-tui.
 		}
 
 		fset := token.NewFileSet()
@@ -294,7 +284,7 @@ func TestHarnessImportsLintClaudeTui(t *testing.T) {
 		for _, imp := range file.Imports {
 			importPath := strings.Trim(imp.Path.Value, `"`)
 			if importPath == forbidden {
-				t.Errorf("%s imports %s (forbidden outside execute_dispatch.go)", path, forbidden)
+				t.Errorf("%s imports %s (concrete imports belong under internal/harnesses)", path, forbidden)
 			}
 		}
 		return nil
@@ -363,6 +353,12 @@ func TestDispatcherCallsClaudeTui(t *testing.T) {
 		},
 		Started: time.Now(),
 	}
+	authority := harnesses.NewRouteRunnerAuthority(nil, nil)
+	binding, err := authority.Register(harnesses.RouteRunnerKey{Harness: "claude-tui"}, &claudetui.Harness{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.RouteRunner = binding
 
 	serviceimpl.DispatchExecuteRun(context.Background(), req, cb)
 

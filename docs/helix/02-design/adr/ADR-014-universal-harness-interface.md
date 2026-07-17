@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 63c97bfb114774622e662d7f171c1c389776a4c5ff08cbe3c9d540dcbbdf8119
+    self_hash: 41637577d153fcf077372c0402fa92fd42cea6af64fa4f24aa7f237addd9308b
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
       CONTRACT-003: 4b053cfd0c66bafac8dedbda6c6d32b724f27ec2db13ec2eff37a9b6683dbb24
-      CONTRACT-004: d573fcd5f4a3335b36f4a858095150a25745a52e3ae177031b1f9d70d008d818
-    reviewed_at: "2026-07-17T06:25:57Z"
+      CONTRACT-004: cc55033051ce62515c520700c1cf70df539f0f8c1db6750795134728394cb881
+    reviewed_at: "2026-07-17T08:14:13Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -102,9 +102,10 @@ concrete snapshot types (`ClaudeQuotaSnapshot`, `CodexQuotaSnapshot`,
 inside the harness package for cache I/O but are no longer part of the
 service-visible surface.
 
-A linter (or `go vet`-shaped check) blocks any new `.go` file outside
-`internal/harnesses/` from importing per-harness package symbols beyond
-the runner constructor used by `internal/serviceimpl/execute_dispatch.go`.
+A linter (or `go vet`-shaped check) blocks production `.go` files outside
+`internal/harnesses/` from importing per-harness package symbols. Concrete
+runner construction is centralized in `internal/harnesses/builtin`; service
+dispatch receives only an authority-issued exact route binding.
 
 **Key Points**: four composable interfaces | service consumes only the
 interfaces | per-harness snapshot types and cache helpers become
@@ -222,7 +223,7 @@ Out of scope:
 | JSON shape regression in CONTRACT-003 output during projection refactor | M | H | Pin recorded fixtures of `HarnessInfo`, `ProviderInfo`, `QuotaState`, `AccountStatus` JSON before the refactor; assert byte-equal post-refactor; refuse merge on diff. |
 | Routing semantic regression (`PreferX` boolean → `RoutingPreference` enum) | M | H | Migrate one harness end-to-end first (claude), prove parity through `service_routing_test.go` fixtures, then proceed to codex and gemini. |
 | Cache file schema drift during snapshot unexport | L | M | Cache files remain on disk in the harness's existing format; only the Go type name changes. Pre-existing cache files keep loading. |
-| Lint rule produces false positives that block legitimate refactor PRs | M | L | Lint exemption file lists the runner constructors used by execute_dispatch.go and any test files that legitimately import for fixture seeding (record-mode tests). |
+| Lint rule produces false positives that block legitimate refactor PRs | M | L | Production construction stays under `internal/harnesses/`; test files may import concrete harnesses for fixture seeding and identity assertions. |
 | The refactor stalls partway, leaving both the old per-harness surface and the new interface coexisting | M | M | Plan sequences harness-at-a-time migration with explicit "old surface deleted" acceptance criterion at each step; lint rule is added in the last step so partial migrations cannot accidentally satisfy it. |
 | ADR-013 (claude-tui) re-proposal arrives during the refactor and gets implemented against the partial contract | L | M | ADR-013 is explicitly withdrawn (not "paused"); re-proposal requires citing the merged CONTRACT-004 and reaching agreement that the contract is stable enough. |
 

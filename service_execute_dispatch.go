@@ -21,10 +21,12 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 	}
 
 	routingDecisionData, _ := json.Marshal(serviceRoutingDecisionDataFromDecision(req, decision, sessionID))
+	routeBinding, routeBindingErr := s.bindRouteRunner(decision)
 
 	return serviceimpl.ExecuteRequest{
-		SessionID:         sessionID,
-		ConfiguredHarness: s.harnessByName(decision.Harness),
+		SessionID:        sessionID,
+		RouteRunner:      routeBinding,
+		RouteRunnerError: routeBindingErr,
 
 		Prompt:            req.Prompt,
 		SystemPrompt:      req.SystemPrompt,
@@ -84,6 +86,19 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 		RouteProgress:       transcript.RouteProgressData(toTranscriptRouteDecision(decision)),
 		OverridePayload:     executeOverridePayload(ovr, sessionID),
 	}
+}
+
+func (s *service) bindRouteRunner(decision RouteDecision) (harnesses.RouteRunnerBinding, error) {
+	if s == nil || s.routeRunners == nil || s.routeRunners.StructuralInstance(decision.Harness) == nil {
+		return harnesses.RouteRunnerBinding{}, nil
+	}
+	return s.routeRunners.Bind(harnesses.RouteRunnerKey{
+		Harness:        decision.Harness,
+		Provider:       decision.Provider,
+		Endpoint:       decision.Endpoint,
+		ServerInstance: decision.ServerInstance,
+		Model:          decision.Model,
+	})
 }
 
 // executeCoordinatorPorts supplies the narrow set of root-owned state and

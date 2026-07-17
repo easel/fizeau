@@ -1406,10 +1406,11 @@ Every harness implementation MUST carry, at minimum:
 These invariants are enforced by reviewer attention and (where practical)
 by `go vet`-shaped tooling:
 
-1. **No service-side import of `internal/harnesses/<name>` symbols beyond
-   `Runner{}` construction.** Permitted imports from outside the harness's
-   own package and `internal/harnesses` itself: the runner constructor
-   used by `internal/serviceimpl/execute_dispatch.go`. All other
+1. **No production service-side import of `internal/harnesses/<name>`
+   symbols.** Concrete runner construction belongs under
+   `internal/harnesses/builtin`. The service owns one endpoint-aware route
+   authority and passes its exact five-field binding into dispatch; dispatch
+   MUST NOT construct or select a runner by harness/display name. All other
    consumption MUST go through the interface methods on `Harness`,
    `QuotaHarness`, `AccountHarness`, or `ModelDiscoveryHarness`.
    Continuation consumption MUST go through `ContinuationHarness`; service

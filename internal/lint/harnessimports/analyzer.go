@@ -113,10 +113,10 @@ func scanFile(path, rel string) ([]Finding, error) {
 }
 
 func formatMessage(path, importPath string) string {
-	return fmt.Sprintf("%s: %s imports %s; only packages under internal/harnesses/ and internal/serviceimpl/execute_dispatch.go may import concrete per-harness packages", contractMessage, path, importPath)
+	return fmt.Sprintf("%s: %s imports %s; only packages under internal/harnesses/ may import concrete per-harness packages", contractMessage, path, importPath)
 }
 
 func allowedImportSite(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	return strings.HasPrefix(rel, "internal/harnesses/") || rel == "internal/serviceimpl/execute_dispatch.go"
+	return strings.HasPrefix(rel, "internal/harnesses/") || strings.HasSuffix(rel, "_test.go")
 }

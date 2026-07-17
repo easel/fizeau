@@ -16,6 +16,7 @@ import (
 type ExecuteRunnerDecision struct {
 	Harness        string
 	Provider       string
+	Endpoint       string
 	ServerInstance string
 	Model          string
 }

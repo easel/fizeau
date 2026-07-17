@@ -22,9 +22,9 @@ func newTestService(t testing.TB, opts ServiceOptions, options ...testServiceOpt
 	registry.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 
 	svc := &service{
-		opts:             opts,
-		registry:         registry,
-		harnessInstances: defaultHarnessInstances(),
+		opts:         opts,
+		registry:     registry,
+		routeRunners: defaultRouteRunnerAuthority(),
 	}
 	for _, option := range options {
 		option(svc)

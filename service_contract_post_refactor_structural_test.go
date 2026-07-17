@@ -91,49 +91,50 @@ func newStructuralFixtureService() *service {
 		Fresh:         true,
 		Detail:        "auth evidence cached for 7d",
 	}
-	return &service{
-		harnessInstances: map[string]harnesses.Harness{
-			"claude": &structuralFixtureHarness{
-				name: "claude",
-				quota: harnesses.QuotaStatus{
-					Source:            "internal/harnesses/claude/quota_cache.go",
-					CapturedAt:        capturedAt,
-					Fresh:             true,
-					State:             harnesses.QuotaOK,
-					Windows:           preRefactorQuotaWindowsClaude(),
-					Account:           &claudeAccount,
-					RoutingPreference: harnesses.RoutingPreferenceAvailable,
-				},
-				account: claudeAccount,
+	instances := map[string]harnesses.Harness{
+		"claude": &structuralFixtureHarness{
+			name: "claude",
+			quota: harnesses.QuotaStatus{
+				Source:            "internal/harnesses/claude/quota_cache.go",
+				CapturedAt:        capturedAt,
+				Fresh:             true,
+				State:             harnesses.QuotaOK,
+				Windows:           preRefactorQuotaWindowsClaude(),
+				Account:           &claudeAccount,
+				RoutingPreference: harnesses.RoutingPreferenceAvailable,
 			},
-			"codex": &structuralFixtureHarness{
-				name: "codex",
-				quota: harnesses.QuotaStatus{
-					Source:            "internal/harnesses/codex/quota_cache.go",
-					CapturedAt:        capturedAt,
-					Fresh:             true,
-					State:             harnesses.QuotaOK,
-					Windows:           preRefactorQuotaWindowsCodex(),
-					Account:           &codexAccount,
-					RoutingPreference: harnesses.RoutingPreferenceAvailable,
-				},
-				account: codexAccount,
-			},
-			"gemini": &structuralFixtureHarness{
-				name: "gemini",
-				quota: harnesses.QuotaStatus{
-					Source:            "internal/harnesses/gemini/quota_cache.go",
-					CapturedAt:        capturedAt,
-					Fresh:             true,
-					State:             harnesses.QuotaOK,
-					Windows:           preRefactorQuotaWindowsGemini(),
-					Account:           &geminiAccount,
-					RoutingPreference: harnesses.RoutingPreferenceAvailable,
-					Reason:            "Pro tier blocked",
-				},
-				account: geminiAccount,
-			},
+			account: claudeAccount,
 		},
+		"codex": &structuralFixtureHarness{
+			name: "codex",
+			quota: harnesses.QuotaStatus{
+				Source:            "internal/harnesses/codex/quota_cache.go",
+				CapturedAt:        capturedAt,
+				Fresh:             true,
+				State:             harnesses.QuotaOK,
+				Windows:           preRefactorQuotaWindowsCodex(),
+				Account:           &codexAccount,
+				RoutingPreference: harnesses.RoutingPreferenceAvailable,
+			},
+			account: codexAccount,
+		},
+		"gemini": &structuralFixtureHarness{
+			name: "gemini",
+			quota: harnesses.QuotaStatus{
+				Source:            "internal/harnesses/gemini/quota_cache.go",
+				CapturedAt:        capturedAt,
+				Fresh:             true,
+				State:             harnesses.QuotaOK,
+				Windows:           preRefactorQuotaWindowsGemini(),
+				Account:           &geminiAccount,
+				RoutingPreference: harnesses.RoutingPreferenceAvailable,
+				Reason:            "Pro tier blocked",
+			},
+			account: geminiAccount,
+		},
+	}
+	return &service{
+		routeRunners: harnesses.NewRouteRunnerAuthority(instances, nil),
 		runtime: serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{
 			Now: func() time.Time { return capturedAt },
 		}),

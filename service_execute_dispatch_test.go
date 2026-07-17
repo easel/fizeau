@@ -1,13 +1,215 @@
 package fizeau
 
 import (
+	"context"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/serviceimpl"
 )
+
+type exactDispatchFixtureRunner struct {
+	name     string
+	executes atomic.Int64
+}
+
+func (r *exactDispatchFixtureRunner) Info() harnesses.HarnessInfo {
+	return harnesses.HarnessInfo{Name: r.name, Type: "subprocess"}
+}
+func (*exactDispatchFixtureRunner) HealthCheck(context.Context) error { return nil }
+func (r *exactDispatchFixtureRunner) Execute(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	r.executes.Add(1)
+	data, _ := json.Marshal(harnesses.FinalData{Status: "success"})
+	events := make(chan harnesses.Event, 1)
+	events <- harnesses.Event{Type: harnesses.EventTypeFinal, Data: data}
+	close(events)
+	return events, nil
+}
+func (r *exactDispatchFixtureRunner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
+	return harnesses.PortableRuntimeStructure{
+		Name:      r.name,
+		Transport: harnesses.PortableRuntimeTransportSubprocess,
+		Mode:      harnesses.PortableRuntimeStructuralUnpinned,
+	}
+}
+
+func TestExecuteUsesRegisteredRouteInstance(t *testing.T) {
+	catalog := loadRoutingFixtureCatalog(t, `
+version: 5
+generated_at: 2026-07-17T00:00:00Z
+policies:
+  default:
+    min_power: 1
+    max_power: 10
+    allow_local: true
+models:
+  gpt-5.4:
+    family: gpt
+    status: active
+    power: 8
+    context_window: 200000
+    surfaces:
+      codex: gpt-5.4
+`)
+	t.Cleanup(replaceRoutingCatalogForTest(t, catalog))
+	refreshCtx, cancelRefresh := context.WithCancel(context.Background())
+	cancelRefresh()
+	public, err := New(ServiceOptions{ServiceConfig: &fakeServiceConfig{}, QuotaRefreshContext: refreshCtx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := public.(*service)
+	forceAvailableHarnessesForTest(t, svc, "codex")
+
+	request := ServiceExecuteRequest{Prompt: "use the registered object", Harness: "codex", Model: "gpt-5.4"}
+	decision, err := svc.resolveExecuteRoute(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := harnesses.RouteRunnerKey{
+		Harness: decision.Harness, Provider: decision.Provider, Endpoint: decision.Endpoint,
+		ServerInstance: decision.ServerInstance, Model: decision.Model,
+	}
+	base := &exactDispatchFixtureRunner{name: "codex"}
+	registered := &exactDispatchFixtureRunner{name: "codex"}
+	fresh := &exactDispatchFixtureRunner{name: "codex"}
+	var freshCalls atomic.Int64
+	authority := harnesses.NewRouteRunnerAuthority(
+		map[string]harnesses.Harness{"codex": base},
+		func(harnesses.RouteRunnerKey, harnesses.Harness) (harnesses.Harness, error) {
+			freshCalls.Add(1)
+			return fresh, nil
+		},
+	)
+	if _, err := authority.Register(key, registered); err != nil {
+		t.Fatal(err)
+	}
+	svc.routeRunners = authority
+
+	var observed harnesses.Harness
+	svc.subprocessDispatchObserver = func(runner harnesses.Harness) { observed = runner }
+	events, err := svc.Execute(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range events {
+	}
+	if observed != registered {
+		t.Fatalf("production Execute dispatched %p, want pre-registered exact runner %p", observed, registered)
+	}
+	if registered.executes.Load() != 1 || fresh.executes.Load() != 0 || freshCalls.Load() != 0 || base.executes.Load() != 0 {
+		t.Fatalf("registered/fresh/factory/base = %d/%d/%d/%d, want 1/0/0/0",
+			registered.executes.Load(), fresh.executes.Load(), freshCalls.Load(), base.executes.Load())
+	}
+}
+
+func TestExecuteCoordinatorKeepsEndpointDistinctRouteInstances(t *testing.T) {
+	base := &exactDispatchFixtureRunner{name: "codex"}
+	east := &exactDispatchFixtureRunner{name: "codex"}
+	west := &exactDispatchFixtureRunner{name: "codex"}
+	created := map[string]*exactDispatchFixtureRunner{"east": east, "west": west}
+	svc := &service{
+		registry: harnesses.NewRegistryForTest("codex"),
+		routeRunners: harnesses.NewRouteRunnerAuthority(
+			map[string]harnesses.Harness{"codex": base},
+			func(key harnesses.RouteRunnerKey, _ harnesses.Harness) (harnesses.Harness, error) {
+				return created[key.Endpoint], nil
+			},
+		),
+	}
+
+	for _, endpoint := range []string{"east", "west"} {
+		decision := RouteDecision{
+			Harness: "codex", Provider: "openai", Endpoint: endpoint,
+			ServerInstance: "server-1", Model: "gpt-5",
+		}
+		req := svc.executeCoordinatorRequest(ServiceExecuteRequest{Prompt: endpoint}, decision, "session-"+endpoint, nil)
+		if req.RouteRunner.Key() != (harnesses.RouteRunnerKey{
+			Harness: "codex", Provider: "openai", Endpoint: endpoint,
+			ServerInstance: "server-1", Model: "gpt-5",
+		}) {
+			t.Fatalf("%s binding key = %#v", endpoint, req.RouteRunner.Key())
+		}
+		var observed harnesses.Harness
+		coordinator := serviceimpl.ExecuteCoordinator{Registry: svc.registry}
+		events := coordinator.RunResolved(context.Background(), req, serviceimpl.ExecutePorts{
+			ObserveSubprocessDispatch: func(runner harnesses.Harness) { observed = runner },
+		})
+		for range events {
+		}
+		if observed != created[endpoint] {
+			t.Fatalf("%s dispatch runner = %p, want exact registered instance %p", endpoint, observed, created[endpoint])
+		}
+	}
+	if east.executes.Load() != 1 || west.executes.Load() != 1 || base.executes.Load() != 0 {
+		t.Fatalf("execute counts east/west/base = %d/%d/%d, want 1/1/0",
+			east.executes.Load(), west.executes.Load(), base.executes.Load())
+	}
+	if _, ok := svc.routeRunners.Lookup(harnesses.RouteRunnerKey{Harness: "codex"}); ok {
+		t.Fatal("harness-only lookup resolved an exact route")
+	}
+}
+
+func TestProductionDispatchHasSingleRunnerAuthority(t *testing.T) {
+	entries, err := os.ReadDir("internal/serviceimpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	forbiddenImports := []string{
+		"internal/harnesses/claude", "internal/harnesses/claude-tui",
+		"internal/harnesses/codex", "internal/harnesses/gemini",
+		"internal/harnesses/opencode", "internal/harnesses/pi",
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join("internal/serviceimpl", entry.Name())
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		src := string(data)
+		for _, forbidden := range forbiddenImports {
+			if strings.Contains(src, forbidden) {
+				t.Fatalf("%s imports concrete runner %q; construction belongs to the runner authority factory", path, forbidden)
+			}
+		}
+		if entry.Name() == "execute_dispatch.go" &&
+			(strings.Contains(src, "builtin.New(") || strings.Contains(src, "ConfiguredHarness")) {
+			t.Fatalf("%s retains a competing runner construction/lookup seam", path)
+		}
+	}
+	root, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(root), "harnessInstances") ||
+		!strings.Contains(string(root), "routeRunners") ||
+		!strings.Contains(string(root), "*harnesses.RouteRunnerAuthority") {
+		t.Fatal("service does not expose RouteRunnerAuthority as its single runner owner")
+	}
+	for path, required := range map[string]string{
+		"service_harness_instances.go": "s.routeRunners.StructuralInstances()",
+		"service_execute_dispatch.go":  "s.routeRunners.Bind(",
+	} {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if !strings.Contains(string(data), required) {
+			t.Fatalf("%s does not consume the service-owned runner authority through %q", path, required)
+		}
+	}
+}
 
 func TestExecuteDispatcherSeamsAreExplicit(t *testing.T) {
 	files := parseRootProductionFiles(t)
