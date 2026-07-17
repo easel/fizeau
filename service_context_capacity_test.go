@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentcore "github.com/easel/fizeau/internal/core"
+	"github.com/easel/fizeau/internal/discoverycache"
 	"github.com/easel/fizeau/internal/harnesses"
 	serviceimpl "github.com/easel/fizeau/internal/serviceimpl"
 )
@@ -151,17 +152,36 @@ func TestServiceContextCapacityRetainsSingleRouteTrace(t *testing.T) {
 }
 
 func TestServiceContextCapacityAcceptedExecuteProjection(t *testing.T) {
-	t.Setenv("FIZEAU_CACHE_DIR", t.TempDir())
+	t.Setenv("PATH", "")
+	stubSubprocessHarnessModelIDs(t, map[string][]string{})
+	previousAutoRoutingModels := subprocessHarnessAutoRoutingModels
+	t.Cleanup(func() { subprocessHarnessAutoRoutingModels = previousAutoRoutingModels })
+	subprocessHarnessAutoRoutingModels = func(string, harnesses.HarnessConfig) []string { return nil }
+	previousResolveAlias := resolveSubprocessModelAlias
+	t.Cleanup(func() { resolveSubprocessModelAlias = previousResolveAlias })
+	resolveSubprocessModelAlias = func(_, model string) string { return model }
+	cacheRoot := t.TempDir()
+	t.Setenv("FIZEAU_CACHE_DIR", cacheRoot)
 	t.Cleanup(replaceRoutingCatalogForTest(t, explicitNativeContextCatalog(t)))
+	const baseURL = "http://127.0.0.1:1/v1"
+	writeSnapshotDiscoveryContextFixture(
+		t,
+		&discoverycache.Cache{Root: cacheRoot},
+		testDiscoverySourceName("alpha", "alpha", baseURL, ""),
+		"known-context-model",
+		2,
+	)
 	svc := newTestService(t, ServiceOptions{ServiceConfig: &fakeServiceConfig{
 		providers: map[string]ServiceProviderEntry{
 			"alpha": {
-				Type: "lmstudio", BaseURL: "http://127.0.0.1:1/v1",
+				Type: "lmstudio", BaseURL: baseURL,
 				Model: "known-context-model", ContextWindow: 2,
 			},
 		},
 		names: []string{"alpha"}, defaultName: "alpha",
 	}})
+	resetProviderProbeForTest(svc)
+	svc.providerProbe.RecordProbe("alpha", "", true, time.Now().UTC())
 	svc.hub = serviceimpl.NewSessionHub()
 
 	events, err := svc.Execute(context.Background(), ServiceExecuteRequest{
