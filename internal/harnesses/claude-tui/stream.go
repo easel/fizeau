@@ -134,6 +134,7 @@ type TranscriptTailer struct {
 	lastAssistantUsage json.RawMessage
 	finalText          strings.Builder
 	sawAssistant       bool
+	emittedFinal       bool
 }
 
 // NewTranscriptTailer creates a new tailer for the given transcript path.
@@ -337,15 +338,19 @@ func (t *TranscriptTailer) lineToEvents(tl transcriptLine) []harnesses.Event {
 }
 
 // finalEvent synthesizes the single final event from the last assistant
-// turn's stop_reason + usage + accumulated text. Returns false if no
-// assistant line was ever seen (an incomplete/empty transcript).
+// turn's stop_reason + usage + accumulated text. Returns false unless the
+// transcript ends with an authoritative terminal stop reason.
 func (t *TranscriptTailer) finalEvent() (harnesses.Event, bool) {
 	if !t.sawAssistant {
 		return harnesses.Event{}, false
 	}
+	status, authoritative := mapStopReason(t.lastAssistantStop)
+	if !authoritative {
+		return harnesses.Event{}, false
+	}
 	t.seqCounter++
 	fd := harnesses.FinalData{
-		Status:          mapStopReason(t.lastAssistantStop),
+		Status:          status,
 		FinalText:       t.finalText.String(),
 		DurationMS:      time.Since(t.startTime).Milliseconds(),
 		FinalCostSource: harnesses.CostSourceUnknown,
@@ -353,6 +358,7 @@ func (t *TranscriptTailer) finalEvent() (harnesses.Event, bool) {
 	if u := parseClaudeUsage(t.lastAssistantUsage); u != nil {
 		fd.Usage = u
 	}
+	t.emittedFinal = true
 	return harnesses.Event{
 		Type:     harnesses.EventTypeFinal,
 		Sequence: t.seqCounter,
@@ -361,15 +367,17 @@ func (t *TranscriptTailer) finalEvent() (harnesses.Event, bool) {
 	}, true
 }
 
-// mapStopReason maps a Claude stop_reason to a CONTRACT-003 final status.
-func mapStopReason(stop string) string {
+// mapStopReason maps authoritative Claude terminal stop reasons to
+// CONTRACT-003 final statuses. Intermediate, missing, and unknown reasons fail
+// closed so a schema change cannot fabricate successful completion evidence.
+func mapStopReason(stop string) (string, bool) {
 	switch stop {
-	case "end_turn", "stop_sequence", "tool_use", "":
-		return "success"
+	case "end_turn", "stop_sequence":
+		return "success", true
 	case "max_tokens":
-		return "iteration_limit"
+		return "iteration_limit", true
 	default:
-		return "success"
+		return "", false
 	}
 }
 

@@ -104,6 +104,133 @@ func writeStopPayload(t *testing.T, path, nonce, transcript string) {
 	}
 }
 
+func runTurnWithTranscriptPath(t *testing.T, transcriptPath, prompt string) []harnesses.Event {
+	t.Helper()
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := "nonce-transcript-finalization"
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
+		writeStopPayload(t, stopPath, nonce, transcriptPath)
+	}()
+
+	return claudetui.RunTurnForTest(ctx, f,
+		harnesses.ExecuteRequest{Prompt: prompt, WorkDir: dir},
+		hookDir, stopPath, nonce, 200*time.Millisecond, 10*time.Millisecond, 4*time.Second)
+}
+
+// TestRunTurnUnreadableTranscriptFailsClosed proves a valid Stop payload is
+// not completion authority when its transcript path cannot be resolved or the
+// transcript cannot be opened/read.
+func TestRunTurnUnreadableTranscriptFailsClosed(t *testing.T) {
+	const (
+		oauthToken = "oauth-token-must-not-leak"
+		apiToken   = "sk-ant-api-token-must-not-leak"
+		accountID  = "acct-must-not-leak"
+		prompt     = "prompt body must not leak"
+	)
+
+	tests := []struct {
+		name string
+		path func(t *testing.T) string
+	}{
+		{
+			name: "path expansion failure",
+			path: func(t *testing.T) string {
+				t.Setenv("HOME", "")
+				return "~/" + oauthToken + "/" + accountID + ".jsonl"
+			},
+		},
+		{
+			name: "missing transcript",
+			path: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), apiToken, accountID+".jsonl")
+			},
+		},
+		{
+			name: "read failure",
+			path: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), oauthToken+"-"+accountID)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := test.path(t)
+			if test.name == "read failure" {
+				if err := os.Mkdir(path, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			events := runTurnWithTranscriptPath(t, path, prompt)
+			final := requireExactlyOneFinal(t, events, "failed")
+			if final.ExitCode == 0 {
+				t.Fatal("unreadable transcript final exit code = 0, want nonzero")
+			}
+			if final.FinalText != "" {
+				t.Fatalf("unreadable transcript fabricated final text %q", final.FinalText)
+			}
+			if final.FinalCostUSD != nil || final.FinalCostSource != harnesses.CostSourceUnknown || final.CostUSD != 0 {
+				t.Fatalf("unreadable transcript fabricated cost: %+v", final)
+			}
+			if final.Usage != nil {
+				t.Fatalf("unreadable transcript fabricated usage: %+v", final.Usage)
+			}
+			if raw := finalEventData(t, events); bytes.Contains(raw, []byte(`"cost_usd"`)) {
+				t.Fatalf("unreadable transcript serialized fabricated cost: %s", raw)
+			}
+			if len(final.Error) == 0 || len(final.Error) > 256 {
+				t.Fatalf("diagnostic length = %d, want 1..256", len(final.Error))
+			}
+			for _, sensitive := range []string{oauthToken, apiToken, accountID, prompt, filepath.Base(path)} {
+				if sensitive != "" && strings.Contains(final.Error, sensitive) {
+					t.Fatalf("diagnostic retained sensitive value %q: %q", sensitive, final.Error)
+				}
+			}
+		})
+	}
+}
+
+func TestRunTurnReadableTranscriptSucceedsExactlyOnce(t *testing.T) {
+	transcript := writeTranscript(t, realTranscript)
+	events := runTurnWithTranscriptPath(t, transcript, "readable transcript prompt")
+	final := requireExactlyOneFinal(t, events, "success")
+	if final.ExitCode != 0 {
+		t.Fatalf("readable transcript exit code = %d, want 0", final.ExitCode)
+	}
+	if final.FinalText == "" {
+		t.Fatal("readable transcript final text is empty")
+	}
+	if final.FinalText != "Let me list the directory.The directory contains file.txt and dir/." {
+		t.Fatalf("readable transcript final text = %q", final.FinalText)
+	}
+	if final.Usage == nil || final.Usage.InputTokens == nil || *final.Usage.InputTokens != 200 ||
+		final.Usage.OutputTokens == nil || *final.Usage.OutputTokens != 40 {
+		t.Fatalf("readable transcript usage = %+v, want input=200 output=40", final.Usage)
+	}
+	if final.Error != "" {
+		t.Fatalf("readable transcript error = %q, want empty", final.Error)
+	}
+}
+
 // TestRunTurnFolderTrustAnsweredWithEnter proves the turn loop renders the
 // screen through the vt10x emulator (NOT naive ANSI stripping) and answers the
 // folder-trust dialog with a single Enter (default = "Yes, I trust this
@@ -955,6 +1082,11 @@ func TestRunTurnSurfacesAuthenticationFailureWithTypedClass(t *testing.T) {
 
 func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) {
 	t.Helper()
+	_ = requireExactlyOneFinal(t, events, wantStatus)
+}
+
+func requireExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus string) harnesses.FinalData {
+	t.Helper()
 	finals := 0
 	var fin harnesses.FinalData
 	for _, ev := range events {
@@ -972,4 +1104,16 @@ func assertExactlyOneFinal(t *testing.T, events []harnesses.Event, wantStatus st
 	if wantStatus != "" && fin.Status != wantStatus {
 		t.Errorf("final status = %q, want %q", fin.Status, wantStatus)
 	}
+	return fin
+}
+
+func finalEventData(t *testing.T, events []harnesses.Event) json.RawMessage {
+	t.Helper()
+	for _, event := range events {
+		if event.Type == harnesses.EventTypeFinal {
+			return event.Data
+		}
+	}
+	t.Fatal("no final event")
+	return nil
 }

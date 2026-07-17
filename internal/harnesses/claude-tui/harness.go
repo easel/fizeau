@@ -553,9 +553,15 @@ func (h *Harness) runTurnOver(
 	}
 }
 
-// emitTranscriptAndFinal reads the transcript (which produces its own single
-// final event) and, if the transcript is unreadable, synthesizes a final. It
-// reads the request-local transcript and emits one final event.
+const (
+	transcriptPathFailureDiagnostic = "Claude transcript path could not be resolved"
+	transcriptReadFailureDiagnostic = "Claude transcript could not be read"
+	transcriptIncompleteDiagnostic  = "Claude transcript contained no assistant final event"
+)
+
+// emitTranscriptAndFinal reads the request-local transcript and emits exactly
+// one final event. Missing or unreadable transcript evidence fails closed: a
+// Stop hook proves only that Claude stopped, not that the turn succeeded.
 func (h *Harness) emitTranscriptAndFinal(
 	ctx context.Context,
 	te *turnEnv,
@@ -565,29 +571,53 @@ func (h *Harness) emitTranscriptAndFinal(
 	startTime time.Time,
 	logger *slog.Logger,
 ) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	expanded, err := ExpandTranscriptPath(transcriptPath)
 	if err == nil {
 		tailer := NewTranscriptTailer(expanded, "default", logger)
 		// Continue the harness sequence counter through the transcript events.
 		tailer.seqCounter = *seq
 		tailer.startTime = startTime
-		if err := tailer.ReadEvents(ctx, eventChan); err == nil {
-			*seq = tailer.seqCounter
-			if !tailer.sawAssistant {
+		readErr := tailer.ReadEvents(ctx, eventChan)
+		// Preserve sequence continuity even when reading fails after emitting
+		// partial transcript events.
+		*seq = tailer.seqCounter
+		if readErr == nil {
+			if !tailer.emittedFinal {
 				// Parser-level empty/incomplete transcripts intentionally do
 				// not emit finals; the harness-level stream still must.
 				*seq++
-				emitFinalEvent(eventChan, *seq, startTime, "failed", "transcript contained no assistant final event", 1)
+				emitFinalEvent(eventChan, *seq, startTime, "failed", transcriptIncompleteDiagnostic, 1)
 			}
 			return
 		}
-		logger.Warn("failed to read transcript", "path", expanded, "error", err)
+		if errors.Is(readErr, context.Canceled) {
+			logger.Warn("Claude transcript read was cancelled")
+			*seq++
+			emitFinalEvent(eventChan, *seq, startTime, "cancelled", "", 130)
+			return
+		}
+		if errors.Is(readErr, context.DeadlineExceeded) {
+			logger.Warn("Claude transcript read timed out")
+			*seq++
+			emitFinalEvent(eventChan, *seq, startTime, "timed_out", "", 124)
+			return
+		}
+		// The path and wrapped OS error can contain account names, prompts, or
+		// credential material. Keep both logs and terminal evidence generic.
+		logger.Warn("Claude transcript could not be read")
+		*seq++
+		emitFinalEvent(eventChan, *seq, startTime, "failed", transcriptReadFailureDiagnostic, 1)
+		return
 	} else {
-		logger.Warn("failed to expand transcript path", "path", transcriptPath, "error", err)
+		logger.Warn("Claude transcript path could not be resolved")
 	}
-	// Transcript unreadable: emit exactly one final so the stream still closes.
+	// Transcript path unavailable: emit exactly one failed final so the stream
+	// closes without inventing completion text, usage, or cost evidence.
 	*seq++
-	emitFinalEvent(eventChan, *seq, startTime, "success", "", 0)
+	emitFinalEvent(eventChan, *seq, startTime, "failed", transcriptPathFailureDiagnostic, 1)
 }
 
 // documentedRequestGaps returns one message per ExecuteRequest field that has
