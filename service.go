@@ -20,6 +20,7 @@ import (
 type FizeauService interface {
 	Execute(ctx context.Context, req ServiceExecuteRequest) (<-chan ServiceEvent, error)
 	Continue(ctx context.Context, req ServiceContinuationRequest) (<-chan ServiceEvent, error)
+	PreparePortableRuntime(ctx context.Context, req PortableRuntimeRequest) (*PortableRuntimeBundle, error)
 	TailSessionLog(ctx context.Context, sessionID string) (<-chan ServiceEvent, error)
 	ListHarnesses(ctx context.Context) ([]HarnessInfo, error)
 	ListProviders(ctx context.Context) ([]ProviderInfo, error)

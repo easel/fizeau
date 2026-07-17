@@ -47,6 +47,16 @@ func TestAllowsHealthTargetAndErrorsIsTarget(t *testing.T) {
 	}
 }
 
+func TestAllowsPortableRuntimeTargetVocabularyOnlyInItsFacade(t *testing.T) {
+	content := []byte("package fizeau\ntype PortableRuntimeRequest struct { TargetGOOS string `json:\"target_goos\"` }\n")
+	if findings := ScanContent("service_portable_runtime.go", content); len(findings) != 0 {
+		t.Fatalf("portable-runtime target findings = %#v, want none", findings)
+	}
+	if findings := ScanContent("service_routing.go", content); len(findings) != 1 {
+		t.Fatalf("routing target findings = %#v, want one", findings)
+	}
+}
+
 func TestRepositoryTargetVocabulary(t *testing.T) {
 	findings, err := Scan(Options{Root: "../../.."})
 	if err != nil {

@@ -223,6 +223,10 @@ func (stubFizeauService) Continue(context.Context, fizeau.ServiceContinuationReq
 	panic("unexpected Continue call")
 }
 
+func (stubFizeauService) PreparePortableRuntime(context.Context, fizeau.PortableRuntimeRequest) (*fizeau.PortableRuntimeBundle, error) {
+	panic("unexpected PreparePortableRuntime call")
+}
+
 func (stubFizeauService) TailSessionLog(context.Context, string) (<-chan fizeau.ServiceEvent, error) {
 	panic("unexpected TailSessionLog call")
 }

@@ -131,6 +131,13 @@ func allowedTargetLine(path, line string) bool {
 	if strings.Contains(line, "HealthTarget") {
 		return true
 	}
+	// CONTRACT-003 uses target as the normative term for the portable
+	// runtime's GOOS/GOARCH and guest mount destination. This file owns only
+	// that public facade; routing destination vocabulary remains forbidden in
+	// every other root service file.
+	if rel == "service_portable_runtime.go" {
+		return true
+	}
 	if strings.HasSuffix(rel, "internal/routing/errors.go") {
 		trimmed := strings.TrimSpace(line)
 		return strings.Contains(trimmed, "Is(target error)") ||
