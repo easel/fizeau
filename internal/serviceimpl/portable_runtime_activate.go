@@ -1,6 +1,7 @@
 package serviceimpl
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/easel/fizeau/internal/modelcatalog"
@@ -27,6 +28,20 @@ func (a PortableRuntimeActivation) ConfiguredProviders() PortableRuntimeConfigur
 	return clonePortableRuntimeConfiguredProviders(a.providers)
 }
 
+func (a PortableRuntimeActivation) BackingRoot() string { return a.plan.BackingRoot() }
+func (a PortableRuntimeActivation) WorkDir() string     { return a.plan.WorkDir() }
+func (a PortableRuntimeActivation) SessionLogDir() string {
+	return a.plan.SessionLogDir()
+}
+
+func (a PortableRuntimeActivation) EntrypointEnvironment(name string) (map[string]string, bool) {
+	return a.plan.EntrypointEnvironment(name)
+}
+
+func (a PortableRuntimeActivation) EntrypointRecipe(name string) (portableruntime.ActivationRecipe, bool) {
+	return a.plan.EntrypointRecipe(name)
+}
+
 // LoadPortableRuntimeActivation verifies the private bundle and reconstructs
 // the API-neutral effective provider configuration without consulting the
 // application config loader or starting service activity.
@@ -35,6 +50,20 @@ func LoadPortableRuntimeActivation(runtimeRoot string, lookupEnv func(string) (s
 	if err != nil {
 		return PortableRuntimeActivation{}, err
 	}
+	return portableRuntimeActivationFromPlan(plan)
+}
+
+// AssemblePortableRuntimeActivation adds caller-owned writable storage and
+// closed per-entrypoint environments without starting a process.
+func AssemblePortableRuntimeActivation(ctx context.Context, runtimeRoot, writableRoot string, lookupEnv func(string) (string, bool)) (PortableRuntimeActivation, error) {
+	plan, err := portableruntime.AssembleActivation(ctx, runtimeRoot, writableRoot, lookupEnv)
+	if err != nil {
+		return PortableRuntimeActivation{}, err
+	}
+	return portableRuntimeActivationFromPlan(plan)
+}
+
+func portableRuntimeActivationFromPlan(plan portableruntime.ActivationPlan) (PortableRuntimeActivation, error) {
 	snapshot := plan.ProviderSnapshot()
 	secrets := plan.ProviderSecrets()
 	if len(snapshot.Providers) != len(secrets) {

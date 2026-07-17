@@ -300,6 +300,9 @@ func buildPlan(ctx context.Context, request Request) (Manifest, []assetPlan, err
 		manifest.EnvironmentNames = append(manifest.EnvironmentNames, name)
 	}
 	sort.Strings(manifest.EnvironmentNames)
+	if err := validateActivationGeneratedPaths(manifest); err != nil {
+		return Manifest{}, nil, closureError("generated path conflicts with required-absent path", -1)
+	}
 	if err := validateManifestText(manifest, forbiddenValues); err != nil {
 		return Manifest{}, nil, err
 	}
@@ -567,7 +570,10 @@ func seedDisposition(asset harnesses.PortableRuntimeAsset, projected map[string]
 		if _, ok := projected[asset.Target]; ok {
 			return SeedProjectionConsumed, nil
 		}
-		prefix := strings.SplitN(asset.Target, "/", 2)[0]
+		prefix, suffix, found := strings.Cut(asset.Target, "/")
+		if !found || suffix == "" {
+			return SeedNone, closureError("mutable seed prefix", -1)
+		}
 		if prefix != "data" && prefix != "state" && prefix != "cache" {
 			return SeedNone, closureError("mutable seed prefix", -1)
 		}
@@ -821,5 +827,13 @@ func validDigest(value string) bool {
 }
 
 func cleanTarget(target string) bool {
-	return target != "" && target == path.Clean(target) && !path.IsAbs(target) && !strings.Contains(target, "\\") && !strings.ContainsRune(target, 0)
+	if target == "" || target != path.Clean(target) || path.IsAbs(target) || strings.Contains(target, "\\") || strings.ContainsRune(target, 0) {
+		return false
+	}
+	for _, component := range strings.Split(target, "/") {
+		if component == "" || component == "." || component == ".." {
+			return false
+		}
+	}
+	return true
 }

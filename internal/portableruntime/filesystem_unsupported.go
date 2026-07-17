@@ -14,8 +14,16 @@ type fileIdentity struct{}
 
 func descriptorFD(*os.File) int { return -1 }
 
+func newDescriptorFile(fd int, name string) *os.File {
+	if fd < 0 {
+		return nil
+	}
+	return os.NewFile(uintptr(fd), name)
+}
+
 type stageHandle struct {
 	path     string
+	file     *os.File
 	identity fileIdentity
 }
 type destinationHandle struct {
@@ -34,6 +42,9 @@ func (*destinationHandle) revalidateEmpty() error {
 	return errors.New("portable runtime materialization requires linux")
 }
 func (*destinationHandle) commit(*stageHandle) error {
+	return errors.New("portable runtime materialization requires linux")
+}
+func (*destinationHandle) commitNamed(*stageHandle, string) error {
 	return errors.New("portable runtime materialization requires linux")
 }
 func (*destinationHandle) takeDirectory() *os.File        { return nil }

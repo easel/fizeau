@@ -67,6 +67,34 @@ func TestPortableRuntimeActivationIsRouteNeutralAndProcessFree(t *testing.T) {
 	}
 }
 
+func TestPortableRuntimeActivationAssemblesServiceStorage(t *testing.T) {
+	bundle, expected := prepareServiceActivationFixture(t)
+	writableRoot := t.TempDir()
+	activation, err := AssemblePortableRuntimeActivation(context.Background(), bundle.RuntimeRoot(), writableRoot, func(string) (string, bool) {
+		t.Fatal("activation looked up an undeclared environment name")
+		return "", false
+	})
+	if err != nil {
+		t.Fatalf("AssemblePortableRuntimeActivation() error = %v", err)
+	}
+	backingRoot := filepath.Join(writableRoot, "activation")
+	if activation.BackingRoot() != backingRoot || activation.WorkDir() != filepath.Join(backingRoot, "state", "work") ||
+		activation.SessionLogDir() != filepath.Join(backingRoot, "state", "sessions") {
+		t.Fatalf("activation paths = backing %q, work %q, sessions %q", activation.BackingRoot(), activation.WorkDir(), activation.SessionLogDir())
+	}
+	environment, ok := activation.EntrypointEnvironment("fixture")
+	if !ok || environment["HOME"] != filepath.Join(backingRoot, "home") || environment["PATH"] == "" {
+		t.Fatalf("closed entrypoint environment = %#v, %t", environment, ok)
+	}
+	if _, ok := activation.EntrypointRecipe("fixture"); !ok {
+		t.Fatal("entrypoint recipe missing")
+	}
+	if got := activation.ConfiguredProviders(); !reflect.DeepEqual(got.ProviderNames, expected.ProviderNames) ||
+		got.DefaultProviderName != expected.DefaultProviderName || !reflect.DeepEqual(got.Providers, expected.Providers) {
+		t.Fatalf("assembled provider structure = %#v, want %#v", got, expected)
+	}
+}
+
 func assertPortableActivationSourcesArePure(t *testing.T) {
 	t.Helper()
 	_, current, _, ok := runtime.Caller(0)
@@ -79,6 +107,9 @@ func assertPortableActivationSourcesArePure(t *testing.T) {
 		"service_portable_runtime_activation.go",
 		"internal/serviceimpl/portable_runtime_activate.go",
 		"internal/portableruntime/activation.go",
+		"internal/portableruntime/activation_storage.go",
+		"internal/portableruntime/activation_storage_linux.go",
+		"internal/portableruntime/activation_storage_unsupported.go",
 		"internal/portableruntime/activation_tree_linux.go",
 		"internal/portableruntime/activation_tree_unsupported.go",
 	}
@@ -88,7 +119,10 @@ func assertPortableActivationSourcesArePure(t *testing.T) {
 	}
 	forbiddenCalls := map[string]bool{
 		"Execute": true, "HealthCheck": true, "ResolveRoute": true,
-		"Command": true, "CommandContext": true, "Start": true, "Dial": true, "DialContext": true,
+		"Command": true, "CommandContext": true, "Start": true, "StartProcess": true, "ForkExec": true,
+		"Clone": true, "Clone3": true, "Fork": true, "Exec": true, "Execve": true,
+		"Unshare": true, "Setns": true, "Mount": true, "PivotRoot": true,
+		"Dial": true, "DialContext": true,
 		"NewSession": true, "NewRuntime": true, "NewRefreshScheduler": true,
 		"reapStaleHarnessSessions": true, "startQuotaRecoveryProbeLoop": true, "startAlivenessProbeLoop": true,
 	}

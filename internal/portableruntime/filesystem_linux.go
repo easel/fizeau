@@ -326,8 +326,15 @@ func (destination *destinationHandle) removeStage(stage *stageHandle) error {
 }
 
 func (destination *destinationHandle) commit(stage *stageHandle) error {
+	return destination.commitNamed(stage, "runtime")
+}
+
+func (destination *destinationHandle) commitNamed(stage *stageHandle, child string) error {
 	if destination == nil || destination.directory == nil || destination.parent == nil || stage == nil || stage.file == nil {
 		return errors.New("commit handles are incomplete")
+	}
+	if child == "" || strings.Contains(child, "/") || strings.Contains(child, "\\") || strings.ContainsRune(child, 0) {
+		return errors.New("commit child is invalid")
 	}
 	if err := destination.revalidateEmpty(); err != nil {
 		return err
@@ -335,21 +342,25 @@ func (destination *destinationHandle) commit(stage *stageHandle) error {
 	if identity, err := identityOfFD(descriptorFD(stage.file)); err != nil || !sameDirectoryObject(identity, stage.identity) {
 		return errors.New("staging identity changed")
 	}
-	if err := unix.Renameat2(descriptorFD(destination.parent), stage.name, descriptorFD(destination.directory), "runtime", unix.RENAME_NOREPLACE); err != nil {
+	if err := unix.Renameat2(descriptorFD(destination.parent), stage.name, descriptorFD(destination.directory), child, unix.RENAME_NOREPLACE); err != nil {
 		return err
 	}
 	stage.name = ""
-	return destination.validateCommittedStage(stage)
+	return destination.validateCommittedStageNamed(stage, child)
 }
 
 func (destination *destinationHandle) validateCommittedStage(stage *stageHandle) error {
+	return destination.validateCommittedStageNamed(stage, "runtime")
+}
+
+func (destination *destinationHandle) validateCommittedStageNamed(stage *stageHandle, child string) error {
 	rollback := func(cause error) error {
-		if cleanupErr := removeOwnedDirectoryAt(descriptorFD(destination.directory), "runtime", stage.identity); cleanupErr != nil {
+		if cleanupErr := removeOwnedDirectoryAt(descriptorFD(destination.directory), child, stage.identity); cleanupErr != nil {
 			return fmt.Errorf("%w: post-commit rollback failed: %v", ErrCleanupIncomplete, cause)
 		}
 		return cause
 	}
-	runtimeFD, err := unix.Openat(descriptorFD(destination.directory), "runtime", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	runtimeFD, err := unix.Openat(descriptorFD(destination.directory), child, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return rollback(errors.New("committed runtime cannot be reopened"))
 	}
@@ -362,7 +373,7 @@ func (destination *destinationHandle) validateCommittedStage(stage *stageHandle)
 		return rollback(err)
 	}
 	entries, err := readDirectoryNames(descriptorFD(destination.directory))
-	if err != nil || len(entries) != 1 || entries[0] != "runtime" {
+	if err != nil || len(entries) != 1 || entries[0] != child {
 		return rollback(errors.New("destination changed during commit"))
 	}
 	_ = stage.file.Close()

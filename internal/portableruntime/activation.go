@@ -28,6 +28,10 @@ type ActivationPlan struct {
 	manifest             Manifest
 	providerSecrets      []ProviderSecret
 	inheritedEnvironment map[string]string
+	backingRoot          string
+	entrypoints          map[string]activationEntrypoint
+	workDir              string
+	sessionLogDir        string
 }
 
 func (p ActivationPlan) String() string {
@@ -86,19 +90,31 @@ func (p ActivationPlan) GuestPath(target string) (string, error) {
 // process. runtimeRoot is internal-only testability plumbing; the public
 // entrypoint always supplies GuestRoot.
 func LoadActivation(runtimeRoot string, lookupEnv func(string) (string, bool)) (ActivationPlan, error) {
+	root, err := openActivationRoot(runtimeRoot, lookupEnv)
+	if err != nil {
+		return ActivationPlan{}, err
+	}
+	defer root.Close()
+	return loadActivationFromRoot(runtimeRoot, root, lookupEnv)
+}
+
+func openActivationRoot(runtimeRoot string, lookupEnv func(string) (string, bool)) (*safefs.NoFollowRoot, error) {
 	if runtimeRoot == "" || !filepath.IsAbs(runtimeRoot) || filepath.Clean(runtimeRoot) != runtimeRoot || lookupEnv == nil {
-		return ActivationPlan{}, activationError("activation input")
+		return nil, activationError("activation input")
 	}
 	root, err := safefs.OpenNoFollowRoot(runtimeRoot)
 	if err != nil {
-		return ActivationPlan{}, activationError("runtime root")
+		return nil, activationError("runtime root")
 	}
-	defer root.Close()
 	rootInfo, err := root.Stat()
 	if err != nil || !rootInfo.IsDir() || rootInfo.Mode().Perm() != 0o700 {
-		return ActivationPlan{}, activationError("runtime root mode")
+		_ = root.Close()
+		return nil, activationError("runtime root mode")
 	}
+	return root, nil
+}
 
+func loadActivationFromRoot(runtimeRoot string, root *safefs.NoFollowRoot, lookupEnv func(string) (string, bool)) (ActivationPlan, error) {
 	manifestBytes, err := readActivationMetadata(root, manifestTarget)
 	if err != nil {
 		return ActivationPlan{}, activationError("manifest read")
