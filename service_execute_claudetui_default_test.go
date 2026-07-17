@@ -292,31 +292,51 @@ func assertClaudeTUIHookSettings(t *testing.T, settings string) {
 		t.Fatalf("tool hooks do not target generated pre/post payload names: pre=%q post=%q", commands["PreToolUse"], commands["PostToolUse"])
 	}
 	stopCommand := commands["Stop"]
-	stopRedirect := strings.LastIndex(stopCommand, "> ")
-	if stopRedirect < 0 {
-		t.Fatalf("Stop hook has no payload redirect: %q", stopCommand)
+	const destinationPrefix = "dest="
+	destinationStart := strings.Index(stopCommand, destinationPrefix)
+	if destinationStart < 0 {
+		t.Fatalf("Stop hook has no destination assignment: %q", stopCommand)
 	}
-	stopPath := firstQuotedClaudeTUICommandValue(t, stopCommand[stopRedirect+2:])
+	stopPath := firstQuotedClaudeTUICommandValue(t, stopCommand[destinationStart+len(destinationPrefix):])
 	if filepath.Dir(stopPath) != preDir || filepath.Base(stopPath) != "stop-hook-payload.json" {
 		t.Fatalf("Stop hook payload path = %q, want stop-hook-payload.json under %q", stopPath, preDir)
 	}
-	const noncePrefix = `printf '{"nonce":"`
+	for _, atomicFragment := range []string{`tmp="${dest}.tmp.$$"`, `> "$tmp"`, `mv -f "$tmp" "$dest"`} {
+		if !strings.Contains(stopCommand, atomicFragment) {
+			t.Fatalf("Stop hook lacks atomic publication fragment %q: %q", atomicFragment, stopCommand)
+		}
+	}
+	const noncePrefix = `,"nonce":"`
 	nonceStart := strings.Index(stopCommand, noncePrefix)
 	if nonceStart < 0 {
 		t.Fatalf("Stop hook does not emit nonce-bound JSON: %q", stopCommand)
 	}
 	nonceTail := stopCommand[nonceStart+len(noncePrefix):]
 	nonceEnd := strings.IndexByte(nonceTail, '"')
-	if nonceEnd <= 0 || !strings.Contains(stopCommand, `"transcript_path":"%s"`) || !strings.Contains(stopCommand, `"transcript_path"`) {
+	if nonceEnd <= 0 || !strings.Contains(stopCommand, `"transcript_path"`) {
 		t.Fatalf("Stop hook lacks generated nonce/transcript payload semantics: %q", stopCommand)
 	}
 }
 
 func firstQuotedClaudeTUICommandValue(t *testing.T, command string) string {
 	t.Helper()
-	start := strings.IndexByte(command, '"')
+	doubleStart := strings.IndexByte(command, '"')
+	singleStart := strings.IndexByte(command, '\'')
+	start := doubleStart
+	quote := byte('"')
+	if singleStart >= 0 && (start < 0 || singleStart < start) {
+		start = singleStart
+		quote = '\''
+	}
 	if start < 0 {
 		t.Fatalf("hook command has no quoted path: %q", command)
+	}
+	if quote == '\'' {
+		end := strings.IndexByte(command[start+1:], '\'')
+		if end < 0 {
+			t.Fatalf("hook command has unterminated single-quoted path: %q", command)
+		}
+		return command[start+1 : start+1+end]
 	}
 	escaped := false
 	for i := start + 1; i < len(command); i++ {
@@ -325,7 +345,7 @@ func firstQuotedClaudeTUICommandValue(t *testing.T, command string) string {
 			escaped = false
 		case command[i] == '\\':
 			escaped = true
-		case command[i] == '"':
+		case command[i] == quote:
 			value, err := strconv.Unquote(command[start : i+1])
 			if err != nil {
 				t.Fatalf("decode quoted hook path in %q: %v", command, err)

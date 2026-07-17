@@ -126,6 +126,7 @@ type ptyConn interface {
 	SendKey(k session.Key) error
 	Size() session.Size
 	Kill() error
+	Wait() session.ExitStatus
 }
 
 // turnEnv carries the resolved per-turn collaborators so the turn loop is
@@ -145,6 +146,9 @@ type turnEnv struct {
 	// readyTimeout bounds Ink startup; pollInterval paces hook/stop polling.
 	readyTimeout time.Duration
 	pollInterval time.Duration
+	// stopGrace bounds the PTY-EOF race window in which a matching Stop hook
+	// payload may still be published atomically.
+	stopGrace time.Duration
 	// turnTimeout bounds the whole turn.
 	turnTimeout time.Duration
 	logger      *slog.Logger
@@ -227,6 +231,7 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		nonce:           nonce,
 		readyTimeout:    10 * time.Second,
 		pollInterval:    50 * time.Millisecond,
+		stopGrace:       250 * time.Millisecond,
 		turnTimeout:     effectiveTurnTimeout(req.Timeout),
 		logger:          logger,
 	}
@@ -509,15 +514,28 @@ func (h *Harness) runTurnOver(
 
 		case chunk, ok := <-te.conn.Output():
 			if !ok {
-				// PTY closed; treat as end-of-stream. Try the Stop payload
-				// first, else synthesize a final.
+				// PTY EOF and Stop-hook publication are independent process/file
+				// observations. Give the nonce-bound payload one short bounded
+				// grace window before classifying the turn as failed.
 				emitFromTailer()
-				if path, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
+				path, ok, exitStatus, exitKnown, waitErr := waitForStopPayloadAfterPTYEOF(ctx, te, turnTimer.C)
+				if ok {
 					h.emitTranscriptAndFinal(ctx, te, path, eventChan, seq, startTime, logger)
 					return turnEvicted
 				}
+				if errors.Is(waitErr, context.Canceled) {
+					*seq++
+					emitFinalEvent(eventChan, *seq, startTime, "cancelled", "", 130)
+					return turnEvicted
+				}
+				if errors.Is(waitErr, context.DeadlineExceeded) {
+					*seq++
+					emitFinalEvent(eventChan, *seq, startTime, "timed_out", "", 124)
+					return turnEvicted
+				}
+				diagnostic, exitCode := ptyEOFDiagnostic(exitStatus, exitKnown)
 				*seq++
-				emitFinalEvent(eventChan, *seq, startTime, "failed", "session closed before Stop hook", 1)
+				emitFinalEvent(eventChan, *seq, startTime, "failed", diagnostic, exitCode)
 				return turnEvicted
 			}
 			if chunk.ReadError != nil {
@@ -551,6 +569,130 @@ func (h *Harness) runTurnOver(
 			}
 		}
 	}
+}
+
+// waitForStopPayloadAfterPTYEOF waits only for the current turn's nonce-bound
+// Stop payload. Process exit collection runs concurrently so a stuck Wait
+// cannot extend the grace deadline.
+func waitForStopPayloadAfterPTYEOF(
+	ctx context.Context,
+	te *turnEnv,
+	turnDeadline <-chan time.Time,
+) (path string, matched bool, status session.ExitStatus, statusKnown bool, err error) {
+	// Cancellation and the enclosing turn deadline remain authoritative during
+	// the grace window. Check them before observing a payload so a ready
+	// terminal condition cannot lose a randomized select race to file polling.
+	if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+		return "", false, status, statusKnown, terminalErr
+	}
+	if transcriptPath, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
+		if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+			return "", false, status, statusKnown, terminalErr
+		}
+		return transcriptPath, true, status, statusKnown, nil
+	}
+
+	grace := te.stopGrace
+	if grace <= 0 {
+		grace = 250 * time.Millisecond
+	}
+	pollInterval := te.pollInterval
+	if pollInterval <= 0 || pollInterval > grace {
+		pollInterval = grace
+	}
+
+	exitCh := make(chan session.ExitStatus, 1)
+	go func() {
+		exitCh <- te.conn.Wait()
+	}()
+
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	poll := time.NewTicker(pollInterval)
+	defer poll.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", false, status, statusKnown, ctx.Err()
+		case <-turnDeadline:
+			if ctx.Err() != nil {
+				return "", false, status, statusKnown, ctx.Err()
+			}
+			return "", false, status, statusKnown, context.DeadlineExceeded
+		case exitStatus := <-exitCh:
+			status = exitStatus
+			statusKnown = true
+			exitCh = nil
+		case <-poll.C:
+			if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+				return "", false, status, statusKnown, terminalErr
+			}
+			if transcriptPath, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
+				if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+					return "", false, status, statusKnown, terminalErr
+				}
+				return transcriptPath, true, status, statusKnown, nil
+			}
+		case <-timer.C:
+			if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+				return "", false, status, statusKnown, terminalErr
+			}
+			// One final read closes the timer/publication boundary race.
+			if transcriptPath, ok := readStopHookPayloadNonce(te.stopPayloadPath, te.nonce); ok {
+				if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+					return "", false, status, statusKnown, terminalErr
+				}
+				return transcriptPath, true, status, statusKnown, nil
+			}
+			if terminalErr := eofGraceTerminalErr(ctx, turnDeadline); terminalErr != nil {
+				return "", false, status, statusKnown, terminalErr
+			}
+			if !statusKnown {
+				select {
+				case status = <-exitCh:
+					statusKnown = true
+				default:
+				}
+			}
+			return "", false, status, statusKnown, nil
+		}
+	}
+}
+
+func eofGraceTerminalErr(ctx context.Context, turnDeadline <-chan time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-turnDeadline:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return context.DeadlineExceeded
+	default:
+	}
+	return ctx.Err()
+}
+
+// ptyEOFDiagnostic retains only structured process status. It never includes a
+// raw Wait error, terminal frame, transcript path, prompt, or account data.
+func ptyEOFDiagnostic(status session.ExitStatus, known bool) (string, int) {
+	const prefix = "Claude TUI PTY closed before Stop hook"
+	if !known {
+		return prefix + "; process exit status unavailable", 1
+	}
+	if status.Signaled {
+		return prefix + "; process terminated by signal", 1
+	}
+	if status.Exited {
+		exitCode := status.Code
+		if exitCode <= 0 {
+			exitCode = 1
+		}
+		return fmt.Sprintf("%s; process exit code %d", prefix, status.Code), exitCode
+	}
+	return prefix + "; process exit status unavailable", 1
 }
 
 const (
@@ -704,14 +846,19 @@ func buildHookConfigs(hookDir, stopPayloadPath, nonce string) map[string][]HookC
 	// named "tool-*.json" file the tailer scans. Use $$ + nanoseconds via a
 	// counter file is overkill; a date+pid suffix from the shell is enough to
 	// keep filenames distinct and lexically ordered.
-	preCmd := fmt.Sprintf(`cat > %q/tool-$(date +%%s%%N)-pre.json`, toolDir)
-	postCmd := fmt.Sprintf(`cat > %q/tool-$(date +%%s%%N)-post.json`, toolDir)
-	// Stop: capture stdin transcript path, then rewrite a payload carrying the
-	// nonce so the harness can verify the Stop belongs to this turn.
-	stopCmd := fmt.Sprintf(
-		`p=$(cat); t=$(printf '%%s' "$p" | sed -n 's/.*"transcript_path"[ ]*:[ ]*"\([^"]*\)".*/\1/p'); printf '{"nonce":"%s","transcript_path":"%s"}' "$t" > %q`,
-		nonce, "%s", stopPayloadPath,
-	)
+	preCmd := fmt.Sprintf(`cat > %s/tool-$(date +%%s%%N)-pre.json`, shellSingleQuote(toolDir))
+	postCmd := fmt.Sprintf(`cat > %s/tool-$(date +%%s%%N)-post.json`, shellSingleQuote(toolDir))
+	// Stop: capture stdin transcript path, then publish a nonce-bound payload
+	// with a same-directory write-then-rename. Readers can observe either the
+	// previous complete payload or the new complete payload, never a partial
+	// JSON write.
+	stopCmd := "exit 1"
+	if isTurnNonce(nonce) {
+		stopCmd = fmt.Sprintf(
+			`umask 077; dest=%s; tmp="${dest}.tmp.$$"; trap 'rm -f "$tmp"' EXIT HUP INT TERM; p=$(cat) || exit 1; printf '%%s' "$p" | awk %s || exit 1; printf '%%s' "$p" | sed 's/}[[:space:]]*$/,"nonce":"%s"}/' > "$tmp" && mv -f "$tmp" "$dest"`,
+			shellSingleQuote(stopPayloadPath), shellSingleQuote(stopTranscriptPathAWK), nonce,
+		)
+	}
 
 	// Matcher "" is Claude Code's documented match-all form for PreToolUse/
 	// PostToolUse/Stop (a NON-empty matcher is treated as a tool-name regex).
@@ -722,6 +869,107 @@ func buildHookConfigs(hookDir, stopPayloadPath, nonce string) map[string][]HookC
 		"PostToolUse": {cmdHook("", postCmd)},
 		"Stop":        {cmdHook("", stopCmd)},
 	}
+}
+
+// stopTranscriptPathAWK validates that the native Stop JSON has exactly one
+// top-level, non-empty string transcript_path before the trusted nonce is
+// appended. It tracks strings and container depth so key-like user text or a
+// nested decoy cannot authorize publication. Full JSON decoding still occurs
+// in Go before the payload is consumed.
+const stopTranscriptPathAWK = `
+{
+	text = text $0 "\n"
+}
+END {
+	depth = 0
+	mode = "root"
+	for (i = 1; i <= length(text); i++) {
+		c = substr(text, i, 1)
+		if (in_string) {
+			if (escaped) {
+				token = token c
+				escaped = 0
+				continue
+			}
+			if (c == "\\") {
+				token = token c
+				escaped = 1
+				continue
+			}
+			if (c == "\"") {
+				in_string = 0
+				if (role == "key" && depth == 1) {
+					if (token ~ /\\/) invalid = 1
+					key = token
+					if (key == "transcript_path") seen++
+					mode = "colon"
+				} else if (role == "value" && depth == 1) {
+					if (key == "transcript_path" && length(token) > 0) valid = 1
+					key = ""
+					mode = "after_value"
+				}
+				role = ""
+				continue
+			}
+			token = token c
+			continue
+		}
+		if (c == "\"") {
+			in_string = 1
+			escaped = 0
+			token = ""
+			if (depth == 1 && mode == "key") role = "key"
+			else if (depth == 1 && mode == "value") role = "value"
+			else role = "ignore"
+			continue
+		}
+		if (c == "{" || c == "[") {
+			old_depth = depth
+			depth++
+			if (depth == 1) mode = "key"
+			else if (old_depth == 1 && mode == "value") mode = "nested_value"
+			continue
+		}
+		if (c == "}" || c == "]") {
+			depth--
+			if (depth == 1 && mode == "nested_value") {
+				mode = "after_value"
+				key = ""
+			}
+			continue
+		}
+		if (depth != 1) continue
+		if (mode == "colon") {
+			if (c == ":") mode = "value"
+			else if (c !~ /[[:space:]]/) invalid = 1
+			continue
+		}
+		if (mode == "value") {
+			if (c ~ /[[:space:]]/) continue
+			mode = "scalar_value"
+		}
+		if ((mode == "after_value" || mode == "scalar_value") && c == ",") {
+			mode = "key"
+			key = ""
+		}
+	}
+	exit(invalid || seen != 1 || !valid)
+}`
+
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func isTurnNonce(value string) bool {
+	if len(value) != 32 {
+		return false
+	}
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // composeSettingsJSON builds the --settings JSON in Claude Code's real schema
@@ -762,6 +1010,9 @@ func composeSettingsJSON(hooks map[string][]HookCommand, logger *slog.Logger) (s
 // transcript path only when the payload's nonce matches the per-turn nonce.
 // A missing file or mismatched nonce reports ok=false (turn not yet complete).
 func readStopHookPayloadNonce(payloadPath, nonce string) (string, bool) {
+	if !isTurnNonce(nonce) {
+		return "", false
+	}
 	data, err := os.ReadFile(payloadPath)
 	if err != nil {
 		return "", false
@@ -783,7 +1034,7 @@ func readStopHookPayloadNonce(payloadPath, nonce string) (string, bool) {
 func newTurnNonce() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("nonce-%d", time.Now().UnixNano())
+		return fmt.Sprintf("%032x", uint64(time.Now().UnixNano()))
 	}
 	return hex.EncodeToString(b[:])
 }
@@ -1416,6 +1667,22 @@ func RunTurnForTest(
 	hookDir, stopPayloadPath, nonce string,
 	readyTimeout, pollInterval, turnTimeout time.Duration,
 ) []harnesses.Event {
+	return RunTurnForTestWithStopGrace(
+		ctx, conn, req, hookDir, stopPayloadPath, nonce,
+		readyTimeout, pollInterval, 5*pollInterval, turnTimeout,
+	)
+}
+
+// RunTurnForTestWithStopGrace is the explicit-duration form used by EOF/Stop
+// ordering tests. Keeping the grace request-local avoids package-global timing
+// seams that can race under parallel tests.
+func RunTurnForTestWithStopGrace(
+	ctx context.Context,
+	conn TestPTYConn,
+	req harnesses.ExecuteRequest,
+	hookDir, stopPayloadPath, nonce string,
+	readyTimeout, pollInterval, stopGrace, turnTimeout time.Duration,
+) []harnesses.Event {
 	h := &Harness{}
 	eventChan := make(chan harnesses.Event, 256)
 	seq := int64(0)
@@ -1427,6 +1694,7 @@ func RunTurnForTest(
 		nonce:           nonce,
 		readyTimeout:    readyTimeout,
 		pollInterval:    pollInterval,
+		stopGrace:       stopGrace,
 		turnTimeout:     turnTimeout,
 		logger:          slog.Default(),
 	}
@@ -1450,6 +1718,7 @@ type TestPTYConn interface {
 	SendKey(k session.Key) error
 	Size() session.Size
 	Kill() error
+	Wait() session.ExitStatus
 }
 
 // Compile-time interface satisfaction assertions per CONTRACT-004.

@@ -3,15 +3,20 @@ package claudetui_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	"github.com/easel/fizeau/internal/pty/session"
 )
@@ -26,11 +31,15 @@ type fakePTY struct {
 	keys     []session.Key
 	sent     [][]byte
 	killed   bool
+	exit     session.ExitStatus
+	waitOnce sync.Once
+	waiting  chan struct{}
+	closeOut sync.Once
 	onPrompt func() // invoked when a bracketed-paste prompt is observed
 }
 
 func newFakePTY() *fakePTY {
-	return &fakePTY{out: make(chan session.OutputChunk, 64)}
+	return &fakePTY{out: make(chan session.OutputChunk, 64), waiting: make(chan struct{})}
 }
 
 func (f *fakePTY) Output() <-chan session.OutputChunk { return f.out }
@@ -62,6 +71,23 @@ func (f *fakePTY) Kill() error {
 	f.killed = true
 	f.mu.Unlock()
 	return nil
+}
+
+func (f *fakePTY) Wait() session.ExitStatus {
+	f.waitOnce.Do(func() { close(f.waiting) })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.exit
+}
+
+func (f *fakePTY) closeOutput() {
+	f.closeOut.Do(func() { close(f.out) })
+}
+
+func (f *fakePTY) setExitStatus(status session.ExitStatus) {
+	f.mu.Lock()
+	f.exit = status
+	f.mu.Unlock()
 }
 
 func (f *fakePTY) push(b []byte) { f.out <- session.OutputChunk{Bytes: b} }
@@ -98,10 +124,31 @@ func (f *fakePTY) sawBracketedPaste() bool {
 // writeStopPayload writes a Stop-hook payload carrying the nonce + transcript path.
 func writeStopPayload(t *testing.T, path, nonce, transcript string) {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{"nonce": nonce, "transcript_path": transcript})
-	if err := os.WriteFile(path, body, 0o644); err != nil {
+	if err := writeStopPayloadFile(path, nonce, transcript); err != nil {
 		t.Fatalf("write stop payload: %v", err)
 	}
+}
+
+func writeStopPayloadFile(path, nonce, transcript string) error {
+	body, _ := json.Marshal(map[string]string{"nonce": nonce, "transcript_path": transcript})
+	return os.WriteFile(path, body, 0o644)
+}
+
+func testTurnNonce(label string) string {
+	sum := sha256.Sum256([]byte(label))
+	return hex.EncodeToString(sum[:16])
+}
+
+func waitForBracketedPaste(ctx context.Context, f *fakePTY) error {
+	for !f.sawBracketedPaste() {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for prompt paste: %w", ctx.Err())
+		default:
+			time.Sleep(2 * time.Millisecond)
+		}
+	}
+	return nil
 }
 
 func runTurnWithTranscriptPath(t *testing.T, transcriptPath, prompt string) []harnesses.Event {
@@ -112,7 +159,7 @@ func runTurnWithTranscriptPath(t *testing.T, transcriptPath, prompt string) []ha
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-transcript-finalization"
+	nonce := testTurnNonce("transcript-finalization")
 
 	f := newFakePTY()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -231,6 +278,286 @@ func TestRunTurnReadableTranscriptSucceedsExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestRunTurnWaitsForStopPayloadAfterPTYEOF(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.Mkdir(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	transcript := writeTranscript(t, realTranscript)
+	const nonce = "11111111111111111111111111111111"
+
+	f := newFakePTY()
+	f.setExitStatus(session.ExitStatus{Code: 0, Exited: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	producerErr := make(chan error, 1)
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		if err := waitForBracketedPaste(ctx, f); err != nil {
+			producerErr <- err
+			return
+		}
+		f.closeOutput()
+		select {
+		case <-f.waiting:
+		case <-ctx.Done():
+			producerErr <- ctx.Err()
+			return
+		}
+		producerErr <- writeStopPayloadFile(stopPath, nonce, transcript)
+	}()
+
+	events := claudetui.RunTurnForTestWithStopGrace(
+		ctx, f, harnesses.ExecuteRequest{Prompt: "late Stop prompt", WorkDir: dir},
+		hookDir, stopPath, nonce, 100*time.Millisecond, 5*time.Millisecond, 150*time.Millisecond, 2*time.Second,
+	)
+	if err := <-producerErr; err != nil {
+		t.Fatal(err)
+	}
+	final := requireExactlyOneFinal(t, events, "success")
+	if final.ExitCode != 0 || final.Error != "" {
+		t.Fatalf("late Stop final = %+v, want successful transcript final", final)
+	}
+	if final.FinalText != "Let me list the directory.The directory contains file.txt and dir/." {
+		t.Fatalf("late Stop final text = %q", final.FinalText)
+	}
+	if final.Usage == nil || final.Usage.InputTokens == nil || *final.Usage.InputTokens != 200 ||
+		final.Usage.OutputTokens == nil || *final.Usage.OutputTokens != 40 {
+		t.Fatalf("late Stop usage = %+v, want input=200 output=40", final.Usage)
+	}
+}
+
+func TestRunTurnPTYEOFStopGraceExpires(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.Mkdir(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	transcript := writeTranscript(t, realTranscript)
+	const (
+		nonce = "22222222222222222222222222222222"
+		grace = 80 * time.Millisecond
+	)
+
+	f := newFakePTY()
+	f.setExitStatus(session.ExitStatus{Code: 0, Exited: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	graceStarted := make(chan time.Time, 1)
+	producerErr := make(chan error, 1)
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		if err := waitForBracketedPaste(ctx, f); err != nil {
+			producerErr <- err
+			return
+		}
+		f.closeOutput()
+		select {
+		case <-f.waiting:
+			graceStarted <- time.Now()
+		case <-ctx.Done():
+			producerErr <- ctx.Err()
+			return
+		}
+		producerErr <- writeStopPayloadFile(stopPath, "44444444444444444444444444444444", transcript)
+	}()
+
+	events := claudetui.RunTurnForTestWithStopGrace(
+		ctx, f, harnesses.ExecuteRequest{Prompt: "stale nonce prompt", WorkDir: dir},
+		hookDir, stopPath, nonce, 100*time.Millisecond, 5*time.Millisecond, grace, 2*time.Second,
+	)
+	if err := <-producerErr; err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(<-graceStarted)
+	if elapsed > grace+time.Second {
+		t.Fatalf("EOF grace elapsed = %s, want bounded above by %s", elapsed, grace+time.Second)
+	}
+	final := requireExactlyOneFinal(t, events, "failed")
+	if final.ExitCode == 0 || final.FinalText != "" || final.Usage != nil || final.FinalCostUSD != nil {
+		t.Fatalf("expired grace fabricated completion evidence: %+v", final)
+	}
+	if !strings.Contains(final.Error, "PTY closed before Stop hook") {
+		t.Fatalf("expired grace diagnostic = %q", final.Error)
+	}
+}
+
+func TestRunTurnPTYEOFPreservesSanitizedExitEvidence(t *testing.T) {
+	const (
+		apiToken   = "sk-ant-eof-secret-token"
+		oauthToken = "oauth-eof-secret-token"
+		accountID  = "acct-eof-secret"
+		prompt     = "prompt-eof-secret"
+		frameText  = "surrounding-frame-eof-secret"
+	)
+	tests := []struct {
+		name         string
+		status       session.ExitStatus
+		wantEvidence string
+		wantExitCode int
+	}{
+		{
+			name: "nonzero exit",
+			status: session.ExitStatus{
+				Code: 23, Exited: true, Err: fmt.Errorf("raw wait %s %s", apiToken, accountID),
+			},
+			wantEvidence: "exit code 23",
+			wantExitCode: 23,
+		},
+		{
+			name: "signal",
+			status: session.ExitStatus{
+				Code: -1, Signaled: true, Signal: "killed " + oauthToken, Err: fmt.Errorf("raw wait %s", frameText),
+			},
+			wantEvidence: "terminated by signal",
+			wantExitCode: 1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			hookDir := filepath.Join(dir, "hooks")
+			if err := os.Mkdir(hookDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			stopPath := filepath.Join(hookDir, "stop.json")
+			f := newFakePTY()
+			f.setExitStatus(test.status)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			producerErr := make(chan error, 1)
+			go func() {
+				f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+				if err := waitForBracketedPaste(ctx, f); err != nil {
+					producerErr <- err
+					return
+				}
+				f.push([]byte(frameText + " " + apiToken + " " + oauthToken + " " + accountID + " " + prompt))
+				f.closeOutput()
+				select {
+				case <-f.waiting:
+					producerErr <- nil
+				case <-ctx.Done():
+					producerErr <- ctx.Err()
+				}
+			}()
+
+			events := claudetui.RunTurnForTestWithStopGrace(
+				ctx, f, harnesses.ExecuteRequest{Prompt: prompt, WorkDir: dir},
+				hookDir, stopPath, "33333333333333333333333333333333", 100*time.Millisecond, 5*time.Millisecond, 40*time.Millisecond, 2*time.Second,
+			)
+			if err := <-producerErr; err != nil {
+				t.Fatal(err)
+			}
+			final := requireExactlyOneFinal(t, events, "failed")
+			if final.ExitCode != test.wantExitCode {
+				t.Fatalf("exit code = %d, want %d", final.ExitCode, test.wantExitCode)
+			}
+			if !strings.Contains(final.Error, test.wantEvidence) {
+				t.Fatalf("diagnostic = %q, want %q", final.Error, test.wantEvidence)
+			}
+			if !utf8.ValidString(final.Error) || len(final.Error) > anthropic.MaxRouteFailureDiagnosticBytes {
+				t.Fatalf("diagnostic is invalid or unbounded: %q", final.Error)
+			}
+			for _, sensitive := range []string{apiToken, oauthToken, accountID, prompt, frameText, test.status.Signal} {
+				if sensitive != "" && strings.Contains(final.Error, sensitive) {
+					t.Fatalf("diagnostic retained sensitive value %q: %q", sensitive, final.Error)
+				}
+			}
+			if final.FinalText != "" || final.Usage != nil || final.FinalCostUSD != nil ||
+				final.FinalCostSource != harnesses.CostSourceUnknown {
+				t.Fatalf("EOF failure fabricated completion evidence: %+v", final)
+			}
+		})
+	}
+}
+
+func TestRunTurnPTYEOFGraceHonorsCancellationAndDeadline(t *testing.T) {
+	t.Run("cancellation", func(t *testing.T) {
+		dir := t.TempDir()
+		hookDir := filepath.Join(dir, "hooks")
+		if err := os.Mkdir(hookDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		stopPath := filepath.Join(hookDir, "stop.json")
+		f := newFakePTY()
+		ctx, cancel := context.WithCancel(context.Background())
+		producerErr := make(chan error, 1)
+		go func() {
+			f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+			if err := waitForBracketedPaste(ctx, f); err != nil {
+				producerErr <- err
+				return
+			}
+			f.closeOutput()
+			select {
+			case <-f.waiting:
+				cancel()
+				producerErr <- nil
+			case <-time.After(2 * time.Second):
+				producerErr <- fmt.Errorf("Wait was not entered after PTY EOF")
+			}
+		}()
+
+		events := claudetui.RunTurnForTestWithStopGrace(
+			ctx, f, harnesses.ExecuteRequest{Prompt: "cancel during EOF grace", WorkDir: dir},
+			hookDir, stopPath, "55555555555555555555555555555555",
+			100*time.Millisecond, 5*time.Millisecond, time.Second, 3*time.Second,
+		)
+		if err := <-producerErr; err != nil {
+			t.Fatal(err)
+		}
+		final := requireExactlyOneFinal(t, events, "cancelled")
+		if final.ExitCode != 130 || final.FinalText != "" || final.Usage != nil {
+			t.Fatalf("cancellation final = %+v", final)
+		}
+	})
+
+	t.Run("turn deadline", func(t *testing.T) {
+		dir := t.TempDir()
+		hookDir := filepath.Join(dir, "hooks")
+		if err := os.Mkdir(hookDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		stopPath := filepath.Join(hookDir, "stop.json")
+		f := newFakePTY()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		producerErr := make(chan error, 1)
+		go func() {
+			f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+			if err := waitForBracketedPaste(ctx, f); err != nil {
+				producerErr <- err
+				return
+			}
+			f.closeOutput()
+			select {
+			case <-f.waiting:
+				producerErr <- nil
+			case <-ctx.Done():
+				producerErr <- ctx.Err()
+			}
+		}()
+
+		events := claudetui.RunTurnForTestWithStopGrace(
+			ctx, f, harnesses.ExecuteRequest{Prompt: "deadline during EOF grace", WorkDir: dir},
+			hookDir, stopPath, "66666666666666666666666666666666",
+			100*time.Millisecond, 5*time.Millisecond, 2*time.Second, 500*time.Millisecond,
+		)
+		if err := <-producerErr; err != nil {
+			t.Fatal(err)
+		}
+		final := requireExactlyOneFinal(t, events, "timed_out")
+		if final.ExitCode != 124 || final.FinalText != "" || final.Usage != nil {
+			t.Fatalf("deadline final = %+v", final)
+		}
+	})
+}
+
 // TestRunTurnFolderTrustAnsweredWithEnter proves the turn loop renders the
 // screen through the vt10x emulator (NOT naive ANSI stripping) and answers the
 // folder-trust dialog with a single Enter (default = "Yes, I trust this
@@ -242,7 +569,7 @@ func TestRunTurnFolderTrustAnsweredWithEnter(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-trust"
+	nonce := testTurnNonce("trust")
 
 	// Minimal but valid transcript so completion has something to read.
 	transcript := writeTranscript(t, realTranscript)
@@ -295,7 +622,7 @@ func TestRunTurnCompletesOnStopNonceOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-complete"
+	nonce := testTurnNonce("complete")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -344,11 +671,11 @@ func TestRunTurnIgnoresStaleStopNonce(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-current"
+	nonce := testTurnNonce("current")
 	transcript := writeTranscript(t, realTranscript)
 
 	// Pre-existing STALE payload with the wrong nonce.
-	writeStopPayload(t, stopPath, "nonce-OLD", transcript)
+	writeStopPayload(t, stopPath, testTurnNonce("old"), transcript)
 
 	f := newFakePTY()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -382,7 +709,7 @@ func TestRunTurnUnlinksPriorStopPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-x"
+	nonce := testTurnNonce("remove-stale")
 	transcript := writeTranscript(t, realTranscript)
 
 	// Stale payload with the SAME nonce, present before the turn starts.
@@ -434,7 +761,7 @@ func TestRunTurnEmitsMidTurnToolEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-tools"
+	nonce := testTurnNonce("tools")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -551,7 +878,7 @@ func TestRunTurnDocumentsRequestGaps(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-gap"
+	nonce := testTurnNonce("gap")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -607,7 +934,7 @@ func TestRunTurnNoGapWarningsForUnsetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-nogap"
+	nonce := testTurnNonce("no-gap")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -683,7 +1010,7 @@ func TestRunTurnSubmitsPromptWithSeparateEnterAfterPaste(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-submit"
+	nonce := testTurnNonce("submit")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -765,7 +1092,7 @@ func TestRunTurnSingleOutputConsumerNoStolenChunks(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopPath := filepath.Join(hookDir, "stop.json")
-	nonce := "nonce-single-consumer"
+	nonce := testTurnNonce("single-consumer")
 	transcript := writeTranscript(t, realTranscript)
 
 	f := newFakePTY()
@@ -852,7 +1179,7 @@ func TestRunTurnDismissesInterstitials(t *testing.T) {
 				t.Fatal(err)
 			}
 			stopPath := filepath.Join(hookDir, "stop.json")
-			nonce := "nonce-" + tc.name
+			nonce := testTurnNonce(tc.name)
 			transcript := writeTranscript(t, realTranscript)
 
 			f := newFakePTY()
@@ -920,7 +1247,7 @@ func TestRunTurnSurfacesMidTurnUsageLimit(t *testing.T) {
 	req := harnesses.ExecuteRequest{Prompt: "do work", WorkDir: dir}
 	// turnTimeout is LARGE: the test must finish well before it via the fatal
 	// screen detection, not the timeout.
-	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, "nonce-limit",
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, testTurnNonce("limit"),
 		100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
 
 	assertExactlyOneFinal(t, events, "iteration_limit")
@@ -952,7 +1279,7 @@ func TestRunTurnSurfacesMidTurnDisconnect(t *testing.T) {
 	}()
 
 	req := harnesses.ExecuteRequest{Prompt: "do work", WorkDir: dir}
-	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, "nonce-disc",
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, testTurnNonce("disconnect"),
 		100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
 
 	assertExactlyOneFinal(t, events, "failed")
@@ -982,12 +1309,12 @@ func TestRunTurnIgnoresFatalMarkersInAssistantProse(t *testing.T) {
 			"\x1b[4;2HAn Invalid API key means the supplied credential was rejected."))
 		time.Sleep(100 * time.Millisecond)
 		proseDidNotKill <- !f.wasKilled()
-		writeStopPayload(t, stopPath, "nonce-assistant-prose", transcript)
+		writeStopPayload(t, stopPath, testTurnNonce("assistant-prose"), transcript)
 	}()
 
 	events := claudetui.RunTurnForTest(ctx, f,
 		harnesses.ExecuteRequest{Prompt: "explain invalid API keys", WorkDir: dir},
-		hookDir, stopPath, "nonce-assistant-prose", 100*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+		hookDir, stopPath, testTurnNonce("assistant-prose"), 100*time.Millisecond, 20*time.Millisecond, 4*time.Second)
 	if ok := <-proseDidNotKill; !ok {
 		t.Error("ordinary assistant prose containing a fatal marker killed the session")
 	}
@@ -1038,7 +1365,7 @@ func TestRunTurnSurfacesAuthenticationFailureWithTypedClass(t *testing.T) {
 
 	events := claudetui.RunTurnForTest(ctx, f,
 		harnesses.ExecuteRequest{Prompt: prompt, WorkDir: dir},
-		hookDir, stopPath, "nonce-auth", 100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
+		hookDir, stopPath, testTurnNonce("auth"), 100*time.Millisecond, 20*time.Millisecond, 30*time.Second)
 	if ok := <-promptOnlyDidNotKill; !ok {
 		t.Error("prompt-only marker frame killed the session or emitted a terminal failure")
 	}
