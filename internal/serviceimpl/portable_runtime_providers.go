@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/modelcatalog"
+	"github.com/easel/fizeau/internal/portableruntime"
 )
 
 // PortableRuntimeConfigTreatment describes how a host ServiceConfig path is
@@ -14,11 +15,11 @@ import (
 type PortableRuntimeConfigTreatment string
 
 const (
-	PortableRuntimeConfigGuestPrivate PortableRuntimeConfigTreatment = "guest_private"
-	PortableRuntimeConfigExcluded     PortableRuntimeConfigTreatment = "excluded"
+	PortableRuntimeConfigGuestPrivate PortableRuntimeConfigTreatment = portableruntime.ConfigTreatmentGuestPrivate
+	PortableRuntimeConfigExcluded     PortableRuntimeConfigTreatment = portableruntime.ConfigTreatmentExcluded
 
-	PortableRuntimeWorkDirRemappedReason       = "host WorkDir is remapped to guest-private state"
-	PortableRuntimeSessionLogDirExcludedReason = "service session logs are not portable"
+	PortableRuntimeWorkDirRemappedReason       = portableruntime.WorkDirRemappedReason
+	PortableRuntimeSessionLogDirExcludedReason = portableruntime.SessionLogExcludedReason
 )
 
 // PortableRuntimeConfigField records a named, value-free treatment of one
@@ -69,12 +70,12 @@ func (input PortableRuntimeConfiguredProvidersInput) MarshalJSON() ([]byte, erro
 		ProviderCount:       len(input.Providers),
 		HealthCooldown:      input.HealthCooldown,
 		WorkDir: PortableRuntimeConfigField{
-			Field:     "WorkDir",
+			Field:     portableruntime.WorkDirField,
 			Treatment: PortableRuntimeConfigGuestPrivate,
 			Reason:    PortableRuntimeWorkDirRemappedReason,
 		},
 		SessionLogDir: PortableRuntimeConfigField{
-			Field:     "SessionLogDir",
+			Field:     portableruntime.SessionLogDirField,
 			Treatment: PortableRuntimeConfigExcluded,
 			Reason:    PortableRuntimeSessionLogDirExcludedReason,
 		},
@@ -209,12 +210,12 @@ func BuildPortableRuntimeConfiguredProviders(input PortableRuntimeConfiguredProv
 		Providers:           make([]PortableRuntimeConfiguredProvider, 0, len(input.ProviderNames)),
 		HealthCooldown:      input.HealthCooldown,
 		WorkDir: PortableRuntimeConfigField{
-			Field:     "WorkDir",
+			Field:     portableruntime.WorkDirField,
 			Treatment: PortableRuntimeConfigGuestPrivate,
 			Reason:    PortableRuntimeWorkDirRemappedReason,
 		},
 		SessionLogDir: PortableRuntimeConfigField{
-			Field:     "SessionLogDir",
+			Field:     portableruntime.SessionLogDirField,
 			Treatment: PortableRuntimeConfigExcluded,
 			Reason:    PortableRuntimeSessionLogDirExcludedReason,
 		},

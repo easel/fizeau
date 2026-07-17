@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/easel/fizeau/internal/harnesses"
@@ -142,11 +143,15 @@ func (s *service) PreparePortableRuntime(ctx context.Context, req PortableRuntim
 	return &PortableRuntimeBundle{bundle: bundle}, nil
 }
 
-// NewFromPortableRuntime is the public activation entrypoint. The successful
-// activation path is supplied by the dependent activation bead; until then it
-// fails closed and never falls back to ambient host configuration.
-func NewFromPortableRuntime(ServiceOptions) (FizeauService, error) {
-	return nil, fmt.Errorf("%w: activation is not implemented", ErrPortableRuntimeActivationInvalid)
+// NewFromPortableRuntime is the public activation entrypoint. Verification
+// and effective-config reconstruction are complete; writable storage and
+// runner composition are supplied by the dependency-chained activation beads.
+// Until those phases land, this remains fail-closed after pure validation.
+func NewFromPortableRuntime(opts ServiceOptions) (FizeauService, error) {
+	if _, err := preparePortableRuntimeActivation(opts, portableruntime.GuestRoot, os.LookupEnv, serviceimpl.LoadPortableRuntimeActivation); err != nil {
+		return nil, publicPortableRuntimeError(err)
+	}
+	return nil, fmt.Errorf("%w: activation composition is incomplete", ErrPortableRuntimeActivationInvalid)
 }
 
 func publicPortableRuntimeError(err error) error {
@@ -159,6 +164,9 @@ func publicPortableRuntimeError(err error) error {
 	}
 	if errors.Is(err, portableruntime.ErrCleanupIncomplete) {
 		classes = append(classes, ErrPortableRuntimeCleanupIncomplete)
+	}
+	if errors.Is(err, portableruntime.ErrActivationInvalid) {
+		classes = append(classes, ErrPortableRuntimeActivationInvalid)
 	}
 	if len(classes) == 0 {
 		return fmt.Errorf("%w: runtime preparation failed", ErrPortableRuntimeClosureIncomplete)

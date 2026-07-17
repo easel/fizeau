@@ -15,6 +15,14 @@ const (
 	// GuestRoot is the fixed Linux mount target consumed by portable activation.
 	GuestRoot = "/opt/fizeau/runtime"
 
+	ConfigTreatmentGuestPrivate = "guest_private"
+	ConfigTreatmentExcluded     = "excluded"
+
+	WorkDirField             = "WorkDir"
+	WorkDirRemappedReason    = "host WorkDir is remapped to guest-private state"
+	SessionLogDirField       = "SessionLogDir"
+	SessionLogExcludedReason = "service session logs are not portable"
+
 	manifestVersion = 1
 	manifestTarget  = ".fizeau/activation.json"
 	manifestSum     = ".fizeau/activation.sha256"
@@ -24,6 +32,7 @@ const (
 var (
 	ErrRequestInvalid    = errors.New("invalid portable runtime request")
 	ErrClosureIncomplete = harnesses.ErrPortableRuntimeClosureIncomplete
+	ErrActivationInvalid = errors.New("portable runtime activation invalid")
 	ErrCleanupIncomplete = errors.New("portable runtime cleanup incomplete")
 )
 
@@ -122,10 +131,23 @@ func (s ProviderSecret) MarshalJSON() ([]byte, error) {
 	}{s.providerName, true})
 }
 
+// ProviderName, APIKey, and Headers are an explicit internal activation
+// bridge. Generic formatting and JSON remain redacted.
+func (s ProviderSecret) ProviderName() string { return s.providerName }
+func (s ProviderSecret) APIKey() string       { return s.apiKey }
+func (s ProviderSecret) Headers() map[string]string {
+	return cloneStrings(s.headers)
+}
+
 type privateProviderSecret struct {
 	ProviderName string            `json:"provider_name"`
 	APIKey       string            `json:"api_key"`
 	Headers      map[string]string `json:"headers"`
+}
+
+type privateProviderSecretsDocument struct {
+	Version   int                     `json:"version"`
+	Providers []privateProviderSecret `json:"providers"`
 }
 
 func (s ProviderSecret) privateRecord() privateProviderSecret {

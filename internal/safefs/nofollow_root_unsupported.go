@@ -14,3 +14,7 @@ func OpenNoFollowRoot(string) (*NoFollowRoot, error) {
 func (root *NoFollowRoot) OpenReadNoFollow(string) (*os.File, error) {
 	return nil, ErrNoFollowRootUnsupported
 }
+
+func (root *NoFollowRoot) OpenDirectoryNoFollow(string) (*os.File, error) {
+	return nil, ErrNoFollowRootUnsupported
+}

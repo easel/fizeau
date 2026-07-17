@@ -106,6 +106,9 @@ func Prepare(ctx context.Context, request Request) (_ *Bundle, err error) {
 	if err != nil {
 		return nil, closureError("provider snapshot", -1)
 	}
+	if len(secretBytes) > activationMetadataLimit {
+		return nil, closureError("provider snapshot exceeds activation limit", -1)
+	}
 	secretDigest, err := writeGeneratedFile(stage, providerSecrets, secretBytes)
 	if err != nil {
 		return nil, closureError("provider snapshot persistence", -1)
@@ -117,6 +120,9 @@ func Prepare(ctx context.Context, request Request) (_ *Bundle, err error) {
 		return nil, closureError("manifest encoding", -1)
 	}
 	manifestBytes = append(manifestBytes, '\n')
+	if len(manifestBytes) > activationMetadataLimit {
+		return nil, closureError("manifest exceeds activation limit", -1)
+	}
 	manifestDigest, err := writeGeneratedFile(stage, manifestTarget, manifestBytes)
 	if err != nil {
 		return nil, closureError("manifest persistence", -1)
@@ -592,10 +598,7 @@ func marshalProviderSecrets(secrets []ProviderSecret) ([]byte, error) {
 	for index := range secrets {
 		records[index] = secrets[index].privateRecord()
 	}
-	data, err := json.MarshalIndent(struct {
-		Version   int                     `json:"version"`
-		Providers []privateProviderSecret `json:"providers"`
-	}{manifestVersion, records}, "", "  ")
+	data, err := json.MarshalIndent(privateProviderSecretsDocument{Version: manifestVersion, Providers: records}, "", "  ")
 	if err != nil {
 		return nil, err
 	}
