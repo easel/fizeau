@@ -1,14 +1,62 @@
 package processlifecycle
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 type portableLaunchTestRecipe struct{ secret string }
 
 func (portableLaunchTestRecipe) PortableRuntimeNamespaceRecipe() {}
+
+func TestPortableActivationIdentityDriftPreventsGatedReleaseAndReleasesLease(t *testing.T) {
+	drift := errors.New("activation identity changed")
+	prepared := testPrepared()
+	released := make(chan struct{}, 1)
+	wrapped := revalidatingPreparedBoundary{
+		PreparedBoundary: prepared,
+		revalidate:       func() error { return drift },
+		releaseLease:     func() { released <- struct{}{} },
+	}
+	_, err := Acquire(context.Background(), testOptions(&fakeClock{now: time.Now()}), NewMemoryRegistry(), testPlatform(), wrapped)
+	if !errors.Is(err, drift) {
+		t.Fatalf("Acquire() error = %v, want identity drift", err)
+	}
+	if prepared.released || prepared.started {
+		t.Fatalf("identity drift released the gated launcher: released=%v started=%v", prepared.released, prepared.started)
+	}
+	if !prepared.aborted {
+		t.Fatal("identity drift did not abort the prepared boundary")
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("identity drift did not release the portable root lease")
+	}
+	select {
+	case <-released:
+		t.Fatal("identity drift released the portable root lease more than once")
+	default:
+	}
+}
+
+func TestPortableActivationIdentityRevalidationAllowsGatedRelease(t *testing.T) {
+	prepared := testPrepared()
+	wrapped := revalidatingPreparedBoundary{
+		PreparedBoundary: prepared,
+		revalidate:       func() error { return nil },
+	}
+	if _, err := Acquire(context.Background(), testOptions(&fakeClock{now: time.Now()}), NewMemoryRegistry(), testPlatform(), wrapped); err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	if !prepared.released || !prepared.started || prepared.aborted {
+		t.Fatalf("normal identity did not release gated launcher: released=%v started=%v aborted=%v", prepared.released, prepared.started, prepared.aborted)
+	}
+}
 
 func TestPortableLaunchAttachmentOwnsExactChildSpecification(t *testing.T) {
 	const secret = "portable-recipe-secret-must-not-leak"

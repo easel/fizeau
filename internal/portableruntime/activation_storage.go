@@ -101,6 +101,7 @@ type ActivationRecipe struct {
 	readOnlyPaths     []harnesses.PortableRuntimeGuestPath
 	requiredAbsent    []harnesses.PortableRuntimeGuestPath
 	identity          activationIdentity
+	identityReader    activationIdentityReader
 	lease             *activationSubprocessLease
 	launcherPath      string
 }
@@ -126,6 +127,21 @@ func (r ActivationRecipe) AcquirePortableNamespaceLease(ctx context.Context) (ui
 		return 0, 0, nil, err
 	}
 	return r.identity.effectiveUID, r.identity.primaryGID, release, nil
+}
+
+// RevalidatePortableNamespaceIdentity proves the process identity is still
+// the precise identity that activation authorized.  It is intentionally an
+// opaque lifecycle handoff: callers learn only whether release of the gated
+// launcher remains safe.
+func (r ActivationRecipe) RevalidatePortableNamespaceIdentity() error {
+	if r.identityReader == nil || r.identity.effectiveUID <= 0 || r.identity.primaryGID <= 0 {
+		return activationError("activation identity")
+	}
+	identity, groups, err := r.identityReader()
+	if err != nil || validateActivationIdentity(identity, groups) != nil || identity != r.identity {
+		return activationError("activation identity")
+	}
+	return nil
 }
 
 type activationImmutableBinding struct {
@@ -345,6 +361,7 @@ func assembleActivationWithIdentity(ctx context.Context, runtimeRoot, writableRo
 			readOnlyPaths:  append([]harnesses.PortableRuntimeGuestPath(nil), entrypoint.ExecutionConstraints.ReadOnlyPaths...),
 			requiredAbsent: append([]harnesses.PortableRuntimeGuestPath(nil), entrypoint.ExecutionConstraints.RequiredAbsentPaths...),
 			identity:       identity,
+			identityReader: identityReader,
 			lease:          lease,
 			launcherPath:   launcher,
 		}
@@ -527,6 +544,7 @@ func cloneActivationRecipe(src ActivationRecipe) ActivationRecipe {
 		readOnlyPaths:     append([]harnesses.PortableRuntimeGuestPath(nil), src.readOnlyPaths...),
 		requiredAbsent:    append([]harnesses.PortableRuntimeGuestPath(nil), src.requiredAbsent...),
 		identity:          src.identity,
+		identityReader:    src.identityReader,
 		lease:             src.lease,
 		launcherPath:      src.launcherPath,
 	}

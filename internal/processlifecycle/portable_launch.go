@@ -128,6 +128,42 @@ type portableNamespaceLauncherRecipe interface {
 	PortableNamespaceLauncherPath() string
 }
 
+// portableNamespaceIdentityRevalidationRecipe is implemented by an
+// activation-owned recipe that can re-read the host identity it sealed during
+// activation.  The lifecycle package deliberately receives only this
+// yes-or-error capability: it must prove the identity is still exact without
+// learning the identity itself.
+type portableNamespaceIdentityRevalidationRecipe interface {
+	RevalidatePortableNamespaceIdentity() error
+}
+
+// revalidatingPreparedBoundary keeps a prepared child gated until the
+// activation identity has been checked at the last possible lifecycle seam.
+// Acquire persists the boundary and calls Release exactly once; placing the
+// check here prevents a drifted activation from releasing the launcher while
+// preserving Acquire's existing abort behavior on a release failure.
+type revalidatingPreparedBoundary struct {
+	PreparedBoundary
+	revalidate   func() error
+	releaseLease func()
+}
+
+func (p revalidatingPreparedBoundary) Release(ctx context.Context) error {
+	if p.revalidate == nil {
+		if p.releaseLease != nil {
+			p.releaseLease()
+		}
+		return fmt.Errorf("%w: portable activation identity revalidation is required", ErrInvalidRecord)
+	}
+	if err := p.revalidate(); err != nil {
+		if p.releaseLease != nil {
+			p.releaseLease()
+		}
+		return fmt.Errorf("revalidate portable activation identity: %w", err)
+	}
+	return p.PreparedBoundary.Release(ctx)
+}
+
 // PortableLaunchAttachment seals the exact command, argv, closed environment,
 // and opaque recipe selected for a portable runtime route. Its fields are
 // private and its diagnostic forms expose only cardinalities, so neither a

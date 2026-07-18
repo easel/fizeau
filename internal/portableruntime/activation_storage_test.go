@@ -405,6 +405,37 @@ func TestPortableRuntimeRejectsUnsafeActivationIdentity(t *testing.T) {
 	}
 }
 
+func TestActivationRecipeRevalidatesSealedIdentity(t *testing.T) {
+	current := activationIdentity{effectiveUID: 65532, primaryGID: 65532}
+	recipe := ActivationRecipe{
+		identity: current,
+		identityReader: func() (activationIdentity, []int, error) {
+			return current, nil, nil
+		},
+	}
+	if err := recipe.RevalidatePortableNamespaceIdentity(); err != nil {
+		t.Fatalf("RevalidatePortableNamespaceIdentity() normal identity error = %v", err)
+	}
+
+	for _, replacement := range []activationIdentity{
+		{effectiveUID: 65531, primaryGID: 65532},
+		{effectiveUID: 65532, primaryGID: 65531},
+	} {
+		recipe.identityReader = func() (activationIdentity, []int, error) {
+			return replacement, nil, nil
+		}
+		if err := recipe.RevalidatePortableNamespaceIdentity(); !errors.Is(err, ErrActivationInvalid) {
+			t.Fatalf("RevalidatePortableNamespaceIdentity() replacement %#v error = %v", replacement, err)
+		}
+	}
+	recipe.identityReader = func() (activationIdentity, []int, error) {
+		return current, []int{5}, nil
+	}
+	if err := recipe.RevalidatePortableNamespaceIdentity(); !errors.Is(err, ErrActivationInvalid) {
+		t.Fatalf("RevalidatePortableNamespaceIdentity() supplementary group error = %v", err)
+	}
+}
+
 func TestPortableRuntimeExclusiveSubprocessLease(t *testing.T) {
 	fixture := newActivationFixture(t)
 	bundle := prepareMaterializerFixture(t, fixture)
