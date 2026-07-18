@@ -166,17 +166,6 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	startTime := time.Now()
 	seq := int64(0)
 
-	claudePath, err := h.claudePath()
-	if err != nil {
-		seq++
-		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("claude binary not found: %v", err), 1)
-		return
-	}
-
-	// Build environment allowlist per ADR-013. Honor the allowlist exactly;
-	// never append os.Environ wholesale.
-	env := BuildEnvironmentAllowlist()
-
 	hookDir, err := os.MkdirTemp("", "claude-tui-hooks-*")
 	if err != nil {
 		seq++
@@ -212,12 +201,19 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 	// model token claude's --model flag accepts (an alias or full ID).
 	cliModel := claudeTuiLaunchModel(req.Model)
 	args := buildLaunchArgs(settingsJSON, cliModel)
+	command, args, env, portableLaunch, err := h.resolveLaunch(args)
+	if err != nil {
+		seq++
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to resolve Claude TUI launch: %v", err), 1)
+		return
+	}
 
 	ptySession, err := startPTYSession(
-		ctx, claudePath, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
+		ctx, command, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
 		session.WithLifecycleOptions(processlifecycle.BatchOptions{
 			Harness: "claude-tui", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 			LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
+			PortableLaunch: portableLaunch,
 		}),
 	)
 	if err != nil {
@@ -275,6 +271,34 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		return
 	}
 	eventChan <- *final
+}
+
+// resolveLaunch preserves the historical ambient Claude launch for an
+// unbound harness. A portable-bound harness instead constructs one exact
+// manifest-derived child command and carries its sealed attachment to the PTY
+// lifecycle boundary; it never consults h.Binary or PATH on that path.
+func (h *Harness) resolveLaunch(requestArgs []string) (string, []string, []string, *processlifecycle.PortableLaunchAttachment, error) {
+	if binding, bound := h.PortableRuntimeBinding(); bound {
+		child, err := binding.BuildCommand(nil, requestArgs)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		attachment, err := processlifecycle.NewPortableLaunchAttachment(
+			child.Command(), child.Arguments(), child.Environment(), child.NamespaceRecipe(),
+		)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		return child.Command(), child.Arguments(), child.Environment(), attachment, nil
+	}
+
+	claudePath, err := h.claudePath()
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	// Build environment allowlist per ADR-013. Honor the allowlist exactly;
+	// never append os.Environ wholesale.
+	return claudePath, append([]string(nil), requestArgs...), BuildEnvironmentAllowlist(), nil, nil
 }
 
 func (h *Harness) claudePath() (string, error) {
