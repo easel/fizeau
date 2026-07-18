@@ -181,6 +181,15 @@ func collectDefaultModelCandidates(reqHarness, reqProvider string, in routing.In
 }
 
 func resolveSingleModelMatch(reqModel string, candidates []string) (string, error) {
+	// A provider-qualified model ID is an identity, not a fuzzy alias. In
+	// particular, modelmatch.CanonicalKey intentionally removes the namespace
+	// before performing its compatibility matching. Without this exact pass,
+	// openai/gpt-5.6-terra also matches openai/gpt-5.6-terra-pro and turns an
+	// otherwise unambiguous caller pin into an ambiguity.
+	if exact := exactModelIdentityMatch(reqModel, candidates); exact != "" {
+		return exact, nil
+	}
+
 	matches := modelmatch.Match(reqModel, candidates)
 	switch len(matches) {
 	case 0:
@@ -194,6 +203,24 @@ func resolveSingleModelMatch(reqModel string, candidates []string) (string, erro
 			Candidates: cloneModelCandidates(matches),
 		}
 	}
+}
+
+// exactModelIdentityMatch returns the unique candidate whose complete model
+// identity equals the request, ignoring only surrounding whitespace and case.
+// It intentionally preserves any provider namespace; aliases continue through
+// modelmatch.Match below.
+func exactModelIdentityMatch(reqModel string, candidates []string) string {
+	reqModel = strings.TrimSpace(reqModel)
+	if reqModel == "" {
+		return ""
+	}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" && strings.EqualFold(candidate, reqModel) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func modelConstraintProviderPin(provider string) string {
