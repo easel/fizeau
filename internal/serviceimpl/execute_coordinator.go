@@ -82,9 +82,12 @@ type ExecuteRequest struct {
 
 	SessionLogDir    string
 	LifecycleBaseDir string
-	Metadata         map[string]string
-	FinalMetadata    map[string]string
-	CollisionWarning *harnesses.FinalWarning
+	// ContinuationLocators is rooted at the effective service log directory,
+	// not a per-request log override. It records the latter as an exact path.
+	ContinuationLocators *ContinuationLocatorStore
+	Metadata             map[string]string
+	FinalMetadata        map[string]string
+	CollisionWarning     *harnesses.FinalWarning
 
 	Decision            ExecuteDecision
 	RoutingDecisionData json.RawMessage
@@ -199,6 +202,12 @@ func (c ExecuteCoordinator) runResolved(ctx context.Context, req ExecuteRequest,
 		state.log = ports.OpenSessionLog()
 	}
 	defer state.closeSessionLog(ctx)
+	if state.log != nil && state.log.Path() != "" && req.ContinuationLocators != nil {
+		if err := req.ContinuationLocators.WritePending(req.SessionID, state.log.Path(), routeRunnerKeyFromDecision(runnerDecision(req.Decision))); err != nil {
+			state.commitFinal(ctx, harnesses.FinalData{Status: "failed", Error: "continuation locator: " + err.Error(), DurationMS: time.Since(state.start).Milliseconds()}, TerminalOriginSpawn)
+			return
+		}
+	}
 
 	runCtx := ctx
 	if req.Timeout > 0 {
@@ -533,6 +542,9 @@ func (state *executeRunState) writeTerminal(meta map[string]string, final harnes
 		state.log.WriteOverride(agentcore.EventOverride, state.req.OverridePayload)
 	}
 	state.log.WriteEnd(meta, final)
+	if state.req.ContinuationLocators != nil && state.log.Path() != "" && state.log.EndWritten() {
+		_ = state.req.ContinuationLocators.MarkComplete(state.req.SessionID)
+	}
 }
 
 func (state *executeRunState) emitFinal(meta map[string]string, at time.Time, final harnesses.FinalData) {
