@@ -229,7 +229,7 @@ func TestPortableRuntimeActivationAssemblesProjectionSeeds(t *testing.T) {
 	var firstOutput harnesses.PortableRuntimeGuestPath
 	for _, entrypoint := range []string{"fixture", "fixture-shared"} {
 		recipe, ok := plan.EntrypointRecipe(entrypoint)
-		if !ok || len(recipe.immutableBindings) != 1 {
+		if !ok || len(recipe.immutableBindings) != 1 || recipe.launcherPath != filepath.Join(bundle.RuntimeRoot(), filepath.FromSlash(namespaceLauncherTarget)) {
 			t.Fatalf("%s recipe = %#v, %t", entrypoint, recipe, ok)
 		}
 		binding := recipe.immutableBindings[0]

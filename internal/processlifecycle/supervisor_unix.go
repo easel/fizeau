@@ -110,7 +110,7 @@ func runUnixBatchSupervisor() int {
 		return 126
 	}
 	if config.Portable != nil {
-		if err := verifyPortableLaunchDescriptor(config.Path); err != nil {
+		if err := verifyPortableLaunchDescriptor(config.Portable.Launcher); err != nil {
 			writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
 			return 126
 		}
@@ -231,18 +231,9 @@ func runUnixBatchSupervisor() int {
 // verifyPortableLaunchDescriptor pins the executable identity at the sole
 // child-creation seam. The second stat catches replacement between open and
 // validation; the gate remains closed on every failure.
-func verifyPortableLaunchDescriptor(target string) error {
-	file, err := os.Open(target)
-	if err != nil {
-		return fmt.Errorf("open sealed portable launcher: %w", err)
-	}
-	defer file.Close()
-	opened, err := file.Stat()
-	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0o111 == 0 || opened.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("validate sealed portable launcher")
-	}
-	current, err := os.Stat(target)
-	if err != nil || !os.SameFile(opened, current) || !current.Mode().IsRegular() || current.Mode().Perm() != opened.Mode().Perm() {
+func verifyPortableLaunchDescriptor(launcher portableNamespaceLauncherConfig) error {
+	opened, err := NewPortableNamespaceLauncher(launcher.Path)
+	if err != nil || opened.digest != launcher.Digest {
 		return fmt.Errorf("revalidate sealed portable launcher")
 	}
 	return nil
@@ -284,6 +275,22 @@ func runUnixBatchChild() int {
 		}
 	}
 	if len(config.Args) == 0 || config.Path == "" {
+		return 126
+	}
+	if config.Portable != nil {
+		// Re-open and revalidate immediately before exec. The direct child is
+		// always the activation-selected launcher; the governed harness target
+		// is opaque, bounded protocol data rather than another spawn decision.
+		if err := verifyPortableLaunchDescriptor(config.Portable.Launcher); err != nil {
+			return 126
+		}
+		environment, err := config.Portable.protocolEnvironment()
+		if err != nil {
+			return 126
+		}
+		if err := syscall.Exec(config.Portable.Launcher.Path, []string{config.Portable.Launcher.Path}, environment); err != nil { // #nosec G204 -- sealed activation launcher descriptor was revalidated at this sole child seam
+			return 126
+		}
 		return 126
 	}
 	if err := syscall.Exec(config.Path, config.Args, config.Env); err != nil { // #nosec G204 -- target is the already-resolved builtin harness command

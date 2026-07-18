@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/easel/fizeau/internal/harnesses"
-	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 const activationChild = "activation"
@@ -103,30 +102,30 @@ type ActivationRecipe struct {
 	requiredAbsent    []harnesses.PortableRuntimeGuestPath
 	identity          activationIdentity
 	lease             *activationSubprocessLease
+	launcherPath      string
 }
 
 // PortableRuntimeNamespaceRecipe marks this value as the opaque recipe that
 // runner bindings may retain for the canonical spawn seam.
 func (ActivationRecipe) PortableRuntimeNamespaceRecipe() {}
 
+// PortableNamespaceLauncherPath is a narrow activation-to-lifecycle handoff.
+// The lifecycle package descriptor-opens and seals this path itself, keeping
+// activation process-free.
+func (r ActivationRecipe) PortableNamespaceLauncherPath() string { return r.launcherPath }
+
 // AcquirePortableNamespaceLease is the sole bridge from activation-owned
 // identity and serialization state to the lifecycle spawn seam. The returned
 // value intentionally contains no paths, mounts, or recipe details.
-func (r ActivationRecipe) AcquirePortableNamespaceLease(ctx context.Context) (processlifecycle.PortableNamespaceLease, error) {
-	identity, err := processlifecycle.NewPortableNamespaceIdentity(r.identity.effectiveUID, r.identity.primaryGID)
-	if err != nil {
-		return processlifecycle.PortableNamespaceLease{}, activationError("activation identity")
+func (r ActivationRecipe) AcquirePortableNamespaceLease(ctx context.Context) (uid, gid int, release func(), err error) {
+	if r.identity.effectiveUID <= 0 || r.identity.primaryGID <= 0 {
+		return 0, 0, nil, activationError("activation identity")
 	}
-	release, err := r.lease.acquire(ctx)
+	release, err = r.lease.acquire(ctx)
 	if err != nil {
-		return processlifecycle.PortableNamespaceLease{}, err
+		return 0, 0, nil, err
 	}
-	lease, err := processlifecycle.NewPortableNamespaceLease(identity, release)
-	if err != nil {
-		release()
-		return processlifecycle.PortableNamespaceLease{}, err
-	}
-	return lease, nil
+	return r.identity.effectiveUID, r.identity.primaryGID, release, nil
 }
 
 type activationImmutableBinding struct {
@@ -330,6 +329,10 @@ func assembleActivationWithIdentity(ctx context.Context, runtimeRoot, writableRo
 	sort.Strings(entrypointNames)
 	entrypoints := make(map[string]activationEntrypoint, len(entrypointNames))
 	lease := newActivationSubprocessLease()
+	var launcher string
+	if len(entrypointNames) > 0 {
+		launcher = filepath.Join(runtimeRoot, filepath.FromSlash(namespaceLauncherTarget))
+	}
 	assembledProjections := make(map[harnesses.PortableRuntimeGuestPath]struct{})
 	for _, name := range entrypointNames {
 		entrypoint := plan.manifest.Entrypoints[name]
@@ -343,6 +346,7 @@ func assembleActivationWithIdentity(ctx context.Context, runtimeRoot, writableRo
 			requiredAbsent: append([]harnesses.PortableRuntimeGuestPath(nil), entrypoint.ExecutionConstraints.RequiredAbsentPaths...),
 			identity:       identity,
 			lease:          lease,
+			launcherPath:   launcher,
 		}
 		for _, projection := range entrypoint.StateProjections {
 			projectionTarget := activationRelativeGuestPath(projection.Directory)
@@ -524,6 +528,7 @@ func cloneActivationRecipe(src ActivationRecipe) ActivationRecipe {
 		requiredAbsent:    append([]harnesses.PortableRuntimeGuestPath(nil), src.requiredAbsent...),
 		identity:          src.identity,
 		lease:             src.lease,
+		launcherPath:      src.launcherPath,
 	}
 }
 
