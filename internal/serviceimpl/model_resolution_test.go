@@ -136,6 +136,47 @@ func TestResolveModelConstraintPreservesConcretePrecedenceAndPinScope(t *testing
 	})
 }
 
+func TestResolveModelConstraintPrefersExactProviderQualifiedIdentity(t *testing.T) {
+	inputs := modelResolutionInputs(
+		"openai/gpt-5.6-sol",
+		"openai/gpt-5.6-terra",
+		"openai/gpt-5.6-terra-pro",
+		"openai/gpt-5.6-luna",
+	)
+
+	for _, want := range []string{
+		"openai/gpt-5.6-sol",
+		"openai/gpt-5.6-terra",
+		"openai/gpt-5.6-terra-pro",
+		"openai/gpt-5.6-luna",
+	} {
+		t.Run(want, func(t *testing.T) {
+			result, err := ResolveModelConstraint(ModelConstraintRequest{Model: want}, inputs, nil)
+			if err != nil {
+				t.Fatalf("ResolveModelConstraint(%q): %v", want, err)
+			}
+			if result.Model != want {
+				t.Fatalf("model = %q, want exact provider-qualified ID %q", result.Model, want)
+			}
+		})
+	}
+
+	t.Run("bare alias remains deterministically ambiguous", func(t *testing.T) {
+		_, err := ResolveModelConstraint(ModelConstraintRequest{Model: "gpt-5.6-terra"}, inputs, nil)
+		var constraintErr *ModelConstraintError
+		if !errors.As(err, &constraintErr) {
+			t.Fatalf("error = %T %v, want *ModelConstraintError", err, err)
+		}
+		if constraintErr.Kind != ModelConstraintErrorAmbiguous {
+			t.Fatalf("error kind = %q, want %q", constraintErr.Kind, ModelConstraintErrorAmbiguous)
+		}
+		wantCandidates := []string{"openai/gpt-5.6-terra", "openai/gpt-5.6-terra-pro"}
+		if !slices.Equal(constraintErr.Candidates, wantCandidates) {
+			t.Fatalf("candidates = %v, want %v", constraintErr.Candidates, wantCandidates)
+		}
+	})
+}
+
 func modelResolutionInputs(models ...string) routing.Inputs {
 	return routing.Inputs{Harnesses: []routing.HarnessEntry{{
 		Name: "fiz",
