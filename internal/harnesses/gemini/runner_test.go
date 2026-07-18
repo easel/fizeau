@@ -73,7 +73,8 @@ EOF
 	defer cancel()
 
 	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
-		Prompt: "test prompt",
+		Prompt:  "test prompt",
+		WorkDir: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -163,7 +164,10 @@ EOF
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			ch, err := (&Runner{Binary: binary, BaseArgs: []string{}}).Execute(ctx, harnesses.ExecuteRequest{Prompt: "cost"})
+			ch, err := (&Runner{Binary: binary, BaseArgs: []string{}}).Execute(ctx, harnesses.ExecuteRequest{
+				Prompt:  "cost",
+				WorkDir: t.TempDir(),
+			})
 			if err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
@@ -240,7 +244,8 @@ func TestRunner_Execute_StdinPromptMode(t *testing.T) {
 	defer cancel()
 
 	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
-		Prompt: "prompt over stdin",
+		Prompt:  "prompt over stdin",
+		WorkDir: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -278,6 +283,7 @@ func TestRunner_Execute_RejectsReasoning(t *testing.T) {
 	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
 		Prompt:    "prompt",
 		Reasoning: "high",
+		WorkDir:   t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -541,7 +547,7 @@ EOF
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test"})
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test", WorkDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -600,6 +606,7 @@ sleep 10
 	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
 		Prompt:  "test",
 		Timeout: 100 * time.Millisecond,
+		WorkDir: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -656,7 +663,7 @@ sleep 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test"})
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{Prompt: "test", WorkDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
