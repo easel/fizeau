@@ -64,11 +64,12 @@ func (s *service) executeCoordinatorRequest(req ServiceExecuteRequest, decision 
 
 		StallMaxReadOnlyIterations: stallMaxReadOnlyIterations,
 
-		SessionLogDir:    req.SessionLogDir,
-		LifecycleBaseDir: s.serviceSessionLogDir(),
-		Metadata:         req.Metadata,
-		FinalMetadata:    metaWithRoleAndCorrelation(req.Metadata, req.Role, req.CorrelationID),
-		CollisionWarning: executeCollisionWarning(req),
+		SessionLogDir:        req.SessionLogDir,
+		LifecycleBaseDir:     s.serviceSessionLogDir(),
+		ContinuationLocators: s.continuationLocators,
+		Metadata:             req.Metadata,
+		FinalMetadata:        metaWithRoleAndCorrelation(req.Metadata, req.Role, req.CorrelationID),
+		CollisionWarning:     executeCollisionWarning(req),
 
 		Decision: serviceimpl.ExecuteDecision{
 			Harness:               decision.Harness,

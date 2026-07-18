@@ -980,9 +980,10 @@ type service struct {
 	registry *harnesses.Registry
 	// routeRunners is the single authority for both route-neutral capability
 	// inventory and exact five-field execution instances.
-	routeRunners     *harnesses.RouteRunnerAuthority
-	refreshScheduler *routehealth.RefreshScheduler
-	hub              *serviceimpl.SessionHub
+	routeRunners         *harnesses.RouteRunnerAuthority
+	refreshScheduler     *routehealth.RefreshScheduler
+	hub                  *serviceimpl.SessionHub
+	continuationLocators *serviceimpl.ContinuationLocatorStore
 
 	routeHealth      *routehealth.Store
 	routeStatusCache *routehealth.DecisionStore[*RouteDecision]
@@ -1095,12 +1096,21 @@ func New(opts ServiceOptions) (FizeauService, error) {
 		}
 		opts.ServiceConfig = sc
 	}
+	configuredLogDir := ""
+	if opts.ServiceConfig != nil {
+		configuredLogDir = opts.ServiceConfig.SessionLogDir()
+	}
+	locators, err := serviceimpl.NewContinuationLocatorStore(serviceimpl.SessionLogDir(opts.SessionLogDir, configuredLogDir))
+	if err != nil {
+		return nil, fmt.Errorf("agent.New: continuation locator: %w", err)
+	}
 	svc := &service{
-		opts:         opts,
-		registry:     harnesses.NewRegistry(),
-		routeRunners: defaultRouteRunnerAuthority(),
-		hub:          serviceimpl.NewSessionHub(),
-		runtime:      serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
+		opts:                 opts,
+		registry:             harnesses.NewRegistry(),
+		routeRunners:         defaultRouteRunnerAuthority(),
+		hub:                  serviceimpl.NewSessionHub(),
+		continuationLocators: locators,
+		runtime:              serviceimpl.NewRuntime(serviceimpl.RuntimeDeps{}),
 		catalog: serviceimpl.NewCatalogCache(serviceimpl.CatalogCacheOptions{
 			AsyncRefreshTimeout:  opts.catalogRefreshTimeout(),
 			DiscoveryUnsupported: ErrDiscoveryUnsupported(),
