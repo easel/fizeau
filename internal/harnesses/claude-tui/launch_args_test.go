@@ -113,6 +113,7 @@ func TestClaudeTuiLaunchModel(t *testing.T) {
 	cases := map[string]string{
 		"":                  "",
 		"sonnet-4.6":        "sonnet",
+		"sonnet-5":          "sonnet",
 		"opus-4.8":          "opus",
 		"opus-4.7":          "opus",
 		"claude-haiku-4-5":  "haiku",
@@ -127,6 +128,23 @@ func TestClaudeTuiLaunchModel(t *testing.T) {
 	for in, want := range cases {
 		if got := claudeTuiLaunchModel(in); got != want {
 			t.Errorf("claudeTuiLaunchModel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestClaudeTuiLaunchModelSonnet5UsesTierAlias proves a dynamically
+// discovered Sonnet 5 route reaches the Claude TUI as --model sonnet, the
+// stable CLI tier alias accepted by the launcher.
+func TestClaudeTuiLaunchModelSonnet5UsesTierAlias(t *testing.T) {
+	const settingsJSON = `{"hooks":{}}`
+	got := buildLaunchArgs(settingsJSON, claudeTuiLaunchModel("sonnet-5"))
+	want := []string{"--permission-mode", "bypassPermissions", "--settings", settingsJSON, "--model", "sonnet"}
+	if len(got) != len(want) {
+		t.Fatalf("buildLaunchArgs(..., sonnet-5) = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("buildLaunchArgs(..., sonnet-5)[%d] = %q, want %q (full: %q)", i, got[i], want[i], got)
 		}
 	}
 }

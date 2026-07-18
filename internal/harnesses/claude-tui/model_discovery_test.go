@@ -515,6 +515,38 @@ func TestParseClaudeTuiModelsFable5CurrentSurface(t *testing.T) {
 	}
 }
 
+// TestParseClaudeTuiModelsSonnet5CurrentSurface locks the dynamic-discovery
+// spelling variants emitted by Claude's model picker.  Sonnet 5 is not a
+// static catalog entry: it must survive parsing as the discovered tier ID.
+func TestParseClaudeTuiModelsSonnet5CurrentSurface(t *testing.T) {
+	for name, text := range map[string]string{
+		"picker label":    "Sonnet 5 with high effort · Claude Team\n",
+		"collapsed label": "Sonnet5 with high effort · Claude Team\n",
+		"full model ID":   "--model accepts claude-sonnet-5\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			models := ParseClaudeTuiModels(text)
+			if !contains(models, "sonnet-5") {
+				t.Fatalf("ParseClaudeTuiModels(%q) = %v, want sonnet-5", text, models)
+			}
+		})
+	}
+}
+
+// TestResolveClaudeTuiFamilyAliasPrefersDiscoveredSonnet5 proves the public
+// family alias follows the model value supplied by dynamic discovery rather
+// than a static Sonnet version.
+func TestResolveClaudeTuiFamilyAliasPrefersDiscoveredSonnet5(t *testing.T) {
+	snapshot := harnesses.ModelDiscoverySnapshot{Models: []string{"sonnet-5"}}
+	resolved, err := (&Harness{}).ResolveModelAlias("sonnet", snapshot)
+	if err != nil {
+		t.Fatalf("ResolveModelAlias(sonnet) error = %v", err)
+	}
+	if resolved != "sonnet-5" {
+		t.Fatalf("ResolveModelAlias(sonnet) = %q, want sonnet-5", resolved)
+	}
+}
+
 func TestClaudeTuiModelDiscoveryCompleteRequiresRenderedPicker(t *testing.T) {
 	startup := "Fable 5 with high effort · API Usage Billing · Synaptiq"
 	if claudeTuiModelDiscoveryComplete(startup) {
