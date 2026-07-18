@@ -219,7 +219,7 @@ func TestCachedSubprocessDiscoveryIgnoresIncompletePickerCacheGeneration(t *test
 		t.Run(name, func(t *testing.T) {
 			completeModels := map[string][]string{
 				"claude-tui": {"fable-5", "fable"},
-				"codex":      {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+				"codex":      {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-terra-pro", "gpt-5.6-luna"},
 			}[name]
 			incompleteModels := map[string][]string{
 				"claude-tui": {"fable"},
@@ -278,6 +278,62 @@ func TestCachedSubprocessDiscoveryIgnoresIncompletePickerCacheGeneration(t *test
 				if _, err := os.Stat(path); err != nil {
 					t.Fatalf("expected cache generation %s: %v", path, err)
 				}
+			}
+		})
+	}
+}
+
+func TestSubprocessHarnessModelIDsCodexStaleCachePreservesAdvertisedIDs(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		advertised []string
+		absent     string
+	}{
+		{
+			name:       "all current 5.6 picker IDs",
+			advertised: []string{"gpt-5.6-terra", "gpt-5.6-terra-pro", "gpt-5.6-sol", "gpt-5.6-luna"},
+		},
+		{
+			name:       "Terra Pro is not invented when absent",
+			advertised: []string{"gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"},
+			absent:     "gpt-5.6-terra-pro",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := subprocessDiscoveryPayload{
+				CapturedAt: time.Now().UTC(),
+				Models:     append([]string(nil), test.advertised...),
+				Source:     "pty",
+			}
+			_, root := withTestDiscoveryCache(t, payload)
+			cache := &discoverycache.Cache{Root: root}
+			src := discoverycache.Source{
+				Tier:            "discovery",
+				Name:            subprocessDiscoveryCacheSourceName("codex"),
+				TTL:             subprocessDiscoveryTTL,
+				RefreshDeadline: subprocessDiscoveryRefreshDeadline,
+			}
+			data, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cache.Refresh(src, func(context.Context) ([]byte, error) { return data, nil }); err != nil {
+				t.Fatalf("seed Codex cache: %v", err)
+			}
+			path := filepath.Join(root, "discovery", subprocessDiscoveryCacheSourceName("codex")+".json")
+			old := time.Now().Add(-2 * subprocessDiscoveryTTL)
+			if err := os.Chtimes(path, old, old); err != nil {
+				t.Fatalf("age Codex cache: %v", err)
+			}
+
+			got := SubprocessHarnessModelIDs("codex", harnesses.HarnessConfig{})
+			for _, want := range test.advertised {
+				if !slices.Contains(got, want) {
+					t.Fatalf("stale Codex cache projection = %v, missing advertised %q", got, want)
+				}
+			}
+			if test.absent != "" && slices.Contains(got, test.absent) {
+				t.Fatalf("stale Codex cache projection = %v, synthesized absent %q", got, test.absent)
 			}
 		})
 	}

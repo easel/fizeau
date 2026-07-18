@@ -110,6 +110,17 @@ func collectConcreteModelCandidates(reqHarness, reqProvider, reqModel string, in
 		if harnessPin != "" && harnessPin != canonicalHarnessPin(h.Name) {
 			continue
 		}
+		// Subscription TUI harnesses have no HTTP endpoint inventory. Their
+		// SupportedModels is nevertheless concrete discovery evidence from the
+		// CLI picker, so retain it for an unscoped provider request. A provider
+		// pin still requires endpoint evidence below; this keeps the diagnostic
+		// distinction between "the picker omitted this model" and "that endpoint
+		// does not advertise it" intact.
+		if providerPin == "" && h.IsSubscription {
+			for _, id := range h.SupportedModels {
+				add(id)
+			}
+		}
 		for _, p := range h.Providers {
 			if providerPin != "" && providerPin != candidateProviderIdentity(h, p) {
 				continue

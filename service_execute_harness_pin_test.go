@@ -45,6 +45,38 @@ func TestSupportedModelsForHarnessExpandsDiscoveredClaudeNames(t *testing.T) {
 	}
 }
 
+func TestSupportedModelsForHarnessPreservesLiveCodexInventory(t *testing.T) {
+	previous := subprocessHarnessModelIDs
+	t.Cleanup(func() { subprocessHarnessModelIDs = previous })
+	advertised := []string{
+		"gpt-5.6-terra",
+		"gpt-5.6-terra-pro",
+		"gpt-5.6-sol",
+		"gpt-5.6-luna",
+	}
+	subprocessHarnessModelIDs = func(name string, _ harnesses.HarnessConfig) []string {
+		if name == "codex" {
+			return append([]string(nil), advertised...)
+		}
+		return nil
+	}
+
+	cfg, ok := harnesses.NewRegistry().Get("codex")
+	if !ok {
+		t.Fatal("codex harness is not registered")
+	}
+	// A nil catalog models a freshly released CLI model which has not yet been
+	// entered into the bundled catalog. The picker evidence remains available
+	// for exact route selection even though automatic ranking needs catalog
+	// power metadata.
+	got := supportedModelsForHarness("codex", cfg, nil)
+	for _, want := range advertised {
+		if !slices.Contains(got, want) {
+			t.Fatalf("Codex live route inventory = %v, missing %q", got, want)
+		}
+	}
+}
+
 // TestResolveExecuteRouteWithEngineForwardsPromptShape is the sole
 // same-package seam for the public request-to-routing-engine adapter. Concrete
 // execute-route validation and dispatch selection are owned and tested by
