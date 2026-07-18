@@ -4,6 +4,7 @@ package processlifecycle
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,12 +41,45 @@ type batchTargetConfig struct {
 
 const portableNamespaceProtocolVersion = 1
 
+const (
+	portableNamespaceProtocolEnvironment = "FIZEAU_PORTABLE_NAMESPACE_PROTOCOL"
+	maxPortableNamespaceProtocolBytes    = 1 << 20
+)
+
 // portableNamespaceConfig is pipe-only, versioned setup state. It is never
 // serialized to logs or a registry record.
 type portableNamespaceConfig struct {
-	Version int `json:"version"`
-	UID     int `json:"uid"`
-	GID     int `json:"gid"`
+	Version  int                             `json:"version"`
+	UID      int                             `json:"uid"`
+	GID      int                             `json:"gid"`
+	Launcher portableNamespaceLauncherConfig `json:"launcher"`
+	Target   portableNamespaceTargetConfig   `json:"target"`
+}
+
+// portableNamespaceLauncherConfig is only the sealed launcher identity. The
+// governed target stays in Target so no caller can mistake it for the direct
+// lifecycle child.
+type portableNamespaceLauncherConfig struct {
+	Path   string   `json:"path"`
+	Digest [32]byte `json:"digest"`
+}
+
+// portableNamespaceTargetConfig is the bounded protocol consumed by the
+// fixed launcher. It deliberately contains no shell expression, PATH lookup,
+// wrapper command, or fresh runner authority.
+type portableNamespaceTargetConfig struct {
+	Path string   `json:"path"`
+	Args []string `json:"args"`
+	Env  []string `json:"env"`
+	Dir  string   `json:"dir,omitempty"`
+}
+
+func (c portableNamespaceConfig) protocolEnvironment() ([]string, error) {
+	encoded, err := json.Marshal(c)
+	if err != nil || len(encoded) == 0 || len(encoded) > maxPortableNamespaceProtocolBytes {
+		return nil, fmt.Errorf("invalid portable namespace launcher protocol")
+	}
+	return []string{portableNamespaceProtocolEnvironment + "=" + base64.RawURLEncoding.EncodeToString(encoded)}, nil
 }
 
 type supervisorStartReport struct {
@@ -99,11 +133,28 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 	var portableLease *PortableNamespaceLease
 	if opts.PortableLaunch != nil {
 		if recipe, ok := opts.PortableLaunch.recipe.(portableNamespaceLeaseRecipe); ok {
-			lease, err := recipe.AcquirePortableNamespaceLease(ctx)
+			uid, gid, release, err := recipe.AcquirePortableNamespaceLease(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("acquire portable namespace lease: %w", err)
 			}
+			identity, err := NewPortableNamespaceIdentity(uid, gid)
+			if err != nil || release == nil {
+				if release != nil {
+					release()
+				}
+				return nil, fmt.Errorf("%w: portable namespace lease is invalid", ErrInvalidRecord)
+			}
+			lease, err := NewPortableNamespaceLease(identity, release)
+			if err != nil {
+				release()
+				return nil, err
+			}
 			portableLease = &lease
+			if opts.PortableLaunch.launcher == nil {
+				releasePortableLease := portableLease.release
+				releasePortableLease()
+				return nil, fmt.Errorf("%w: portable namespace launcher is required", ErrInvalidRecord)
+			}
 		}
 	}
 	leaseReleased := false
@@ -157,7 +208,11 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 		CleanupTimeout: opts.CleanupTimeout,
 	}
 	if portableLease != nil {
-		config.Portable = &portableNamespaceConfig{Version: portableNamespaceProtocolVersion, UID: portableLease.identity.uid, GID: portableLease.identity.gid}
+		config.Portable = &portableNamespaceConfig{
+			Version: portableNamespaceProtocolVersion, UID: portableLease.identity.uid, GID: portableLease.identity.gid,
+			Launcher: portableNamespaceLauncherConfig{Path: opts.PortableLaunch.launcher.path, Digest: opts.PortableLaunch.launcher.digest},
+			Target:   portableNamespaceTargetConfig{Path: target.Path, Args: append([]string(nil), target.Args...), Env: append([]string(nil), target.Environ()...), Dir: target.Dir},
+		}
 	}
 	originalExtraFiles := append([]*os.File(nil), target.ExtraFiles...)
 

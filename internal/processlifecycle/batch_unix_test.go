@@ -5,6 +5,8 @@ package processlifecycle
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -24,8 +26,8 @@ type portableNamespaceTestRecipe struct {
 
 func (portableNamespaceTestRecipe) PortableRuntimeNamespaceRecipe() {}
 
-func (r portableNamespaceTestRecipe) AcquirePortableNamespaceLease(context.Context) (PortableNamespaceLease, error) {
-	return NewPortableNamespaceLease(r.identity, func() { close(r.released) })
+func (r portableNamespaceTestRecipe) AcquirePortableNamespaceLease(context.Context) (int, int, func(), error) {
+	return r.identity.uid, r.identity.gid, func() { close(r.released) }, nil
 }
 
 func TestUnixBatchGatePersistsIdentitiesBeforeExec(t *testing.T) {
@@ -214,6 +216,75 @@ func TestUnixPortablePTYLaunchUsesSealedAttachment(t *testing.T) {
 	}
 	if err := terminal.Wait(); err != nil {
 		t.Fatalf("portable PTY Wait: %v", err)
+	}
+}
+
+func TestUnixPortableLauncherIsGatedDirectChildAndReceivesBoundProtocol(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := filepath.Join(dir, "protocol")
+	targetMarker := filepath.Join(dir, "target-ran")
+	launcher := filepath.Join(dir, "namespace-launcher")
+	launcherSource := "#!/bin/sh\nprintf '%s' \"$FIZEAU_PORTABLE_NAMESPACE_PROTOCOL\" > '" + protocolPath + "'\n"
+	if err := os.WriteFile(launcher, []byte(launcherSource), 0o700); err != nil {
+		t.Fatalf("write launcher: %v", err)
+	}
+	sealed, err := NewPortableNamespaceLauncher(launcher)
+	if err != nil {
+		t.Fatalf("NewPortableNamespaceLauncher: %v", err)
+	}
+	configR, configW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer configW.Close()
+	gateR, gateW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gateW.Close()
+	child := exec.Command(os.Args[0])
+	child.Env = lifecycleEnvironment(os.Environ(), map[string]string{
+		lifecycleRoleEnv: lifecycleRoleChild, lifecycleFDBaseEnv: "3", lifecycleExtraCountEnv: "0",
+	})
+	child.ExtraFiles = []*os.File{configR, gateR}
+	if err := child.Start(); err != nil {
+		t.Fatalf("start direct child: %v", err)
+	}
+	_ = configR.Close()
+	_ = gateR.Close()
+	config := batchTargetConfig{Path: "/bin/sh", Args: []string{"/bin/sh", "-c", "touch " + targetMarker}, Env: []string{}, Portable: &portableNamespaceConfig{
+		Version: portableNamespaceProtocolVersion, UID: 65532, GID: 65532,
+		Launcher: portableNamespaceLauncherConfig{Path: sealed.path, Digest: sealed.digest},
+		Target:   portableNamespaceTargetConfig{Path: "/bin/sh", Args: []string{"/bin/sh", "-c", "touch " + targetMarker}, Env: []string{}},
+	}}
+	if err := json.NewEncoder(configW).Encode(config); err != nil {
+		t.Fatalf("encode target protocol: %v", err)
+	}
+	if _, err := gateW.Write([]byte{1}); err != nil {
+		t.Fatalf("release gate: %v", err)
+	}
+	_ = configW.Close()
+	_ = gateW.Close()
+	if err := child.Wait(); err != nil {
+		t.Fatalf("launcher child: %v", err)
+	}
+	if _, err := os.Stat(targetMarker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("governed target ran instead of fixed launcher: %v", err)
+	}
+	encoded, err := os.ReadFile(protocolPath)
+	if err != nil {
+		t.Fatalf("read launcher protocol: %v", err)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(string(encoded))
+	if err != nil {
+		t.Fatalf("decode launcher protocol: %v", err)
+	}
+	var got portableNamespaceConfig
+	if err := json.Unmarshal(decoded, &got); err != nil {
+		t.Fatalf("unmarshal launcher protocol: %v", err)
+	}
+	if got.Version != portableNamespaceProtocolVersion || got.Launcher.Path != launcher || !equalStrings(got.Target.Args, config.Portable.Target.Args) || !equalStrings(got.Target.Env, config.Portable.Target.Env) {
+		t.Fatalf("launcher protocol lost sealed identity or target: %#v", got)
 	}
 }
 

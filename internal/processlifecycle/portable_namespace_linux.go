@@ -26,6 +26,28 @@ func validatePortableNamespaceConfig(config *portableNamespaceConfig) error {
 	if config.Version != portableNamespaceProtocolVersion || config.UID <= 0 || config.GID <= 0 {
 		return fmt.Errorf("invalid portable namespace protocol")
 	}
+	// Mapping helpers use this config before a launcher has been selected. The
+	// lifecycle supervisor requires the full sealed launcher protocol below.
+	if config.Launcher.Path == "" && config.Target.Path == "" && len(config.Target.Args) == 0 && config.Target.Env == nil {
+		return nil
+	}
+	if !validPortableCommand(config.Launcher.Path) || config.Target.Path == "" || len(config.Target.Args) == 0 || config.Target.Args[0] != config.Target.Path || config.Target.Env == nil {
+		return fmt.Errorf("invalid portable namespace protocol")
+	}
+	for _, argument := range config.Target.Args {
+		if strings.IndexByte(argument, 0) >= 0 {
+			return fmt.Errorf("invalid portable namespace protocol")
+		}
+	}
+	for _, entry := range config.Target.Env {
+		name, value, ok := strings.Cut(entry, "=")
+		if !ok || !validPortableEnvironmentName(name) || strings.IndexByte(value, 0) >= 0 {
+			return fmt.Errorf("invalid portable namespace protocol")
+		}
+	}
+	if _, err := config.protocolEnvironment(); err != nil {
+		return err
+	}
 	return nil
 }
 

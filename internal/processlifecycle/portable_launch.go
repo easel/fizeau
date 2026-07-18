@@ -2,13 +2,71 @@ package processlifecycle
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 )
+
+// PortableNamespaceLauncher is the activation-verified executable identity
+// for the fixed namespace child.  It is intentionally distinct from the
+// governed harness target: the latter is data for the launcher protocol, not
+// the process lifecycle's direct child.
+type PortableNamespaceLauncher struct {
+	path   string
+	digest [sha256.Size]byte
+}
+
+// NewPortableNamespaceLauncher captures an exact, regular, owner-only
+// launcher file.  The lifecycle seam repeats this descriptor check before it
+// opens the launch gate; callers never get an accessor that could turn this
+// into a generic command runner.
+func NewPortableNamespaceLauncher(path string) (PortableNamespaceLauncher, error) {
+	if !validPortableCommand(path) {
+		return PortableNamespaceLauncher{}, fmt.Errorf("%w: portable namespace launcher path is invalid", ErrInvalidRecord)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return PortableNamespaceLauncher{}, fmt.Errorf("%w: open portable namespace launcher", ErrInvalidRecord)
+	}
+	defer file.Close()
+	before, err := file.Stat()
+	if err != nil || !validPortableLauncherFile(before) {
+		return PortableNamespaceLauncher{}, fmt.Errorf("%w: validate portable namespace launcher", ErrInvalidRecord)
+	}
+	digest, err := digestPortableLauncher(file)
+	if err != nil {
+		return PortableNamespaceLauncher{}, fmt.Errorf("%w: read portable namespace launcher", ErrInvalidRecord)
+	}
+	after, err := os.Stat(path)
+	if err != nil || !os.SameFile(before, after) || !validPortableLauncherFile(after) || before.Mode() != after.Mode() {
+		return PortableNamespaceLauncher{}, fmt.Errorf("%w: revalidate portable namespace launcher", ErrInvalidRecord)
+	}
+	return PortableNamespaceLauncher{path: path, digest: digest}, nil
+}
+
+func validPortableLauncherFile(info os.FileInfo) bool {
+	return info != nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 && info.Mode().Perm()&0o022 == 0
+}
+
+func digestPortableLauncher(file *os.File) ([sha256.Size]byte, error) {
+	var zero [sha256.Size]byte
+	if _, err := file.Seek(0, 0); err != nil {
+		return zero, err
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return zero, err
+	}
+	var digest [sha256.Size]byte
+	copy(digest[:], hash.Sum(nil))
+	return digest, nil
+}
 
 // PortableNamespaceIdentity is the single host identity authorized to back
 // the outer portable user namespace.  It deliberately has no String or JSON
@@ -60,7 +118,14 @@ type PortableLaunchRecipe interface {
 // launch attachments remain transport-neutral; only an activation-owned
 // recipe can request the Linux outer namespace protocol.
 type portableNamespaceLeaseRecipe interface {
-	AcquirePortableNamespaceLease(context.Context) (PortableNamespaceLease, error)
+	AcquirePortableNamespaceLease(context.Context) (uid, gid int, release func(), err error)
+}
+
+// portableNamespaceLauncherRecipe is deliberately optional for legacy sealed
+// attachments. Activation-owned portable recipes implement it; test and
+// transport-only attachments retain their existing no-namespace behavior.
+type portableNamespaceLauncherRecipe interface {
+	PortableNamespaceLauncherPath() string
 }
 
 // PortableLaunchAttachment seals the exact command, argv, closed environment,
@@ -73,6 +138,7 @@ type PortableLaunchAttachment struct {
 	arguments   []string
 	environment []string
 	recipe      PortableLaunchRecipe
+	launcher    *PortableNamespaceLauncher
 }
 
 // NewPortableLaunchAttachment validates and defensively owns a portable child
@@ -107,10 +173,18 @@ func NewPortableLaunchAttachment(command string, arguments, environment []string
 		}
 		seenNames[name] = struct{}{}
 	}
-	return &PortableLaunchAttachment{
+	attachment := &PortableLaunchAttachment{
 		command: command, arguments: append([]string(nil), arguments...),
 		environment: append([]string{}, environment...), recipe: recipe,
-	}, nil
+	}
+	if launcherRecipe, ok := recipe.(portableNamespaceLauncherRecipe); ok {
+		launcher, err := NewPortableNamespaceLauncher(launcherRecipe.PortableNamespaceLauncherPath())
+		if err != nil {
+			return nil, fmt.Errorf("%w: portable namespace launcher", ErrInvalidRecord)
+		}
+		attachment.launcher = &launcher
+	}
+	return attachment, nil
 }
 
 func validPortableCommand(command string) bool {
@@ -141,17 +215,18 @@ func isNilPortableRecipe(recipe PortableLaunchRecipe) bool {
 }
 
 func (a PortableLaunchAttachment) String() string {
-	return fmt.Sprintf("{ArgumentCount:%d EnvironmentCount:%d NamespaceRecipeConfigured:%t}", len(a.arguments), len(a.environment), a.recipe != nil)
+	return fmt.Sprintf("{ArgumentCount:%d EnvironmentCount:%d NamespaceRecipeConfigured:%t NamespaceLauncherConfigured:%t}", len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil)
 }
 
 func (a PortableLaunchAttachment) GoString() string { return a.String() }
 
 func (a PortableLaunchAttachment) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		ArgumentCount             int  `json:"argument_count"`
-		EnvironmentCount          int  `json:"environment_count"`
-		NamespaceRecipeConfigured bool `json:"namespace_recipe_configured"`
-	}{len(a.arguments), len(a.environment), a.recipe != nil})
+		ArgumentCount               int  `json:"argument_count"`
+		EnvironmentCount            int  `json:"environment_count"`
+		NamespaceRecipeConfigured   bool `json:"namespace_recipe_configured"`
+		NamespaceLauncherConfigured bool `json:"namespace_launcher_configured"`
+	}{len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil})
 }
 
 func (a *PortableLaunchAttachment) clone() *PortableLaunchAttachment {
@@ -161,6 +236,7 @@ func (a *PortableLaunchAttachment) clone() *PortableLaunchAttachment {
 	return &PortableLaunchAttachment{
 		command: a.command, arguments: append([]string(nil), a.arguments...),
 		environment: append([]string{}, a.environment...), recipe: a.recipe,
+		launcher: a.launcher,
 	}
 }
 
