@@ -537,7 +537,12 @@ func (h *Harness) runTurnOver(
 				}
 				diagnostic, exitCode := ptyEOFDiagnostic(exitStatus, exitKnown)
 				*seq++
-				emitFinalEvent(eventChan, *seq, startTime, "failed", diagnostic, exitCode)
+				// Generic PTY termination has no completion evidence, but it is
+				// still an adapter-owned terminal failure. Route it through the
+				// shared classifier so unrecognised, sanitized EOF evidence is
+				// explicitly typed as unknown. Recognised Claude fatal evidence
+				// retains its existing more-specific class.
+				emitClaudeFailureFinalEvent(eventChan, *seq, startTime, "failed", diagnostic, exitCode)
 				return turnEvicted
 			}
 			if chunk.ReadError != nil {
