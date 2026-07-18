@@ -3,9 +3,12 @@ package portableruntime
 import (
 	"bytes"
 	"debug/elf"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -26,7 +29,7 @@ func TestPortableRuntimeNamespaceLauncherArtifactParity(t *testing.T) {
 	if len(targets) != 2 {
 		t.Fatalf("launcher target cardinality = %d", len(targets))
 	}
-	if namespaceLauncherZigVersion != "0.16.0" || namespaceLauncherSourceVersion != 1 || !validateNamespaceLauncherSourceIdentity() {
+	if namespaceLauncherZigVersion != "0.16.0" || namespaceLauncherSourceVersion != 2 || !validateNamespaceLauncherSourceIdentity() {
 		t.Fatal("launcher source/version identity is invalid")
 	}
 	_, testFile, _, ok := runtime.Caller(0)
@@ -54,9 +57,9 @@ func TestPortableRuntimeNamespaceLauncherArtifactParity(t *testing.T) {
 	}
 	source := string(namespaceLauncherSource)
 	for _, required := range []string{
-		`source_version = 1`, `required_zig_version = "0.16.0"`, `builtin.os.tag != .linux`,
+		`source_version = 2`, `required_zig_version = "0.16.0"`, `builtin.os.tag != .linux`,
 		`builtin.abi != .musl`, `builtin.link_mode != .static`, `builtin.single_threaded`,
-		`.x86_64`, `.aarch64`, `std.process.exit(125)`,
+		`.x86_64`, `.aarch64`, `std.os.linux.execve`, `protocol_environment`,
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("launcher source is missing governed identity %q", required)
@@ -233,6 +236,123 @@ func TestPortableRuntimeNamespaceLauncherArtifactParity(t *testing.T) {
 			t.Fatalf("launcher changed environment names: %#v", got)
 		}
 	})
+}
+
+func TestPortableRuntimeNamespaceLauncherExecutesOnlyValidatedProtocol(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("actual launcher artifact test requires the host launcher target")
+	}
+	artifact, err := namespaceLauncherForTarget(harnesses.PortableRuntimeTarget{GOOS: "linux", GOARCH: "amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(t.TempDir(), "namespace-launcher")
+	if err := os.WriteFile(launcher, artifact.bytes, 0o700); err != nil {
+		t.Fatalf("write actual launcher artifact: %v", err)
+	}
+	marker := filepath.Join(t.TempDir(), "target-ran")
+	protocol := namespaceLauncherProtocol{
+		Version: 1, UID: 1, GID: 1,
+		Launcher: namespaceLauncherProtocolLauncher{Path: "/sealed/namespace-launcher", Digest: [32]byte{1}},
+		Target: namespaceLauncherProtocolTarget{
+			Path: os.Args[0],
+			Args: []string{os.Args[0], "-test.run=^TestPortableRuntimeNamespaceLauncherTargetHelper$", "--"},
+			Env:  []string{"FIZEAU_NSLAUNCHER_TARGET_MARKER=" + marker, "FIZEAU_NSLAUNCHER_EXPECTED=sealed", "PATH=/not/a/lookup/path"},
+		},
+	}
+	valid, err := encodeNamespaceLauncherProtocol(protocol)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runNamespaceLauncher(launcher, valid); err != nil {
+		t.Fatalf("valid actual launcher artifact failed: %v\n%s", err, output)
+	}
+	if got, err := os.ReadFile(marker); err != nil || string(got) != "sealed|/not/a/lookup/path" {
+		t.Fatalf("governed target result = %q, error %v", got, err)
+	}
+
+	for _, test := range []struct {
+		name     string
+		protocol string
+	}{
+		{name: "malformed", protocol: "%%%"},
+		{name: "unsupported-version", protocol: mustEncodeNamespaceLauncherProtocol(t, namespaceLauncherProtocol{Version: 2, UID: 1, GID: 1, Launcher: protocol.Launcher, Target: protocol.Target})},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.Remove(marker); err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if output, err := runNamespaceLauncher(launcher, test.protocol); err == nil {
+				t.Fatalf("invalid launcher protocol unexpectedly succeeded: %s", output)
+			}
+			if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("target ran for invalid launcher protocol: %v", err)
+			}
+		})
+	}
+
+	source := string(namespaceLauncherSource)
+	for _, forbidden := range []string{"execvpe", "std.process.Child", "std.process.Child.Run", "sh -c"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("launcher source has alternate spawn authority %q", forbidden)
+		}
+	}
+}
+
+type namespaceLauncherProtocol struct {
+	Version  int                               `json:"version"`
+	UID      int                               `json:"uid"`
+	GID      int                               `json:"gid"`
+	Launcher namespaceLauncherProtocolLauncher `json:"launcher"`
+	Target   namespaceLauncherProtocolTarget   `json:"target"`
+}
+
+type namespaceLauncherProtocolLauncher struct {
+	Path   string   `json:"path"`
+	Digest [32]byte `json:"digest"`
+}
+
+type namespaceLauncherProtocolTarget struct {
+	Path string   `json:"path"`
+	Args []string `json:"args"`
+	Env  []string `json:"env"`
+	Dir  string   `json:"dir,omitempty"`
+}
+
+func encodeNamespaceLauncherProtocol(protocol namespaceLauncherProtocol) (string, error) {
+	encoded, err := json.Marshal(protocol)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(encoded), nil
+}
+
+func mustEncodeNamespaceLauncherProtocol(t *testing.T, protocol namespaceLauncherProtocol) string {
+	t.Helper()
+	encoded, err := encodeNamespaceLauncherProtocol(protocol)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func runNamespaceLauncher(launcher, protocol string) ([]byte, error) {
+	command := exec.Command(launcher)
+	command.Env = []string{"FIZEAU_PORTABLE_NAMESPACE_PROTOCOL=" + protocol}
+	return command.CombinedOutput()
+}
+
+func TestPortableRuntimeNamespaceLauncherTargetHelper(t *testing.T) {
+	marker := os.Getenv("FIZEAU_NSLAUNCHER_TARGET_MARKER")
+	if marker == "" {
+		return
+	}
+	if err := os.WriteFile(marker, []byte(os.Getenv("FIZEAU_NSLAUNCHER_EXPECTED")+"|"+os.Getenv("PATH")), 0o600); err != nil {
+		os.Exit(2)
+	}
+	if len(os.Args) < 2 || os.Args[1] != "-test.run=^TestPortableRuntimeNamespaceLauncherTargetHelper$" {
+		os.Exit(3)
+	}
 }
 
 func assertNamespaceLauncherELF(t *testing.T, data []byte, machine elf.Machine) {
