@@ -1,6 +1,7 @@
 package processlifecycle
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -8,6 +9,42 @@ import (
 	"reflect"
 	"strings"
 )
+
+// PortableNamespaceIdentity is the single host identity authorized to back
+// the outer portable user namespace.  It deliberately has no String or JSON
+// representation: diagnostics must not disclose the activation identity.
+type PortableNamespaceIdentity struct {
+	uid int
+	gid int
+}
+
+// NewPortableNamespaceIdentity constructs the only mapping shape supported by
+// the portable launcher protocol.  Zero is deliberately rejected because it
+// would make the host root identity the mapping authority.
+func NewPortableNamespaceIdentity(uid, gid int) (PortableNamespaceIdentity, error) {
+	if uid <= 0 || gid <= 0 {
+		return PortableNamespaceIdentity{}, fmt.Errorf("%w: portable namespace identity is invalid", ErrInvalidRecord)
+	}
+	return PortableNamespaceIdentity{uid: uid, gid: gid}, nil
+}
+
+// PortableNamespaceLease couples an activation's exact mapping identity to
+// its exclusive subprocess lease.  Release is idempotent and is invoked on
+// every setup failure before a harness can be executed.
+type PortableNamespaceLease struct {
+	identity PortableNamespaceIdentity
+	release  func()
+}
+
+// NewPortableNamespaceLease creates an opaque lease handoff for an activation
+// recipe. It is intentionally an internal-package API, not a public runtime
+// configuration surface.
+func NewPortableNamespaceLease(identity PortableNamespaceIdentity, release func()) (PortableNamespaceLease, error) {
+	if identity.uid <= 0 || identity.gid <= 0 || release == nil {
+		return PortableNamespaceLease{}, fmt.Errorf("%w: portable namespace lease is invalid", ErrInvalidRecord)
+	}
+	return PortableNamespaceLease{identity: identity, release: release}, nil
+}
 
 // PortableLaunchRecipe is the opaque activation-owned recipe retained until
 // the lifecycle-owned spawn seam. Its marker deliberately has no accessors:
@@ -17,6 +54,13 @@ import (
 // harness package, which would create a processlifecycle <-> harness cycle.
 type PortableLaunchRecipe interface {
 	PortableRuntimeNamespaceRecipe()
+}
+
+// portableNamespaceLeaseRecipe is deliberately optional. Existing sealed
+// launch attachments remain transport-neutral; only an activation-owned
+// recipe can request the Linux outer namespace protocol.
+type portableNamespaceLeaseRecipe interface {
+	AcquirePortableNamespaceLease(context.Context) (PortableNamespaceLease, error)
 }
 
 // PortableLaunchAttachment seals the exact command, argv, closed environment,

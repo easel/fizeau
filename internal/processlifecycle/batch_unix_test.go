@@ -17,6 +17,17 @@ import (
 	"time"
 )
 
+type portableNamespaceTestRecipe struct {
+	identity PortableNamespaceIdentity
+	released chan struct{}
+}
+
+func (portableNamespaceTestRecipe) PortableRuntimeNamespaceRecipe() {}
+
+func (r portableNamespaceTestRecipe) AcquirePortableNamespaceLease(context.Context) (PortableNamespaceLease, error) {
+	return NewPortableNamespaceLease(r.identity, func() { close(r.released) })
+}
+
 func TestUnixBatchGatePersistsIdentitiesBeforeExec(t *testing.T) {
 	dir := t.TempDir()
 	registryDir := filepath.Join(dir, "registry")
@@ -157,6 +168,36 @@ func TestUnixPortableLaunchAttachmentRejectsBeforeSpawn(t *testing.T) {
 	}
 	if _, statErr := os.Stat(marker); !errors.Is(statErr, fs.ErrNotExist) {
 		t.Fatalf("aliased portable target started before rejection: %v", statErr)
+	}
+}
+
+func TestUnixPortableNamespaceSetupFailureReleasesLeaseBeforeHarnessExec(t *testing.T) {
+	identity, err := NewPortableNamespaceIdentity(65532, 65532)
+	if err != nil {
+		t.Fatalf("NewPortableNamespaceIdentity: %v", err)
+	}
+	marker := filepath.Join(t.TempDir(), "harness-executed")
+	released := make(chan struct{})
+	target := exec.Command(os.Args[0], "-test.run=^TestUnixPortableLaunchAttachmentSpawnHelper$")
+	target.Env = append(os.Environ(), "FIZEAU_PORTABLE_LAUNCH_MARKER="+marker)
+	attachment, err := NewPortableLaunchAttachment(target.Path, target.Args[1:], target.Env, portableNamespaceTestRecipe{identity: identity, released: released})
+	if err != nil {
+		t.Fatalf("NewPortableLaunchAttachment: %v", err)
+	}
+	batch, startErr := StartBatch(context.Background(), target, BatchOptions{Harness: "portable", Registry: NewMemoryRegistry(), PortableLaunch: attachment})
+	if startErr == nil {
+		_ = batch.Stop()
+		_ = batch.Wait()
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("portable namespace lease was not released")
+	}
+	if startErr != nil {
+		if _, statErr := os.Stat(marker); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Fatalf("harness executed after namespace setup failure: %v", statErr)
+		}
 	}
 }
 

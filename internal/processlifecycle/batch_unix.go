@@ -28,13 +28,24 @@ const (
 )
 
 type batchTargetConfig struct {
-	Path           string        `json:"path"`
-	Args           []string      `json:"args"`
-	Env            []string      `json:"env"`
-	Dir            string        `json:"dir,omitempty"`
-	PTY            bool          `json:"pty,omitempty"`
-	GracePeriod    time.Duration `json:"grace_period"`
-	CleanupTimeout time.Duration `json:"cleanup_timeout"`
+	Path           string                   `json:"path"`
+	Args           []string                 `json:"args"`
+	Env            []string                 `json:"env"`
+	Dir            string                   `json:"dir,omitempty"`
+	PTY            bool                     `json:"pty,omitempty"`
+	GracePeriod    time.Duration            `json:"grace_period"`
+	CleanupTimeout time.Duration            `json:"cleanup_timeout"`
+	Portable       *portableNamespaceConfig `json:"portable,omitempty"`
+}
+
+const portableNamespaceProtocolVersion = 1
+
+// portableNamespaceConfig is pipe-only, versioned setup state. It is never
+// serialized to logs or a registry record.
+type portableNamespaceConfig struct {
+	Version int `json:"version"`
+	UID     int `json:"uid"`
+	GID     int `json:"gid"`
 }
 
 type supervisorStartReport struct {
@@ -46,13 +57,14 @@ type supervisorStartReport struct {
 // Batch owns one supervised Unix batch process and its durable containment
 // lease. The wrapped command is started and waited only by this handle.
 type Batch struct {
-	cmd            *exec.Cmd
-	lease          *Lease
-	backend        *unixBackend
-	control        *os.File
-	request        context.Context
-	cleanupTimeout time.Duration
-	gracePeriod    time.Duration
+	cmd             *exec.Cmd
+	lease           *Lease
+	backend         *unixBackend
+	control         *os.File
+	request         context.Context
+	cleanupTimeout  time.Duration
+	gracePeriod     time.Duration
+	portableRelease func()
 
 	stopOnce sync.Once
 	stopErr  error
@@ -84,6 +96,29 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 	if err := validatePortableLaunchTarget(target, opts.PortableLaunch); err != nil {
 		return nil, err
 	}
+	var portableLease *PortableNamespaceLease
+	if opts.PortableLaunch != nil {
+		if recipe, ok := opts.PortableLaunch.recipe.(portableNamespaceLeaseRecipe); ok {
+			lease, err := recipe.AcquirePortableNamespaceLease(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("acquire portable namespace lease: %w", err)
+			}
+			portableLease = &lease
+		}
+	}
+	leaseReleased := false
+	leaseHandedOff := false
+	releasePortableLease := func() {
+		if !leaseReleased && portableLease != nil {
+			leaseReleased = true
+			portableLease.release()
+		}
+	}
+	defer func() {
+		if portableLease != nil && !leaseHandedOff && !leaseReleased {
+			releasePortableLease()
+		}
+	}()
 	if opts.Harness == "" {
 		return nil, fmt.Errorf("%w: harness is required", ErrInvalidRecord)
 	}
@@ -120,6 +155,9 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 		PTY:            terminal,
 		GracePeriod:    opts.GracePeriod,
 		CleanupTimeout: opts.CleanupTimeout,
+	}
+	if portableLease != nil {
+		config.Portable = &portableNamespaceConfig{Version: portableNamespaceProtocolVersion, UID: portableLease.identity.uid, GID: portableLease.identity.gid}
 	}
 	originalExtraFiles := append([]*os.File(nil), target.ExtraFiles...)
 
@@ -233,8 +271,9 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 	}
 	batch := &Batch{
 		cmd: target, lease: lease, backend: backend, control: controlW, request: ctx,
-		cleanupTimeout: opts.CleanupTimeout, gracePeriod: opts.GracePeriod, waitDone: make(chan struct{}),
+		cleanupTimeout: opts.CleanupTimeout, gracePeriod: opts.GracePeriod, waitDone: make(chan struct{}), portableRelease: releasePortableLease,
 	}
+	leaseHandedOff = true // Batch now owns the activation lease release callback.
 	go func() {
 		batch.waitErr = target.Wait()
 		close(batch.waitDone)
@@ -285,6 +324,12 @@ func (b *Batch) Wait() error {
 }
 
 func (b *Batch) stop() error {
+	defer func() {
+		if b.portableRelease != nil {
+			b.portableRelease()
+			b.portableRelease = nil
+		}
+	}()
 	cleanupCtx, cancel := CleanupContext(b.request, b.cleanupTimeout)
 	defer cancel()
 	beginErr := b.lease.BeginCleanup(cleanupCtx)
