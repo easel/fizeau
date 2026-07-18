@@ -112,7 +112,7 @@ func (r *Runner) HealthCheck(ctx context.Context) error {
 // JSON-derived events on the returned channel.
 func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
 	binary := r.Binary
-	if binary == "" {
+	if _, bound := r.PortableRuntimeBinding(); !bound && binary == "" {
 		resolved, err := osexec.LookPath("opencode")
 		if err != nil {
 			return nil, fmt.Errorf("opencode binary not found: %w", err)
@@ -216,6 +216,14 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	defer cancel()
 
 	cmd := harnesses.HarnessBatchCommand(binary, args...)
+	var portableLaunch *processlifecycle.PortableLaunchAttachment
+	if binding, bound := r.PortableRuntimeBinding(); bound {
+		boundCmd, attachment, buildErr := harnesses.BuildPortableRuntimeBatchCommand(binding, base, args[len(base):])
+		if buildErr != nil {
+			return nil, -1, "", buildErr, "failed"
+		}
+		cmd, portableLaunch = boundCmd, attachment
+	}
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
@@ -230,6 +238,7 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "opencode", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
+		PortableLaunch: portableLaunch,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"

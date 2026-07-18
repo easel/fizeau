@@ -129,7 +129,7 @@ func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-c
 		return nil, err
 	}
 	binary := r.Binary
-	if binary == "" {
+	if _, bound := r.PortableRuntimeBinding(); !bound && binary == "" {
 		resolved, err := osexec.LookPath("gemini")
 		if err != nil {
 			return nil, fmt.Errorf("gemini binary not found: %w", err)
@@ -225,7 +225,16 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	defer cancel()
 
 	cmd := harnesses.HarnessBatchCommand(binary, args...)
-	cmd.Env = geminiPortableRunnerEnvironment(os.Environ())
+	var portableLaunch *processlifecycle.PortableLaunchAttachment
+	if binding, bound := r.PortableRuntimeBinding(); bound {
+		boundCmd, attachment, buildErr := harnesses.BuildPortableRuntimeBatchCommand(binding, base, args[len(base):])
+		if buildErr != nil {
+			return nil, -1, "", buildErr, "failed"
+		}
+		cmd, portableLaunch = boundCmd, attachment
+	} else {
+		cmd.Env = geminiPortableRunnerEnvironment(os.Environ())
+	}
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
@@ -240,6 +249,7 @@ func (r *Runner) runBuffered(ctx context.Context, binary string, req harnesses.E
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "gemini", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
+		PortableLaunch: portableLaunch,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"

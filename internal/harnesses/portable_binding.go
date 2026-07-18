@@ -3,9 +3,12 @@ package harnesses
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 // PortableRuntimeNamespaceRecipe is the opaque activation-owned namespace
@@ -323,6 +326,30 @@ func (b PortableRuntimeRunnerBinding) BuildCommand(registryArgv, requestArgv []s
 		command: command, arguments: arguments, environment: environment,
 		namespaceRecipe: b.namespaceRecipe,
 	}, nil
+}
+
+// BuildPortableRuntimeBatchCommand turns a bound portable runner recipe into
+// the sole command passed to the lifecycle-owned spawn seam. Registry argv
+// and request argv remain distinct so the manifest's fixed prefix is always
+// ordered before them. The returned attachment makes StartBatch reject any
+// later command, argv, or environment substitution.
+//
+// Callers must use this only for an activated binding. Unbound runners retain
+// their normal configured-Binary/PATH discovery behavior.
+func BuildPortableRuntimeBatchCommand(binding PortableRuntimeRunnerBinding, registryArgv, requestArgv []string) (*exec.Cmd, *processlifecycle.PortableLaunchAttachment, error) {
+	child, err := binding.BuildCommand(registryArgv, requestArgv)
+	if err != nil {
+		return nil, nil, err
+	}
+	attachment, err := processlifecycle.NewPortableLaunchAttachment(
+		child.Command(), child.Arguments(), child.Environment(), child.NamespaceRecipe(),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := HarnessBatchCommand(child.Command(), child.Arguments()...)
+	cmd.Env = child.Environment()
+	return cmd, attachment, nil
 }
 
 // PortableRuntimeRunnerBinder is the one generic activation-facing contract
