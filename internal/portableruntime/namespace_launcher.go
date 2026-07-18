@@ -12,7 +12,7 @@ import (
 
 const (
 	namespaceLauncherZigVersion    = "0.16.0"
-	namespaceLauncherSourceVersion = 1
+	namespaceLauncherSourceVersion = 2
 )
 
 var (
