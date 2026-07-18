@@ -472,8 +472,8 @@ func TestRunTurnPTYEOFPreservesSanitizedExitEvidence(t *testing.T) {
 				final.FinalCostSource != harnesses.CostSourceUnknown {
 				t.Fatalf("EOF failure fabricated completion evidence: %+v", final)
 			}
-			if final.RoutingActual != nil {
-				t.Fatalf("generic EOF fabricated a typed route failure: %+v", final.RoutingActual)
+			if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" || final.RoutingActual.FailureClass != "unknown" {
+				t.Fatalf("generic EOF routing actual = %+v, want claude-tui unknown failure", final.RoutingActual)
 			}
 		})
 	}
