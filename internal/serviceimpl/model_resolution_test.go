@@ -177,6 +177,55 @@ func TestResolveModelConstraintPrefersExactProviderQualifiedIdentity(t *testing.
 	})
 }
 
+func TestResolveModelConstraintProjectsSubscriptionTUIPickerEvidence(t *testing.T) {
+	advertised := []string{
+		"gpt-5.6-terra",
+		"gpt-5.6-terra-pro",
+		"gpt-5.6-sol",
+		"gpt-5.6-luna",
+	}
+	inputs := routing.Inputs{Harnesses: []routing.HarnessEntry{{
+		Name:              "codex",
+		Surface:           "codex",
+		IsSubscription:    true,
+		SupportedModels:   append([]string(nil), advertised...),
+		AutoRoutingModels: append([]string(nil), advertised...),
+	}}}
+
+	for _, want := range advertised {
+		result, err := ResolveModelConstraint(ModelConstraintRequest{Harness: "codex", Model: want}, inputs, nil)
+		if err != nil {
+			t.Fatalf("ResolveModelConstraint(%q): %v", want, err)
+		}
+		if result.Model != want {
+			t.Fatalf("ResolveModelConstraint(%q) = %q, want live picker identity", want, result.Model)
+		}
+	}
+
+	// A provider pin asks for endpoint-specific evidence. The same live TUI
+	// picker evidence must not be mislabeled as an endpoint advertisement.
+	_, err := ResolveModelConstraint(ModelConstraintRequest{
+		Harness:  "codex",
+		Provider: "codex@missing-endpoint",
+		Model:    "gpt-5.6-terra-pro",
+	}, inputs, nil)
+	var constraintErr *ModelConstraintError
+	if !errors.As(err, &constraintErr) || constraintErr.Kind != ModelConstraintErrorNoMatch {
+		t.Fatalf("provider-pinned resolution error = %T %v, want no endpoint evidence", err, err)
+	}
+
+	omitted := routing.Inputs{Harnesses: []routing.HarnessEntry{{
+		Name:            "codex",
+		Surface:         "codex",
+		IsSubscription:  true,
+		SupportedModels: []string{"gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"},
+	}}}
+	_, err = ResolveModelConstraint(ModelConstraintRequest{Harness: "codex", Model: "gpt-5.6-terra-pro"}, omitted, nil)
+	if !errors.As(err, &constraintErr) || constraintErr.Kind != ModelConstraintErrorNoMatch {
+		t.Fatalf("omitted picker model error = %T %v, want no-match", err, err)
+	}
+}
+
 func modelResolutionInputs(models ...string) routing.Inputs {
 	return routing.Inputs{Harnesses: []routing.HarnessEntry{{
 		Name: "fiz",
