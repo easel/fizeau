@@ -56,6 +56,14 @@ func StartPTY(ctx context.Context, target *exec.Cmd, size PTYSize, opts BatchOpt
 // then delegates to StartPTY. A nil env inherits the owner environment; a
 // non-nil env is the exact child environment.
 func StartPTYCommand(ctx context.Context, command string, args []string, workdir string, env []string, size PTYSize, opts BatchOptions) (*PTY, error) {
+	if opts.PortableLaunch != nil {
+		target, err := opts.PortableLaunch.commandForPTY(command, args, env)
+		if err != nil {
+			return nil, err
+		}
+		target.Dir = workdir
+		return StartPTY(ctx, target, size, opts)
+	}
 	resolved, err := exec.LookPath(command)
 	if err != nil {
 		return nil, err
