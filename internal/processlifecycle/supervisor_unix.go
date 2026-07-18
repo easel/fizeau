@@ -105,6 +105,16 @@ func runUnixBatchSupervisor() int {
 	if config.CleanupTimeout <= 0 {
 		config.CleanupTimeout = defaultBatchCleanupTimeout
 	}
+	if err := validatePortableNamespaceConfig(config.Portable); err != nil {
+		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+		return 126
+	}
+	if config.Portable != nil {
+		if err := verifyPortableLaunchDescriptor(config.Path); err != nil {
+			writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+			return 126
+		}
+	}
 	_ = configFile.Close()
 	select {
 	case <-parentGone:
@@ -146,12 +156,29 @@ func runUnixBatchSupervisor() int {
 	child.Stdout = os.Stdout
 	child.Stderr = os.Stderr
 	child.SysProcAttr = lifecycleChildSysProcAttr(config.PTY)
+	if config.Portable != nil {
+		child.SysProcAttr, err = lifecyclePortableChildSysProcAttr(config.PTY)
+		if err != nil {
+			closeFiles(childConfigR, childConfigW)
+			writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+			return 126
+		}
+	}
 	if err := child.Start(); err != nil {
 		closeFiles(childConfigR, childConfigW)
 		writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
 		return 126
 	}
 	_ = childConfigR.Close()
+	if config.Portable != nil {
+		if err := writePortableNamespaceMaps(child.Process.Pid, *config.Portable); err != nil {
+			_ = childConfigW.Close()
+			_ = child.Process.Kill()
+			_ = child.Wait()
+			writeSupervisorReport(reportFile, supervisorStartReport{Error: err.Error()})
+			return 126
+		}
+	}
 	if err := json.NewEncoder(childConfigW).Encode(config); err != nil {
 		_ = childConfigW.Close()
 		_ = child.Process.Kill()
@@ -199,6 +226,26 @@ func runUnixBatchSupervisor() int {
 	}
 	cleanupSupervisorGroup(pgid, config.GracePeriod, config.CleanupTimeout)
 	return processExitCode(waitErr)
+}
+
+// verifyPortableLaunchDescriptor pins the executable identity at the sole
+// child-creation seam. The second stat catches replacement between open and
+// validation; the gate remains closed on every failure.
+func verifyPortableLaunchDescriptor(target string) error {
+	file, err := os.Open(target)
+	if err != nil {
+		return fmt.Errorf("open sealed portable launcher: %w", err)
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0o111 == 0 || opened.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("validate sealed portable launcher")
+	}
+	current, err := os.Stat(target)
+	if err != nil || !os.SameFile(opened, current) || !current.Mode().IsRegular() || current.Mode().Perm() != opened.Mode().Perm() {
+		return fmt.Errorf("revalidate sealed portable launcher")
+	}
+	return nil
 }
 
 func runUnixBatchChild() int {

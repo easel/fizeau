@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 )
 
 const activationChild = "activation"
@@ -107,6 +108,26 @@ type ActivationRecipe struct {
 // PortableRuntimeNamespaceRecipe marks this value as the opaque recipe that
 // runner bindings may retain for the canonical spawn seam.
 func (ActivationRecipe) PortableRuntimeNamespaceRecipe() {}
+
+// AcquirePortableNamespaceLease is the sole bridge from activation-owned
+// identity and serialization state to the lifecycle spawn seam. The returned
+// value intentionally contains no paths, mounts, or recipe details.
+func (r ActivationRecipe) AcquirePortableNamespaceLease(ctx context.Context) (processlifecycle.PortableNamespaceLease, error) {
+	identity, err := processlifecycle.NewPortableNamespaceIdentity(r.identity.effectiveUID, r.identity.primaryGID)
+	if err != nil {
+		return processlifecycle.PortableNamespaceLease{}, activationError("activation identity")
+	}
+	release, err := r.lease.acquire(ctx)
+	if err != nil {
+		return processlifecycle.PortableNamespaceLease{}, err
+	}
+	lease, err := processlifecycle.NewPortableNamespaceLease(identity, release)
+	if err != nil {
+		release()
+		return processlifecycle.PortableNamespaceLease{}, err
+	}
+	return lease, nil
+}
 
 type activationImmutableBinding struct {
 	runtimeGuestTarget string
