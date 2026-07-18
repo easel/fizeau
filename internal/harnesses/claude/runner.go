@@ -223,7 +223,7 @@ func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-c
 	}
 
 	binary := r.Binary
-	if binary == "" {
+	if _, bound := r.PortableRuntimeBinding(); !bound && binary == "" {
 		resolved, err := osexec.LookPath("claude")
 		if err != nil {
 			return nil, fmt.Errorf("claude binary not found: %w", err)
@@ -404,6 +404,14 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	defer cancel()
 
 	cmd := harnesses.HarnessBatchCommand(binary, args...)
+	var portableLaunch *processlifecycle.PortableLaunchAttachment
+	if binding, bound := r.PortableRuntimeBinding(); bound {
+		boundCmd, attachment, buildErr := harnesses.BuildPortableRuntimeBatchCommand(binding, base, args[len(base):])
+		if buildErr != nil {
+			return nil, -1, "", buildErr, "failed"
+		}
+		cmd, portableLaunch = boundCmd, attachment
+	}
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
@@ -418,6 +426,7 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
+		PortableLaunch: portableLaunch,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"
@@ -546,7 +555,8 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 // rejected stream-json flags. It surfaces the captured stdout as a single
 // text_delta event so callers still receive the model's text.
 func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.ExecuteRequest, out chan<- harnesses.Event, seq *int64) (*streamAggregate, int, string, error, string) {
-	args := r.buildArgs([]string{"--print", "-p", "--output-format", "json"}, req)
+	base := []string{"--print", "-p", "--output-format", "json"}
+	args := r.buildArgs(base, req)
 	promptMode := r.PromptMode
 	if promptMode == "" {
 		promptMode = "arg"
@@ -559,6 +569,14 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 	defer cancel()
 
 	cmd := harnesses.HarnessBatchCommand(binary, args...)
+	var portableLaunch *processlifecycle.PortableLaunchAttachment
+	if binding, bound := r.PortableRuntimeBinding(); bound {
+		boundCmd, attachment, buildErr := harnesses.BuildPortableRuntimeBatchCommand(binding, base, args[len(base):])
+		if buildErr != nil {
+			return nil, -1, "", buildErr, "failed"
+		}
+		cmd, portableLaunch = boundCmd, attachment
+	}
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
@@ -574,6 +592,7 @@ func (r *Runner) runLegacy(ctx context.Context, binary string, req harnesses.Exe
 	batch, err := processlifecycle.StartBatch(runCtx, cmd, processlifecycle.BatchOptions{
 		Harness: "claude", OperationID: req.SessionID, SessionLogDir: req.SessionLogDir,
 		LifecycleStateDir: req.LifecycleStateDir, CleanupTimeout: req.CleanupTimeout,
+		PortableLaunch: portableLaunch,
 	})
 	if err != nil {
 		return nil, -1, "", err, "failed"

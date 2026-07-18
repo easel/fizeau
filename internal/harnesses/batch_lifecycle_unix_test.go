@@ -32,6 +32,87 @@ const (
 	grandchildPIDFile = "lifecycle-grandchild.pid"
 )
 
+type boundBatchRecipe struct{}
+
+func (boundBatchRecipe) PortableRuntimeNamespaceRecipe() {}
+
+type boundBatchHarness interface {
+	harnesses.Harness
+	harnesses.PortableRuntimeRunnerBinder
+}
+
+// TestUnixBoundBatchRunnersIgnoreAmbientBinaryResolution proves every batch
+// adapter consumes the activation-owned command and closed environment. PATH
+// intentionally has no executable so a runner that falls back to Binary or
+// LookPath cannot pass this test.
+func TestUnixBoundBatchRunnersIgnoreAmbientBinaryResolution(t *testing.T) {
+	factories := map[string]func() boundBatchHarness{
+		"claude":   func() boundBatchHarness { return &claude.Runner{NativeMode: false} },
+		"codex":    func() boundBatchHarness { return &codex.Runner{} },
+		"gemini":   func() boundBatchHarness { return &gemini.Runner{} },
+		"opencode": func() boundBatchHarness { return &opencode.Runner{} },
+		"pi":       func() boundBatchHarness { return &pi.Runner{} },
+	}
+	for name, factory := range factories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			guestRoot := filepath.Join(dir, "guest")
+			if err := os.MkdirAll(filepath.Join(guestRoot, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			capture := filepath.Join(dir, "capture")
+			launcher := filepath.Join(guestRoot, "bin", "runner")
+			if err := os.WriteFile(launcher, []byte("#!/bin/sh\nprintf 'path=%s\\nmarker=%s\\n' \"$PATH\" \"$BOUND_MARKER\" > \"$CAPTURE\"\nprintf 'arg=%s\\n' \"$@\" >> \"$CAPTURE\"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			binding, err := harnesses.NewPortableRuntimeRunnerBinding(harnesses.PortableRuntimeRunnerBindingInput{
+				Structure: harnesses.PortableRuntimeStructure{Name: name, Transport: harnesses.PortableRuntimeTransportSubprocess, Mode: harnesses.PortableRuntimeStructuralUnpinned},
+				GuestRoot: guestRoot, ClosureClass: harnesses.PortableRuntimeClosureStatic,
+				Launch:          harnesses.PortableRuntimeLaunch{EntrypointTarget: "bin/runner"},
+				FixedArguments:  []string{"--manifest-fixed"},
+				Environment:     map[string]string{"PATH": filepath.Join(dir, "poison-path"), "BOUND_MARKER": name, "CAPTURE": capture},
+				NamespaceRecipe: boundBatchRecipe{},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner := factory()
+			if err := runner.BindPortableRuntime(binding); err != nil {
+				t.Fatal(err)
+			}
+			events, err := runner.Execute(context.Background(), harnesses.ExecuteRequest{Prompt: "bound-request", WorkDir: dir, SessionLogDir: filepath.Join(dir, "sessions"), SessionID: "bound-" + name})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			drainHarnessEvents(t, events, 4*time.Second)
+			captured, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatalf("bound launcher did not run: %v", err)
+			}
+			output := string(captured)
+			if !strings.Contains(output, "path="+filepath.Join(dir, "poison-path")) || !strings.Contains(output, "marker="+name) {
+				t.Fatalf("bound closed environment was not used: %q", output)
+			}
+			var argv []string
+			for _, line := range strings.Split(output, "\n") {
+				if argument, ok := strings.CutPrefix(line, "arg="); ok {
+					argv = append(argv, argument)
+				}
+			}
+			requestIndex := -1
+			for index, argument := range argv {
+				if argument == "bound-request" {
+					requestIndex = index
+					break
+				}
+			}
+			if len(argv) < 3 || argv[0] != "--manifest-fixed" || requestIndex < 2 {
+				t.Fatalf("bound fixed/request argv was not used: %q", output)
+			}
+		})
+	}
+}
+
 func TestUnixBatchLifecycleAppliesToEveryBatchRunner(t *testing.T) {
 	factories := map[string]func(string) harnesses.Harness{
 		"claude": func(binary string) harnesses.Harness {
