@@ -180,6 +180,9 @@ func validateLocatorTerminal(locator ContinuationLocator) error {
 		return fmt.Errorf("continuation parent is incomplete")
 	}
 	route := harnesses.RouteRunnerKey{Harness: terminal.ResolvedHarness, Provider: terminal.SelectedProvider, Endpoint: terminal.SelectedEndpoint, ServerInstance: terminal.SelectedServerInstance, Model: terminal.ResolvedModel}
+	if route == (harnesses.RouteRunnerKey{}) {
+		return fmt.Errorf("continuation parent has no terminal route")
+	}
 	if route != locator.Route {
 		return fmt.Errorf("continuation terminal route mismatch")
 	}
