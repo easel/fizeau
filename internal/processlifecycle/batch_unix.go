@@ -131,6 +131,7 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 		return nil, err
 	}
 	var portableLease *PortableNamespaceLease
+	var revalidatePortableIdentity func() error
 	if opts.PortableLaunch != nil {
 		if recipe, ok := opts.PortableLaunch.recipe.(portableNamespaceLeaseRecipe); ok {
 			uid, gid, release, err := recipe.AcquirePortableNamespaceLease(ctx)
@@ -155,6 +156,13 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 				releasePortableLease()
 				return nil, fmt.Errorf("%w: portable namespace launcher is required", ErrInvalidRecord)
 			}
+			revalidator, ok := opts.PortableLaunch.recipe.(portableNamespaceIdentityRevalidationRecipe)
+			if !ok {
+				releasePortableLease := portableLease.release
+				releasePortableLease()
+				return nil, fmt.Errorf("%w: portable activation identity revalidation is required", ErrInvalidRecord)
+			}
+			revalidatePortableIdentity = revalidator.RevalidatePortableNamespaceIdentity
 		}
 	}
 	leaseReleased := false
@@ -320,7 +328,11 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 			BoundaryType:            BoundaryTypeUnixProcessGroup,
 		},
 	}
-	lease, err := Acquire(ctx, Options{OperationID: opts.OperationID, Harness: opts.Harness}, opts.Registry, backend, prepared)
+	preparedForAcquire := PreparedBoundary(prepared)
+	if portableLease != nil {
+		preparedForAcquire = revalidatingPreparedBoundary{PreparedBoundary: prepared, revalidate: revalidatePortableIdentity, releaseLease: releasePortableLease}
+	}
+	lease, err := Acquire(ctx, Options{OperationID: opts.OperationID, Harness: opts.Harness}, opts.Registry, backend, preparedForAcquire)
 	if err != nil {
 		return nil, err
 	}
