@@ -81,6 +81,9 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 	if target == nil || target.Path == "" || len(target.Args) == 0 {
 		return nil, fmt.Errorf("%w: a prepared target command is required", ErrInvalidRecord)
 	}
+	if err := validatePortableLaunchTarget(target, opts.PortableLaunch); err != nil {
+		return nil, err
+	}
 	if opts.Harness == "" {
 		return nil, fmt.Errorf("%w: harness is required", ErrInvalidRecord)
 	}

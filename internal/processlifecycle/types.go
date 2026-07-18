@@ -277,6 +277,12 @@ type BatchOptions struct {
 	CleanupTimeout    time.Duration
 	GracePeriod       time.Duration
 	Registry          Registry
+	// PortableLaunch, when set, seals the exact portable command prepared by
+	// the route runner. The lifecycle boundary verifies it before it starts a
+	// supervisor or target. It is deliberately a transport-neutral attachment:
+	// the later namespace-launch implementation consumes its opaque recipe at
+	// this same boundary rather than introducing a wrapper spawn path.
+	PortableLaunch *PortableLaunchAttachment
 }
 
 // PTYSize is the initial terminal size for a supervised PTY target.

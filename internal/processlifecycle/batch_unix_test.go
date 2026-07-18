@@ -138,6 +138,55 @@ func TestUnixBatchWatcherCompletesWithoutWaitCaller(t *testing.T) {
 	}
 }
 
+func TestUnixPortableLaunchAttachmentRejectsBeforeSpawn(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "started")
+	target := exec.Command(os.Args[0], "-test.run=^TestUnixPortableLaunchAttachmentSpawnHelper$")
+	target.Env = append(os.Environ(), "FIZEAU_PORTABLE_LAUNCH_MARKER="+marker)
+	attachment, err := NewPortableLaunchAttachment(target.Path, target.Args[1:], target.Env, portableLaunchTestRecipe{})
+	if err != nil {
+		t.Fatalf("NewPortableLaunchAttachment: %v", err)
+	}
+	// A changed argv[0] is an alias: exec would still run target.Path, but the
+	// portable boundary must refuse a caller that has altered the sealed plan.
+	target.Args[0] += ".alias"
+	_, err = StartBatch(context.Background(), target, BatchOptions{
+		Harness: "portable", Registry: NewMemoryRegistry(), PortableLaunch: attachment,
+	})
+	if err == nil {
+		t.Fatal("StartBatch accepted an aliased portable target")
+	}
+	if _, statErr := os.Stat(marker); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("aliased portable target started before rejection: %v", statErr)
+	}
+}
+
+func TestUnixPortablePTYLaunchUsesSealedAttachment(t *testing.T) {
+	attachment, err := NewPortableLaunchAttachment("/bin/true", nil, []string{}, portableLaunchTestRecipe{})
+	if err != nil {
+		t.Fatalf("NewPortableLaunchAttachment: %v", err)
+	}
+	terminal, err := StartPTYCommand(context.Background(), "/bin/true", nil, "", []string{}, PTYSize{Rows: 24, Cols: 80}, BatchOptions{
+		Harness: "portable", Registry: NewMemoryRegistry(), PortableLaunch: attachment,
+	})
+	if err != nil {
+		t.Fatalf("StartPTYCommand: %v", err)
+	}
+	if err := terminal.Wait(); err != nil {
+		t.Fatalf("portable PTY Wait: %v", err)
+	}
+}
+
+func TestUnixPortableLaunchAttachmentSpawnHelper(t *testing.T) {
+	marker := os.Getenv("FIZEAU_PORTABLE_LAUNCH_MARKER")
+	if marker == "" {
+		return
+	}
+	if err := os.WriteFile(marker, []byte("started"), 0o600); err != nil {
+		os.Exit(2)
+	}
+	os.Exit(0)
+}
+
 func TestUnixPreparedAbortIsBoundedAndIndeterminateWithoutBoundary(t *testing.T) {
 	command := exec.Command("sh", "-c", "exec sleep 300")
 	if err := command.Start(); err != nil {
