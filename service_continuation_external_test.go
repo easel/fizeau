@@ -54,8 +54,8 @@ func TestServiceContinuationPublicSurfaceExternal(t *testing.T) {
 	}); events != nil || !errors.Is(err, fizeau.ErrContinuationSessionUnavailable) {
 		t.Fatalf("missing parent = (%v, %v), want nil/%v", events, err, fizeau.ErrContinuationSessionUnavailable)
 	}
-	if events, err := svc.Continue(context.Background(), request); events != nil || !errors.Is(err, fizeau.ErrContinuationUnsupported) {
-		t.Fatalf("unimplemented continuation = (%v, %v), want nil/%v", events, err, fizeau.ErrContinuationUnsupported)
+	if events, err := svc.Continue(context.Background(), request); events != nil || !errors.Is(err, fizeau.ErrContinuationSessionUnavailable) {
+		t.Fatalf("missing parent continuation = (%v, %v), want nil/%v", events, err, fizeau.ErrContinuationSessionUnavailable)
 	}
 
 	t.Run("require resume rejects every nonzero fresh request", func(t *testing.T) {
@@ -142,8 +142,8 @@ func TestServiceContinuationPublicSurfaceExternal(t *testing.T) {
 					Metadata:      map[string]string{"source": "outer"},
 					CorrelationID: "outer-valid",
 				})
-				if events != nil || !errors.Is(err, fizeau.ErrContinuationUnsupported) {
-					t.Fatalf("valid overrides = (%v, %v), want nil/%v", events, err, fizeau.ErrContinuationUnsupported)
+				if events != nil || !errors.Is(err, fizeau.ErrContinuationSessionUnavailable) {
+					t.Fatalf("valid overrides = (%v, %v), want nil/%v", events, err, fizeau.ErrContinuationSessionUnavailable)
 				}
 			})
 		}
@@ -160,7 +160,7 @@ func TestServiceContinuationPublicSurfaceExternal(t *testing.T) {
 		}
 	})
 
-	t.Run("valid envelopes remain unsupported", func(t *testing.T) {
+	t.Run("valid envelopes require completed parent lineage", func(t *testing.T) {
 		for _, policy := range []fizeau.ContinuationPolicy{
 			fizeau.ContinuationRequireResume,
 			fizeau.ContinuationPreferResume,
@@ -173,8 +173,8 @@ func TestServiceContinuationPublicSurfaceExternal(t *testing.T) {
 				Metadata:      map[string]string{"source": "outer"},
 				CorrelationID: "outer-valid",
 			})
-			if events != nil || !errors.Is(err, fizeau.ErrContinuationUnsupported) {
-				t.Fatalf("valid %s envelope = (%v, %v), want nil/%v", policy, events, err, fizeau.ErrContinuationUnsupported)
+			if events != nil || !errors.Is(err, fizeau.ErrContinuationSessionUnavailable) {
+				t.Fatalf("valid %s envelope = (%v, %v), want nil/%v", policy, events, err, fizeau.ErrContinuationSessionUnavailable)
 			}
 		}
 	})

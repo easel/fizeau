@@ -151,10 +151,30 @@ func (s *service) executeCoordinatorPorts(req ServiceExecuteRequest, decision Ro
 	}
 }
 
+// continuationLineage is root-owned public session metadata. It contains only
+// Fizeau IDs and policy/disposition, never a harness-native conversation ID.
+type continuationLineage struct {
+	ParentSessionID string
+	Policy          ContinuationPolicy
+	Disposition     ContinuationDisposition
+}
+
+func (s *service) continuationCoordinatorPorts(req ServiceExecuteRequest, decision RouteDecision, sessionID string, lineage continuationLineage) serviceimpl.ExecutePorts {
+	ports := s.executeCoordinatorPorts(req, decision, sessionID, nil)
+	ports.OpenSessionLog = func() serviceimpl.ExecuteSessionLog {
+		return s.openExecuteContinuationSessionLog(req, decision, sessionID, lineage)
+	}
+	return ports
+}
+
 // openExecuteSessionLog is the narrow public-to-internal projection seam for
 // durable execution history. The internal runtime owns writing, terminal
 // merge semantics, first-end-wins, and progress timing.
 func (s *service) openExecuteSessionLog(req ServiceExecuteRequest, decision RouteDecision, sessionID string) *serviceimpl.SessionLog {
+	return s.openExecuteContinuationSessionLog(req, decision, sessionID, continuationLineage{})
+}
+
+func (s *service) openExecuteContinuationSessionLog(req ServiceExecuteRequest, decision RouteDecision, sessionID string, lineage continuationLineage) *serviceimpl.SessionLog {
 	headerMeta := metaWithRoleAndCorrelation(req.Metadata, req.Role, req.CorrelationID)
 	start := session.SessionStartData{
 		Provider:               s.providerTypeLabel(decision.Provider),
@@ -179,17 +199,20 @@ func (s *service) openExecuteSessionLog(req ServiceExecuteRequest, decision Rout
 			CachePressure:  decision.Utilization.CachePressure,
 			ObservedAt:     decision.Utilization.ObservedAt,
 		},
-		RequestedHarness: req.Harness,
-		ResolvedHarness:  decision.Harness,
-		HarnessSource:    harnessSource(req),
-		RequestedModel:   req.Model,
-		ResolvedModel:    decision.Model,
-		Reasoning:        req.Reasoning,
-		WorkDir:          req.WorkDir,
-		MaxIterations:    req.MaxIterations,
-		Prompt:           req.Prompt,
-		SystemPrompt:     req.SystemPrompt,
-		Metadata:         headerMeta,
+		RequestedHarness:   req.Harness,
+		ResolvedHarness:    decision.Harness,
+		HarnessSource:      harnessSource(req),
+		RequestedModel:     req.Model,
+		ResolvedModel:      decision.Model,
+		Reasoning:          req.Reasoning,
+		WorkDir:            req.WorkDir,
+		MaxIterations:      req.MaxIterations,
+		Prompt:             req.Prompt,
+		SystemPrompt:       req.SystemPrompt,
+		Metadata:           headerMeta,
+		ParentSessionID:    lineage.ParentSessionID,
+		ContinuationPolicy: string(lineage.Policy),
+		Continuation:       string(lineage.Disposition),
 	}
 	endBase := session.SessionEndData{
 		SelectedRoute:    req.SelectedRoute,
@@ -210,10 +233,13 @@ func (s *service) openExecuteSessionLog(req ServiceExecuteRequest, decision Rout
 			CachePressure:  decision.Utilization.CachePressure,
 			ObservedAt:     decision.Utilization.ObservedAt,
 		},
-		RequestedHarness: req.Harness,
-		HarnessSource:    harnessSource(req),
-		RequestedModel:   req.Model,
-		Reasoning:        req.Reasoning,
+		RequestedHarness:   req.Harness,
+		HarnessSource:      harnessSource(req),
+		RequestedModel:     req.Model,
+		Reasoning:          req.Reasoning,
+		ParentSessionID:    lineage.ParentSessionID,
+		ContinuationPolicy: string(lineage.Policy),
+		Continuation:       string(lineage.Disposition),
 	}
 	if req.CostCapUSD > 0 {
 		cap := req.CostCapUSD
