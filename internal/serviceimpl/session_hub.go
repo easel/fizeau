@@ -30,6 +30,12 @@ func NewSessionHub() *SessionHub {
 func (h *SessionHub) OpenSession(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if _, ok := h.sessions[sessionID]; ok {
+		// Prepared continuations establish the root child admission seam after
+		// the coordinator makes the ID tailable. Preserve subscribers that
+		// attached in that interval rather than replacing their session.
+		return
+	}
 	h.sessions[sessionID] = &hubSession{}
 }
 
