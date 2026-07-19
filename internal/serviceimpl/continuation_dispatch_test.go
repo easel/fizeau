@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	agentcore "github.com/easel/fizeau/internal/core"
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/processlifecycle"
 	"github.com/easel/fizeau/internal/session"
 )
 
@@ -413,5 +415,183 @@ func TestContinuationStartFailureTerminalizesChildWithoutFallback(t *testing.T) 
 		if strings.Contains(string(raw), "native rejected") || strings.Contains(string(raw), "resume_token") {
 			t.Fatalf("native Start evidence escaped into durable artifact %s: %s", path, raw)
 		}
+	}
+}
+
+type coordinatorPreparedContinuation struct {
+	child  *continuationTestChild
+	starts int
+	err    error
+	nilOut bool
+}
+
+func (p *coordinatorPreparedContinuation) Start(context.Context) (<-chan harnesses.Event, error) {
+	p.starts++
+	if p.child == nil || !p.child.created || !p.child.lease {
+		return nil, errors.New("prepared continuation started before child lifecycle")
+	}
+	p.child.started = true
+	if p.err != nil {
+		return nil, p.err
+	}
+	if p.nilOut {
+		return nil, nil
+	}
+	out := make(chan harnesses.Event, 1)
+	raw, err := json.Marshal(harnesses.FinalData{Status: "success", FinalText: "resumed"})
+	if err != nil {
+		panic(err)
+	}
+	out <- harnesses.Event{Type: harnesses.EventTypeFinal, Data: raw}
+	close(out)
+	return out, nil
+}
+
+func continuationCoordinatorRequest(childID string, route harnesses.RouteRunnerKey, store *ContinuationLocatorStore) ExecuteRequest {
+	return ExecuteRequest{
+		SessionID:            childID,
+		LifecycleBaseDir:     filepath.Join(filepath.Dir(store.dir), "lifecycle"),
+		ContinuationLocators: store,
+		Metadata:             map[string]string{"caller": "resume"},
+		FinalMetadata:        map[string]string{"lineage": "caller-supplied"},
+		Decision: ExecuteDecision{
+			Harness: route.Harness, Provider: route.Provider, Endpoint: route.Endpoint,
+			ServerInstance: route.ServerInstance, Model: route.Model,
+		},
+	}
+}
+
+func continuationCoordinatorPorts(root, childID string, route harnesses.RouteRunnerKey) ExecutePorts {
+	return ExecutePorts{OpenSessionLog: func() ExecuteSessionLog {
+		return OpenSessionLog(SessionLogOptions{Dir: root, SessionID: childID,
+			Start: session.SessionStartData{ParentSessionID: "caller-parent", Continuation: "resumed"},
+			EndBase: session.SessionEndData{ParentSessionID: "caller-parent", Continuation: "resumed",
+				ResolvedHarness: route.Harness, SelectedProvider: route.Provider, SelectedEndpoint: route.Endpoint,
+				SelectedServerInstance: route.ServerInstance, ResolvedModel: route.Model},
+		})
+	}}
+}
+
+func readAllContinuationEvents(ch <-chan harnesses.Event) []harnesses.Event {
+	var events []harnesses.Event
+	for event := range ch {
+		events = append(events, event)
+	}
+	return events
+}
+
+func TestExecuteCoordinatorRunPreparedContinuationUsesSharedTerminalAndCleanup(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewContinuationLocatorStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := harnesses.RouteRunnerKey{Harness: "claude-tui", Provider: "anthropic", Endpoint: "east", ServerInstance: "one", Model: "claude-sonnet-5"}
+	childID := "prepared-coordinator-child"
+	child := &continuationTestChild{}
+	prepared := &coordinatorPreparedContinuation{child: child}
+	hub := NewSessionHub()
+	coordinator := ExecuteCoordinator{Hub: hub}
+
+	events := readAllContinuationEvents(coordinator.RunPreparedContinuation(context.Background(), continuationCoordinatorRequest(childID, route, store), child, prepared, continuationCoordinatorPorts(root, childID, route)))
+	if prepared.starts != 1 || !child.created || !child.lease || !child.started {
+		t.Fatalf("child/start lifecycle = child=%+v starts=%d", child, prepared.starts)
+	}
+	if got := strings.Join(child.order, ","); got != "child,lease" {
+		t.Fatalf("child lifecycle order = %q, want child,lease before Start", got)
+	}
+	if len(events) == 0 || events[len(events)-1].Type != harnesses.EventTypeFinal {
+		t.Fatalf("coordinator events missing terminal: %#v", events)
+	}
+	if _, err := store.ResolveCompleted(childID); err != nil {
+		t.Fatalf("shared terminal path did not promote locator: %v", err)
+	}
+	if replay, err := hub.Subscribe(childID); err != nil {
+		t.Fatalf("shared terminal path did not close hub: %v", err)
+	} else if replayFinals := readAllContinuationEvents(replay); len(replayFinals) != 1 || replayFinals[0].Type != harnesses.EventTypeFinal {
+		t.Fatalf("hub replay = %#v", replayFinals)
+	}
+	logPath := filepath.Join(root, childID+".jsonl")
+	if durable, err := session.ReadEvents(logPath); err != nil || !containsSessionEnd(durable) {
+		t.Fatalf("shared terminal path did not write session end: %v / %#v", err, durable)
+	}
+}
+
+func TestExecuteCoordinatorRunPreparedContinuationTerminalizesStartAndNilStream(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		prepared func(*continuationTestChild) *coordinatorPreparedContinuation
+	}{
+		{name: "start error", prepared: func(child *continuationTestChild) *coordinatorPreparedContinuation {
+			return &coordinatorPreparedContinuation{child: child, err: errors.New("route-private start error")}
+		}},
+		{name: "nil stream", prepared: func(child *continuationTestChild) *coordinatorPreparedContinuation {
+			return &coordinatorPreparedContinuation{child: child, nilOut: true}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			store, err := NewContinuationLocatorStore(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			route := harnesses.RouteRunnerKey{Harness: "claude-tui", Provider: "anthropic", Model: "claude-sonnet-5"}
+			childID := "prepared-" + strings.ReplaceAll(tc.name, " ", "-")
+			child := &continuationTestChild{}
+			prepared := tc.prepared(child)
+			hub := NewSessionHub()
+			events := readAllContinuationEvents((ExecuteCoordinator{Hub: hub}).RunPreparedContinuation(context.Background(), continuationCoordinatorRequest(childID, route, store), child, prepared, continuationCoordinatorPorts(root, childID, route)))
+			if !child.terminal || prepared.starts != 1 || len(events) == 0 {
+				t.Fatalf("start failure was not terminalized through coordinator: child=%+v starts=%d events=%#v", child, prepared.starts, events)
+			}
+			var final harnesses.FinalData
+			if err := json.Unmarshal(events[len(events)-1].Data, &final); err != nil || final.Status != "failed" {
+				t.Fatalf("terminal = %#v, %v", final, err)
+			}
+			if _, err := store.ResolveCompleted(childID); err != nil {
+				t.Fatalf("terminalized child locator not complete: %v", err)
+			}
+			if replay, err := hub.Subscribe(childID); err != nil {
+				t.Fatalf("terminalized child hub not closed: %v", err)
+			} else if got := readAllContinuationEvents(replay); len(got) != 1 || got[0].Type != harnesses.EventTypeFinal {
+				t.Fatalf("hub terminal replay = %#v", got)
+			}
+		})
+	}
+}
+
+func TestExecuteCoordinatorRunPreparedContinuationWaitsForLifecycleCleanup(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewContinuationLocatorStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route := harnesses.RouteRunnerKey{Harness: "claude-tui", Provider: "anthropic", Model: "claude-sonnet-5"}
+	childID := "prepared-cleanup"
+	req := continuationCoordinatorRequest(childID, route, store)
+	stateDir, err := processlifecycle.StateDirectory(req.LifecycleBaseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := processlifecycle.NewFileRegistry(stateDir)
+	record := cleanupTestRecord(childID, processlifecycle.StateOwned)
+	if err := registry.Create(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	child := &continuationTestChild{}
+	prepared := &coordinatorPreparedContinuation{child: child}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		if err := registry.Delete(context.Background(), record.RecordID, record.Revision); err != nil {
+			t.Errorf("release prepared-continuation lifecycle record: %v", err)
+		}
+	}()
+	events := readAllContinuationEvents((ExecuteCoordinator{}).RunPreparedContinuation(context.Background(), req, child, prepared, continuationCoordinatorPorts(root, childID, route)))
+	if len(events) == 0 {
+		t.Fatal("prepared continuation emitted no terminal")
+	}
+	var final harnesses.FinalData
+	if err := json.Unmarshal(events[len(events)-1].Data, &final); err != nil || final.Status != "success" {
+		t.Fatalf("terminal after cleanup = %#v, %v", final, err)
 	}
 }

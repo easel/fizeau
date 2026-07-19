@@ -148,6 +148,25 @@ func (c ExecuteCoordinator) RunResolved(ctx context.Context, req ExecuteRequest,
 	return outer
 }
 
+// RunPreparedContinuation runs a route-owned prepared continuation through
+// the same session-log, terminal, hub, locator, and cleanup coordinator used
+// by an accepted Execute. The caller supplies only an already-prepared route
+// continuation and an already-resolved child request; public continuation
+// policy and parent evidence deliberately do not cross this seam.
+//
+// Unlike RunResolved, this entrypoint owns registration of the newly-created
+// child session. The child lifecycle seam establishes one child and one fresh
+// lease before Start is permitted to consume the prepared continuation.
+func (c ExecuteCoordinator) RunPreparedContinuation(ctx context.Context, req ExecuteRequest, child ContinuationChild, prepared harnesses.PreparedContinuation, ports ExecutePorts) <-chan harnesses.Event {
+	outer := make(chan harnesses.Event, 64)
+	if c.Hub != nil {
+		c.Hub.OpenSession(req.SessionID)
+	}
+	inner := c.wrapExecuteStream(req, ports, outer)
+	go c.runPreparedContinuation(ctx, req, child, prepared, ports, inner)
+	return outer
+}
+
 // RoutingFailure returns the terminal-only stream for an ordinary route
 // resolution failure. Typed quota and explicit-pin failures are rejected by
 // the root boundary before calling this method. The final is retained for both
@@ -222,6 +241,43 @@ func (c ExecuteCoordinator) runResolved(ctx context.Context, req ExecuteRequest,
 	state.emitProgress(req.RouteProgress)
 
 	c.dispatch(runCtx, state)
+}
+
+func (c ExecuteCoordinator) runPreparedContinuation(ctx context.Context, req ExecuteRequest, child ContinuationChild, prepared harnesses.PreparedContinuation, ports ExecutePorts, out chan<- harnesses.Event) {
+	defer close(out)
+
+	state := &executeRunState{req: req, ports: ports, out: out, start: time.Now()}
+	if ports.OpenSessionLog != nil {
+		state.log = ports.OpenSessionLog()
+	}
+	defer state.closeSessionLog(ctx)
+	if state.log != nil && state.log.Path() != "" && req.ContinuationLocators != nil {
+		if err := req.ContinuationLocators.WritePending(req.SessionID, state.log.Path(), routeRunnerKeyFromDecision(runnerDecision(req.Decision))); err != nil {
+			state.commitFinal(ctx, harnesses.FinalData{Status: "failed", Error: "continuation locator: " + err.Error(), DurationMS: time.Since(state.start).Milliseconds()}, TerminalOriginSpawn)
+			return
+		}
+	}
+
+	runCtx := ctx
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
+	if len(req.RoutingDecisionData) > 0 {
+		state.emitRaw(harnesses.EventTypeRoutingDecision, req.FinalMetadata, req.RoutingDecisionData)
+	}
+	state.emitProgress(req.RouteProgress)
+
+	stream, err := StartPreparedContinuation(runCtx, child, prepared)
+	if err != nil {
+		// StartPreparedContinuation has already notified the child lifecycle
+		// seam for lease, Start, and nil-stream failures. This coordinator
+		// owns the durable/public terminal and hub closure for all failures.
+		state.commitFinal(runCtx, harnesses.FinalData{Status: "failed", Error: err.Error(), DurationMS: time.Since(state.start).Milliseconds()}, TerminalOriginSpawn)
+		return
+	}
+	state.runPreparedStream(runCtx, stream)
 }
 
 func (c ExecuteCoordinator) dispatch(ctx context.Context, state *executeRunState) {
@@ -443,6 +499,19 @@ func projectExecuteContextToNative(dst *NativeRequest, req ExecuteRequest) {
 
 func (state *executeRunState) runSubprocess(ctx context.Context, runner harnesses.Harness) {
 	progress := transcript.NewSubprocessProgressState(state.req.Prompt, state.req.SystemPrompt)
+	state.runSubprocessWithProgress(ctx, runner, progress)
+}
+
+// runPreparedStream deliberately adapts an already-started stream to the
+// ordinary subprocess consumption path. This retains the one terminal gate:
+// malformed/absent finals, cleanup supersession, durable WriteEnd, locator
+// promotion, and hub closure cannot drift between Execute and resume.
+func (state *executeRunState) runPreparedStream(ctx context.Context, stream <-chan harnesses.Event) {
+	progress := transcript.NewSubprocessProgressState(state.req.Prompt, state.req.SystemPrompt)
+	state.runSubprocessWithProgress(ctx, preparedContinuationStream{stream: stream}, progress)
+}
+
+func (state *executeRunState) runSubprocessWithProgress(ctx context.Context, runner harnesses.Harness, progress *transcript.SubprocessProgressState) {
 	stateDir, err := processlifecycle.StateDirectory(state.req.LifecycleBaseDir)
 	if err != nil {
 		stateDir = ""
@@ -499,6 +568,17 @@ func (state *executeRunState) runSubprocess(ctx context.Context, runner harnesse
 			state.commitSubprocessFinal(ev, final)
 		},
 	})
+}
+
+// preparedContinuationStream is not a route runner. It only lets a stream
+// whose route already executed PreparedContinuation.Start enter the shared
+// service-owned terminal and cleanup consumer without starting it again.
+type preparedContinuationStream struct{ stream <-chan harnesses.Event }
+
+func (preparedContinuationStream) Info() harnesses.HarnessInfo       { return harnesses.HarnessInfo{} }
+func (preparedContinuationStream) HealthCheck(context.Context) error { return nil }
+func (r preparedContinuationStream) Execute(context.Context, harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	return r.stream, nil
 }
 
 func (state *executeRunState) observeRouteAttempt(final harnesses.FinalData) {
