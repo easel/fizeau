@@ -25,6 +25,7 @@ type activationProjectionRecipe struct {
 	directories []activationDescriptorPin
 	sources     []activationSourcePin
 	absent      []activationAbsentPin
+	plan        *portableNamespaceProjectionPlan
 }
 
 type activationDescriptorPin struct {
@@ -116,6 +117,11 @@ func pinActivationProjectionRecipe(runtime *safefs.NoFollowRoot, stage *stageHan
 		}
 		pinned.absent = append(pinned.absent, activationAbsentPin{parent: parentCopy, parentIdentity: identity, names: names})
 	}
+	plan, planErr := compilePortableNamespaceProjectionPlan(pinned, entrypoint, recipe)
+	if planErr != nil {
+		return nil, planErr
+	}
+	pinned.plan = plan
 	return pinned, nil
 }
 
