@@ -9,14 +9,14 @@ ddx:
     - ADR-012
   child_of: fizeau-67f2d585
   review:
-    self_hash: 42efefd3b240ecfde8e39830eace0ef29e9c75a298de2d6454925978c0736123
+    self_hash: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
       ADR-012: 5c24642fbb06edd9f8fede71adc0a1a4375c2e17a95f7c61b1add3f24a5f622a
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
-      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
-    reviewed_at: "2026-07-17T10:48:01Z"
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+      CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # ADR-014: Universal Harness Interface
 
@@ -533,6 +533,17 @@ remain caller data governed by the normal public contract.
   child cannot transfer ownership to another invocation.
 
 ## Amendment — 2026-07-15: Optional Portable Runtime Asset Capability
+
+### Scope correction — 2026-07-19
+
+This is an optional experimental capability, not a product requirement and not
+a v0.15 release gate. The product vision and the canonical PRD requirements
+establish embedded execution, provider/harness parity, measurement, routing,
+the thin CLI, distribution, and benchmark evidence; they do not require
+prepared Linux runtimes, mount projections, a namespace launcher, PID 1, or
+OCI conformance. The detailed mechanics below remain an implementation
+reference for the experimental track. They may not add release-blocking work
+or public-compatibility obligations without a future vision/PRD-backed decision.
 
 ADR-014's small-interface rule also applies when an embedding caller prepares
 Fizeau for Linux same-platform isolated execution. The base `Harness` interface does

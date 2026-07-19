@@ -14,10 +14,10 @@ ddx:
     - US-007
     - US-008
   review:
-    self_hash: 2cc79f66b979ddee32ac4016b9aa7ce73fff45ba12b223584961eabc3bef9958
+    self_hash: 330c9b002d2e84719534ab126f66001ae73cfb4f20986e28ff59cdc9ec179c9d
     deps:
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
-      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+      CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
       US-001: 83ee6bdfd89336cf77cb0dd2a1f6d8250baf1de494605112a56ef21b835c9b83
       US-002: 6d7fad544c6ba871e42c6b6b2b4926d9e2a78b7c1e69f294fd14d46cca157aff
       US-003: f204f2e58a405ef53c8a3bab96afcf242e755ec10bbe85b1d7985e81b95abe81
@@ -27,7 +27,7 @@ ddx:
       US-007: f7d77406d905f1c80b62432b28060e560dc7c8d811124159f3650ff2ab914ebf
       US-008: ec847be580408d23190b47f052551b4f7638365ab373de68e57d8ee06fb2bc4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-17T10:48:02Z"
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # Test Plan — Fizeau
 
@@ -93,6 +93,9 @@ parses zero packages is a measurement error, never a passing zero-row report.
 5. CLI delegation through the public facade.
 
 ### Portable Runtime Lane Allocation
+
+> **Experimental track.** These are not v0.15 release lanes. They become
+> required only for a separately approved portable-runtime release target.
 
 Portable activation has native non-skipping amd64 and arm64 Linux security jobs
 in addition to ordinary and race tests. The lanes divide evidence as follows:

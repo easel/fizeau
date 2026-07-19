@@ -12,18 +12,18 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 2aaaac638dff4ee468eda320f0665734e9ba456c876df34fbc0e37d33f23776c
+    self_hash: 95d87c27b75ae667b55e7fd931c0dbd74477ab3f77f0c55f92d33eaf35bb3a32
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
-      ADR-013: e9086db5ed1ca93bb9837c820fda3fdc444e7dfbbae9f8aacadb74d5e2b634c4
-      ADR-014: 42efefd3b240ecfde8e39830eace0ef29e9c75a298de2d6454925978c0736123
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
-      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
+      ADR-013: 23f4177615108086d085e2e3f9a70871194825d615f90daffdfea2458fbcda09
+      ADR-014: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+      CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
       FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      implementation-plan: 86017874b97e9f3490c41a40816d2a476257d10fed7bbf62756b22464209eff9
-    reviewed_at: "2026-07-17T10:48:02Z"
+      implementation-plan: ede4c3ca8d3c5ec0208bdf67cec76b6398a1e0988bdee733748ab8d4ba847d1b
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # Release Checklist — Fizeau
 
@@ -69,6 +69,24 @@ ddx:
 | Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
 | Artifact names | Workflow emits only `fiz-<os>-<arch>` names | `go test . -run TestReleaseWorkflowArtifactNamesFiz -count=1` | [ ] |
 | Version | Tag starts with `v` and points at the intended commit | tag/SHA record | [ ] |
+
+### v0.15 Scope Decision — 2026-07-19
+
+The portable-runtime material in this checklist is retained as historical
+experimental evidence under ADR-014, not as a core-release gate. In particular,
+closure preparation, portable inventory, mount projections, namespace launcher
+behavior, PID-1/signal isolation, OCI jobs, and `PreparePortableRuntime` /
+`NewFromPortableRuntime` consumer compatibility are **non-blocking for v0.15**.
+They must not consume a release workflow, prevent a tag, or be used to hold the
+core service and CLI release. A future experimental release proposal may
+activate those checks with a separately approved target and evidence plan.
+
+The required v0.15 compatibility surface is the vision-backed service: embedded
+execution, wrapped-harness lifecycle safety, dynamic provider/model discovery,
+routing, measurement/replay, the thin CLI, versioned artifacts/installer, and
+benchmark provenance. `Continue` remains a release gate; portable-runtime
+symbols are additive experimental code and are excluded from v0.15 mock and
+consumer compatibility requirements.
 
 ## Rollout Plan
 

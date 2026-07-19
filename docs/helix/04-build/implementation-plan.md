@@ -14,20 +14,20 @@ ddx:
     - SD-005
     - SD-006
   review:
-    self_hash: 86017874b97e9f3490c41a40816d2a476257d10fed7bbf62756b22464209eff9
+    self_hash: ede4c3ca8d3c5ec0208bdf67cec76b6398a1e0988bdee733748ab8d4ba847d1b
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
-      ADR-013: e9086db5ed1ca93bb9837c820fda3fdc444e7dfbbae9f8aacadb74d5e2b634c4
-      ADR-014: 42efefd3b240ecfde8e39830eace0ef29e9c75a298de2d6454925978c0736123
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
-      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
+      ADR-013: 23f4177615108086d085e2e3f9a70871194825d615f90daffdfea2458fbcda09
+      ADR-014: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+      CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
       SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-      TP-001: 2cc79f66b979ddee32ac4016b9aa7ce73fff45ba12b223584961eabc3bef9958
+      TP-001: 330c9b002d2e84719534ab126f66001ae73cfb4f20986e28ff59cdc9ec179c9d
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-17T10:48:02Z"
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # Build Plan — Fizeau
 
@@ -85,11 +85,10 @@ close state; this document does not copy that queue or freeze a second backlog.
   `ServiceOverrideOutcome`. External keyed literals and selector expressions
   migrate to nil/source branching and explicit dereference; no adapter infers
   amount presence from a positive scalar.
-- Portable-runtime preparation is route-neutral and complete-or-error. v0.15 is
-  Linux same-GOARCH only. It packages every installed, structurally unpinned-capable harness
-  closure plus every effective configured provider without selecting a route,
-  exposing a secret value, or replacing the later invocation's process
-  containment. Structural parity does not freeze live health or reachability.
+- Portable-runtime preparation remains an experimental route-neutral and
+  complete-or-error track. Its Linux same-GOARCH constraints do not define
+  v0.15 scope or release evidence. Structural parity does not freeze live
+  health or reachability.
 
 ## Implementation Slices
 
@@ -158,18 +157,15 @@ The separate matrix, TerminalBench, and website cell-evidence pipeline remains
 owned by SD-010, SD-012, SD-015, and its benchmark-rewrite queue; F-3 does not
 silently redefine those schemas as part of the public service migration.
 
-### Portable Runtime Sequence — v0.15
+### Portable Runtime — Deferred Experimental Track
 
-This sequence governs the DDx-facing isolated-runtime bundle. The bundle is an
-artifact plan and owned cleanup handle, not Docker orchestration and not a
-preselected route.
-
-| Slice | Goal | Depends On | Validation Gate |
-|---|---|---|---|
-| P-0 Authority alignment | Align CONTRACT-003 public opacity/completeness, CONTRACT-004 harness ownership, ADR-014, this plan, and release gates | Lifecycle containment authority | HELIX graph validation and freshness checks pass; same-target and complete-or-error rules are unambiguous |
-| P-1 Complete runtime inventory | Join the production registry to the route authority's structural-instance view, classify actual transports and structural inclusion, collect content-addressed Linux static/dynamic/interpreted closures plus typed launch recipes, value-opaque execution constraints, and normalized mixed-state projections through `PortableRuntimeHarness`, add exactly one target-indexed embedded static single-threaded Zig namespace launcher at `.fizeau/namespace-launcher` whenever a subprocess is included, and combine them with a field-exhaustive effective configured-provider snapshot | P-0 | Drift tests cover every classification and provider field; package layout fixtures reject unknown closures; interpreted contributors supply reviewed exact interpreter size/SHA identities and exhaustive native-addon declarations that the neutral analyzer verifies from retained root/member descriptors and immutable package snapshots without `PATH`, shebang selection, or blind `.node` scanning; verified-exact contributors bind publisher-authenticated release digests to same-target isolated positive and missing-library-negative probes; `make portable-namespace-launcher-check` under Zig 0.16.0 rebuilds both supported architectures and `TestPortableRuntimeNamespaceLauncherArtifactParity` proves source/embedded-byte/digest parity, static same-target single-thread ELF shape, exact collision-proof target, zero/one cardinality, tamper rejection, and public opacity; node/addon/inventory tests pass; ordering, merge-before-prune, dedupe/conflict, package-tree ownership, target mismatch, inherited-name, typed environment/path constraint, mixed-state projection, standalone fixed-flag, and typed fixed option/value rules are deterministic without raw environment values. Activation configures the same authority that later creates one exact endpoint-aware binding per winning route; dispatch never constructs a competing runner |
-| P-2 Secure materialization | Stage one sibling tree, revalidate the empty caller directory by identity, commit one `runtime` child with no-replace rename, emit one fixed read-only guest mount, persist normalized projections, distinguish unprojected prefix-preserving seeds from projection-consumed seeds, revalidate every source identity/content/type/symlink condition while copying, and retain retryable cleanup ownership | P-1 | `TestPortableRuntimeMixedStateProjection` plus filesystem fixtures cover deterministic private persistence, concurrent preparers, traversal, links, source identity/content races, partial failure, cancellation, modes, redaction, both seed classifications, and failed-then-retried `Close` |
-| P-3 Public activation and OCI conformance | Add the opaque root facade plus process-free `NewFromPortableRuntime`; reject zero activation UID/GID or supplementary groups; reconstruct the configured service and exact endpoint-aware canonical runner authority from the fixed guest manifest; assemble owner-only mutable backing storage and an opaque namespace recipe; apply it only at that runner's lifecycle-owned spawn seam through the embedded launcher | P-2 | Root/service tests prove closed environment, prefix/projection assembly, double-copy prevention, ownership, and route neutrality; `TestPortableRuntimeActivationFeedsProductionDispatch` proves the canonical binding consumes the recipe; `TestPortableRuntimeExclusiveSubprocessLease` passes under race; native amd64/arm64 OCI adversaries pass the pinned runtime and Linux >=6.12 feature preflight and prove governed-ancestor/config mutation denial, mutable atomic refresh/locks/siblings, final absence, exact UID/GID plus empty groups, every namespace task's Cap*/securebits/NoNewPrivs/seccomp state, single-threaded non-dumpable PID 1 and supervisor isolation, exact FD ownership, denial of direct, queued, thread-directed, process-group, and pidfd signal paths to PID 1, ordinary threading, setup failure without exec, private proc, distinct process groups, non-duplicated signal bridging, PTY foreground and exact mirrored status/caller-death behavior, descendant reaping, OpenCode auth+sibling writes, and static/dynamic/interpreted unpinned Execute without skips |
+Portable runtime preparation is an optional Linux-isolation experiment, not a
+v0.15 delivery sequence. It has no canonical PRD requirement and cannot block
+the embedded runtime, provider/harness parity, measurement, routing, CLI,
+distribution, or benchmark evidence release. The existing implementation and
+its detailed design remain available for a separately approved future proposal.
+Do not schedule P-series work against the v0.15 release or treat its OCI,
+namespace, mount, PID-1, or closure evidence as core release criteria.
 
 ## Issue Decomposition
 
@@ -227,28 +223,6 @@ evidence that prevents an unowned path from remaining.
 - [ ] Run `TestV015CostPointerMigrationCompile` against all three public cost
       types and reject scalar literals, numeric presence checks, or selector
       use without nil/source handling.
-- [ ] Compile the public portable-runtime request, opaque bundle, and separate
-      `NewFromPortableRuntime` consumer fixture; prove the plan contains no
-      routing selector, original source path, or environment value.
-- [ ] Run `TestPortableRuntimeInventoryIncludesGeminiAndPi`,
-      `TestRouteRunnerKeyIsEndpointAware`,
-      `TestExecuteUsesRegisteredRouteInstance`, and
-      `TestProductionDispatchHasSingleRunnerAuthority`; prove Gemini/Pi
-      dispatch consumes the exact authority binding derived from configured
-      structural launch state and fails before subprocess dispatch when the
-      binding is absent or mismatched.
-- [ ] Exercise empty-root identity, one-child no-replace commit, concurrent
-      preparers, copied-symlink/hardlink rejection or re-creation, traversal,
-      source identity/content races, restrictive modes, cancellation, rollback,
-      redaction, concurrent cleanup, and failed-then-retried cleanup.
-- [ ] Run the required Linux OCI portable-runtime job. When opted in, missing
-      OCI support is a failure, not a skip. Static, dynamic, and interpreted
-      launch recipes, opaque environment inheritance, generated provider
-      bootstrap, production dispatch, mapped non-root UID, and structural
-      candidate identity must execute. Inject a writable-storage destruction
-      failure, prove the bundle is retained and `Close` is not called, then
-      retry destruction and host cleanup successfully; product code still
-      contains no Docker orchestration.
 - [ ] Commit `.ddx/beads.jsonl` with tracker mutations and push each completed
       fix before starting the next one.
 

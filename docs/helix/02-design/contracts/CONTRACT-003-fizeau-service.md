@@ -7,13 +7,13 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: f013b735dfab41fb60acb1978d41da9d50bb737b7a9dd9d28f0e0b8e86e07ebc
+    self_hash: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
     deps:
       ADR-006: 70e1de266a6e8c6289f23c05e36bc2fed2af4dc8ad131d352e40876dc46f6793
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-16T10:47:59Z"
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
@@ -50,8 +50,12 @@ surface on a heartbeat to keep the snapshot warm.
 
 - **In scope:** the public root-package service facade; routing and inventory
   projections; execution, continuation, session events, terminal facts,
-  session-log projections, route-neutral portable-runtime preparation, and
-  wrapped-harness lifecycle ownership.
+  session-log projections, and wrapped-harness lifecycle ownership.
+- **Experimental, not a v0.15 release gate:** route-neutral portable-runtime
+  preparation and activation. The currently shipped additive symbols remain
+  documented to avoid misdescribing the code, but their completion,
+  compatibility promises, OCI evidence, and Linux isolation mechanics are not
+  prerequisites for the core product release.
 - **Out of scope:** concrete adapter implementation, provider-native protocols,
   DDx worktree setup, gates, review, landing, preservation, tracker mutation,
   and bead closure policy.
@@ -112,11 +116,12 @@ Seventeen service methods are public. `Execute` is the primary verb and
 methods expose the live routing inventory and policy metadata. `HealthCheck`,
 `ResolveRoute`, `RecordRouteAttempt`, and `RouteStatus` are routing/status
 projections. The remaining methods project service-owned session logs for
-usage, listing, JSON rendering, and replay. `PreparePortableRuntime` is the
-route-neutral preparation boundary for an embedding caller that will execute
-the configured service inside an isolated same-platform runtime.
-`NewFromPortableRuntime` is the matching constructor inside that runtime; it is
-a package function, not an eighteenth service method.
+usage, listing, JSON rendering, and replay. `PreparePortableRuntime` is an
+experimental route-neutral preparation boundary for an embedding caller that
+will execute the configured service inside an isolated same-platform runtime.
+`NewFromPortableRuntime` is its matching experimental constructor. Neither
+expands the v0.15 product requirements or release gates; ADR-014 owns any
+future promotion decision.
 
 The v0.11 interface has no removed route-introspection service methods and no
 separate model reference request field. Old route-reference names are not
@@ -196,6 +201,13 @@ should pass `ServiceConfig` explicitly.
 
 ## Portable Runtime Preparation and Activation
 
+> **Experimental / deferred track.** This section describes an additive
+> implementation already present in the repository. It is not a v0.15 release
+> requirement, does not gate the public service/CLI release, and must not be
+> used to add Linux namespace, mount, PID-1, or OCI obligations to core Fizeau.
+> A future proposal must establish a customer-facing requirement and a bounded
+> release target before this track can become normative.
+
 An embedding caller can ask its already-configured service to prepare the
 complete runtime needed for a later unpinned `Execute` inside an isolated
 runtime. Preparation is not routing and does not accept routing intent.
@@ -241,7 +253,7 @@ The later `Execute` call remains the only routing decision.
 missing path, non-directory, non-empty directory, symbolic-link destination,
 or destination whose ancestry cannot be validated returns an error wrapping
 `ErrPortableRuntimeRequestInvalid`. `TargetGOOS` and `TargetGOARCH` are required.
-In v0.15, `TargetGOOS` MUST equal both `runtime.GOOS` and `linux`, and
+For the experimental implementation, `TargetGOOS` MUST equal both `runtime.GOOS` and `linux`, and
 `TargetGOARCH` MUST equal `runtime.GOARCH`. A non-Linux preparing process or any
 cross-target request fails before materialization. Darwin and Windows portable
 activation require later platform-specific evidence; ordinary Fizeau execution

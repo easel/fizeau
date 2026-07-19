@@ -6,11 +6,11 @@ ddx:
     - SD-006
   child_of: fizeau-67f2d585
   review:
-    self_hash: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
+    self_hash: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
     deps:
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-17T10:48:01Z"
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # CONTRACT-004: Harness Implementation Contract
 
@@ -52,7 +52,8 @@ In scope:
   boundary, including completed-session resolution and private evidence
   ownership.
 - Optional harness-owned portable-runtime asset discovery behind an
-  API-neutral target and asset-closure boundary.
+  API-neutral target and asset-closure boundary. This is an experimental
+  ADR-014 track, not a v0.15 release requirement.
 - Live subprocess containment, cleanup, and recovery obligations shared by
   normal execution, PTY sessions, and auxiliary probes.
 - Conformance evidence requirements.
@@ -74,7 +75,8 @@ Out of scope:
   owns only the optional route capability and its private evidence boundary.
 - Public portable-runtime request/bundle types, destination materialization,
   and OCI orchestration. CONTRACT-003 owns the public behavior; this contract
-  owns only per-harness asset and inherited-environment discovery.
+  owns only per-harness asset and inherited-environment discovery. Neither is
+  a v0.15 release gate.
 
 ## Interface Set
 
@@ -86,7 +88,7 @@ implement any of `QuotaHarness`, `AccountHarness`, and
 also implement `ContextModelDiscoveryHarness`. A route that can resume
 harness-native conversation state MAY implement `ContinuationHarness`. A
 subprocess harness instance that is structurally capable of unpinned execution
-within a portable runtime MUST implement `PortableRuntimeHarness`; other
+within the experimental portable runtime MUST implement `PortableRuntimeHarness`; other
 subprocess harnesses MAY implement it to support future inclusion. The service
 uses Go interface assertions to discover which optional contracts a harness
 satisfies and consumes them through the interface only.

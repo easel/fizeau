@@ -12,15 +12,15 @@ ddx:
     - CONTRACT-004
   child_of: fizeau-67f2d585
   review:
-    self_hash: e9086db5ed1ca93bb9837c820fda3fdc444e7dfbbae9f8aacadb74d5e2b634c4
+    self_hash: 23f4177615108086d085e2e3f9a70871194825d615f90daffdfea2458fbcda09
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-004: 0fcd10ef635933ba8c2c9bbbfca7fc7c91d117085ef161082e70c0da71d7c862
       ADR-011: 088af56c3f51ae0ba0bb0d71940195af827b2ec5b73768e11fd0d7427070f8d2
-      ADR-014: 42efefd3b240ecfde8e39830eace0ef29e9c75a298de2d6454925978c0736123
-      CONTRACT-003: 5cbc714d703fad430419a9cf569c806e826050e5d21262d5735f067c5a91605d
-      CONTRACT-004: 9895d8798c0c2b7dcccdbea06f6bb8084316af34978554c57a27d7b1423d44b1
-    reviewed_at: "2026-07-17T10:48:02Z"
+      ADR-014: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
+      CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+      CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
+    reviewed_at: "2026-07-19T22:52:02Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 
@@ -524,7 +524,7 @@ markers including `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
 operator launches Fizeau from an existing Claude session. Unknown future
 `CLAUDE_*` names are excluded until explicitly reviewed.
 
-Portable preparation consumes the same classifier. It may inherit only `TZ`
+Experimental portable preparation consumes the same classifier. It may inherit only `TZ`
 and the approved OAuth/debug scalar names above; it declares no `CLAUDE_`
 prefix. Activation regenerates HOME, PATH, user identity, terminal/locale,
 the XDG paths, and `CLAUDE_CONFIG_DIR` from guest-owned state. The cassette
