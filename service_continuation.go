@@ -3,7 +3,9 @@ package fizeau
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/easel/fizeau/internal/harnesses"
 	"github.com/easel/fizeau/internal/processlifecycle"
@@ -118,7 +120,8 @@ func (s *service) Continue(ctx context.Context, req ServiceContinuationRequest) 
 		if prepareErr == nil {
 			lineage.Disposition = ContinuationResumed
 			ports = s.continuationCoordinatorPorts(childRequest, decision, childID, lineage)
-			return coordinator.RunPreparedContinuation(ctx, coordinatorRequest, continuationChild{}, prepared, ports), nil
+			child := newContinuationChild(s, childID, coordinatorRequest.LifecycleBaseDir)
+			return coordinator.RunPreparedContinuation(ctx, coordinatorRequest, child, prepared, ports), nil
 		}
 		if req.Policy == ContinuationRequireResume {
 			// Preparation precedes child registration, lease acquisition, and
@@ -168,15 +171,85 @@ func continuationSeed(value *int64) int64 {
 	return *value
 }
 
-type continuationChild struct{}
+// continuationChild is the root-owned admission lifecycle for a prepared
+// continuation. It deliberately does not own the harness process boundary:
+// that lease is acquired by the route when PreparedContinuation.Start runs.
+// Its job is to establish the distinct Fizeau child identity and a fresh
+// service lifecycle root before native Start may run. The coordinator remains
+// the sole owner of durable terminals, locator promotion, cleanup
+// supersession, and hub closure.
+type continuationChild struct {
+	service          *service
+	sessionID        string
+	lifecycleBaseDir string
 
-// The coordinator owns hub registration, durable locator creation, terminal
-// projection, and subprocess cleanup. This child seam is intentionally empty:
-// its ordering callbacks mark the point at which the prepared route may Start
-// without exposing any route-private evidence to root callers.
-func (continuationChild) Create(context.Context) error                   { return nil }
-func (continuationChild) AcquireLease(context.Context) error             { return nil }
-func (continuationChild) TerminalizeStartFailure(context.Context, error) {}
+	mu           sync.Mutex
+	created      bool
+	lease        *continuationChildLease
+	startFailure error
+}
+
+// continuationChildLease is intentionally private and contains no
+// harness-native identity. A new instance is minted for every resumed child;
+// the service lifecycle root is made available before Start so the route can
+// acquire its own process-boundary lease under that child identity.
+type continuationChildLease struct {
+	sessionID string
+	stateDir  string
+}
+
+func newContinuationChild(s *service, sessionID, lifecycleBaseDir string) *continuationChild {
+	return &continuationChild{service: s, sessionID: sessionID, lifecycleBaseDir: lifecycleBaseDir}
+}
+
+func (c *continuationChild) Create(context.Context) error {
+	if c == nil || c.service == nil || c.service.hub == nil || c.sessionID == "" {
+		return errors.New("continuation child session is unavailable")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.created {
+		return fmt.Errorf("continuation child %q already created", c.sessionID)
+	}
+	// The coordinator also opens this ID before it begins its stream so a
+	// TailSessionLog subscriber can attach immediately. Re-opening here makes
+	// the child seam the production admission point and is idempotent at the
+	// hub boundary.
+	c.service.hub.OpenSession(c.sessionID)
+	c.created = true
+	return nil
+}
+
+func (c *continuationChild) AcquireLease(context.Context) error {
+	if c == nil {
+		return errors.New("continuation child is unavailable")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.created {
+		return errors.New("continuation child lease before child creation")
+	}
+	if c.lease != nil {
+		return fmt.Errorf("continuation child %q already has a lease", c.sessionID)
+	}
+	stateDir, err := processlifecycle.StateDirectory(c.lifecycleBaseDir)
+	if err != nil {
+		return fmt.Errorf("prepare continuation lifecycle state: %w", err)
+	}
+	c.lease = &continuationChildLease{sessionID: c.sessionID, stateDir: stateDir}
+	return nil
+}
+
+func (c *continuationChild) TerminalizeStartFailure(_ context.Context, err error) {
+	if c == nil || err == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Do not publish a competing terminal here. The coordinator immediately
+	// commits the one durable, cleanup-aware terminal after this handoff.
+	c.startFailure = err
+}
 
 func continuationRouteDecision(key harnesses.RouteRunnerKey) RouteDecision {
 	return RouteDecision{

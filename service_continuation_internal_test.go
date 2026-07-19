@@ -95,6 +95,8 @@ type continuationFixtureRunner struct {
 	prepareCalls atomic.Int64
 	executeCalls atomic.Int64
 	prepareErr   error
+	startErr     error
+	onStart      func() error
 }
 
 func (*continuationFixtureRunner) Info() harnesses.HarnessInfo {
@@ -110,15 +112,23 @@ func (r *continuationFixtureRunner) PrepareContinuation(context.Context, harness
 	if r.prepareErr != nil {
 		return nil, r.prepareErr
 	}
-	return continuationFixturePrepared{}, nil
+	return continuationFixturePrepared{runner: r}, nil
 }
 func (*continuationFixtureRunner) PortableRuntimeStructure() harnesses.PortableRuntimeStructure {
 	return harnesses.PortableRuntimeStructure{Name: "claude-tui", Transport: harnesses.PortableRuntimeTransportSubprocess, Mode: harnesses.PortableRuntimeStructuralUnpinned}
 }
 
-type continuationFixturePrepared struct{}
+type continuationFixturePrepared struct{ runner *continuationFixtureRunner }
 
-func (continuationFixturePrepared) Start(context.Context) (<-chan harnesses.Event, error) {
+func (p continuationFixturePrepared) Start(context.Context) (<-chan harnesses.Event, error) {
+	if p.runner != nil && p.runner.onStart != nil {
+		if err := p.runner.onStart(); err != nil {
+			return nil, err
+		}
+	}
+	if p.runner != nil && p.runner.startErr != nil {
+		return nil, p.runner.startErr
+	}
 	return continuationFixtureEvents(), nil
 }
 
@@ -128,6 +138,27 @@ func continuationFixtureEvents() <-chan harnesses.Event {
 	ch <- harnesses.Event{Type: harnesses.EventTypeFinal, Time: time.Now().UTC(), Data: data}
 	close(ch)
 	return ch
+}
+
+func TestContinuationChildCreatesChildAndFreshLifecycleLease(t *testing.T) {
+	svc := &service{hub: serviceimpl.NewSessionHub()}
+	child := newContinuationChild(svc, "resumed-child", t.TempDir())
+	if err := child.Create(context.Background()); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := svc.hub.Subscribe("resumed-child"); err != nil {
+		t.Fatalf("child session was not registered: %v", err)
+	}
+	if err := child.AcquireLease(context.Background()); err != nil {
+		t.Fatalf("AcquireLease: %v", err)
+	}
+	if child.lease == nil || child.lease.sessionID != "resumed-child" || child.lease.stateDir == "" {
+		t.Fatalf("fresh child lifecycle lease = %#v", child.lease)
+	}
+	child.TerminalizeStartFailure(context.Background(), errors.New("route-private failure"))
+	if child.startFailure == nil {
+		t.Fatal("start failure was not handed to the coordinator terminal seam")
+	}
 }
 
 func continuationFixtureService(t *testing.T, runner *continuationFixtureRunner) (*service, string) {
@@ -189,6 +220,37 @@ func TestContinueSupportedResume(t *testing.T) {
 		if !bytes.Contains(event.Data, []byte(`"parent_session_id":"parent"`)) || !bytes.Contains(event.Data, []byte(`"continuation_policy":"prefer_resume"`)) || !bytes.Contains(event.Data, []byte(`"continuation":"resumed"`)) {
 			t.Fatalf("missing service-owned lineage in %s: %s", event.Type, event.Data)
 		}
+	}
+}
+
+func TestContinueResumedStartFailureIsDurableWithoutFreshFallback(t *testing.T) {
+	runner := &continuationFixtureRunner{startErr: errors.New("route-private native continuation token")}
+	svc, dir := continuationFixtureService(t, runner)
+	events, err := svc.Continue(context.Background(), ServiceContinuationRequest{
+		SessionID: "parent", Prompt: "resume", Policy: ContinuationPreferResume,
+		FreshRequest: ServiceExecuteRequest{SessionLogDir: dir},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := DrainExecute(context.Background(), events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Final == nil || result.Final.Status != "failed" {
+		t.Fatalf("start failure final = %#v", result.Final)
+	}
+	if result.Final.Error != "continuation start failed" {
+		t.Fatalf("start failure diagnostic = %q", result.Final.Error)
+	}
+	if runner.prepareCalls.Load() != 1 || runner.executeCalls.Load() != 0 {
+		t.Fatalf("start failure retried fresh execution: prepare=%d execute=%d", runner.prepareCalls.Load(), runner.executeCalls.Load())
+	}
+	if result.Final.SessionLogPath == "" {
+		t.Fatal("start failure did not produce a durable child session log")
+	}
+	if _, err := session.ReadEvents(result.Final.SessionLogPath); err != nil {
+		t.Fatalf("read durable child session: %v", err)
 	}
 }
 
