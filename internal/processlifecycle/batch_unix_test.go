@@ -20,14 +20,53 @@ import (
 )
 
 type portableNamespaceTestRecipe struct {
-	identity PortableNamespaceIdentity
-	released chan struct{}
+	identity      PortableNamespaceIdentity
+	released      chan struct{}
+	projection    *PortableProjectionRecipe
+	projectionErr error
+}
+
+type stalePortableNamespaceTestRecipe struct {
+	portableNamespaceTestRecipe
+	stale bool
+}
+
+func (r *stalePortableNamespaceTestRecipe) RevalidatePortableProjectionDescriptors() error {
+	if r.stale {
+		return errors.New("descriptor identity changed")
+	}
+	return nil
 }
 
 func (portableNamespaceTestRecipe) PortableRuntimeNamespaceRecipe() {}
 
 func (r portableNamespaceTestRecipe) AcquirePortableNamespaceLease(context.Context) (int, int, func(), error) {
 	return r.identity.uid, r.identity.gid, func() { close(r.released) }, nil
+}
+
+func (r portableNamespaceTestRecipe) PortableNamespaceProjectionRecipe() (*PortableProjectionRecipe, error) {
+	return r.projection, r.projectionErr
+}
+
+func (r portableNamespaceTestRecipe) RevalidatePortableProjectionDescriptors() error {
+	return r.projectionErr
+}
+
+func (r portableNamespaceTestRecipe) RevalidatePortableNamespaceIdentity() error { return nil }
+
+func newPortableNamespaceTestRecipe(t *testing.T, identity PortableNamespaceIdentity, released chan struct{}) portableNamespaceTestRecipe {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "projection")
+	if err != nil {
+		t.Fatalf("create projection descriptor: %v", err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	record := bytes.Repeat([]byte{0x5a}, portableProjectionRecordBytes)
+	projection, err := NewPortableProjectionRecipe([][]byte{record}, []*os.File{file})
+	if err != nil {
+		t.Fatalf("NewPortableProjectionRecipe: %v", err)
+	}
+	return portableNamespaceTestRecipe{identity: identity, released: released, projection: projection}
 }
 
 func TestUnixBatchGatePersistsIdentitiesBeforeExec(t *testing.T) {
@@ -182,7 +221,7 @@ func TestUnixPortableNamespaceSetupFailureReleasesLeaseBeforeHarnessExec(t *test
 	released := make(chan struct{})
 	target := exec.Command(os.Args[0], "-test.run=^TestUnixPortableLaunchAttachmentSpawnHelper$")
 	target.Env = append(os.Environ(), "FIZEAU_PORTABLE_LAUNCH_MARKER="+marker)
-	attachment, err := NewPortableLaunchAttachment(target.Path, target.Args[1:], target.Env, portableNamespaceTestRecipe{identity: identity, released: released})
+	attachment, err := NewPortableLaunchAttachment(target.Path, target.Args[1:], target.Env, newPortableNamespaceTestRecipe(t, identity, released))
 	if err != nil {
 		t.Fatalf("NewPortableLaunchAttachment: %v", err)
 	}
@@ -200,6 +239,30 @@ func TestUnixPortableNamespaceSetupFailureReleasesLeaseBeforeHarnessExec(t *test
 		if _, statErr := os.Stat(marker); !errors.Is(statErr, fs.ErrNotExist) {
 			t.Fatalf("harness executed after namespace setup failure: %v", statErr)
 		}
+	}
+}
+
+func TestUnixPortableProjectionDriftRejectsBeforeNamespaceGateRelease(t *testing.T) {
+	identity, err := NewPortableNamespaceIdentity(65532, 65532)
+	if err != nil {
+		t.Fatalf("NewPortableNamespaceIdentity: %v", err)
+	}
+	released := make(chan struct{})
+	recipe := &stalePortableNamespaceTestRecipe{portableNamespaceTestRecipe: newPortableNamespaceTestRecipe(t, identity, released)}
+	target := exec.Command(os.Args[0], "-test.run=^TestUnixPortableLaunchAttachmentSpawnHelper$")
+	target.Env = []string{}
+	attachment, err := NewPortableLaunchAttachment(target.Path, target.Args[1:], target.Env, recipe)
+	if err != nil {
+		t.Fatalf("NewPortableLaunchAttachment: %v", err)
+	}
+	recipe.stale = true
+	if _, err := StartBatch(context.Background(), target, BatchOptions{Harness: "portable", Registry: NewMemoryRegistry(), PortableLaunch: attachment}); err == nil {
+		t.Fatal("StartBatch accepted a stale projection recipe")
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("stale projection rejection did not release namespace lease")
 	}
 }
 
@@ -243,10 +306,15 @@ func TestUnixPortableLauncherIsGatedDirectChildAndReceivesBoundProtocol(t *testi
 	}
 	defer gateW.Close()
 	child := exec.Command(os.Args[0])
+	descriptor, err := os.CreateTemp(dir, "projection")
+	if err != nil {
+		t.Fatalf("create projection descriptor: %v", err)
+	}
+	defer descriptor.Close()
 	child.Env = lifecycleEnvironment(os.Environ(), map[string]string{
-		lifecycleRoleEnv: lifecycleRoleChild, lifecycleFDBaseEnv: "3", lifecycleExtraCountEnv: "0",
+		lifecycleRoleEnv: lifecycleRoleChild, lifecycleFDBaseEnv: "4", lifecycleExtraCountEnv: "1",
 	})
-	child.ExtraFiles = []*os.File{configR, gateR}
+	child.ExtraFiles = []*os.File{descriptor, configR, gateR}
 	if err := child.Start(); err != nil {
 		t.Fatalf("start direct child: %v", err)
 	}
@@ -254,8 +322,9 @@ func TestUnixPortableLauncherIsGatedDirectChildAndReceivesBoundProtocol(t *testi
 	_ = gateR.Close()
 	config := batchTargetConfig{Path: "/bin/sh", Args: []string{"/bin/sh", "-c", "touch " + targetMarker}, Env: []string{}, Portable: &portableNamespaceConfig{
 		Version: portableNamespaceProtocolVersion, UID: 65532, GID: 65532,
-		Launcher: portableNamespaceLauncherConfig{Path: sealed.path, Digest: sealed.digest},
-		Target:   portableNamespaceTargetConfig{Path: "/bin/sh", Args: []string{"/bin/sh", "-c", "touch " + targetMarker}, Env: []string{}},
+		Launcher:   portableNamespaceLauncherConfig{Path: sealed.path, Digest: sealed.digest},
+		Target:     portableNamespaceTargetConfig{Path: "/bin/sh", Args: []string{"/bin/sh", "-c", "touch " + targetMarker}, Env: []string{}},
+		Projection: portableNamespaceProjectionConfig{Version: portableProjectionRecipeVersion, DescriptorBase: 3, Records: [][]byte{bytes.Repeat([]byte{0x5a}, portableProjectionRecordBytes)}},
 	}}
 	if err := json.NewEncoder(configW).Encode(config); err != nil {
 		t.Fatalf("encode target protocol: %v", err)
@@ -283,7 +352,7 @@ func TestUnixPortableLauncherIsGatedDirectChildAndReceivesBoundProtocol(t *testi
 	if err := json.Unmarshal(decoded, &got); err != nil {
 		t.Fatalf("unmarshal launcher protocol: %v", err)
 	}
-	if got.Version != portableNamespaceProtocolVersion || got.Launcher.Path != launcher || !equalStrings(got.Target.Args, config.Portable.Target.Args) || !equalStrings(got.Target.Env, config.Portable.Target.Env) {
+	if got.Version != portableNamespaceProtocolVersion || got.Launcher.Path != launcher || !equalStrings(got.Target.Args, config.Portable.Target.Args) || !equalStrings(got.Target.Env, config.Portable.Target.Env) || got.Projection.DescriptorBase != 3 || len(got.Projection.Records) != 1 || !bytes.Equal(got.Projection.Records[0], config.Portable.Projection.Records[0]) {
 		t.Fatalf("launcher protocol lost sealed identity or target: %#v", got)
 	}
 }

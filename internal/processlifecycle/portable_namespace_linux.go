@@ -31,7 +31,7 @@ func validatePortableNamespaceConfig(config *portableNamespaceConfig) error {
 	if config.Launcher.Path == "" && config.Target.Path == "" && len(config.Target.Args) == 0 && config.Target.Env == nil {
 		return nil
 	}
-	if !validPortableCommand(config.Launcher.Path) || config.Target.Path == "" || len(config.Target.Args) == 0 || config.Target.Args[0] != config.Target.Path || config.Target.Env == nil {
+	if !validPortableCommand(config.Launcher.Path) || config.Target.Path == "" || len(config.Target.Args) == 0 || config.Target.Args[0] != config.Target.Path || config.Target.Env == nil || !validPortableNamespaceProjectionConfig(config.Projection) {
 		return fmt.Errorf("invalid portable namespace protocol")
 	}
 	for _, argument := range config.Target.Args {
@@ -49,6 +49,23 @@ func validatePortableNamespaceConfig(config *portableNamespaceConfig) error {
 		return err
 	}
 	return nil
+}
+
+func validPortableNamespaceProjectionConfig(projection portableNamespaceProjectionConfig) bool {
+	if projection.Version != portableProjectionRecipeVersion || projection.DescriptorBase < 3 || len(projection.Records) == 0 || len(projection.Records) > maxPortableProjectionRecords || projection.DescriptorBase > maxLifecycleInheritedFD-len(projection.Records) {
+		return false
+	}
+	for i, record := range projection.Records {
+		if len(record) != portableProjectionRecordBytes || allZero(record) || pathShapedPortableProjectionRecord(record) {
+			return false
+		}
+		for prior := 0; prior < i; prior++ {
+			if string(record) == string(projection.Records[prior]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // writePortableNamespaceMaps is deliberately parent-owned: Linux requires
