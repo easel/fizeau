@@ -49,11 +49,12 @@ const (
 // portableNamespaceConfig is pipe-only, versioned setup state. It is never
 // serialized to logs or a registry record.
 type portableNamespaceConfig struct {
-	Version  int                             `json:"version"`
-	UID      int                             `json:"uid"`
-	GID      int                             `json:"gid"`
-	Launcher portableNamespaceLauncherConfig `json:"launcher"`
-	Target   portableNamespaceTargetConfig   `json:"target"`
+	Version    int                               `json:"version"`
+	UID        int                               `json:"uid"`
+	GID        int                               `json:"gid"`
+	Launcher   portableNamespaceLauncherConfig   `json:"launcher"`
+	Target     portableNamespaceTargetConfig     `json:"target"`
+	Projection portableNamespaceProjectionConfig `json:"projection"`
 }
 
 // portableNamespaceLauncherConfig is only the sealed launcher identity. The
@@ -74,12 +75,69 @@ type portableNamespaceTargetConfig struct {
 	Dir  string   `json:"dir,omitempty"`
 }
 
+// portableNamespaceProjectionConfig identifies only inherited descriptor
+// positions and fixed-size opaque records.  It cannot encode a host path or a
+// mount action.  The fixed namespace launcher receives the descriptors across
+// exec and interprets the records in its own later authority boundary.
+type portableNamespaceProjectionConfig struct {
+	Version        int      `json:"version"`
+	DescriptorBase int      `json:"descriptor_base"`
+	Records        [][]byte `json:"records"`
+}
+
 func (c portableNamespaceConfig) protocolEnvironment() ([]string, error) {
 	encoded, err := json.Marshal(c)
 	if err != nil || len(encoded) == 0 || len(encoded) > maxPortableNamespaceProtocolBytes {
 		return nil, fmt.Errorf("invalid portable namespace launcher protocol")
 	}
 	return []string{portableNamespaceProtocolEnvironment + "=" + base64.RawURLEncoding.EncodeToString(encoded)}, nil
+}
+
+func clonePortableProjectionRecords(records [][]byte) [][]byte {
+	result := make([][]byte, len(records))
+	for i := range records {
+		result[i] = append([]byte(nil), records[i]...)
+	}
+	return result
+}
+
+// duplicatePortableProjectionDescriptors gives the lifecycle seam an owned
+// descriptor copy for exactly one supervisor/child handoff.  The attachment
+// keeps the activation-owned originals opaque; no later path lookup can
+// substitute a descriptor between validation and the gated launcher exec.
+func duplicatePortableProjectionDescriptors(recipe *PortableProjectionRecipe) ([]*os.File, error) {
+	if !validPortableProjectionRecipe(recipe) {
+		return nil, fmt.Errorf("%w: portable projection recipe is invalid", ErrInvalidRecord)
+	}
+	result := make([]*os.File, 0, len(recipe.descriptors))
+	for i, descriptor := range recipe.descriptors {
+		fd, err := syscall.Dup(int(descriptor.Fd()))
+		if err != nil {
+			closePortableProjectionDescriptors(result)
+			return nil, fmt.Errorf("%w: duplicate portable projection descriptor %d", ErrInvalidRecord, i)
+		}
+		copyDescriptor := os.NewFile(uintptr(fd), "portable-projection")
+		if copyDescriptor == nil {
+			_ = syscall.Close(fd)
+			closePortableProjectionDescriptors(result)
+			return nil, fmt.Errorf("%w: duplicate portable projection descriptor %d", ErrInvalidRecord, i)
+		}
+		originalInfo, originalErr := descriptor.Stat()
+		copyInfo, copyErr := copyDescriptor.Stat()
+		if originalErr != nil || copyErr != nil || !os.SameFile(originalInfo, copyInfo) {
+			_ = copyDescriptor.Close()
+			closePortableProjectionDescriptors(result)
+			return nil, fmt.Errorf("%w: portable projection descriptor %d changed", ErrInvalidRecord, i)
+		}
+		result = append(result, copyDescriptor)
+	}
+	return result, nil
+}
+
+func closePortableProjectionDescriptors(files []*os.File) {
+	for _, file := range files {
+		_ = file.Close()
+	}
 }
 
 type supervisorStartReport struct {
@@ -132,6 +190,7 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 	}
 	var portableLease *PortableNamespaceLease
 	var revalidatePortableIdentity func() error
+	var revalidatePortableProjection func() error
 	if opts.PortableLaunch != nil {
 		if recipe, ok := opts.PortableLaunch.recipe.(portableNamespaceLeaseRecipe); ok {
 			uid, gid, release, err := recipe.AcquirePortableNamespaceLease(ctx)
@@ -156,6 +215,13 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 				releasePortableLease()
 				return nil, fmt.Errorf("%w: portable namespace launcher is required", ErrInvalidRecord)
 			}
+			projectionRecipe, ok := opts.PortableLaunch.recipe.(portableNamespaceProjectionRecipe)
+			if !ok || opts.PortableLaunch.projection == nil || !validPortableProjectionRecipe(opts.PortableLaunch.projection) {
+				releasePortableLease := portableLease.release
+				releasePortableLease()
+				return nil, fmt.Errorf("%w: portable projection recipe is required", ErrInvalidRecord)
+			}
+			revalidatePortableProjection = projectionRecipe.RevalidatePortableProjectionDescriptors
 			revalidator, ok := opts.PortableLaunch.recipe.(portableNamespaceIdentityRevalidationRecipe)
 			if !ok {
 				releasePortableLease := portableLease.release
@@ -215,14 +281,26 @@ func startUnixTarget(ctx context.Context, target *exec.Cmd, opts BatchOptions, t
 		GracePeriod:    opts.GracePeriod,
 		CleanupTimeout: opts.CleanupTimeout,
 	}
+	originalExtraFiles := append([]*os.File(nil), target.ExtraFiles...)
+	projectionExtraFiles := make([]*os.File, 0)
+	defer func() { closePortableProjectionDescriptors(projectionExtraFiles) }()
 	if portableLease != nil {
+		if err := revalidatePortableProjection(); err != nil {
+			return nil, fmt.Errorf("revalidate portable projection descriptors: %w", err)
+		}
+		var err error
+		projectionExtraFiles, err = duplicatePortableProjectionDescriptors(opts.PortableLaunch.projection)
+		if err != nil {
+			return nil, err
+		}
 		config.Portable = &portableNamespaceConfig{
 			Version: portableNamespaceProtocolVersion, UID: portableLease.identity.uid, GID: portableLease.identity.gid,
-			Launcher: portableNamespaceLauncherConfig{Path: opts.PortableLaunch.launcher.path, Digest: opts.PortableLaunch.launcher.digest},
-			Target:   portableNamespaceTargetConfig{Path: target.Path, Args: append([]string(nil), target.Args...), Env: append([]string(nil), target.Environ()...), Dir: target.Dir},
+			Launcher:   portableNamespaceLauncherConfig{Path: opts.PortableLaunch.launcher.path, Digest: opts.PortableLaunch.launcher.digest},
+			Target:     portableNamespaceTargetConfig{Path: target.Path, Args: append([]string(nil), target.Args...), Env: append([]string(nil), target.Environ()...), Dir: target.Dir},
+			Projection: portableNamespaceProjectionConfig{Version: opts.PortableLaunch.projection.version, DescriptorBase: 3 + len(originalExtraFiles), Records: clonePortableProjectionRecords(opts.PortableLaunch.projection.records)},
 		}
 	}
-	originalExtraFiles := append([]*os.File(nil), target.ExtraFiles...)
+	target.ExtraFiles = append(originalExtraFiles, projectionExtraFiles...)
 
 	configR, configW, err := os.Pipe()
 	if err != nil {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +43,57 @@ func TestPortableActivationIdentityDriftPreventsGatedReleaseAndReleasesLease(t *
 	case <-released:
 		t.Fatal("identity drift released the portable root lease more than once")
 	default:
+	}
+}
+
+func TestPortableProjectionRecipeFailsClosedAndRedactsDescriptors(t *testing.T) {
+	secretPath := t.TempDir() + "/projection-secret"
+	if err := os.WriteFile(secretPath, []byte("descriptor-only"), 0o600); err != nil {
+		t.Fatalf("write projection fixture: %v", err)
+	}
+	first, err := os.Open(secretPath)
+	if err != nil {
+		t.Fatalf("open projection fixture: %v", err)
+	}
+	defer first.Close()
+	second, err := os.Open(secretPath)
+	if err != nil {
+		t.Fatalf("open aliased projection fixture: %v", err)
+	}
+	defer second.Close()
+
+	valid := make([]byte, portableProjectionRecordBytes)
+	valid[len(valid)-1] = 1
+	for _, tc := range []struct {
+		name        string
+		records     [][]byte
+		descriptors []*os.File
+	}{
+		{name: "oversized", records: make([][]byte, maxPortableProjectionRecords+1), descriptors: make([]*os.File, maxPortableProjectionRecords+1)},
+		{name: "path-shaped", records: [][]byte{append([]byte("/host/path-shaped-projection-record"), 0)}, descriptors: []*os.File{first}},
+		{name: "aliased-record", records: [][]byte{valid, append([]byte(nil), valid...)}, descriptors: []*os.File{first, second}},
+		{name: "aliased-descriptor", records: [][]byte{valid, append([]byte{2}, valid[1:]...)}, descriptors: []*os.File{first, second}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := NewPortableProjectionRecipe(tc.records, tc.descriptors); err == nil {
+				t.Fatal("NewPortableProjectionRecipe accepted unsafe input")
+			}
+		})
+	}
+
+	recipe, err := NewPortableProjectionRecipe([][]byte{valid}, []*os.File{first})
+	if err != nil {
+		t.Fatalf("NewPortableProjectionRecipe: %v", err)
+	}
+	text := fmt.Sprintf("%#v", recipe)
+	encoded, err := json.Marshal(recipe)
+	if err != nil {
+		t.Fatalf("marshal projection recipe: %v", err)
+	}
+	for _, forbidden := range []string{secretPath, "descriptor-only", string(valid)} {
+		if strings.Contains(text, forbidden) || strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("projection diagnostic leaked descriptor detail %q: text=%q json=%s", forbidden, text, encoded)
+		}
 	}
 }
 

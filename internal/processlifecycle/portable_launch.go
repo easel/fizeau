@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 // PortableNamespaceLauncher is the activation-verified executable identity
@@ -114,6 +115,107 @@ type PortableLaunchRecipe interface {
 	PortableRuntimeNamespaceRecipe()
 }
 
+const (
+	portableProjectionRecipeVersion = 1
+	maxPortableProjectionRecords    = 128
+	portableProjectionRecordBytes   = sha256.Size
+)
+
+// PortableProjectionRecipe is the sealed, descriptor-only handoff from an
+// activation to the lifecycle-owned namespace launcher seam.  It intentionally
+// carries no names, host paths, mount instructions, or source content: record
+// bytes identify the activation-owned descriptors by position only.  The
+// namespace launcher is the sole later consumer of those inherited positions.
+//
+// Callers construct this value only after descriptor pinning.  The constructor
+// owns the record bytes but deliberately does not expose the descriptors or
+// records back to callers or diagnostic encoders.
+type PortableProjectionRecipe struct {
+	version     int
+	records     [][]byte
+	descriptors []*os.File
+}
+
+func (r PortableProjectionRecipe) String() string {
+	return fmt.Sprintf("{Version:%d DescriptorCount:%d}", r.version, len(r.descriptors))
+}
+
+func (r PortableProjectionRecipe) GoString() string { return r.String() }
+
+func (r PortableProjectionRecipe) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Version         int `json:"version"`
+		DescriptorCount int `json:"descriptor_count"`
+	}{Version: r.version, DescriptorCount: len(r.descriptors)})
+}
+
+// NewPortableProjectionRecipe seals bounded opaque record IDs to their exact
+// descriptor order.  A record is a fixed SHA-256-sized opaque identifier, not
+// a pathname or a serialized mount instruction.  Descriptor aliases are
+// rejected so one descriptor cannot acquire two projection identities.
+func NewPortableProjectionRecipe(records [][]byte, descriptors []*os.File) (*PortableProjectionRecipe, error) {
+	if len(records) == 0 || len(records) > maxPortableProjectionRecords || len(records) != len(descriptors) {
+		return nil, fmt.Errorf("%w: portable projection recipe is invalid", ErrInvalidRecord)
+	}
+	owned := make([][]byte, len(records))
+	for i, record := range records {
+		if len(record) != portableProjectionRecordBytes || allZero(record) || pathShapedPortableProjectionRecord(record) {
+			return nil, fmt.Errorf("%w: portable projection record %d is invalid", ErrInvalidRecord, i)
+		}
+		for prior := 0; prior < i; prior++ {
+			if string(record) == string(records[prior]) {
+				return nil, fmt.Errorf("%w: portable projection record %d aliases an earlier record", ErrInvalidRecord, i)
+			}
+		}
+		owned[i] = append([]byte(nil), record...)
+	}
+	for i, descriptor := range descriptors {
+		if descriptor == nil {
+			return nil, fmt.Errorf("%w: portable projection descriptor %d is invalid", ErrInvalidRecord, i)
+		}
+		info, err := descriptor.Stat()
+		if err != nil || !(info.Mode().IsRegular() || info.IsDir()) {
+			return nil, fmt.Errorf("%w: portable projection descriptor %d is invalid", ErrInvalidRecord, i)
+		}
+		for prior := 0; prior < i; prior++ {
+			priorInfo, priorErr := descriptors[prior].Stat()
+			if priorErr != nil {
+				return nil, fmt.Errorf("%w: portable projection descriptor %d is invalid", ErrInvalidRecord, prior)
+			}
+			if os.SameFile(info, priorInfo) {
+				return nil, fmt.Errorf("%w: portable projection descriptor %d aliases an earlier descriptor", ErrInvalidRecord, i)
+			}
+		}
+	}
+	return &PortableProjectionRecipe{version: portableProjectionRecipeVersion, records: owned, descriptors: append([]*os.File(nil), descriptors...)}, nil
+}
+
+func allZero(value []byte) bool {
+	for _, byteValue := range value {
+		if byteValue != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func pathShapedPortableProjectionRecord(value []byte) bool {
+	if !utf8.Valid(value) {
+		return false
+	}
+	text := string(value)
+	return strings.HasPrefix(text, "/") || strings.Contains(text, "../") || strings.Contains(text, "\\")
+}
+
+// portableNamespaceProjectionRecipe is deliberately an optional capability of
+// an activation-owned recipe.  It keeps descriptor acquisition and projection
+// semantics outside processlifecycle while requiring an explicit sealed
+// handoff before a namespace child can be released.
+type portableNamespaceProjectionRecipe interface {
+	PortableNamespaceProjectionRecipe() (*PortableProjectionRecipe, error)
+	RevalidatePortableProjectionDescriptors() error
+}
+
 // portableNamespaceLeaseRecipe is deliberately optional. Existing sealed
 // launch attachments remain transport-neutral; only an activation-owned
 // recipe can request the Linux outer namespace protocol.
@@ -175,6 +277,7 @@ type PortableLaunchAttachment struct {
 	environment []string
 	recipe      PortableLaunchRecipe
 	launcher    *PortableNamespaceLauncher
+	projection  *PortableProjectionRecipe
 }
 
 // NewPortableLaunchAttachment validates and defensively owns a portable child
@@ -220,7 +323,37 @@ func NewPortableLaunchAttachment(command string, arguments, environment []string
 		}
 		attachment.launcher = &launcher
 	}
+	if projectionRecipe, ok := recipe.(portableNamespaceProjectionRecipe); ok {
+		projection, err := projectionRecipe.PortableNamespaceProjectionRecipe()
+		if err != nil || !validPortableProjectionRecipe(projection) {
+			return nil, fmt.Errorf("%w: portable projection recipe", ErrInvalidRecord)
+		}
+		attachment.projection = projection.clone()
+	}
 	return attachment, nil
+}
+
+func validPortableProjectionRecipe(recipe *PortableProjectionRecipe) bool {
+	if recipe == nil || recipe.version != portableProjectionRecipeVersion || len(recipe.records) == 0 || len(recipe.records) > maxPortableProjectionRecords || len(recipe.records) != len(recipe.descriptors) {
+		return false
+	}
+	for _, record := range recipe.records {
+		if len(record) != portableProjectionRecordBytes || allZero(record) || pathShapedPortableProjectionRecord(record) {
+			return false
+		}
+	}
+	return true
+}
+
+func (r *PortableProjectionRecipe) clone() *PortableProjectionRecipe {
+	if r == nil {
+		return nil
+	}
+	copyRecipe := &PortableProjectionRecipe{version: r.version, records: make([][]byte, len(r.records)), descriptors: append([]*os.File(nil), r.descriptors...)}
+	for i := range r.records {
+		copyRecipe.records[i] = append([]byte(nil), r.records[i]...)
+	}
+	return copyRecipe
 }
 
 func validPortableCommand(command string) bool {
@@ -251,7 +384,7 @@ func isNilPortableRecipe(recipe PortableLaunchRecipe) bool {
 }
 
 func (a PortableLaunchAttachment) String() string {
-	return fmt.Sprintf("{ArgumentCount:%d EnvironmentCount:%d NamespaceRecipeConfigured:%t NamespaceLauncherConfigured:%t}", len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil)
+	return fmt.Sprintf("{ArgumentCount:%d EnvironmentCount:%d NamespaceRecipeConfigured:%t NamespaceLauncherConfigured:%t ProjectionRecipeConfigured:%t}", len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil, a.projection != nil)
 }
 
 func (a PortableLaunchAttachment) GoString() string { return a.String() }
@@ -262,7 +395,8 @@ func (a PortableLaunchAttachment) MarshalJSON() ([]byte, error) {
 		EnvironmentCount            int  `json:"environment_count"`
 		NamespaceRecipeConfigured   bool `json:"namespace_recipe_configured"`
 		NamespaceLauncherConfigured bool `json:"namespace_launcher_configured"`
-	}{len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil})
+		ProjectionRecipeConfigured  bool `json:"projection_recipe_configured"`
+	}{len(a.arguments), len(a.environment), a.recipe != nil, a.launcher != nil, a.projection != nil})
 }
 
 func (a *PortableLaunchAttachment) clone() *PortableLaunchAttachment {
@@ -272,7 +406,7 @@ func (a *PortableLaunchAttachment) clone() *PortableLaunchAttachment {
 	return &PortableLaunchAttachment{
 		command: a.command, arguments: append([]string(nil), a.arguments...),
 		environment: append([]string{}, a.environment...), recipe: a.recipe,
-		launcher: a.launcher,
+		launcher: a.launcher, projection: a.projection.clone(),
 	}
 }
 
