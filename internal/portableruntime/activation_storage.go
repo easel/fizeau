@@ -104,6 +104,7 @@ type ActivationRecipe struct {
 	identityReader    activationIdentityReader
 	lease             *activationSubprocessLease
 	launcherPath      string
+	projection        *activationProjectionRecipe
 }
 
 // PortableRuntimeNamespaceRecipe marks this value as the opaque recipe that
@@ -140,6 +141,17 @@ func (r ActivationRecipe) RevalidatePortableNamespaceIdentity() error {
 	identity, groups, err := r.identityReader()
 	if err != nil || validateActivationIdentity(identity, groups) != nil || identity != r.identity {
 		return activationError("activation identity")
+	}
+	return nil
+}
+
+// RevalidatePortableProjectionDescriptors proves that the activation-owned
+// projection inputs are still the exact objects admitted during activation.
+// It deliberately returns only a capability verdict: callers cannot recover
+// host paths, descriptor numbers, or source contents from a recipe.
+func (r ActivationRecipe) RevalidatePortableProjectionDescriptors() error {
+	if r.projection == nil || r.projection.revalidate() != nil {
+		return activationError("projection descriptor identity")
 	}
 	return nil
 }
@@ -403,6 +415,11 @@ func assembleActivationWithIdentity(ctx context.Context, runtimeRoot, writableRo
 				})
 			}
 		}
+		pinned, pinErr := pinActivationProjectionRecipe(runtime, stage, destination, entrypoint, assets, recipe)
+		if pinErr != nil {
+			return ActivationPlan{}, activationError("projection descriptor identity")
+		}
+		recipe.projection = pinned
 		entrypoints[name] = activationEntrypoint{environment: environment, recipe: recipe}
 	}
 
@@ -547,6 +564,7 @@ func cloneActivationRecipe(src ActivationRecipe) ActivationRecipe {
 		identityReader:    src.identityReader,
 		lease:             src.lease,
 		launcherPath:      src.launcherPath,
+		projection:        src.projection,
 	}
 }
 
