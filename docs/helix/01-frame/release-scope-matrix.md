@@ -27,6 +27,30 @@ misrepresenting a release. Experimental/deferred work is not a v0.15 blocker.
 Decision-required rows need an explicit compatibility decision before they can
 be gates.
 
+## Decision Record: Public Cost Presence and Provenance
+
+**Decision:** retain and freeze the bounded v0.15 public cost migration.
+
+FR-5 requires an observable distinction between a known cost (including a
+known zero) and an explicitly unknown cost, plus provenance for a known
+amount. That is the product semantic. `CostUSD *float64` paired with
+`CostSource` is the already-selected public representation of that semantic;
+it is not a reason to widen cost APIs or to turn every internal price or
+routing value into an optional public result.
+
+The source-incompatible change relative to v0.14.50 is intentional: it has
+landed on the pre-v0.15 mainline before the v0.15 tag. Consumers of the
+affected keyed literals and selector expressions must branch on nil and
+`CostSource`, then explicitly dereference a present amount. This release does
+not add a compatibility adapter that guesses presence from a scalar value.
+
+The freeze applies to the current public final-result and durable end
+projections named in CONTRACT-003: `ServiceFinalData`, `DrainExecuteResult`,
+`SessionEndData`, and `ServiceOverrideOutcome`. Do not extend this migration
+to routing/catalog price fields, benchmark result schemas, new public result
+types, or additional compatibility bridges in v0.15. Future public cost-shape
+changes require a separately scoped compatibility decision.
+
 ## Matrix
 
 | Release-gate area | Classification | PRD trace | v0.15 outcome and boundary |
@@ -44,14 +68,16 @@ be gates.
 | Governed-document validation and freshness | Supporting reliability | FR-1–FR-8 | The PRD, test plan, release checklist, and implementation plan agree on the release scope. |
 | Portable-runtime closure preparation, mount projection, namespace launcher, PID-1/signal isolation, and OCI proof | Experimental/deferred | No canonical FR | Retain ADR-014 material as an optional future Linux-isolation experiment. It neither blocks v0.15 nor adds mock/consumer compatibility obligations. |
 | Continuation (`FizeauService.Continue`) | Decision required | Indirectly FR-1, FR-5 | Decide whether the existing bounded API remains a v0.15 public commitment or becomes experimental. **Keep:** verify the current API only; no new resume policies, persistence formats, or lifecycle features. **Defer:** remove it from v0.15 gates and preserve it only as additive experimental code. Either choice affects public interface and external mocks. |
-| Cost pointer migration across public result types | Decision required | FR-5 | Known/unknown cost and provenance are core; the broad pointer-literal migration is not automatically core. **Keep:** publish it as an intentional compatibility change with keyed-literal and nil/source-aware consumer fixtures. **Defer:** preserve existing public shapes and enforce the FR-5 semantics internally until a separately versioned migration. Either choice affects source compatibility. |
+| Bounded public cost presence/provenance migration | Core (frozen compatibility boundary) | FR-5 | Retain the existing `CostUSD *float64` plus `CostSource` representation on the four final-result and durable end projections named in the decision record. The deliberate pre-v0.15 source break from v0.14.50 is complete; validate nil/zero/positive/source semantics and affected consumer compilation, but do not widen the migration. |
 
 ## Gate Rule
 
 The v0.15 checklist may require the Core and Supporting reliability rows above.
 It must not require Experimental/deferred rows. A Decision-required row becomes
 required only after its explicit choice is recorded in the public contract and
-the checklist is reduced to the selected, bounded evidence.
+the checklist is reduced to the selected, bounded evidence. The cost migration
+is no longer decision-required: the decision record above fixes its v0.15
+boundary.
 
 ## Direct Sources
 
