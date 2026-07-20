@@ -33,9 +33,12 @@ ddx:
 
 ## Testing Strategy
 
-**Goals**: protect the embeddable public contract, measurement semantics, and
-local/cloud parity | **Quality gates**: every package test passes and every
-measured package meets its ratchet floor
+**Goals**: prove the v0.15 outcomes in the
+[release-scope matrix](../01-frame/release-scope-matrix.md): embeddable public
+execution, supported provider and TUI-wrapper parity, measured/replayable
+results, a thin CLI, installable artifacts, and preserved benchmark evidence.
+**Quality gates**: every package test passes and every measured package meets
+its ratchet floor.
 
 **Out of Scope**: live paid-provider calls and hardware-specific benchmark
 claims. Those require opt-in integration runs and recorded evidence.
@@ -50,7 +53,7 @@ claims. Those require opt-in integration runs and recorded evidence.
 | Public contract | All changed exported behavior has an external-package or structural contract test | P0 |
 | Integration | Native and subprocess paths use service-owned events and projections | P0 |
 | Unit | 100% of measured packages meet `.helix-ratchets/coverage-floor.json` | P0 |
-| E2E | Installer and browser workbench acceptance suites pass for affected releases | P1 |
+| E2E | Installer acceptance and self-describing benchmark evidence pass for affected releases | P0 |
 
 ### Frameworks
 
@@ -59,7 +62,7 @@ claims. Those require opt-in integration runs and recorded evidence.
 | Contract | Go `testing` with `package fizeau_test` and structural tests | Exercises the consumer boundary |
 | Integration | Go build tags, cassettes, and local test servers | Keeps default tests deterministic; live probes remain explicit |
 | Unit | Go `testing`, `testify`, and focused property/fuzz tests | Matches package ownership |
-| E2E | Shell acceptance tests and Playwright-driven Go smoke tests | Exercises released installer and browser surfaces |
+| E2E | Shell acceptance tests and benchmark evidence fixtures | Exercises released installer and reproducible comparison evidence |
 
 ## Test Data
 
@@ -92,30 +95,47 @@ parses zero packages is a measurement error, never a passing zero-row report.
 4. Per-turn measurement, replay, and explicit unknown cost semantics.
 5. CLI delegation through the public facade.
 
-### Portable Runtime Lane Allocation
+### Core v0.15 Release Evidence
+
+This table is the testing projection of the release-scope matrix. A v0.15
+release requires the Core and Supporting reliability rows; it does not acquire
+new requirements from an ADR or a detailed test lane alone.
+
+| Scope-matrix outcome | Required evidence |
+|---|---|
+| FR-1 embedded execution | Root-facade construction, bounded `Execute`, service-event, and terminal-result contract tests |
+| FR-2 workspace tools | Tool-schema, workspace-resolution, tool-attempt, and service-owned event tests |
+| FR-3 provider and wrapper parity | Native-provider and supported subprocess/TUI wrapper request, event, usage, model-discovery, and launch tests |
+| FR-4 routing and catalog | Catalog/model discovery, exact pin and policy intent, selected-route attribution, one-route dispatch, and context-capacity correctness tests |
+| FR-5 measurement and replay | Session JSONL, replay, timing/token, and known/unknown/zero cost-presence-and-provenance tests |
+| FR-6 thin CLI | `agentcli` and `fiz` tests proving delegation through the public facade and machine-readable inspection surfaces |
+| FR-7 distribution | Versioned artifact build plus explicit installer/update acceptance on the supported release platforms |
+| FR-8 benchmark provenance | Self-describing benchmark-cell and comparison-evidence tests; website presentation is not release evidence |
+| Supporting reliability | Contained subprocess descendant cleanup, caller-death handling, terminal-after-cleanup ordering, and stale-identity refusal for supported execution paths |
+
+Normal repository evidence remains mandatory: the default Go suite, race suite,
+vet/lint/security/format checks, coverage ratchet, and the relevant artifact or
+installer acceptance. Run focused tests first, then the applicable core matrix
+row and repository gates.
+
+### Portable Runtime — Experimental, Non-Blocking
 
 > **Experimental track.** These are not v0.15 release lanes. They become
 > required only for a separately approved portable-runtime release target.
 
-Portable activation has native non-skipping amd64 and arm64 Linux security jobs
-in addition to ordinary and race tests. The lanes divide evidence as follows:
+Portable closure preparation, launcher generation, Linux namespace isolation,
+mount projection, PID-1 behavior, and OCI/security proof are retained as a
+separate experiment. They do not run as v0.15 release gates and a failure in
+one cannot block the core release matrix above.
 
-| Lane | Required evidence |
+| Experimental lane | Future-target evidence |
 |---|---|
-| Ordinary repository tests | Manifest/provider verification; closed per-entrypoint environment; unsafe activation UID/GID/group rejection; owner-only scope creation; prefix/projection seed mapping and double-copy prevention; checked-in launcher bytes/digest/ELF/GOARCH/static/single-thread shape and exact reserved target; public and diagnostic opacity; `PortableRuntimeBundle.Close` ownership |
-| Focused race tests | `TestPortableRuntimeExclusiveSubprocessLease` proves same-root serialization through descendant cleanup, queued cancellation without spawn, terminal-path release, independent-root concurrency, and teardown cleanup |
-| `portable-namespace-launcher` generation job | `make portable-namespace-launcher-check` requires Zig 0.16.0 and rebuilds both x86_64-linux-musl/linux-amd64 and aarch64-linux-musl/linux-arm64 with the governed static, stripped, single-threaded flags; every checked artifact byte and digest must match |
-| Native `portable-runtime-oci-{amd64,arm64}` jobs | `make test-portable-runtime-oci` on `ubuntu-24.04` and `ubuntu-24.04-arm` verifies the repo-pinned Docker 29.6.2/runc toolchain and Linux >=6.12 feature preflight, then runs static/dynamic/interpreted unpinned Execute; every governed ancestor and config mutation/shadow attack including `RENAME_EXCHANGE`; mutable in-place/truncate/atomic replacement plus locks and siblings; final required-absent check under the exclusive lease; exact two-stage UID/GID maps and empty groups; every PID-1/harness task's CapInh/Prm/Eff/Bnd/Amb, securebits, `NoNewPrivs`, and seccomp state; single-threaded non-dumpable PID 1; ptrace/process-VM/proc-mem/proc-fd/pidfd isolation; descriptor closure and private `/proc`; `EPERM` for direct, queued, thread-directed, process-group, and pidfd signal paths to PID 1; seccomp errno and ordinary-thread fallback; setup failure without harness exec; distinct process groups, non-duplicated signal bridging, PTY foreground, exact status/caller-death/grandchild cleanup; OpenCode auth plus log/database siblings |
+| Repository and race tests | Closure/projection behavior, redaction/ownership boundaries, and exclusive-lease concurrency |
+| Launcher generation | `make portable-namespace-launcher-check` for the separately approved launcher target |
+| Native OCI/security | `make test-portable-runtime-oci` on the approved Linux architectures, including namespace, mount, signal, and isolation evidence |
 
-Each native OCI job fails rather than skips on an architecture mismatch,
-unpinned runtime, Linux below 6.12, or failed namespace/syscall/seccomp feature
-preflight. It builds its `FROM scratch` fixture without a pull and invokes the
-consumer as `65532:65532` with no supplementary groups, all capabilities
-dropped, no network, a read-only root, exact mounts, and no privileged/cap-add
-option. A sentinel environment value must appear only in the
-child environment, never launcher argv, sealed-recipe diagnostics, JSON, or
-public plan data. Recipe tamper, map/gate failure, and unsupported mount syscalls
-must fail before the governed harness target executes.
+Experimental results may inform a future proposal, but they are neither a
+substitute for supported subprocess-cleanup evidence nor a v0.15 blocker.
 
 ### Known Contract-to-Code Gaps
 
@@ -124,13 +144,12 @@ These desired contracts are intentionally not counted as passing evidence:
 | Contract | Missing implementation | Required proof before alignment |
 |---|---|---|
 | CONTRACT-001 timing classification | Chat spans lack required availability, source, and available-fields attributes. | Telemetry contract tests assert all classifications for present and absent timing windows. |
-| CONTRACT-003 final and override cost presence and provenance | `DrainExecuteResult`, `ServiceFinalData`, and `ServiceOverrideOutcome` use scalar cost fields, so adapters can collapse absence into zero and lose source. The service-backed comparison runner also emits scalar arm and summary evidence. | `TestServiceFinalCostPresenceJSONRoundTrip`, `TestDrainExecutePreservesFinalCostPresence`, and `TestPublicSessionEndTypedValuesDurableRoundTrip` prove terminal nil/zero/positive/source behavior; `TestExecuteOverridePreservesFinalCostPresence` and `TestMakeExecuteOverrideEventPreservesFinalCostPresence` prove accepted and rejected override behavior; `TestRunResultCostSourceIngressCompile`, `TestBenchmarkFinalCostPresence`, `TestBenchmarkEvidenceCostPresence`, and `TestBenchmarkReportCostPresence` prove the behavior-preserving comparison ingress, runner population, JSON, summaries, and reports preserve presence/source; `TestV015CostPointerMigrationCompile` proves an external consumer migrates keyed literals, selectors, nil branches, dereference, and source inspection for all three public pointer types. Alignment additionally requires `TestExecuteNativePreservesFinalCostPresence` and `TestSessionLogPreservesFinalCostPresence` so no internal boundary reconstructs presence numerically. |
 | SD-011 progress usage | The internal progress payload still uses historical cached-input/retried-input fields instead of cache-read/cache-write. | Transcript tests assert the canonical four-stream payload and keep retry accounting separate. |
 | SD-010 benchmark pricing map | Benchmark profiles expose one historical cached-input rate instead of separate cache-read/cache-write rates. | Profile-schema and cost-reconciliation tests cover all four runtime streams without pricing retry accounting. |
 
 ### Secondary Paths (P1-P2)
 
-- P1: installer/update release flow and benchmark workbench smoke coverage.
+- P1: optional browser workbench presentation coverage.
 - P2: opt-in live providers, hardware benchmarks, fuzzing, and long-running
   integration probes.
 
@@ -173,7 +192,7 @@ relevant assertion is `ASSERTED_UNBACKED`.
 |---|---|
 | CI tool | GitHub Actions using Go from `go.mod` |
 | Services | None for the default suite; local servers and subprocess cassettes only |
-| Platform jobs | Linux default/race; pinned `portable-namespace-launcher`; native `portable-runtime-oci-amd64` and `portable-runtime-oci-arm64`; Linux and macOS installer acceptance |
+| Platform jobs | Linux default/race and Linux/macOS installer acceptance; portable launcher and OCI jobs are experimental only |
 | Browser | Hugo plus Playwright Chromium for workbench smoke |
 
 ## Risks
@@ -198,9 +217,15 @@ contract check remains `UNIMPLEMENTED`.
 
 ## Build Handoff
 
-**Commands**: `go test -count=1 ./...` | `make test-race` |
-`make coverage-ratchet` | `make portable-namespace-launcher-check` |
-`make test-portable-runtime-oci`
+**Core commands**: `go test -count=1 ./...` | `make test-race` |
+`make coverage-ratchet` | `make build-ci` | `make vet` | `make lint` |
+`make gosec` | `make govulncheck` | `make fmt-check` |
+`make rename-noise-check` | `make test-install-sh` when artifacts or the
+installer change.
+
+**Experimental only**: `make portable-namespace-launcher-check` and
+`make test-portable-runtime-oci` apply only to a separately approved portable
+runtime target; neither is a v0.15 blocking command.
 
 **Priority**: focused structural acceptance first, then repository gates.
 
@@ -213,5 +238,9 @@ measured package at or above its configured floor minus tolerance.
 - [ ] Story criteria have exercising tests and canonical citations
 - [ ] Default and race suites pass
 - [ ] Coverage ratchet measures at least one package and passes
-- [ ] Installer/browser E2E gates run when those surfaces change
+- [ ] Installer acceptance and required benchmark-evidence tests run when
+      their core surfaces change
+- [ ] Browser workbench presentation coverage remains optional
 - [ ] No test depends on real developer configuration or paid credentials
+- [ ] Portable launcher, namespace, mount, OCI, and security evidence is not
+      treated as a v0.15 release gate

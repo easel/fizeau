@@ -187,6 +187,23 @@ evidence that prevents an unowned path from remaining.
 
 ## Validation Plan
 
+### v0.15 Core Release Evidence
+
+The release-scope matrix, not an individual ADR or implementation sequence,
+decides what blocks v0.15. Apply the normal repository gates to every
+substantive change and additionally run the matrix row affected by the change.
+
+| Scope-matrix row | Required v0.15 validation |
+|---|---|
+| FR-1 / FR-2 | Root-facade `Execute`, event, workspace-tool, and tool-attempt contract/integration tests |
+| FR-3 | Native provider and supported subprocess/TUI wrapper request, event, usage, model-discovery, launch, and cleanup tests |
+| FR-4 | Catalog/model-discovery, selected-route attribution, one-route dispatch, and context-capacity correctness tests |
+| FR-5 | Session/replay/timing/token tests plus known/unknown/zero cost-presence and provenance round trips |
+| FR-6 | `agentcli`/`fiz` public-facade and machine-readable surface tests |
+| FR-7 | Versioned artifact build and explicit installer/update acceptance on the supported release platforms |
+| FR-8 | Self-describing benchmark-cell and comparison-evidence tests; website presentation alone is not a release gate |
+| Supporting reliability | Descendant cleanup, caller-death, terminal-after-cleanup, and stale-identity refusal tests for supported subprocess paths |
+
 - [ ] Run every test function and structural property named by the bead.
 - [ ] Run `go test -count=1 ./...` before every substantive commit.
 - [ ] Run `make test-race` before push.
@@ -228,6 +245,16 @@ evidence that prevents an unowned path from remaining.
 
 Worker outcome labels are not acceptance evidence. Local structural checks and
 the commands above decide whether a bead can close.
+
+### Portable Runtime — Experimental, Non-Blocking
+
+Portable closure preparation, launcher generation, Linux namespaces, mount
+projection, PID-1 behavior, and OCI/security verification remain an optional
+future experiment. `make portable-namespace-launcher-check` and
+`make test-portable-runtime-oci`, including their architecture-specific
+environment requirements, run only for a separately approved portable-runtime
+target. Their success is not required to release v0.15; their failure must not
+block the core matrix or expand a core bead's acceptance criteria.
 
 ## Risks and Rollbacks
 
