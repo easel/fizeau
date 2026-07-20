@@ -201,8 +201,18 @@ substantive change and additionally run the matrix row affected by the change.
 | FR-5 | Session/replay/timing/token tests plus known/unknown/zero cost-presence and provenance round trips |
 | FR-6 | `agentcli`/`fiz` public-facade and machine-readable surface tests |
 | FR-7 | Versioned artifact build and explicit installer/update acceptance on the supported release platforms |
-| FR-8 | Self-describing benchmark-cell and comparison-evidence tests; website presentation alone is not a release gate |
+| FR-8 | Durable self-describing benchmark-cell and comparison-evidence tests: provenance, replayability, and honest local/cloud comparability are preserved. Website narrative, presentation-specific schemas, and nonessential pipeline work are not release gates. |
 | Supporting reliability | Descendant cleanup, caller-death, terminal-after-cleanup, and stale-identity refusal tests for supported subprocess paths |
+
+FR-8 release evidence is the durable cell and the comparison it supports, not a
+particular collector, importer, report format, or website. A cell must retain
+the provenance and measurement semantics needed to inspect or replay the run.
+A local/cloud comparison must retain the workload, model/provider/harness, and
+environment or runtime facts needed to distinguish comparable results from
+unknown or inapplicable ones; it must not manufacture a fair comparison by
+dropping those differences. Browser narratives, presentation-only tables or
+schemas, and pipeline work that does not create, preserve, or validate this
+evidence remain non-blocking for v0.15.
 
 - [ ] Run every test function and structural property named by the bead.
 - [ ] Run `go test -count=1 ./...` before every substantive commit.

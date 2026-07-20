@@ -55,6 +55,20 @@ The cost checks above verify the frozen FR-5 representation only. They do not
 authorize further public cost-shape changes or migration of routing, catalog,
 or benchmark schemas.
 
+### FR-8 Evidence Boundary
+
+The Benchmark provenance core gate requires durable, self-describing result
+cells with enough provenance and measurement semantics to inspect or replay an
+individual run. Its comparison evidence must preserve the workload,
+model/provider/harness, and relevant environment or runtime facts needed for
+an honest local/cloud comparison. Missing, unknown, or non-comparable facts
+must remain explicit; a comparison cannot become valid by omitting them.
+
+The gate does not require a website narrative, curated presentation, a
+presentation-specific cell schema, or collection/import/report pipeline work
+that neither creates nor validates durable comparison evidence. Those surfaces
+may evolve independently and are non-blocking for v0.15.
+
 `FizeauService.Continue` is experimental/deferred. Its tests, public mock and
 consumer compatibility, policies, persistence, and lifecycle behavior are not
 v0.15 verification evidence and cannot block a core release.
