@@ -9,15 +9,15 @@ ddx:
     - ADR-002
     - TP-001
   review:
-    self_hash: 6b99383dfff4e431ba9f0ec207a8da8a6d615ae59697b96fbf14937a5a6b1fde
+    self_hash: 2d4a1ff0727a4a746ce7254a0cf87926cb411c5b1b85bc14bf2f0e462699371b
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       CONTRACT-003: 01fd520e5200f41c120be3f561973a35c7c573703812e1a45d498fe5214188af
       CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
-      TP-001: 330c9b002d2e84719534ab126f66001ae73cfb4f20986e28ff59cdc9ec179c9d
+      TP-001: 83ce3746c691d2aad9ea1a4f76059f0319f673079fbdaefa17a360b73635d6b6
       helix.release-scope-matrix: dc3373a8837b404f86607a1a66cf4aba1df019b038b767a4e91354e2b8cd9662
-      implementation-plan: ede4c3ca8d3c5ec0208bdf67cec76b6398a1e0988bdee733748ab8d4ba847d1b
-    reviewed_at: "2026-07-20T22:54:37Z"
+      implementation-plan: f86382dc2e5601fbf4c297a7ff6e41b54a03417fbd69ea4c2f7830d09f18464c
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # Release Checklist — Fizeau
 

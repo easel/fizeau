@@ -20,7 +20,7 @@ ddx:
       ADR-014: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
       CONTRACT-003: 01fd520e5200f41c120be3f561973a35c7c573703812e1a45d498fe5214188af
       CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
-    reviewed_at: "2026-07-20T22:54:37Z"
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # ADR-013: `claude-tui` PTY Harness as a Fork of `claude`
 

@@ -15,7 +15,7 @@ ddx:
       CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
       FEAT-005: 5b479bd3a3b1dede6630f99fcc6a1d26da118eb8f891a1145b59cfa76d4c272b
       SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
-    reviewed_at: "2026-07-20T22:54:37Z"
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # Solution Design: SD-011 — Canonical Progress Events
 

@@ -14,7 +14,7 @@ ddx:
     - US-007
     - US-008
   review:
-    self_hash: 330c9b002d2e84719534ab126f66001ae73cfb4f20986e28ff59cdc9ec179c9d
+    self_hash: 83ce3746c691d2aad9ea1a4f76059f0319f673079fbdaefa17a360b73635d6b6
     deps:
       CONTRACT-003: 01fd520e5200f41c120be3f561973a35c7c573703812e1a45d498fe5214188af
       CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
@@ -27,7 +27,7 @@ ddx:
       US-007: f7d77406d905f1c80b62432b28060e560dc7c8d811124159f3650ff2ab914ebf
       US-008: ec847be580408d23190b47f052551b4f7638365ab373de68e57d8ee06fb2bc4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-20T22:54:37Z"
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # Test Plan — Fizeau
 

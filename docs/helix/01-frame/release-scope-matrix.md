@@ -9,7 +9,7 @@ ddx:
     deps:
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
       helix.product-vision: eb5af3663734d35e7b42963ce12e39adc19147aa2df25fe9bd3887793217836c
-    reviewed_at: "2026-07-20T22:54:37Z"
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # v0.15 Release Scope Matrix
 

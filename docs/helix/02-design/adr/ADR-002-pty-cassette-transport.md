@@ -11,7 +11,7 @@ ddx:
       CONTRACT-003: 01fd520e5200f41c120be3f561973a35c7c573703812e1a45d498fe5214188af
       helix.arch: 076e620580b77517a3f561f5ce842cf1c09e6cef625c13e0a1adb874ae0e19ef
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-20T22:54:37Z"
+    reviewed_at: "2026-07-20T23:03:56Z"
 ---
 # ADR-002: PTY Cassette Transport for Harness Golden Masters
 
