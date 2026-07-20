@@ -56,6 +56,12 @@ fresh, but freshness maintenance is not a second routing authority.
   documented to avoid misdescribing the code, but their completion,
   compatibility promises, OCI evidence, and Linux isolation mechanics are not
   prerequisites for the core product release.
+- **Experimental, not a v0.15 release gate:** the currently compiled
+  `Continue` method and its continuation types. FR-1 through FR-8 require
+  neither conversation continuation nor harness-native resume. This material
+  remains implementation reference for experimental callers pending a separate
+  versioned API refactor; it creates no v0.15 compatibility, conformance, or
+  lifecycle-expansion commitment.
 - **Out of scope:** concrete adapter implementation, provider-native protocols,
   DDx worktree setup, gates, review, landing, preservation, tracker mutation,
   and bead closure policy.
@@ -134,9 +140,10 @@ func ValidateCachePolicy(v string) error
 func ValidatePowerBounds(minPower, maxPower int) error
 ```
 
-Seventeen service methods are public. `Execute` is the primary verb and
-`Continue` is its harness-neutral conversation-continuation companion. The list
-methods expose the live routing inventory and policy metadata. `HealthCheck`,
+Seventeen service methods are currently compiled. `Execute` is the primary v0.15
+verb. `Continue` is an experimental harness-neutral conversation-continuation
+surface retained as implementation reference, not a v0.15 product promise. The
+list methods expose the live routing inventory and policy metadata. `HealthCheck`,
 `ResolveRoute`, `RecordRouteAttempt`, and `RouteStatus` are routing/status
 projections. The remaining methods project service-owned session logs for
 usage, listing, JSON rendering, and replay. `PreparePortableRuntime` is an
@@ -704,6 +711,15 @@ wrapped-harness cleanup, but cleanup runs under a service-owned context bounded
 by `HarnessCleanupTimeout`, not under the cancelled request context.
 
 ## Session Continuation
+
+> **Experimental / deferred track.** This section documents the currently
+> compiled continuation implementation so experimental callers can understand
+> it. It is not a v0.15 normative surface or release gate: canonical FR-1
+> through FR-8 do not require continuation, and `FizeauService` at v0.14.50
+> did not have `Continue`. Do not add continuation policies, durable formats,
+> lifecycle behavior, or conformance requirements under v0.15. A future
+> versioned API refactor decides whether this surface is retained, replaced, or
+> removed.
 
 Callers request continuation without naming a concrete harness, provider-native
 conversation token, subprocess flag, or adapter type. Fizeau resolves the prior
@@ -1729,11 +1745,13 @@ guidance. Go callers update code to `Policy`, `ListPolicies`, and exact
 ADR-007 sampling defaults are separate catalog generation policy and are not
 changed by this routing contract.
 
-The typed session-lifecycle and continuation surface is introduced in product
-API v0.15. Adding `Continue` to `FizeauService` is a Go source-compatibility
-break for third-party implementations and mocks of that interface. Adding
-`PreparePortableRuntime` to `FizeauService` is the same class of v0.15 source
-break. The standalone portable-runtime types and methods on
+The typed session-lifecycle surface is introduced in product API v0.15.
+`Continue` is currently compiled but experimental/deferred, not introduced as a
+v0.15 product API. Its presence can break third-party implementations and mocks
+of the current `FizeauService` interface, just as `PreparePortableRuntime` can;
+that present-checkout impact is not a v0.15 compatibility promise. A future
+versioned API refactor owns the decision to retain, replace, or remove either
+experimental interface method. The standalone portable-runtime types and methods on
 `PortableRuntimeBundle`, the `NewFromPortableRuntime` constructor, the
 platform-specific fixed guest-root function, and the four stable portable error
 sentinels are additive,
