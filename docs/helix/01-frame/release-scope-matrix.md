@@ -5,11 +5,11 @@ ddx:
     - helix.product-vision
     - helix.prd
   review:
-    self_hash: 52569e9b934b7fc80919a782c031cf2927668bca2e82239a1e6c3c65f640327b
+    self_hash: dc3373a8837b404f86607a1a66cf4aba1df019b038b767a4e91354e2b8cd9662
     deps:
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
       helix.product-vision: eb5af3663734d35e7b42963ce12e39adc19147aa2df25fe9bd3887793217836c
-    reviewed_at: "2026-07-20T22:42:56Z"
+    reviewed_at: "2026-07-20T22:54:37Z"
 ---
 # v0.15 Release Scope Matrix
 

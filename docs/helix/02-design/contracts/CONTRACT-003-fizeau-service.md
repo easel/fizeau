@@ -7,13 +7,13 @@ ddx:
     - ADR-008
     - ADR-009
   review:
-    self_hash: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
+    self_hash: 01fd520e5200f41c120be3f561973a35c7c573703812e1a45d498fe5214188af
     deps:
       ADR-006: 70e1de266a6e8c6289f23c05e36bc2fed2af4dc8ad131d352e40876dc46f6793
       ADR-008: 3f36c9ae5997a72d2575876d739d110a7dd6950456a517695ed0d0cd8e118db3
       ADR-009: d9968b4818b0f45508f3e0689b403ff6997c2722924e7457605bc43080ae5a4a
       helix.prd: aac943d5a9d416aafbadb68c4740707e9fa40a31833766e060a20cb9b8f2bd77
-    reviewed_at: "2026-07-19T22:52:02Z"
+    reviewed_at: "2026-07-20T22:54:37Z"
 ---
 # CONTRACT-003: FizeauService Service Interface
 
