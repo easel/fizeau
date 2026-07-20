@@ -38,13 +38,13 @@ ADR-009 owns the v0.11 routing vocabulary: callers express routing intent with
 `Policy`, `MinPower`, and `MaxPower`; they express hard overrides with
 `Harness`, `Provider`, and `Model`.
 
-The routing entrypoint is conceptually `route(client_inputs, fiz_models_snapshot)`.
-Client inputs include policy and numeric power intent, hard pins, `no_remote`, metered opt-in, tools,
-context, reasoning needs, and other explicit constraints. The `fiz models`
-snapshot is the only source of routing facts. Fizeau does not require a daemon
-for correctness. Its freshness contract is synchronous, lock-coordinated
-refresh; long-running clients such as a DDx server may call that public refresh
-surface on a heartbeat to keep the snapshot warm.
+The routing entrypoint is conceptually
+`route(caller_intent, catalog_and_live_inventory)`. Caller intent is limited to
+policy and numeric power intent, hard pins, and explicit execution constraints.
+Fizeau owns the catalog and its cached, refreshable live inventory; `fiz models`
+and the inventory APIs expose that evidence for inspection. Fizeau does not
+require a daemon for correctness. A long-running consumer may keep inventory
+fresh, but freshness maintenance is not a second routing authority.
 
 ## Scope and Boundaries
 
@@ -62,6 +62,29 @@ surface on a heartbeat to keep the snapshot warm.
 - **Owning system:** Fizeau owns each accepted service invocation through
   terminal cleanup. The caller owns task semantics and every workflow decision
   outside that invocation.
+
+### v0.15 routing boundary (FR-4 and FR-5)
+
+The v0.15 routing promise is intentionally narrow and caller-visible:
+
+- Fizeau combines its catalog with live inventory, applies the caller's pins
+  and policy intent, selects and attributes one dispatch route, and records the
+  route identity and execution measurements needed for replay.
+- One `Execute` invocation dispatches one selected route. A transport retry may
+  repeat that route when the execution contract permits it; it does not become
+  cross-route failover. A caller that interprets an answer, a task failure, or
+  a business outcome owns semantic retry, escalation, and any later request.
+- Health, quota, capacity, utilization, cost, and similar signals are internal
+  evidence. They may affect eligibility only when dispatch would otherwise be
+  incorrect, and they may be projected when needed to preserve an FR-5
+  measurement fact such as route attribution, known-versus-unknown cost, or a
+  capacity rejection. They are not a new caller policy language or a promise of
+  autonomous multi-route recovery.
+
+New quota, health, capacity, scoring, or policy elaboration is outside v0.15
+unless it is required to prevent an incorrect dispatch or to preserve one of
+those replayable measurement facts. Existing public projections remain for
+compatibility and inspection; they do not widen this product boundary.
 
 ## Normative Surface
 
@@ -657,16 +680,15 @@ output-budget convention. `CompactionContextWindow == 0` preserves the
 selected route's context window; a positive value may only tighten that window
 as specified below.
 
-`ResolveRoute` and `Execute` are cache-first on the route hot path. Before
-scoring an unpinned or partially pinned automatic route, they read the freshest
-cached routing-relevant facts available and may request a coordinated
-background refresh for stale health, quota, discovery, context, reasoning,
-tool-support, cost, or utilization fields. They must not synchronously contact
-local model providers, block on stale `/v1/models` discovery, or fail the
-process solely because one configured local provider is unreachable. Known
-fresh failed health evidence can still make that provider ineligible with a
-typed dispatchability reason; unknown local health is a score penalty, not a
-hard gate when alternatives exist.
+`ResolveRoute` and `Execute` are cache-first on the route hot path. They use
+the catalog and the freshest available inventory evidence and may request a
+coordinated background refresh. They must not synchronously contact local model
+providers, block on stale `/v1/models` discovery, or fail the process solely
+because one configured local provider is unreachable. A known fact may exclude
+a route only when dispatching it would be incorrect; absence of a fact does not
+invent a new failure policy. The detailed refresh and scoring mechanics below
+are retained implementation and inspection reference, bounded by the FR-4/FR-5
+routing boundary above.
 
 ### Caller-signalled cancellation and stream abandonment
 
@@ -1200,6 +1222,13 @@ type RouteCandidate struct {
 }
 ```
 
+`RouteDecision` and `RouteCandidate` expose the evidence behind one selection
+and the measurements necessary to audit it. They are not an extension point for
+callers to program routing algorithms, request multi-route execution, or turn
+every inventory signal into a policy control. Existing fields remain stable
+compatibility surface; v0.15 adds no routing field or feature merely to expose
+more health, quota, capacity, or scoring detail.
+
 `RouteRequest.MaxTokens` is the requested per-provider-call output budget.
 `ResolveRoute` and `Execute` reject a negative `MaxTokens` before candidate
 construction. `Execute` copies `ServiceExecuteRequest.MaxTokens` unchanged into
@@ -1333,13 +1362,12 @@ weaker model is more likely to fail the task while using a stronger model is
 primarily a cost/latency tradeoff. Missing-power and exact-pin-only models are
 excluded from unpinned automatic routing but remain visible in inventory and
 usable through exact pins when the selected harness/provider can serve them.
-Cost, quality, health risk, latency, utilization, and power fit are scoring
-inputs. They do not become hard gates unless they make dispatch impossible.
-`RouteCandidate.Components` is the stable operator-facing aggregate evidence;
-`RouteCandidate.ScoreComponents` preserves the raw routing score component map
-used by the engine, including keys such as `base`, `power`, `cost`,
-`quota_health`, `deployment_locality`, `utilization`, `context_headroom`, and
-`performance` when present.
+Cost, quality, health risk, latency, utilization, and power fit may inform the
+single-route selection. They do not become hard gates unless dispatch would be
+incorrect. `RouteCandidate.Components` is operator-facing aggregate evidence;
+`RouteCandidate.ScoreComponents` preserves engine evidence when present. Neither
+projection promises a stable or growing scoring vocabulary, nor does either add
+a caller-controlled policy mechanism.
 
 `fiz models` is the snapshot-first inspection path. It is expected to be quick,
 return stale output by default when freshness is pending, and use
