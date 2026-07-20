@@ -2,26 +2,20 @@
 ddx:
   id: deployment-checklist
   depends_on:
+    - helix.release-scope-matrix
     - implementation-plan
-    - FEAT-007
     - CONTRACT-003
     - CONTRACT-004
     - ADR-002
     - ADR-013
-    - ADR-014
-    - SD-005
-    - SD-006
+    - TP-001
   review:
     self_hash: 95d87c27b75ae667b55e7fd931c0dbd74477ab3f77f0c55f92d33eaf35bb3a32
     deps:
       ADR-002: 973f858cdad07342b377ef3e4f58481ae0383c946077fac4e44e790e81687e7e
       ADR-013: 23f4177615108086d085e2e3f9a70871194825d615f90daffdfea2458fbcda09
-      ADR-014: 89ffa95eb4e5636c3ba35abb3db400b6fe4aeaf28cd2e87622864b6d88925191
       CONTRACT-003: 14c07663bf82781f011226995ad21dc91db82763e3dd4defa1b92dc8a4d1679e
       CONTRACT-004: f64b7056ea5860d1afb164fa63f3c421cc94fb1432d050180d07a0a734576539
-      FEAT-007: 20cf41ca595074feb1345729785859f504ce1fa570547ffc31ea38a264aa719b
-      SD-005: e0acdb5a9db144a415aa5831485fe198aa3f9c7fdf0ac7d100f5a01a117df1a0
-      SD-006: bd9f4cf464dbad08e003533906b67eb25735384eac4d522e367adccc9a3a7db6
       implementation-plan: ede4c3ca8d3c5ec0208bdf67cec76b6398a1e0988bdee733748ab8d4ba847d1b
     reviewed_at: "2026-07-19T22:52:02Z"
 ---
@@ -29,135 +23,65 @@ ddx:
 
 ## Release Scope
 
-- Component: public Go module plus the thin `fiz` proof CLI
-- Version or commit: `v*` tag and its immutable commit SHA
-- Release owner: tag creator
-- Rollback owner: repository maintainer on duty
-- Sources of truth: `CONTRACT-003`, `CONTRACT-004`, `TP-001`, `SD-005`,
-  `SD-006`, `ADR-002`, `ADR-006`, `ADR-013`, `ADR-014`,
-  `.github/workflows/ci.yml`,
-  `.github/workflows/release.yml`, `install.sh`, and
-  `tests/install_sh_acceptance.sh`
+- Component: public Go module plus the thin `fiz` proof CLI.
+- Version or commit: immutable `v*` tag and its commit SHA.
+- Scope authority: [v0.15 release scope matrix](../01-frame/release-scope-matrix.md).
+- Release owner: tag creator. Rollback owner: repository maintainer on duty.
 
-## Pre-Deploy Checks
+This is the complete v0.15 core gate. Every live row maps to one or more
+canonical PRD requirements (FR-1 through FR-8), or is the minimum reliability
+condition for a supported execution path. A check not in this table does not
+block the tag.
 
-| Area | Check | Evidence or Command | Status |
-|---|---|---|---|
-| Repository | Branch is clean and tag commit is pushed | `git status --short`; upstream SHA | [ ] |
-| Quality | Build, static analysis, default tests, and race tests pass | `make ci-checks` | [ ] |
-| Unix batch containment | Caller-death and every-batch-runner conformance passes on Linux and macOS | `lifecycle-unix` CI jobs; `TestSubprocessHarnessDiesWithEmbeddingCaller`; `TestUnixBatchLifecycleAppliesToEveryBatchRunner` | [ ] |
-| PTY containment | PTY caller-death and grandchild cleanup passes on Linux and macOS | `lifecycle-unix` CI jobs; `TestPTYLifecycleDiesWithEmbeddingCaller`; `TestPTYLifecycleReapsGrandchildOnClose` | [ ] |
-| Windows containment | Real Job Object kill-on-close and grandchild tests pass | `lifecycle-windows` CI job; `TestWindowsJobKillOnOwnerHandleClose`; `TestWindowsJobReapsGrandchild` | [ ] |
-| Cleanup terminalization | `HarnessCleanupTimeout` bounds current-invocation cleanup and terminal ordering; `StaleHarnessReaperGrace` governs only later startup adoption | `TestHarnessCleanupTimeoutDefaultAndValidation`; `TestStaleHarnessReaperGraceDoesNotDelayCleanup`; `TestTerminalWaitsForHarnessCleanup`; `TestCleanupFailureSupersedesPrimaryTuple` | [ ] |
-| Continuation capability | The public `FizeauService.Continue(context.Context, ServiceContinuationRequest)` surface resolves a completed parent's exact endpoint-aware terminal route, uses the authoritative registered route instance, and creates no session or process when preparation reports unavailable evidence | public contract compile test; `TestCompletedSessionRouteResolutionRequiresTerminalRoute`; `TestCompletedSessionRouteResolutionUsesPerRequestLogOverrideAfterRestart`; `TestContinuationUsesRegisteredRouteInstance`; `TestContinuationEvidenceUnavailableBeforeSpawn` | [ ] |
-| Continuation prepare/start ordering | Preparation creates no child, lease, process, or event; Start runs exactly once only after child creation and fresh-lease acquisition; a Start failure cannot trigger a fresh fallback | `TestContinuationPrepareOrdersChildAndSpawn` | [ ] |
-| Continuation opacity | Public continuation and serialized events carry only Fizeau session lineage; service- or harness-derived route-native evidence never crosses the public or session-log boundary, while caller metadata remains opaque | `TestContinuationHarnessReceivesOnlyFizeauSessionRef`; `TestContinuationNativeReferenceIsNotSerialized`; public-field and JSON-tag structural searches | [ ] |
-| Continuation durability | The service-private locator uses the configured effective service session-log root; private evidence, terminal log, locator completion, and public success follow the contract order; pending recovery uses only the exact recorded path and full route key | `TestContinuationEvidenceCommitsBeforeSuccessfulTerminal`; `TestContinuationRecoversPendingLocatorAfterTerminalCommit` | [ ] |
-| Continuation containment | Every resumed, `prefer_resume` fallback, and `fresh_session` continuation creates a new child session and acquires a fresh lifecycle lease | `TestContinuationDispatchAcquiresFreshLifecycleLease`; `TestContinuationFreshPoliciesAcquireFreshLifecycleLease`; ADR-013 and ADR-014 conformance | [ ] |
-| Portable-runtime contract and completeness | `PreparePortableRuntime` accepts only an empty destination and same-GOARCH Linux target; preparation selects no route, joins actual instances to registry classifications, and includes every installed structurally unpinned-capable subprocess closure/launch recipe, value-opaque execution constraints, normalized mixed-state projections, exactly one embedded static single-threaded Zig namespace launcher at `.fizeau/namespace-launcher` whenever any subprocess is included, and the effective configured provider or fails atomically; interpreted contributors bind reviewed interpreter identities and exhaustive addon declarations through retained descriptors and immutable package snapshots without `PATH`, shebang selection, or blind `.node` scanning; `make portable-namespace-launcher-check` under Zig 0.16.0 rebuilds both Linux architectures and proves source/embedded-byte/digest parity, copied-byte ELF/GOARCH/static/single-thread validation, exact reserved-target collision rejection, and zero/one cardinality; verified-exact harness contributors accept only publisher-authenticated release digests with same-target isolated positive and missing-library-negative evidence | `make portable-namespace-launcher-check`; required `portable-namespace-launcher` workflow job; `TestPreparePortableRuntimeOwnsHarnessFilesAndEnvironment`; `TestPortableRuntimeNamespaceLauncherClosure`; `TestPortableRuntimeNamespaceLauncherArtifactParity`; `TestPortableRuntimeNodeInterpreterBypassesShebangAndPATH`; `TestPortableRuntimeNodeInterpreterIdentity`; `TestPortableRuntimeNodeInterpreterRejectsRPATH`; `TestPortableRuntimeNodeAddonDeclaration`; `TestPortableRuntimeNodeAddonDescriptorIdentity`; `TestPortableRuntimeNodeAddonELFPolicy`; `TestPortableRuntimeNodeAddonClosure`; `TestPortableRuntimeExecutionConstraints`; `TestPortableRuntimeMixedStateProjection`; `TestPortableRuntimePlanIsRouteNeutralAndOpaque`; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; `TestClaudePortableRuntimeVerifiedReleaseEvidence`; `TestOpenCodePortableRuntimeVerifiedReleaseEvidence`; registry/instance and provider field-parity fixtures | [ ] |
-| Gemini/Pi portable inventory and dispatch authority | Gemini and Pi contribute closures through the route authority's structural view; execution receives the authority's exact endpoint-aware registered binding, never an ad hoc dispatcher runner, and fails before subprocess dispatch when the binding is absent or identity-mismatched | `TestPortableRuntimeInventoryIncludesGeminiAndPi`; `TestRouteRunnerKeyIsEndpointAware`; `TestExecuteUsesRegisteredRouteInstance`; `TestProductionDispatchHasSingleRunnerAuthority`; Gemini/Pi `Test.*PortableRuntime` suites | [ ] |
-| Portable-runtime security and cleanup | One sibling-staged tree commits as one `runtime` child and one fixed read-only guest mount; the private manifest preserves the normalized closed-world environment, standalone fixed-flag, typed fixed option/value, read-only, required-absent, unprojected prefix-seed, and projection-consumed seed rules without exposing them in the public plan; materialization revalidates source identity/content/type/symlink conditions; sensitive material has restrictive modes, no raw value/original source path reaches diagnostics or plan, partial failure/cancellation rolls back, and concurrent cleanup is retryable | `TestPortableRuntimeExecutionConstraints`; `TestPortableRuntimeFixedOptionValues`; `TestPortableRuntimeMixedStateProjection`; `TestPortableRuntimeBundleRedactsSecretsFromDiagnostics`; `TestPortableRuntimeBundleCleanupRemovesCredentialCopies`; concurrent-preparer and focused race evidence | [ ] |
-| Portable-runtime activation and OCI conformance | A separate public-package process with nonzero UID/GID and no supplementary groups applies only the generic mount and inherited names, calls process-free `NewFromPortableRuntime`, copies unprojected prefix seeds into owner-only generated scopes, assembles projection-consumed mutable seeds, and compiles the private closed-world environment plus an opaque namespace recipe while reconstructing configured providers and the canonical endpoint-aware runner authority; the exact embedded namespace launcher applies that recipe at the authority's sole lifecycle-owned spawn seam, descriptor-pins governed identities, binds config read-only last, and uses private PID/proc state; its single-threaded non-dumpable PID 1 and harness tasks lack capabilities/setup authority, share no supervisor descriptors, resist ptrace/process-VM/proc/pidfd attacks, deny direct, queued, thread-directed, process-group, and pidfd signals to PID 1, use distinct process groups with one cleanup-signal bridge and correct PTY foreground/status behavior, and still permit ordinary harness threads; projection config denies mutation/shadowing while credential refresh, locks, and sibling state succeed; cleanup ownership remains retryable; native amd64/arm64 jobs pass the pinned Docker/runc and Linux >=6.12 feature preflight without privileged/cap-add execution or skips | `TestPortableRuntimeRejectsUnsafeActivationIdentity`; `TestPortableRuntimeActivationFeedsProductionDispatch`; `TestPortableRuntimeProjectionDeniesConfigMutation`; `TestPortableRuntimeProjectionAllowsMutableState`; `TestPortableRuntimeNamespaceLauncherDropsAuthority`; `TestPortableRuntimeNamespaceSupervisorIsolation`; `TestPortableRuntimeNamespaceLauncherLifecycle`; `TestPortableRuntimeNamespaceSetupFailureDoesNotExec`; `TestPortableRuntimeExclusiveSubprocessLease`; `TestPortableRuntimeExternalCleanupFailureRetainsBundle`; `make test-portable-runtime-oci`; required `portable-runtime-oci-amd64` and `portable-runtime-oci-arm64` jobs; `CGO_ENABLED=1 go test -race . ./internal/serviceimpl -run '^TestPortableRuntimeExclusiveSubprocessLease$' -count=1`; `TestPortableRuntimePublicCompileFixture` | [ ] |
-| Default Claude-TUI launch | An unpinned `Policy=default`, `Permissions=unrestricted` Claude request selects and dispatches `claude-tui`; the production launch boundary receives `--permission-mode bypassPermissions`, generated hook settings, and the resolved model without `--print` | `TestExecuteDefaultClaudeUnrestrictedLaunchesTUIYolo`; `TestExecuteDefaultClaudeUnrestrictedSelectsClaudeTUI`; `TestClaudeTuiDefaultSupportsUnrestrictedPermissions`; `TestExplicitClaudePinBeatsTuiDefault`; `TestRoutingSurfacePreference`; `TestDispatcherCallsClaudeTui`; `TestBuildLaunchArgsBypassPermissions` | [ ] |
-| Context evidence | Selected-route context comes from candidate/config, cached type-gated provider evidence, catalog metadata, or the documented default; route and execution hot paths make no synchronous limit probe | SD-005/SD-006 conformance evidence; structural probe-path review | [ ] |
-| Capacity enforcement | The selected context value/source is authoritative, a positive compaction bound only tightens it, and every provider-call path applies the canonical estimate and fixed capacity envelope | CONTRACT-003 obligations 17–20; focused route/core evidence | [ ] |
-| One-route boundary | Eligibility-time context rejection may leave the best eligible survivor for selection; after one route is selected, service preflight rejection and residual provider overflow never dispatch the next ranked candidate. Residual overflow is exact-route `capability` evidence, may retry the same route once only after measured compaction, does not poison endpoint reachability or provider-wide availability, and semantic rerouting is a new caller request | CONTRACT-003 obligations 17, 20, and 21; `TestNativeResidualContextOverflowProjectsCapabilityAndSingleRoute`; `TestExecuteResidualContextOverflowIsCapabilityAndCallerOwnsCrossRouteRetry` | [ ] |
-| Cost presence and provenance | Final, override, durable session, CLI, service-backed comparison evidence, and its benchmark-runner ingestion preserve unknown, known zero, positive amount, and mandatory normalized source without a behavior-losing migration slice, negative producer values, or numeric presence inference | Final/override/session conformance suite; `TestRunResultCostSourceIngressCompile`; `TestBenchmarkFinalCostPresence`; `TestBenchmarkEvidenceCostPresence`; `TestBenchmarkReportCostPresence` | [ ] |
-| v0.15 public compatibility | Core-to-`internal/harnesses`-to-root capacity mapping is exhaustive; additive capacity events/final values preserve unknown JSON enums; external mocks implement both new `Continue` and `PreparePortableRuntime` methods; all three public cost types use pointer literals and nil/source-aware selectors | CONTRACT-003 obligations 21–30; `TestV015CostPointerMigrationCompile`; public AST and JSON fixtures | [ ] |
-| Recovery | Reused process identity is refused and cleanup-failed records are retained | `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
-| Governed documents | Lifecycle, capacity, and cost-provenance contracts, decisions, tests, build sequence, and release gates are current | `ddx doc stale --json` omits `ADR-006`, `CONTRACT-003`, `TP-001`, `implementation-plan`, and `deployment-checklist`, in addition to the lifecycle/capacity artifacts | [ ] |
-| Installer | Linux and macOS installer acceptance passes | `make test-install-sh` | [ ] |
-| Artifact names | Workflow emits only `fiz-<os>-<arch>` names | `go test . -run TestReleaseWorkflowArtifactNamesFiz -count=1` | [ ] |
-| Version | Tag starts with `v` and points at the intended commit | tag/SHA record | [ ] |
+## v0.15 Core Gates
 
-### v0.15 Scope Decision — 2026-07-19
+| Area | PRD trace | Required outcome | Evidence | Status |
+|---|---|---|---|---|
+| Repository quality | FR-1–FR-8 | The tagged commit is clean, pushed, builds, and passes the repository test suite. | `git status --short`; upstream SHA; `go test ./...` | [ ] |
+| Public service and tools | FR-1, FR-2 | The root facade supports bounded `Execute`, service events, workspace tools, and recorded tool attempts without exposing concrete internals. | Public contract/compile fixtures; core and tool tests | [ ] |
+| Supported wrapper lifecycle | FR-1, FR-3, FR-6 | Native and supported TUI/subprocess execution leaves no owned process after normal cleanup or embedding-caller death; a terminal event follows cleanup. Reused identities are refused and cleanup-failed records remain recoverable. | `TestSubprocessHarnessDiesWithEmbeddingCaller`; `TestPTYLifecycleDiesWithEmbeddingCaller`; `TestPTYLifecycleReapsGrandchildOnClose`; `TestTerminalWaitsForHarnessCleanup`; `TestRecoveryRefusesReusedIdentity`; `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
+| Provider and model discovery | FR-3, FR-4 | Native providers, local runtimes, and supported wrappers use one provider-neutral request/event/usage surface. Supported dynamic discovery and launch selection are verified, including the default unrestricted Claude TUI path. | Provider and harness conformance; `TestExecuteDefaultClaudeUnrestrictedSelectsClaudeTUI`; `TestBuildLaunchArgsBypassPermissions` | [ ] |
+| One-route routing | FR-4 | Catalog/pin/policy selection attributes one route. Once selected, capacity or residual-overflow handling never dispatches a second route; cross-route retry remains caller-owned. | `TestNativeResidualContextOverflowProjectsCapabilityAndSingleRoute`; `TestExecuteResidualContextOverflowIsCapabilityAndCallerOwnsCrossRouteRetry` | [ ] |
+| Measurement and replay | FR-5 | Service-owned session records and replay preserve timing, tokens, tool attempts, and known-or-unknown cost with normalized provenance; unknown values are never invented. | Final/override/session cost-presence conformance; `TestBenchmarkFinalCostPresence`; `TestBenchmarkEvidenceCostPresence` | [ ] |
+| Thin CLI | FR-6 | `fiz` remains a service-backed proof CLI with machine-readable inspection and harness surfaces, not a second execution architecture. | CLI integration and public-facade tests | [ ] |
+| Artifacts and installer | FR-7 | The release publishes exactly the supported versioned artifacts and the explicit installer selects the requested tag, platform, and executable. | `go test . -run TestReleaseWorkflowArtifactNamesFiz -count=1`; `make test-install-sh`; release asset list; `FIZEAU_VERSION=<tag> FIZEAU_INSTALL_DIR=<tmp> ./install.sh`; `<tmp>/fiz --version` | [ ] |
+| Benchmark provenance | FR-8 | Benchmark result cells remain self-describing and preserve the evidence needed to compare local and cloud execution. Website presentation is not a release gate. | Benchmark evidence/provenance conformance suite | [ ] |
+| Governed scope | FR-1–FR-8 | The PRD, scope matrix, test plan, implementation plan, and this checklist agree. | `ddx doc validate`; `ddx doc stale --json` | [ ] |
 
-The portable-runtime material in this checklist is retained as historical
-experimental evidence under ADR-014, not as a core-release gate. In particular,
-closure preparation, portable inventory, mount projections, namespace launcher
-behavior, PID-1/signal isolation, OCI jobs, and `PreparePortableRuntime` /
-`NewFromPortableRuntime` consumer compatibility are **non-blocking for v0.15**.
-They must not consume a release workflow, prevent a tag, or be used to hold the
-core service and CLI release. A future experimental release proposal may
-activate those checks with a separately approved target and evidence plan.
+## Rollout and Go/No-Go
 
-The required v0.15 compatibility surface is the vision-backed service: embedded
-execution, wrapped-harness lifecycle safety, dynamic provider/model discovery,
-routing, measurement/replay, the thin CLI, versioned artifacts/installer, and
-benchmark provenance. `Continue` remains a release gate; portable-runtime
-symbols are additive experimental code and are excluded from v0.15 mock and
-consumer compatibility requirements.
-
-## Rollout Plan
-
-| Stage | Action | Exit Condition |
+| Stage | Action | Exit condition |
 |---|---|---|
-| Build | Push the `v*` tag; GitHub Actions cross-compiles with `CGO_ENABLED=0` | Linux/darwin × amd64/arm64 jobs upload `fiz-${GOOS}-${GOARCH}` |
-| Publish | Publish the four downloaded artifacts as one GitHub release | Release for the exact tag exists and lists all four binaries |
-| Install verification | Run `install.sh` with `FIZEAU_VERSION=<tag>` in a temporary install directory | Correct OS/arch artifact downloads, becomes executable, and answers `fiz --version` |
+| Validate | Run every core gate locally before tagging. | All core evidence is recorded against the intended SHA. |
+| Build | Push the `v*` tag once. | Linux/darwin × amd64/arm64 jobs upload `fiz-<os>-<arch>`. |
+| Publish | Publish the four artifacts as one GitHub release. | The exact tag has the four expected assets. |
+| Install | Verify an explicit tag in a temporary install directory. | `fiz --version` reports the tagged version. |
 
-The installer supports Linux and macOS on amd64 and arm64. It normalizes an
-explicit version to a `v` tag, otherwise reads the latest GitHub release, writes
-to `FIZEAU_INSTALL_DIR` (default `$HOME/.local/bin`), makes `fiz` executable,
-and checks the installed binary.
+No tag retry is authorized for incomplete scope work. A failed tag is fixed by a
+new version; published tags are never moved or rewritten.
 
-Windows lifecycle CI validates the Go library contract only. It does not add a
-Windows release artifact; the release matrix remains Linux and macOS on amd64
-and arm64 until a separate artifact decision expands it.
+## Core Rollback Triggers
 
-## Verification Checks
+| Trigger | Immediate action |
+|---|---|
+| Missing, mislabeled, or non-executable artifact; installer downloads the wrong version/platform | Mark the release unusable and stop installer promotion. Fix forward with a new tag. |
+| A tagged public consumer cannot build the root module | Mark the release unusable and publish a corrective version. |
+| A supported wrapped harness leaks an owned process, emits terminal before cleanup, or recovery signals a reused/unowned identity | Hold the release; preserve lifecycle evidence and fix the supported execution path. |
+| One `Execute` dispatches more than one selected route, or capacity projections disagree with selected-route evidence | Hold the release; restore one-route and projection correctness. |
+| Measurement/replay loses timing, tokens, tool attempts, cost presence, or normalized cost provenance | Hold the release; restore the service-owned evidence path. |
+| A core gate fails on the tag SHA | Mark the release unusable; do not retag that version. |
 
-| Signal or Check | Expected Result | Evidence or Command | Status |
-|---|---|---|---|
-| Workflow | `release` matrix and `publish` job are green | GitHub Actions run for tag | [ ] |
-| Assets | Exactly four supported platform artifacts are present | GitHub release asset list | [ ] |
-| Explicit install | Requested tag is downloaded, not latest | `FIZEAU_VERSION=<tag> FIZEAU_INSTALL_DIR=<tmp> ./install.sh` | [ ] |
-| Execution | Installed binary reports version successfully | `<tmp>/fiz --version` | [ ] |
-| Library | Tagged module remains consumable through the public root package | release commit `go test -count=1 ./...` evidence | [ ] |
-| Caller death | No registered wrapped harness leaves a contained process after embedding-caller death | Linux, macOS, and Windows lifecycle CI evidence | [ ] |
-| Claude-TUI | Default unrestricted routing reaches the interactive yolo launch contract, and successful execution leaves no live PTY or Claude process | `TestExecuteDefaultClaudeUnrestrictedLaunchesTUIYolo`; `TestClaudeTUIExecuteLeavesNoLiveSession` | [ ] |
-| Cleanup failure | `cleanup_failed` retains lifecycle ownership evidence for recovery | `TestCleanupFailureRetainsRecoveryRecord` | [ ] |
-| Identity safety | Startup recovery never signals an identity-mismatched or reused process | `TestRecoveryRefusesReusedIdentity` | [ ] |
-| Continuation | Resumed, prefer-fallback, and explicitly fresh outcomes each create a new child Fizeau session with a fresh lease; implementation-derived native evidence is absent from public projections and logs | continuation conformance suite; public-field and serialized-tag structural searches | [ ] |
-| Context provenance | Routing event, execution handoff, capacity event, and final projection agree on selected context value/source; raw unknown candidate evidence remains distinguishable | CONTRACT-003 selected-context conformance evidence | [ ] |
-| Capacity event order | Clamp immediately precedes its request; planning skip prevents planning request/response/turn; main rejection precedes session end and typed terminal, with no provider call or next-route dispatch | CONTRACT-003 capacity event-order evidence | [ ] |
-| Portable runtime | Preparation is route-neutral and value-opaque; separate-process activation rejects unsafe IDs/groups and reproduces structural candidates, providers, and canonical dispatch; the embedded launcher preserves lifecycle/PTY ownership while projected config remains namespace-immutable and mutable seeds/siblings remain writable; every launcher/harness task lacks setup authority, the non-dumpable supervisor exposes no control descriptor, signal/status ownership is unambiguous, and the per-root exclusive lease closes required-absent races; runtime destruction removes guest backing storage and `Close` leaves no host credential copy | all six parent `TestPreparePortableRuntime*` / `TestPortableRuntime*` conformance tests; `TestPortableRuntimeNamespaceLauncherArtifactParity`; `TestPortableRuntimeRejectsUnsafeActivationIdentity`; `TestPortableRuntimeConfiguredProvidersPreserveUnpinnedCandidateSet`; `TestPortableRuntimeActivationFeedsProductionDispatch`; `TestPortableRuntimeProjectionDeniesConfigMutation`; `TestPortableRuntimeProjectionAllowsMutableState`; `TestPortableRuntimeNamespaceLauncherDropsAuthority`; `TestPortableRuntimeNamespaceSupervisorIsolation`; `TestPortableRuntimeNamespaceLauncherLifecycle`; `TestPortableRuntimeExclusiveSubprocessLease`; both required native OCI jobs | [ ] |
-| Gemini/Pi dispatch identity | Inventory and execution consume one route authority; coordinator and subprocess dispatch preserve its exact five-field binding, and absent, key-mismatched, or structurally mismatched bindings produce a failed final before spawn | `TestPortableRuntimeInventoryIncludesGeminiAndPi`; `TestRouteRunnerAuthorityRejectsPartialLookup`; `TestExecuteUsesRegisteredRouteInstance`; `TestProductionDispatchHasSingleRunnerAuthority` | [ ] |
-| Cost projection | Unknown cost omits `cost_usd`, known zero and positive remain present, accepted override outcomes always carry normalized `cost_source`, and rejected overrides omit `outcome` | final/override/session/consumer cost-presence conformance suite | [ ] |
-| v0.15 migration | External keyed Go pointer literals and nil/source-aware selectors compile for `ServiceFinalData`, `DrainExecuteResult`, and `ServiceOverrideOutcome`; additive capacity JSON accepts unknown future values; third-party mocks implement `Continue` plus `PreparePortableRuntime`; public consumers compile `NewFromPortableRuntime` | `TestV015CostPointerMigrationCompile`; public compile/AST and JSON compatibility fixtures | [ ] |
+## Experimental Appendix — Portable Runtime
 
-## Rollback Triggers
+Portable-runtime preparation, closure copying, mount projection, namespace
+launchers, PID-1/signal isolation, OCI proof, and
+`PreparePortableRuntime`/`NewFromPortableRuntime` consumer compatibility are
+an ADR-014 experiment. They are **not v0.15 release gates** and are not listed
+in the core table or rollback triggers.
 
-| Trigger | Threshold or Condition | Immediate Action | Owner |
-|---|---|---|---|
-| Missing/wrong artifact | Any of four matrix assets absent or mislabeled | Mark release unusable and stop installer promotion | Release owner |
-| Installer mismatch | Explicit tag downloads a different version/platform or cannot execute | Mark release unusable; fix forward with a new tag | Release owner |
-| Tag commit gate failure | Any required repository gate fails against the tag SHA | Mark release unusable; do not retag the same version | Maintainer |
-| Public contract regression | A consumer cannot build the tagged module | Mark release unusable; publish a corrective version | Maintainer |
-| Wrapped harness leak | Any contained process remains after successful cleanup or caller-death recovery | Hold release; preserve lifecycle evidence and fix forward | Maintainer |
-| Premature terminal event | A final event is emitted before the cleanup decision | Hold release; restore cleanup-before-terminal ordering | Maintainer |
-| Unsafe stale recovery | Recovery signals a reused or unowned process identity | Hold release; disable recovery path until identity validation is fixed | Maintainer |
-| Unsafe Windows resume | A Windows child resumes before Job Object assignment | Hold release; reject wrapped execution until assignment ordering is fixed | Maintainer |
-| Indeterminate record deletion | A lifecycle record is removed before boundary emptiness is confirmed | Hold release; retain the record and fix forward | Maintainer |
-| Continuation evidence leak | Any service- or harness-derived native session reference appears in a public type, event, projection, metadata field, or service-owned session log | Hold release; disable continuation for the route and remove the leaked evidence before a corrective release | Maintainer |
-| Continuation lease reuse | A resumed or fresh continuation reuses a live process, PTY, containment boundary, or lifecycle lease from its parent | Hold release; disable continuation and restore one-fresh-lease-per-invocation semantics | Maintainer |
-| Continuation durability/order failure | Successful continuation evidence is not durable before public success, locator recovery scans outside its recorded exact path, or Start can run before child lease acquisition | Hold release; disable continuation and restore prepare/persist/start ordering before a corrective release | Maintainer |
-| Context hot-path probe | Route resolution or execution synchronously contacts a provider only to fill missing context/output limits | Hold release; disable that probe and restore cached type-gated evidence with catalog/default fallback | Maintainer |
-| Capacity authority mismatch | Execution enlarges the selected route window, projections disagree on value/source, or a capacity failure advances to another candidate | Hold release; restore selected-route authority and one-route-per-`Execute` behavior | Maintainer |
-| Capacity projection regression | A capacity payload field is dropped between core, harness-neutral event, root decode, or final projection, or event order permits a prevented provider call | Hold release; restore exhaustive mapping and required event order | Maintainer |
-| v0.15 migration regression | Public examples use unkeyed changed structs or additive JSON/event values are rejected as unknown | Hold release; correct migration fixtures and tolerant decoding before publishing v0.15 | Maintainer |
-| Cost pointer migration regression | Any external fixture still assigns a scalar `CostUSD`, uses a cost selector in comparison, formatting, or arithmetic without nil/source handling, or cannot compile all three migrated public types | Hold release; migrate the consumer and fixture to keyed pointers, nil checks, source inspection, and explicit dereference before publishing v0.15 | Maintainer |
-| Cost-collapse regression | Unknown cost serializes as numeric zero, known zero is omitted, provenance is missing or inferred from amount, a negative producer value escapes, or rejected override fabricates an outcome | Hold release; disable the faulty projection path and restore authoritative optional amount plus normalized source at every boundary before a corrective release | Maintainer |
-| Portable runtime narrows the structural set | Any installed structurally unpinned-capable subprocess or effective provider is silently omitted, actual transport is misclassified, or preparation chooses a route | Hold release; restore exhaustive registry/instance and provider inventory, then defer live eligibility to `Execute` | Maintainer |
-| Portable activation drifts | `NewFromPortableRuntime` accepts zero UID/GID or supplementary groups, cannot reconstruct provider/structural identity and the declared closed-world constraints in a separate public-only process, falls back to ambient host state, permits projected config mutation/shadowing, blocks declared mutable state, starts an undeclared child, lets any PID-1/harness task retain setup authority, exposes supervisor memory/control descriptors, lets the harness signal PID 1, duplicates cleanup signals, or misprojects PTY/status ownership | Hold release; disable portable execution until fixed-root activation, the exact single-threaded launcher, descriptor-pinned enforcement, all-task authority removal, non-dumpable supervisor isolation, explicit process-group/PTY ownership, and the canonical lifecycle-owned spawn seam are authoritative | Maintainer |
-| Portable dispatch bypass | Activation updates only the structural/scheduler view, or production `Execute` constructs/selects an ad hoc runner outside the endpoint-aware route authority | Hold release; configure the authority's exact-route factory from the activated launch recipe, fail closed on missing/mismatched binding identity, and prove both hops with endpoint-distinct fixtures | Maintainer |
-| Portable executable closure is incomplete | A staged PATH launcher lacks its interpreter, package tree, loader, shared runtime, native-addon declaration/dependency, content identity, package-snapshot binding, or same-target offline proof | Hold release; reject that preparation path until the owning contributor returns a conforming closure; never recover by scanning `.node` files or emitting an addon outside its package tree | Maintainer |
-| Portable secret or cleanup regression | A credential/environment value appears in an error, JSON, String, log, or plan; failed/cancelled preparation leaves material; guest writable storage survives runtime destruction; failed stop/storage destruction permits host `Close`; or any cleanup cannot be retried with both handles retained | Hold release; disable portable preparation and retain runtime, storage, and bundle cleanup ownership until every owned copy is removed | Maintainer |
-| Portable OCI proof skips | The required Linux job skips or passes without separate-process activation, configured-provider bootstrap, all three closure classes, and unpinned `Execute` | Hold release; restore the non-skipping public-consumer OCI gate | Maintainer |
-
-Published tags and DDx audit commits are immutable. Rollback means stopping use
-of the bad release and publishing a new corrective tag; it never means moving
-or rewriting the published tag.
+Those checks may be run and recorded for experimental work. They may not block
+a core tag, consume a release workflow, or add mock/consumer compatibility
+obligations until a future approved scope matrix explicitly promotes them.
 
 ## Go or No-Go Decision
 
@@ -165,5 +89,6 @@ or rewriting the published tag.
 - Tag and commit: [tag / SHA]
 - Decision time: [timestamp]
 - Workflow run and release: [links]
-- Exceptions or follow-up: [none or tracked work]
+- Core-gate exceptions: [none or tracked work]
+- Experimental results: [not run or link; non-blocking]
 - Decision owner: [name]
