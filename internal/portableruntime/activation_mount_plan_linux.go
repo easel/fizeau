@@ -152,6 +152,7 @@ func compilePortableNamespaceProjectionPlan(pinned *activationProjectionRecipe, 
 		}
 		for index, descriptor := range plan.descriptors {
 			if samePinnedObject(descriptor.object, pin.identity) {
+				// #nosec G115 -- both indices are bounded by maxPortableNamespaceProjectionPlanRecords (64).
 				plan.records = append(plan.records, portableNamespaceProjectionRecord{descriptorIndex: uint8(index), role: role, target: target, operation: operation, order: uint16(len(plan.records))})
 				return nil
 			}
@@ -160,6 +161,7 @@ func compilePortableNamespaceProjectionPlan(pinned *activationProjectionRecipe, 
 			return activationError("projection mount plan")
 		}
 		plan.descriptors = append(plan.descriptors, portableNamespaceProjectionDescriptor{object: pin, identity: pin.identity})
+		// #nosec G115 -- both indices are bounded by maxPortableNamespaceProjectionPlanRecords (64).
 		plan.records = append(plan.records, portableNamespaceProjectionRecord{descriptorIndex: uint8(len(plan.descriptors) - 1), role: role, target: target, operation: operation, order: uint16(len(plan.records))})
 		return nil
 	}

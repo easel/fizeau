@@ -111,11 +111,13 @@ func duplicatePortableProjectionDescriptors(recipe *PortableProjectionRecipe) ([
 	}
 	result := make([]*os.File, 0, len(recipe.descriptors))
 	for i, descriptor := range recipe.descriptors {
+		// #nosec G115 -- os.File.Fd is the syscall descriptor passed directly to syscall.Dup on supported Unix targets.
 		fd, err := syscall.Dup(int(descriptor.Fd()))
 		if err != nil {
 			closePortableProjectionDescriptors(result)
 			return nil, fmt.Errorf("%w: duplicate portable projection descriptor %d", ErrInvalidRecord, i)
 		}
+		// #nosec G115 -- syscall.Dup returns a non-negative file descriptor for os.NewFile ownership transfer.
 		copyDescriptor := os.NewFile(uintptr(fd), "portable-projection")
 		if copyDescriptor == nil {
 			_ = syscall.Close(fd)

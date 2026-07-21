@@ -31,6 +31,7 @@ func NewPortableNamespaceLauncher(path string) (PortableNamespaceLauncher, error
 	if !validPortableCommand(path) {
 		return PortableNamespaceLauncher{}, fmt.Errorf("%w: portable namespace launcher path is invalid", ErrInvalidRecord)
 	}
+	// #nosec G304 -- validPortableCommand validates this explicit launcher path before descriptor identity and mode checks.
 	file, err := os.Open(path)
 	if err != nil {
 		return PortableNamespaceLauncher{}, fmt.Errorf("%w: open portable namespace launcher", ErrInvalidRecord)

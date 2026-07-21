@@ -215,6 +215,7 @@ func duplicateDescriptor(file *os.File) (*os.File, error) {
 	if file == nil {
 		return nil, os.ErrInvalid
 	}
+	// #nosec G115 -- descriptorFD returns the non-negative Unix descriptor owned by file.
 	fd, err := unix.FcntlInt(uintptr(descriptorFD(file)), unix.F_DUPFD_CLOEXEC, 3)
 	if err != nil {
 		return nil, err

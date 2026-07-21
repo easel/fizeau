@@ -87,6 +87,7 @@ func writePortableNamespaceMapsAt(root string, config portableNamespaceConfig) e
 		if err := os.WriteFile(path, []byte(want), 0); err != nil {
 			return fmt.Errorf("write portable namespace %s: %w", name, err)
 		}
+		// #nosec G304 -- root is the internally constructed /proc/<validated child PID> directory and name is a fixed map file.
 		got, err := os.ReadFile(path)
 		if err != nil || strings.Join(strings.Fields(string(got)), " ") != strings.Join(strings.Fields(want), " ") {
 			if err != nil {
