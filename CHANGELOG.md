@@ -5,6 +5,24 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.15.0] — 2026-07-20
+
+### Added
+
+- The public service facade now provides measured embedded execution, provider
+  and wrapper discovery, replayable session evidence, and the thin `fiz` proof
+  CLI under the v0.15 contract.
+- Dynamic TUI wrapper discovery recognizes current Claude and Codex model
+  families, including Claude Fable/Sonnet 5 and Codex Terra, Sol, and Luna.
+
+### Changed
+
+- Final execution and override projections preserve known, zero, and unknown
+  cost with explicit provenance through the bounded v0.15 public cost contract.
+- Release gates now track the product requirements: embedded execution, wrapper
+  lifecycle, routing, measurement, distribution, and benchmark provenance.
+  Portable Linux-runtime preparation remains experimental and non-blocking.
+
 ## [v0.14.50] — 2026-06-11
 
 ### Fixed
