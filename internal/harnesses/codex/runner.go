@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	osexec "os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -207,6 +208,24 @@ func (r *Runner) runStreaming(ctx context.Context, binary string, req harnesses.
 	// WorkDir flag: -C <dir>
 	if req.WorkDir != "" {
 		args = append(args, "-C", req.WorkDir)
+
+		// Codex's workspace-write sandbox only grants write access to the
+		// -C directory (plus /tmp, $TMPDIR) by default. When WorkDir is a
+		// linked git worktree (e.g. ddx's execute-bead isolation model,
+		// which checks worktrees out under a cache dir separate from the
+		// main repo), git must still write index/HEAD/logs into the main
+		// repo's .git/worktrees/<name>/ directory — a path outside the
+		// sandboxed root. Without surfacing that path via --add-dir, every
+		// git add/commit inside the worktree is denied with a read-only-
+		// filesystem error, even though the working tree itself is fully
+		// writable. See bead niflheim-e6943834 (git add/commit blocked:
+		// "cannot write the repository worktree gitdir ... outside the
+		// writable sandbox").
+		if req.Permissions != "unrestricted" {
+			if gitDir := gitCommonDirIfOutside(req.WorkDir); gitDir != "" {
+				args = append(args, "--add-dir", gitDir)
+			}
+		}
 	}
 
 	// Model flag: -m <model>
@@ -362,6 +381,55 @@ type stringBuilderWriter struct {
 
 func (w *stringBuilderWriter) Write(p []byte) (int, error) {
 	return w.sb.Write(p)
+}
+
+// gitCommonDirIfOutside returns the absolute path to workDir's git common
+// directory (the main repository's .git directory) when it lies outside
+// workDir itself. That is the case for a linked git worktree: the checked-
+// out working tree can live anywhere, but git still writes index/HEAD/
+// logs/ORIG_HEAD into <main-repo>/.git/worktrees/<name>/ under the common
+// dir. Codex's workspace-write sandbox only grants write access to the -C
+// directory (plus /tmp, $TMPDIR) by default, so that write is denied
+// unless the common dir is surfaced via --add-dir.
+//
+// Returns "" when workDir isn't a git repo, resolution fails for any
+// reason, or the common dir already lives under workDir (an ordinary,
+// non-worktree checkout, which is already covered by -C) — callers should
+// treat "" as "nothing extra to add".
+func gitCommonDirIfOutside(workDir string) string {
+	out, err := osexec.Command("git", "-C", workDir, "rev-parse", "--git-common-dir").Output()
+	if err != nil {
+		return ""
+	}
+	commonDir := strings.TrimSpace(string(out))
+	if commonDir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(workDir, commonDir)
+	}
+	commonDir, err = filepath.Abs(commonDir)
+	if err != nil {
+		return ""
+	}
+	commonDir = filepath.Clean(commonDir)
+
+	absWorkDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return ""
+	}
+	absWorkDir = filepath.Clean(absWorkDir)
+
+	rel, err := filepath.Rel(absWorkDir, commonDir)
+	if err != nil {
+		return ""
+	}
+	if rel == "." || !strings.HasPrefix(rel, "..") {
+		// commonDir is workDir itself or nested inside it — already
+		// writable via -C, nothing extra needed.
+		return ""
+	}
+	return commonDir
 }
 
 func trimErrorBlob(s string) string {

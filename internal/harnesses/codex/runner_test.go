@@ -103,6 +103,184 @@ EOF
 	}
 }
 
+// setupGitWorktree creates a main git repo under dir/main with one commit,
+// then creates a linked worktree at dir/wt (checked out to a location
+// outside the main repo, mirroring ddx's execute-bead exec-wt isolation
+// model). Returns the worktree's working directory and the main repo's
+// .git directory (the common dir the worktree's gitdir metadata lives
+// under). Skips the test if git isn't available.
+func setupGitWorktree(t *testing.T) (worktreeDir, gitCommonDir string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	mainRepo := filepath.Join(dir, "main")
+	if err := os.Mkdir(mainRepo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(name string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(name, args...)
+		cmd.Dir = mainRepo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+		}
+	}
+	run("git", "init", "-q")
+	run("git", "config", "user.email", "test@example.com")
+	run("git", "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(mainRepo, "seed.txt"), []byte("seed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("git", "add", "seed.txt")
+	run("git", "commit", "-q", "-m", "seed")
+
+	worktreeDir = filepath.Join(dir, "wt")
+	cmd := exec.Command("git", "-C", mainRepo, "worktree", "add", "--detach", worktreeDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v\n%s", err, out)
+	}
+	t.Cleanup(func() {
+		_ = exec.Command("git", "-C", mainRepo, "worktree", "remove", "--force", worktreeDir).Run()
+	})
+
+	absMainGit, err := filepath.Abs(filepath.Join(mainRepo, ".git"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return worktreeDir, absMainGit
+}
+
+func TestGitCommonDirIfOutside_LinkedWorktreeReturnsMainGitDir(t *testing.T) {
+	worktreeDir, gitCommonDir := setupGitWorktree(t)
+
+	got := gitCommonDirIfOutside(worktreeDir)
+	if got != gitCommonDir {
+		t.Fatalf("gitCommonDirIfOutside(%q) = %q, want %q", worktreeDir, got, gitCommonDir)
+	}
+}
+
+func TestGitCommonDirIfOutside_OrdinaryRepoReturnsEmpty(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "-q", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if got := gitCommonDirIfOutside(dir); got != "" {
+		t.Fatalf("gitCommonDirIfOutside(%q) = %q, want empty (ordinary repo, .git already under workDir)", dir, got)
+	}
+}
+
+func TestGitCommonDirIfOutside_NonGitDirReturnsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if got := gitCommonDirIfOutside(dir); got != "" {
+		t.Fatalf("gitCommonDirIfOutside(%q) = %q, want empty (not a git repo)", dir, got)
+	}
+}
+
+func TestRunner_Execute_LinkedWorktreeAddsGitCommonDirToSandbox(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	worktreeDir, gitCommonDir := setupGitWorktree(t)
+
+	capture := filepath.Join(t.TempDir(), "capture.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  i=0
+  for arg in "$@"; do
+    printf 'ARG[%%s]=%%s\n' "$i" "$arg"
+    i=$((i + 1))
+  done
+} > %q
+cat <<'EOF'
+{"type":"output","item":{"type":"agent_message","text":"ok"}}
+{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":2}}
+EOF
+`, capture)
+	binary := filepath.Join(t.TempDir(), "fake-codex")
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{Binary: binary}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
+		Prompt:      "hello prompt",
+		WorkDir:     worktreeDir,
+		Permissions: "safe",
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for range ch {
+	}
+
+	raw, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	if !strings.Contains(got, "ARG[4]=--add-dir\nARG[5]="+gitCommonDir+"\n") {
+		t.Fatalf("expected --add-dir %s right after -C %s, got:\n%s", gitCommonDir, worktreeDir, got)
+	}
+}
+
+func TestRunner_Execute_UnrestrictedSkipsAddDirForLinkedWorktree(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	worktreeDir, gitCommonDir := setupGitWorktree(t)
+
+	capture := filepath.Join(t.TempDir(), "capture.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  i=0
+  for arg in "$@"; do
+    printf 'ARG[%%s]=%%s\n' "$i" "$arg"
+    i=$((i + 1))
+  done
+} > %q
+cat <<'EOF'
+{"type":"output","item":{"type":"agent_message","text":"ok"}}
+{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":2}}
+EOF
+`, capture)
+	binary := filepath.Join(t.TempDir(), "fake-codex")
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &Runner{Binary: binary}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ch, err := r.Execute(ctx, harnesses.ExecuteRequest{
+		Prompt:      "hello prompt",
+		WorkDir:     worktreeDir,
+		Permissions: "unrestricted",
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for range ch {
+	}
+
+	raw, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	if strings.Contains(got, "--add-dir") {
+		t.Fatalf("unrestricted mode already bypasses the sandbox; --add-dir should not be added:\n%s", got)
+	}
+	_ = gitCommonDir
+}
+
 func TestRunner_Execute_SnapsReasoningToDiscoveryLevels(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh not available")
