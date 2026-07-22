@@ -6,10 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
+
+// guestCommandPath maps a canonical POSIX-style fixture path onto the host
+// platform's exact-absolute-path shape, since validPortableCommand requires a
+// filepath.IsAbs, Clean-normalized command on the platform running the test.
+func guestCommandPath(posixPath string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.FromSlash("C:" + posixPath)
+	}
+	return posixPath
+}
 
 type portableLaunchTestRecipe struct{ secret string }
 
@@ -113,8 +125,9 @@ func TestPortableActivationIdentityRevalidationAllowsGatedRelease(t *testing.T) 
 
 func TestPortableLaunchAttachmentOwnsExactChildSpecification(t *testing.T) {
 	const secret = "portable-recipe-secret-must-not-leak"
+	command := guestCommandPath("/guest/runtime/bin/tool")
 	attachment, err := NewPortableLaunchAttachment(
-		"/guest/runtime/bin/tool", []string{"run", "request"},
+		command, []string{"run", "request"},
 		[]string{"HOME=/guest/home", "TOKEN=not-the-recipe-secret"},
 		portableLaunchTestRecipe{secret: secret},
 	)
@@ -127,13 +140,13 @@ func TestPortableLaunchAttachmentOwnsExactChildSpecification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalJSON: %v", err)
 	}
-	for _, forbidden := range []string{"/guest/runtime/bin/tool", "request", "TOKEN", secret} {
+	for _, forbidden := range []string{command, "request", "TOKEN", secret} {
 		if strings.Contains(text, forbidden) || strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("diagnostic leaked %q: text=%q json=%s", forbidden, text, encoded)
 		}
 	}
 
-	target, err := attachment.commandForPTY("/guest/runtime/bin/tool", []string{"run", "request"}, []string{"HOME=/guest/home", "TOKEN=not-the-recipe-secret"})
+	target, err := attachment.commandForPTY(command, []string{"run", "request"}, []string{"HOME=/guest/home", "TOKEN=not-the-recipe-secret"})
 	if err != nil {
 		t.Fatalf("commandForPTY: %v", err)
 	}
@@ -152,12 +165,12 @@ func TestPortableLaunchAttachmentFailsClosed(t *testing.T) {
 		recipe      PortableLaunchRecipe
 	}{
 		{name: "relative command", command: "tool", environment: []string{}},
-		{name: "aliased command", command: "/guest/runtime/../tool", environment: []string{}},
-		{name: "inherited environment", command: "/guest/tool", environment: nil},
-		{name: "duplicate environment", command: "/guest/tool", environment: []string{"HOME=/a", "HOME=/b"}},
-		{name: "malformed environment", command: "/guest/tool", environment: []string{"HOME"}},
-		{name: "nul argument", command: "/guest/tool", arguments: []string{"bad\x00argument"}, environment: []string{}},
-		{name: "missing recipe", command: "/guest/tool", environment: []string{}},
+		{name: "aliased command", command: guestCommandPath("/guest/runtime/../tool"), environment: []string{}},
+		{name: "inherited environment", command: guestCommandPath("/guest/tool"), environment: nil},
+		{name: "duplicate environment", command: guestCommandPath("/guest/tool"), environment: []string{"HOME=/a", "HOME=/b"}},
+		{name: "malformed environment", command: guestCommandPath("/guest/tool"), environment: []string{"HOME"}},
+		{name: "nul argument", command: guestCommandPath("/guest/tool"), arguments: []string{"bad\x00argument"}, environment: []string{}},
+		{name: "missing recipe", command: guestCommandPath("/guest/tool"), environment: []string{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			candidate := tc.recipe
@@ -172,15 +185,16 @@ func TestPortableLaunchAttachmentFailsClosed(t *testing.T) {
 }
 
 func TestPortableLaunchAttachmentRejectsAliasedTarget(t *testing.T) {
-	attachment, err := NewPortableLaunchAttachment("/guest/runtime/bin/tool", []string{"request"}, []string{"HOME=/guest/home"}, portableLaunchTestRecipe{})
+	command := guestCommandPath("/guest/runtime/bin/tool")
+	attachment, err := NewPortableLaunchAttachment(command, []string{"request"}, []string{"HOME=/guest/home"}, portableLaunchTestRecipe{})
 	if err != nil {
 		t.Fatalf("NewPortableLaunchAttachment: %v", err)
 	}
-	target, err := attachment.commandForPTY("/guest/runtime/bin/tool", []string{"request"}, []string{"HOME=/guest/home"})
+	target, err := attachment.commandForPTY(command, []string{"request"}, []string{"HOME=/guest/home"})
 	if err != nil {
 		t.Fatalf("commandForPTY: %v", err)
 	}
-	target.Args[0] = "/guest/runtime/bin/alias"
+	target.Args[0] = guestCommandPath("/guest/runtime/bin/alias")
 	if err := validatePortableLaunchTarget(target, attachment); err == nil {
 		t.Fatal("validatePortableLaunchTarget accepted aliased argv[0]")
 	}
