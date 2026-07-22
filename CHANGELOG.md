@@ -5,6 +5,19 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.15.1] — 2026-07-22
+
+### Fixed
+
+- The `tb-2-1-all` benchmark set resolves the full TB 2.1 task catalog from
+  the checked-in task subset (via `tasks_from` and the `harbor` executor)
+  instead of deferring to `tasks: all`, keeping lane-filtered planning
+  deterministic across all 89 tasks.
+- `fiz-bench bench-sets` understands the `tasks_from` and `task_executor`
+  bench-set fields, resolving external task catalogs with the same
+  external-first, deduplicated ordering as the shell driver instead of
+  rejecting them as unknown fields.
+
 ## [v0.15.0] — 2026-07-20
 
 ### Added
