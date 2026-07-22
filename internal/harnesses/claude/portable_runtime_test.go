@@ -246,8 +246,36 @@ int main(void) {
 	return launcher
 }
 
+// unprivilegedNamespacesSupported reports whether the host can create the
+// unprivileged user namespace the offline probe needs. Hosts that restrict
+// them (for example GitHub's Ubuntu 24.04 runners under the default AppArmor
+// policy) surface EPERM writing /proc/self/uid_map; the probe then degrades
+// to a logged no-op so the remaining credential-boundary assertions still run.
+func unprivilegedNamespacesSupported(t *testing.T) bool {
+	t.Helper()
+	if bwrap, err := exec.LookPath("bwrap"); err == nil {
+		output, err := exec.Command(bwrap, "--unshare-all", "--die-with-parent", "--ro-bind", "/", "/", "/bin/true").CombinedOutput()
+		if err != nil {
+			t.Logf("host cannot create unprivileged namespaces via bwrap, skipping offline probe: %v: %q", err, output)
+			return false
+		}
+		return true
+	}
+	if unshare, err := exec.LookPath("unshare"); err == nil {
+		output, err := exec.Command(unshare, "--user", "--map-root-user", "/bin/true").CombinedOutput()
+		if err != nil {
+			t.Logf("host cannot create unprivileged user namespaces, skipping offline probe: %v: %q", err, output)
+			return false
+		}
+	}
+	return true
+}
+
 func assertClaudePortableOfflineProbe(t *testing.T, contribution harnesses.PortableRuntimeContribution) {
 	t.Helper()
+	if !unprivilegedNamespacesSupported(t) {
+		return
+	}
 	root := t.TempDir()
 	for _, asset := range contribution.Assets {
 		if asset.Kind != harnesses.PortableRuntimeAssetExecutable && asset.Kind != harnesses.PortableRuntimeAssetSupport {
