@@ -138,9 +138,14 @@ func (s *Store) recordMetricLocked(key Key, success bool, duration time.Duration
 	record.attempts++
 	if success {
 		record.successes++
-	}
-	if duration > 0 {
-		record.totalDuration += duration
+		// Only successful attempts measure endpoint latency. A failed
+		// attempt's wall-clock (connection refused, timeout) is a failure
+		// signal, not performance evidence; folding it in lets a fast
+		// refusal masquerade as a fast endpoint and outscore the cooldown
+		// demotion the failure just earned.
+		if duration > 0 {
+			record.totalDuration += duration
+		}
 	}
 	record.recordedAt = recordedAt
 	s.metrics[key] = record
@@ -255,8 +260,8 @@ func (s *Store) MetricSignals(now time.Time, ttl time.Duration) (map[string]floa
 		}
 		metricKey := ProviderModelKey(key)
 		successRate[metricKey] = float64(record.successes) / float64(record.attempts)
-		if record.totalDuration > 0 {
-			latencyMS[metricKey] = float64(record.totalDuration.Milliseconds()) / float64(record.attempts)
+		if record.totalDuration > 0 && record.successes > 0 {
+			latencyMS[metricKey] = float64(record.totalDuration.Milliseconds()) / float64(record.successes)
 		}
 	}
 	return successRate, latencyMS
