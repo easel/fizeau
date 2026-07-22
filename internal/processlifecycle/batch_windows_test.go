@@ -90,7 +90,11 @@ func TestWindowsJobReapsGrandchild(t *testing.T) {
 	if err := batch.Stop(); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	assertWindowsHandlesSignaled(t, processHandles)
+	// Stop waits for the job's active-process count to reach zero, but the
+	// kernel can decrement that count a beat before it signals the process
+	// handles, so an instant zero-timeout inspection races OS bookkeeping.
+	// A bounded wait still proves the grandchild was reaped.
+	waitWindowsHandlesSignaled(t, processHandles, 5*time.Second)
 	if _, err := registry.Get(context.Background(), recordID); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("completed lifecycle record retained: %v", err)
 	}
