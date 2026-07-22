@@ -139,3 +139,23 @@ BENCHSET
   inline_1_line="$(printf '%s\n' "${output}" | grep -n 'inline-task-1' | cut -d: -f1)"
   [[ "${external_1_line}" -lt "${inline_1_line}" ]]
 }
+
+# Test 4: The full TB-2.1 bench-set resolves its checked-in 89-task catalog.
+@test "TestMatrixExpandFullTB21Catalog" {
+  local output
+  output="$("${BENCHMARK}" \
+    --profile sindri-lucebox \
+    --bench-set tb-2-1-all \
+    --plan 2>&1)"
+
+  local task_count
+  task_count="$(printf '%s\n' "${output}" \
+    | sed -n 's/.*task=\([^[:space:]]*\).*/\1/p' \
+    | sort -u \
+    | wc -l \
+    | tr -d ' ')"
+  [[ "${task_count}" -eq 89 ]]
+
+  ! printf '%s\n' "${output}" | grep -Fq 'task=*all*'
+  printf '%s\n' "${output}" | grep -Fq 'task_executor=harbor'
+}
