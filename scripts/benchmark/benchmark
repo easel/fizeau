@@ -1132,7 +1132,11 @@ compute_cell_cost() {
             // $result.n_cached_input_tokens
             // 0)                          as $tc
       | num($result.cost_usd // $result.total_cost_usd // 0) as $reported
-      | (($ti * $pi) + ($to * $po) + ($tc * $pc)) / 1000000  as $priced
+      # Parenthesized because jq versions disagree on the precedence of a
+      # trailing `as` binding: jq 1.7 parses `x / 1000000 as $v | rest` as
+      # `x / (1000000 as $v | rest)`, which divides by the string output of
+      # the tail pipeline and aborts the cell worker.
+      | ((($ti * $pi) + ($to * $po) + ($tc * $pc)) / 1000000) as $priced
       | (if $priced > 0 then $priced
          elif ($pi + $po + $pc) == 0 then $reported
          else 0
