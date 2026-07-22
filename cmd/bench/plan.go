@@ -41,14 +41,61 @@ type benchSet struct {
 }
 
 // rawBenchSet captures the YAML literal before normalizing the `tasks` field,
-// which accepts either a list of task IDs or the bare string "all".
+// which accepts either a list of task IDs or the bare string "all". A
+// bench-set may also reference an external task catalog via `tasks_from`
+// (path relative to the bench-set file, tasks[].id entries); external tasks
+// resolve before inline ones with duplicates removed, mirroring the shell
+// driver's resolve_tasks. `task_executor` is executor routing owned by the
+// shell driver; the plan helper accepts it but does not interpret it.
 type rawBenchSet struct {
-	ID          string    `yaml:"id"`
-	Framework   string    `yaml:"framework"`
-	Dataset     string    `yaml:"dataset"`
-	DefaultReps int       `yaml:"default_reps"`
-	Description string    `yaml:"description"`
-	Tasks       yaml.Node `yaml:"tasks"`
+	ID           string    `yaml:"id"`
+	Framework    string    `yaml:"framework"`
+	Dataset      string    `yaml:"dataset"`
+	DefaultReps  int       `yaml:"default_reps"`
+	Description  string    `yaml:"description"`
+	Tasks        yaml.Node `yaml:"tasks"`
+	TasksFrom    string    `yaml:"tasks_from"`
+	TaskExecutor string    `yaml:"task_executor"`
+}
+
+// loadTaskSubset reads a task-subset YAML (scripts/benchmark/task-subset-*.yaml)
+// and returns its task IDs in file order. Entries are either scalar IDs or
+// mappings with an `id` key; surrounding metadata fields are ignored.
+func loadTaskSubset(path string) ([]string, error) {
+	raw, err := os.ReadFile(path) // #nosec G304 -- path referenced by operator-supplied bench-set
+	if err != nil {
+		return nil, fmt.Errorf("read tasks_from %s: %w", path, err)
+	}
+	var f struct {
+		Tasks []yaml.Node `yaml:"tasks"`
+	}
+	if err := yaml.Unmarshal(raw, &f); err != nil {
+		return nil, fmt.Errorf("parse tasks_from %s: %w", path, err)
+	}
+	out := make([]string, 0, len(f.Tasks))
+	for _, n := range f.Tasks {
+		switch n.Kind {
+		case yaml.ScalarNode:
+			if v := strings.TrimSpace(n.Value); v != "" {
+				out = append(out, v)
+			}
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				if n.Content[i].Value == "id" {
+					if v := strings.TrimSpace(n.Content[i+1].Value); v != "" {
+						out = append(out, v)
+					}
+					break
+				}
+			}
+		default:
+			return nil, fmt.Errorf("tasks_from %s: tasks entries must be scalars or mappings with an id key", path)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("tasks_from %s: resolved no tasks", path)
+	}
+	return out, nil
 }
 
 func loadBenchSet(path string) (*benchSet, error) {
@@ -69,27 +116,48 @@ func loadBenchSet(path string) (*benchSet, error) {
 		DefaultReps: r.DefaultReps,
 		Description: strings.TrimSpace(r.Description),
 	}
+	tasksFrom := strings.TrimSpace(r.TasksFrom)
+	seen := make(map[string]bool)
+	appendTask := func(v string) {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			bs.Tasks = append(bs.Tasks, v)
+		}
+	}
 	switch r.Tasks.Kind {
 	case yaml.ScalarNode:
 		if strings.TrimSpace(r.Tasks.Value) != "all" {
 			return nil, fmt.Errorf("bench-set %s: tasks scalar must be \"all\", got %q", path, r.Tasks.Value)
 		}
+		if tasksFrom != "" {
+			return nil, fmt.Errorf("bench-set %s: tasks: all cannot be combined with tasks_from", path)
+		}
 		bs.AllTasks = true
 	case yaml.SequenceNode:
+		// Appended below, after any tasks_from catalog.
+	case 0:
+		if tasksFrom == "" {
+			return nil, fmt.Errorf("bench-set %s: tasks field is required", path)
+		}
+	default:
+		return nil, fmt.Errorf("bench-set %s: unsupported tasks node kind %v", path, r.Tasks.Kind)
+	}
+	if tasksFrom != "" && !bs.AllTasks {
+		external, err := loadTaskSubset(filepath.Join(filepath.Dir(path), tasksFrom))
+		if err != nil {
+			return nil, fmt.Errorf("bench-set %s: %w", path, err)
+		}
+		for _, v := range external {
+			appendTask(v)
+		}
+	}
+	if r.Tasks.Kind == yaml.SequenceNode {
 		for _, child := range r.Tasks.Content {
 			if child.Kind != yaml.ScalarNode {
 				return nil, fmt.Errorf("bench-set %s: tasks entries must be scalars", path)
 			}
-			v := strings.TrimSpace(child.Value)
-			if v == "" {
-				continue
-			}
-			bs.Tasks = append(bs.Tasks, v)
+			appendTask(strings.TrimSpace(child.Value))
 		}
-	case 0:
-		return nil, fmt.Errorf("bench-set %s: tasks field is required", path)
-	default:
-		return nil, fmt.Errorf("bench-set %s: unsupported tasks node kind %v", path, r.Tasks.Kind)
 	}
 	if err := bs.validate(); err != nil {
 		return nil, fmt.Errorf("validate bench-set %s: %w", path, err)
