@@ -220,8 +220,10 @@ func TestBenchmarkCanaryReports(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stdout
 
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("benchmark run failed: %v\noutput: %s", err, stdout.String())
+	err = cmd.Run()
+	t.Logf("benchmark output: %s", stdout.String())
+	if err != nil {
+		t.Fatalf("benchmark run failed: %v", err)
 	}
 
 	// Verify cell directory structure

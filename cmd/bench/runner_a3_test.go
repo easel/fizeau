@@ -407,8 +407,8 @@ func TestRunProducesCellReports(t *testing.T) {
 	cmd.Dir = repoRoot
 
 	output, err := cmd.CombinedOutput()
+	t.Logf("benchmark output: %s", output)
 	if err != nil {
-		t.Logf("benchmark output: %s", output)
 		t.Fatalf("benchmark failed: %v", err)
 	}
 
@@ -599,8 +599,8 @@ func TestResumeAndRetryInvalid(t *testing.T) {
 	cmd.Dir = repoRoot
 
 	output, err := cmd.CombinedOutput()
+	t.Logf("first run output: %s", output)
 	if err != nil {
-		t.Logf("first run output: %s", output)
 		t.Fatalf("first run failed: %v", err)
 	}
 
@@ -969,8 +969,8 @@ func TestPerCellRetryLinks(t *testing.T) {
 	cmd.Dir = repoRoot
 
 	output, err := cmd.CombinedOutput()
+	t.Logf("benchmark output: %s", output)
 	if err != nil {
-		t.Logf("benchmark output: %s", output)
 		t.Fatalf("benchmark failed: %v", err)
 	}
 
