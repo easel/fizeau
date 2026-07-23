@@ -147,6 +147,11 @@ launch_cell_worker() {
   setsid bash -c '
     budget_or_run_cell "$@"
     status=$?
+    if [[ ${status} -ne 0 && -n "${BENCH_WORKER_FAILURE_MARKER:-}" ]]; then
+      # The job pool discards worker exit statuses (wait -n || true), so a
+      # failed worker records itself for the sweep-end failure check.
+      printf "task=%s status=%d\n" "$7" "${status}" >>"${BENCH_WORKER_FAILURE_MARKER}" || true
+    fi
     release_group_lock "${!#}"
     exit "${status}"
   ' bash "$@" "${lock_fd}" &
@@ -1519,11 +1524,19 @@ run_cell_with_per_cell_retry() {
   local prior_cell_dir="${initial_attempt_of}"
 
   while :; do
-    local cell_dir
+    # run_one_cell runs in a command substitution, where an inner die only
+    # exits the subshell; set -e is suppressed in the worker's condition
+    # context, so the failure must be checked explicitly or a crashed cell
+    # silently yields an empty cell_dir and the sweep reports success.
+    local cell_dir run_status=0
     cell_dir="$(run_one_cell "${out}" "${profile_id}" "${profile_file}" \
                   "${framework}" "${dataset}" "${dataset_dir}" "${task}" \
                   "${rep_idx}" "${total_reps}" "${adapter}" "${prior_cell_dir}" \
-                  "${te_ver}" "${hd}" "${interrupted_flag}")"
+                  "${te_ver}" "${hd}" "${interrupted_flag}")" || run_status=$?
+    if [[ ${run_status} -ne 0 || -z "${cell_dir}" ]]; then
+      warn "cell worker crashed before writing a report (task=${task} run_one_cell status=${run_status})"
+      return 1
+    fi
 
     if [[ ! -f "${cell_dir}/report.json" ]]; then
       # No result to check, just return the cell
@@ -1580,10 +1593,16 @@ budget_or_run_cell() {
     return 0
   fi
 
+  # Same swallow hazard as run_cell_with_per_cell_retry: the substitution's
+  # failure must be propagated or the worker exits 0 over a crashed cell.
+  local run_status=0
   cell_dir="$(run_cell_with_per_cell_retry "${out}" "${profile_id}" "${profile_file}" \
                 "${framework}" "${dataset}" "${dataset_dir}" "${task}" \
                 "${rep_idx}" "${total_reps}" "${adapter}" \
-                "${te_ver}" "${hd}" "${interrupted_flag}" "${prior_cell_dir}")"
+                "${te_ver}" "${hd}" "${interrupted_flag}" "${prior_cell_dir}")" || run_status=$?
+  if [[ ${run_status} -ne 0 || -z "${cell_dir}" ]]; then
+    return 1
+  fi
 
   if [[ -n "${cap}" && -f "${cell_dir}/report.json" ]]; then
     local cell_id cost
@@ -1619,6 +1638,11 @@ run_sweep() {
   if [[ -n "${max_cost_usd}" ]]; then
     init_budget "${out}" "${max_cost_usd}"
   fi
+
+  # Crashed cell workers append here; a non-empty marker fails the sweep.
+  BENCH_WORKER_FAILURE_MARKER="${FIZEAU_BENCH_STATE_DIR}/.worker-failures-$$"
+  export BENCH_WORKER_FAILURE_MARKER
+  : >"${BENCH_WORKER_FAILURE_MARKER}"
 
   # Signal handling: set up interrupt flag and trap
   local interrupted_flag
@@ -1783,8 +1807,13 @@ run_sweep() {
   # Wait for all background jobs to complete
   wait
   local exit_code=0
+  if [[ -s "${BENCH_WORKER_FAILURE_MARKER}" ]]; then
+    warn "cell worker failures detected; failing the sweep:"
+    cat "${BENCH_WORKER_FAILURE_MARKER}" >&2
+    exit_code=1
+  fi
   [[ -f "${interrupted_flag}" ]] && exit_code=130
-  rm -f "${interrupted_flag}"
+  rm -f "${interrupted_flag}" "${BENCH_WORKER_FAILURE_MARKER}"
   trap - SIGINT SIGTERM
   return "${exit_code}"
 }

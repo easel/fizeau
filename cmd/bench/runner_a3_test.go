@@ -1113,3 +1113,40 @@ func TestBenchmarkSignalInterruptionManualGate(t *testing.T) {
 	t.Log("   - cost_usd_at_run_time = 0")
 	t.Log("5. Verify exit code is 130 (SIGTERM)")
 }
+
+// TestWorkerCrashFailsSweep verifies that a cell worker dying before it
+// writes report.json fails the sweep instead of exiting 0 with report-less
+// cells. The crash is forced by pointing the task-executor override at a
+// path that fails run_one_cell's executability check after the cell
+// directory already exists.
+func TestWorkerCrashFailsSweep(t *testing.T) {
+	repoRoot := benchRepoRoot(t)
+	benchmarkScript := filepath.Join(repoRoot, "scripts/benchmark/benchmark")
+	if _, err := os.Stat(benchmarkScript); err != nil {
+		t.Skipf("benchmark script not found at %s; skipping integration test", benchmarkScript)
+	}
+
+	outDir := filepath.Join(t.TempDir(), "results")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`
+		BENCH_TASK_EXECUTOR_OVERRIDE=/nonexistent/task-executor \
+		"%s" \
+		  --profile sindri-lucebox \
+		  --bench-set tb-2-1-canary \
+		  --reps 1 \
+		  --out "%s"
+	`, benchmarkScript, outDir))
+	cmd.Dir = repoRoot
+
+	output, err := cmd.CombinedOutput()
+	t.Logf("benchmark output: %s", output)
+	if err == nil {
+		t.Fatal("sweep exited 0 despite crashed cell workers")
+	}
+	if !strings.Contains(string(output), "cell worker") {
+		t.Fatalf("sweep failure does not mention cell worker failures: %v", err)
+	}
+}
