@@ -14,7 +14,7 @@ import (
 
 func TestRegistryBuiltinHarnesses(t *testing.T) {
 	r := NewRegistry()
-	for _, name := range []string{"codex", "claude", "gemini", "opencode", "fiz", "pi"} {
+	for _, name := range []string{"codex", "claude", "gemini", "grok", "opencode", "fiz", "pi"} {
 		assert.True(t, r.Has(name), "should have builtin harness: %s", name)
 	}
 	assert.False(t, r.Has("nonexistent"))
@@ -46,16 +46,17 @@ func TestRegistryDefaultBaseArgs(t *testing.T) {
 func TestRegistryNamesPreferenceOrder(t *testing.T) {
 	r := NewRegistry()
 	names := r.Names()
-	require.Len(t, names, 14)
+	require.Len(t, names, 15)
 	// claude-tui is now in PreferenceOrder (the default for the shared "claude"
 	// surface) and ranks just after codex, ahead of claude(--print).
 	assert.Equal(t, "codex", names[0])
 	assert.Equal(t, "claude-tui", names[1])
 	assert.Equal(t, "claude", names[2])
-	assert.Equal(t, "opencode", names[3])
-	assert.Equal(t, "lucebox", names[9])
-	assert.Equal(t, "vllm", names[10])
-	assert.Equal(t, "gemini", names[11])
+	assert.Equal(t, "grok", names[3])
+	assert.Equal(t, "opencode", names[4])
+	assert.Equal(t, "lucebox", names[10])
+	assert.Equal(t, "vllm", names[11])
+	assert.Equal(t, "gemini", names[12])
 	assert.Contains(t, names, "virtual")
 	assert.Contains(t, names, "claude-tui")
 }
@@ -114,6 +115,8 @@ func TestRegistryFirstAvailableEmbeddedFallback(t *testing.T) {
 func TestResolveHarnessAlias(t *testing.T) {
 	assert.Equal(t, "fiz", ResolveHarnessAlias("local"))
 	assert.Equal(t, "fiz", ResolveHarnessAlias("fiz"))
+	assert.Equal(t, "grok", ResolveHarnessAlias("grok-build"))
+	assert.Equal(t, "grok", ResolveHarnessAlias("grok"))
 	assert.Equal(t, "agent", ResolveHarnessAlias("agent"))
 	assert.Equal(t, "claude", ResolveHarnessAlias("claude"))
 	assert.Equal(t, "unknown", ResolveHarnessAlias("unknown"))

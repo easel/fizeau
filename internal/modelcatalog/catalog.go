@@ -19,6 +19,7 @@ const (
 	SurfaceCodex          Surface = "codex"
 	SurfaceClaudeCode     Surface = "claude-code"
 	SurfaceGemini         Surface = "gemini"
+	SurfaceGrok           Surface = "grok"
 	SurfaceEmbeddedOpenAI Surface = "embedded.openai"
 )
 

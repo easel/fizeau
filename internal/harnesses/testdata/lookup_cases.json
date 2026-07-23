@@ -1,32 +1,38 @@
 [
   {
     "name": "all four major CLI harnesses installed",
-    "installed": ["claude", "codex", "pi", "opencode", "gemini"],
-    "expect_available": ["codex", "claude", "claude-tui", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini", "virtual", "script"],
+    "installed": ["claude", "codex", "pi", "opencode", "gemini", "grok"],
+    "expect_available": ["codex", "claude", "claude-tui", "grok", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini", "virtual", "script"],
     "expect_unavailable": []
   },
   {
     "name": "only claude installed",
     "installed": ["claude"],
     "expect_available": ["claude", "claude-tui", "fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
-    "expect_unavailable": ["codex", "opencode", "pi", "gemini"]
+    "expect_unavailable": ["codex", "grok", "opencode", "pi", "gemini"]
   },
   {
     "name": "only codex installed",
     "installed": ["codex"],
     "expect_available": ["codex", "fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
-    "expect_unavailable": ["claude-tui", "claude", "opencode", "pi", "gemini"]
+    "expect_unavailable": ["claude-tui", "claude", "grok", "opencode", "pi", "gemini"]
+  },
+  {
+    "name": "only grok installed",
+    "installed": ["grok"],
+    "expect_available": ["grok", "fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
+    "expect_unavailable": ["claude-tui", "claude", "codex", "opencode", "pi", "gemini"]
   },
   {
     "name": "no CLI binaries installed",
     "installed": [],
     "expect_available": ["fiz", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
-    "expect_unavailable": ["claude-tui", "codex", "claude", "opencode", "pi", "gemini"]
+    "expect_unavailable": ["claude-tui", "codex", "claude", "grok", "opencode", "pi", "gemini"]
   },
   {
     "name": "pi and opencode installed",
     "installed": ["pi", "opencode"],
     "expect_available": ["opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "virtual", "script"],
-    "expect_unavailable": ["claude-tui", "codex", "claude", "gemini"]
+    "expect_unavailable": ["claude-tui", "codex", "claude", "grok", "gemini"]
   }
 ]

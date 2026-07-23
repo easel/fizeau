@@ -77,7 +77,7 @@ func ClassifyHarnessCapabilities(name string, cfg harnesses.HarnessConfig) Harne
 
 func serviceExecuteWired(name string, cfg harnesses.HarnessConfig) bool {
 	switch name {
-	case "fiz", "claude", "codex", "gemini", "opencode", "pi", "virtual", "script":
+	case "fiz", "claude", "codex", "gemini", "grok", "opencode", "pi", "virtual", "script":
 		return true
 	default:
 		return cfg.IsHTTPProvider
@@ -101,7 +101,7 @@ func modelDiscoveryCapability(name string, cfg harnesses.HarnessConfig) HarnessC
 	if name == "gemini" {
 		return capabilityOptional("models are discovered from Gemini CLI bundled model configuration and replay fixtures")
 	}
-	if name == "opencode" || name == "pi" {
+	if name == "grok" || name == "opencode" || name == "pi" {
 		return capabilityOptional("models are discovered from a stable harness CLI command or documented CLI help")
 	}
 	if name == "fiz" || cfg.IsHTTPProvider {
@@ -190,7 +190,7 @@ func finalTextCapability(name string, cfg harnesses.HarnessConfig) HarnessCapabi
 		return capabilityNotApplicable("test-only harness does not expose normalized live response text")
 	}
 	switch name {
-	case "fiz", "codex", "claude", "gemini", "opencode", "pi":
+	case "fiz", "codex", "claude", "gemini", "grok", "opencode", "pi":
 		return capabilityOptional("final events include normalized final_text when response text is available")
 	default:
 		if cfg.IsHTTPProvider {
@@ -230,7 +230,7 @@ func recordReplayCapability(cfg harnesses.HarnessConfig) HarnessCapability {
 	if cfg.TestOnly {
 		return capabilityRequired("test-only harness provides deterministic replay or directive execution")
 	}
-	if cfg.Name == "codex" || cfg.Name == "claude" {
+	if cfg.Name == "codex" || cfg.Name == "claude" || cfg.Name == "grok" {
 		return capabilityOptional("direct PTY discovery and quota probes produce replayable sanitized cassettes")
 	}
 	if cfg.Name == "gemini" {

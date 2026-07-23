@@ -577,6 +577,8 @@ func RoutingCatalogSurface(surface string) (modelcatalog.Surface, bool) {
 		return modelcatalog.SurfaceClaudeCode, true
 	case "gemini":
 		return modelcatalog.SurfaceGemini, true
+	case "grok":
+		return modelcatalog.SurfaceGrok, true
 	default:
 		return "", false
 	}
@@ -791,7 +793,7 @@ func ProviderRoutingCostClass(providerType string) string {
 // subscription harness's default model has no catalog price.
 func SubscriptionFallbackPolicy(harnessName string) string {
 	switch harnessName {
-	case "claude", "codex", "gemini":
+	case "claude", "codex", "gemini", "grok":
 		return "default"
 	default:
 		return ""

@@ -35,7 +35,7 @@ func DispatchExecuteRun(ctx context.Context, req ExecuteDispatchRequest, cb Exec
 		if cb.RunNative != nil {
 			cb.RunNative(ctx)
 		}
-	case "claude", "claude-tui", "codex", "gemini", "opencode", "pi":
+	case "claude", "claude-tui", "codex", "gemini", "grok", "opencode", "pi":
 		runRegisteredSubprocess(ctx, req, cb)
 	case "virtual":
 		if cb.RunVirtual != nil {

@@ -33,8 +33,9 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 	}
 
 	wantNames := []string{
-		"claude", "claude-tui", "codex", "fiz", "gemini", "lmstudio", "lucebox",
-		"omlx", "opencode", "openrouter", "pi", "script", "virtual", "vllm",
+		"claude", "claude-tui", "codex", "fiz", "gemini", "grok", "lmstudio",
+		"lucebox", "omlx", "opencode", "openrouter", "pi", "script", "virtual",
+		"vllm",
 	}
 	wantClassification := map[string]struct {
 		transport harnesses.PortableRuntimeTransport
@@ -44,6 +45,7 @@ func TestPortableRuntimeInventoryCoversEveryEligibleRegisteredHarness(t *testing
 		"claude-tui": {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
 		"codex":      {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
 		"gemini":     {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
+		"grok":       {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
 		"opencode":   {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
 		"pi":         {harnesses.PortableRuntimeTransportSubprocess, harnesses.PortableRuntimeInclusionRequired},
 		"fiz":        {harnesses.PortableRuntimeTransportEmbedded, harnesses.PortableRuntimeInclusionNonSubprocess},

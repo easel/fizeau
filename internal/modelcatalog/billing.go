@@ -19,7 +19,7 @@ func BillingForProviderSystem(system string) BillingModel {
 	switch normalizeBillingKey(system) {
 	case "lmstudio", "llama-server", "ds4", "omlx", "vllm", "rapid-mlx", "ollama", "lucebox":
 		return BillingModelFixed
-	case "openai", "openrouter", "anthropic", "google":
+	case "openai", "openrouter", "anthropic", "google", "xai":
 		return BillingModelPerToken
 	default:
 		return BillingModelUnknown
@@ -31,7 +31,7 @@ func BillingForProviderSystem(system string) BillingModel {
 // provider configuration.
 func BillingForHarness(harness string) BillingModel {
 	switch normalizeBillingKey(harness) {
-	case "claude", "codex", "gemini":
+	case "claude", "codex", "gemini", "grok":
 		return BillingModelSubscription
 	default:
 		return BillingModelUnknown

@@ -11,6 +11,7 @@ import (
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
+	grokharness "github.com/easel/fizeau/internal/harnesses/grok"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
 	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
@@ -32,6 +33,8 @@ func New(name string) harnesses.Harness {
 		return &codexharness.Runner{}
 	case "gemini":
 		return &geminiharness.Runner{}
+	case "grok":
+		return &grokharness.Runner{}
 	case "opencode":
 		return &opencodeharness.Runner{}
 	case "pi":
@@ -65,6 +68,11 @@ func NewRouteRunner(key harnesses.RouteRunnerKey, prototype harnesses.Harness) (
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
 		return &clone, nil
 	case *geminiharness.Runner:
+		clone := *runner
+		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
+		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
+		return &clone, nil
+	case *grokharness.Runner:
 		clone := *runner
 		clone.PortableRuntimeRunnerState = runner.PortableRuntimeRunnerState.Clone()
 		clone.BaseArgs = append([]string(nil), runner.BaseArgs...)
@@ -115,6 +123,7 @@ func Instances() map[string]harnesses.Harness {
 		"claude-tui": New("claude-tui"),
 		"codex":      New("codex"),
 		"gemini":     New("gemini"),
+		"grok":       New("grok"),
 		"opencode":   New("opencode"),
 		"pi":         New("pi"),
 	}

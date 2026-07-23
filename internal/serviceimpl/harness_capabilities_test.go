@@ -133,6 +133,11 @@ func TestHarnessCapabilityMatrixClassification(t *testing.T) {
 			reasoningGemini, permissionsOptional, progressRequired, usageOptional,
 			finalLive, toolsUnsupported, quotaGemini, replayGemini,
 		),
+		"grok": matrix(
+			executeRequired, discoveryCLI, pinningOptional, workdirExplicit,
+			reasoningRegistry, permissionsOptional, progressRequired, usageOptional,
+			finalLive, toolsUnsupported, quotaSubscription, replayTUI,
+		),
 		"virtual": matrix(
 			executeRequired, discoveryTest, pinningTest, workdirTest,
 			reasoningTest, permissionsTest, progressRequired, usageOptional,

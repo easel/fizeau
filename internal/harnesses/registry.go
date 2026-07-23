@@ -3,7 +3,7 @@ package harnesses
 import "github.com/easel/fizeau/internal/productinfo"
 
 // PreferenceOrder defines the default harness preference when multiple are available.
-var PreferenceOrder = []string{"codex", "claude-tui", "claude", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini"}
+var PreferenceOrder = []string{"codex", "claude-tui", "claude", "grok", "opencode", "fiz", "pi", "openrouter", "lmstudio", "omlx", "lucebox", "vllm", "gemini"}
 
 // builtinHarnesses defines known harnesses and how to invoke them.
 var builtinHarnesses = map[string]HarnessConfig{
@@ -78,6 +78,33 @@ var builtinHarnesses = map[string]HarnessConfig{
 		IsSubscription:      true,
 		AutoRoutingEligible: true,
 		ExactPinSupport:     false,
+	},
+	"grok": {
+		Name:   "grok",
+		Binary: "grok",
+		// streaming-json emits one NDJSON event per stdout line (thought/text/end/error),
+		// letting the service surface deltas in real time. The grok runner passes the
+		// prompt as the value of -p (grok's -p/--single requires a value, unlike claude's
+		// bare -p toggle), appended after all flags.
+		BaseArgs: []string{"--output-format", "streaming-json"},
+		PermissionArgs: map[string][]string{
+			"safe":         {},
+			"supervised":   {"--permission-mode", "default"},
+			"unrestricted": {"--always-approve"},
+		},
+		PromptMode:          "arg",
+		DefaultModel:        "grok-4.5",
+		ReasoningLevels:     []string{"low", "medium", "high", "xhigh", "max"},
+		ModelFlag:           "-m",
+		WorkDirFlag:         "--cwd",
+		ReasoningFlag:       "--reasoning-effort",
+		Surface:             "grok",
+		CostClass:           "medium",
+		IsLocal:             false,
+		IsSubscription:      true,
+		AutoRoutingEligible: true,
+		ExactPinSupport:     true,
+		TUIQuotaCommand:     "/usage show",
 	},
 	"gemini": {
 		Name:         "gemini",
@@ -214,7 +241,8 @@ var builtinHarnesses = map[string]HarnessConfig{
 // "local" always routes to the embedded agent; it must never
 // fall through to a cloud harness like claude or codex.
 var harnessAliases = map[string]string{
-	"local": "fiz",
+	"local":      "fiz",
+	"grok-build": "grok",
 }
 
 // ResolveHarnessAlias returns the canonical harness name for an alias,
