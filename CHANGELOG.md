@@ -5,6 +5,25 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Added
+
+- A `grok` harness for xAI's Grok Build CLI with the same capability set as
+  the claude and codex harnesses: headless `streaming-json` execution with
+  reported cost/usage capture, model selection and discovery (via the
+  non-interactive `grok models` surface with the CLI's on-disk model cache as
+  fallback, plus `grok`/`grok-4` alias resolution), weekly-pool quota
+  tracking (PTY `/usage show` probe with a durable cache feeding routing),
+  and account evidence from the CLI's auth state. `grok-build` resolves as a
+  harness alias, and the model catalog carries `grok-4.5` on a new `grok`
+  surface.
+
+### Fixed
+
+- PTY quota/discovery probes now answer terminal capability queries (DSR
+  cursor-position, DA1/DA2, XTVERSION) from the probed TUI. Grok Build
+  blocks on the cursor-position query before painting its first frame, which
+  previously made every probe time out with an empty screen.
+
 ## [v0.15.2] — 2026-07-22
 
 ### Fixed

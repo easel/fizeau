@@ -19,6 +19,15 @@ Every harness with a TUI model surface (`claude`, `codex`, `gemini`, `opencode`,
 
 Stale fixtures fail because they no longer prove the parser works against current TUI output.
 
+The `grok` harness discovers models through the non-interactive `grok models`
+subcommand rather than a TUI surface, so it carries no `model_surface/`
+cassette. Its PTY-derived quota evidence (`/usage show`) can be re-recorded
+with:
+
+```bash
+FIZEAU_HARNESS_RECORD=1 go test -tags integration ./internal/harnesses/grok -run Test_quotaRecordGrokPTY
+```
+
 Run locally:
 ```bash
 go test ./internal/harnesses -run TestCassettePresenceAndFreshness
