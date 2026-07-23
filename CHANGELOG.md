@@ -5,6 +5,28 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.15.2] — 2026-07-22
+
+### Fixed
+
+- Route scoring no longer treats a failed attempt's wall-clock duration as
+  endpoint latency, so a fast connection refusal cannot earn a performance
+  bonus that outweighs the cooldown demotion the failure just recorded.
+- The benchmark driver's per-cell cost computation parses correctly under
+  jq 1.7, which previously aborted every cell worker before its report was
+  written.
+- Crashed benchmark cell workers now fail the sweep with a per-task failure
+  summary instead of letting the run exit 0 with report-less cells.
+- The Go toolchain is 1.26.5, clearing the stdlib vulnerability findings
+  that blocked `govulncheck`.
+
+### Changed
+
+- CI runs the full test suite again (it had been halted at the govulncheck
+  gate), lifts the Ubuntu 24.04 AppArmor restriction so portable-runtime
+  namespace probes keep coverage, and the Windows lifecycle and portable
+  launch tests are platform-correct and race-free.
+
 ## [v0.15.1] — 2026-07-22
 
 ### Fixed
