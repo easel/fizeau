@@ -284,6 +284,58 @@ func (f *fakeCodexQuotaHarness) RefreshQuota(ctx context.Context) (harnesses.Quo
 func (f *fakeCodexQuotaHarness) QuotaFreshness() time.Duration { return 15 * time.Minute }
 func (f *fakeCodexQuotaHarness) SupportedLimitIDs() []string   { return []string{"codex"} }
 
+// fakeGrokQuotaHarness is a QuotaHarness stub for the "grok" primary
+// harness so startup/foreground refresh paths never launch a real grok PTY
+// probe from tests (grok may be installed on developer machines).
+type fakeGrokQuotaHarness struct {
+	refreshCalls atomic.Int32
+	refreshFn    func(ctx context.Context) (harnesses.QuotaStatus, error)
+}
+
+func newFakeGrokQuotaHarness() *fakeGrokQuotaHarness {
+	return &fakeGrokQuotaHarness{}
+}
+
+func (f *fakeGrokQuotaHarness) Info() harnesses.HarnessInfo {
+	return harnesses.HarnessInfo{Name: "grok", Type: "subprocess"}
+}
+func (f *fakeGrokQuotaHarness) HealthCheck(_ context.Context) error { return nil }
+func (f *fakeGrokQuotaHarness) Execute(_ context.Context, _ harnesses.ExecuteRequest) (<-chan harnesses.Event, error) {
+	panic("fakeGrokQuotaHarness: Execute not supported")
+}
+func (f *fakeGrokQuotaHarness) QuotaStatus(_ context.Context, _ time.Time) (harnesses.QuotaStatus, error) {
+	return harnesses.QuotaStatus{State: harnesses.QuotaUnavailable}, nil
+}
+func (f *fakeGrokQuotaHarness) RefreshQuota(ctx context.Context) (harnesses.QuotaStatus, error) {
+	f.refreshCalls.Add(1)
+	if f.refreshFn != nil {
+		return f.refreshFn(ctx)
+	}
+	return harnesses.QuotaStatus{
+		Fresh:             true,
+		State:             harnesses.QuotaOK,
+		RoutingPreference: harnesses.RoutingPreferenceAvailable,
+	}, nil
+}
+func (f *fakeGrokQuotaHarness) QuotaFreshness() time.Duration { return 15 * time.Minute }
+func (f *fakeGrokQuotaHarness) SupportedLimitIDs() []string   { return []string{"grok", "grok-weekly"} }
+
+// setFakeGrokHarness installs h as the "grok" entry in harnessInstanceHook
+// so both New() and newTestService() pick it up. Restores the previous hook
+// via t.Cleanup.
+func setFakeGrokHarness(t *testing.T, h *fakeGrokQuotaHarness) {
+	t.Helper()
+	prev := harnessInstanceHook
+	harnessInstanceHook = func(instances map[string]harnesses.Harness) map[string]harnesses.Harness {
+		if prev != nil {
+			instances = prev(instances)
+		}
+		instances["grok"] = h
+		return instances
+	}
+	t.Cleanup(func() { harnessInstanceHook = prev })
+}
+
 // setFakeCodexHarness installs h as the "codex" entry in harnessInstanceHook
 // so both New() and newTestService() pick it up. Restores the previous hook
 // via t.Cleanup.
@@ -488,6 +540,7 @@ func TestNewWaitsBrieflyForInvalidQuotaRefresh(t *testing.T) {
 
 	fake := newFakeCodexQuotaHarness()
 	setFakeCodexHarness(t, fake)
+	setFakeGrokHarness(t, newFakeGrokQuotaHarness())
 
 	if _, err := New(ServiceOptions{
 		ServiceConfig:           &fakeServiceConfig{},
@@ -536,6 +589,7 @@ func TestNewStartupQuotaRefreshContinuesAfterTimeout(t *testing.T) {
 		return harnesses.QuotaStatus{Fresh: true, State: harnesses.QuotaOK, RoutingPreference: harnesses.RoutingPreferenceAvailable}, nil
 	}
 	setFakeCodexHarness(t, fake)
+	setFakeGrokHarness(t, newFakeGrokQuotaHarness())
 
 	start := time.Now()
 	svc, err := New(ServiceOptions{
@@ -596,6 +650,8 @@ func TestResolveRouteDoesNotTriggerAsyncQuotaRefresh(t *testing.T) {
 
 	fake := newFakeCodexQuotaHarness()
 	setFakeCodexHarness(t, fake)
+	fakeGrok := newFakeGrokQuotaHarness()
+	setFakeGrokHarness(t, fakeGrok)
 
 	svc := newTestService(t, ServiceOptions{
 		ServiceConfig: &fakeServiceConfig{

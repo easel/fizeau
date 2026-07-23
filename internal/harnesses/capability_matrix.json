@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "timestamp": "2026-05-18T10:15:03Z",
-  "description": "Machine-checkable harness capability matrix with evidence-ID bindings per CONTRACT-004 §Conformance Evidence",
+  "description": "Machine-checkable harness capability matrix with evidence-ID bindings per CONTRACT-004 \u00a7Conformance Evidence",
   "harnesses": [
     {
       "name": "claude",
@@ -335,6 +335,80 @@
             {
               "type": "method",
               "id": "gemini.(*Runner).SupportedAliases"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedAliasesMatch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "grok",
+      "type": "subprocess",
+      "capabilities": [
+        {
+          "name": "Harness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/grok::TestGrokRunnerHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "QuotaHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/grok::TestGrokRunnerQuotaHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "AccountHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/grok::TestGrokRunnerAccountHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "ModelDiscoveryHarness",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses/grok::TestGrokRunnerModelDiscoveryHarnessConformance"
+            }
+          ]
+        },
+        {
+          "name": "SupportedLimitIDs emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "grok.(*Runner).SupportedLimitIDs"
+            },
+            {
+              "type": "test",
+              "id": "github.com/easel/fizeau/internal/harnesses::TestHarnessCapabilityMatrixSupportedLimitIDsMatch"
+            }
+          ]
+        },
+        {
+          "name": "SupportedAliases emission validation",
+          "status": "supported",
+          "evidence": [
+            {
+              "type": "method",
+              "id": "grok.(*Runner).SupportedAliases"
             },
             {
               "type": "test",

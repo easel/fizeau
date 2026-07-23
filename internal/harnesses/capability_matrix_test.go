@@ -21,6 +21,7 @@ import (
 	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
+	grokharness "github.com/easel/fizeau/internal/harnesses/grok"
 )
 
 type CapabilityMatrixJSON struct {
@@ -783,6 +784,7 @@ func TestHarnessCapabilityMatrixValidation(t *testing.T) {
 		{"claude", &claudeharness.Runner{}},
 		{"codex", &codexharness.Runner{}},
 		{"gemini", &geminiharness.Runner{}},
+		{"grok", &grokharness.Runner{}},
 	}
 
 	for _, tc := range cases {
@@ -839,6 +841,7 @@ func TestHarnessCapabilityMatrixSupportedLimitIDsMatch(t *testing.T) {
 		{"claude", &claudeharness.Runner{}},
 		{"codex", &codexharness.Runner{}},
 		{"gemini", &geminiharness.Runner{}},
+		{"grok", &grokharness.Runner{}},
 	}
 
 	for _, tc := range cases {
@@ -878,6 +881,7 @@ func TestHarnessCapabilityMatrixSupportedAliasesMatch(t *testing.T) {
 		{"claude", &claudeharness.Runner{}},
 		{"codex", &codexharness.Runner{}},
 		{"gemini", &geminiharness.Runner{}},
+		{"grok", &grokharness.Runner{}},
 	}
 
 	for _, tc := range cases {
@@ -1070,6 +1074,15 @@ func validateMethodExists(t *testing.T, harnessName, methodID string) {
 		}
 	case "gemini":
 		runner := &geminiharness.Runner{}
+		rt := reflect.TypeOf(runner)
+		for i := 0; i < rt.NumMethod(); i++ {
+			if strings.Contains(methodID, rt.Method(i).Name) {
+				found = true
+				break
+			}
+		}
+	case "grok":
+		runner := &grokharness.Runner{}
 		rt := reflect.TypeOf(runner)
 		for i := 0; i < rt.NumMethod(); i++ {
 			if strings.Contains(methodID, rt.Method(i).Name) {

@@ -137,7 +137,7 @@ func ActiveSources(cfg *config.Config) []discoverycache.Source {
 	for _, providerName := range names {
 		pcfg := providers[providerName]
 		switch normalizeProviderType(pcfg.Type) {
-		case "claude", "codex":
+		case "claude", "codex", "grok":
 			sources = append(sources, discoverycache.Source{
 				Tier:            "discovery",
 				Name:            providerName,

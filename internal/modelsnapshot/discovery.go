@@ -77,7 +77,7 @@ const (
 func discoverProvider(ctx context.Context, providerName string, pc ProviderConfig, cache *discoverycache.Cache, opts AssembleOptions) providerDiscoveryResult {
 	providerType := normalizeProviderType(pc.Type)
 	switch providerType {
-	case "claude", "codex":
+	case "claude", "codex", "grok":
 		return discoverHarnessProvider(providerName, providerType, cache, opts)
 	case "openai", "openrouter", "vidar-ds4", "sindri-llamacpp", "ds4", "lucebox", "lmstudio", "llama-server", "omlx", "rapid-mlx", "vllm", "ollama", "minimax", "qwen", "zai":
 		result := discoverOpenAICompatibleProvider(ctx, providerName, pc, cache, opts)

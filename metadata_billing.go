@@ -62,7 +62,7 @@ func routingHarnessUsesAccountBilling(entry *routing.HarnessEntry) bool {
 
 func harnessDefaultModel(name string, cfg harnesses.HarnessConfig, cat *modelcatalog.Catalog) string {
 	switch name {
-	case "codex", "claude", "claude-tui":
+	case "codex", "claude", "claude-tui", "grok":
 		if tiers := catalogModelsForHarness(name, cfg, cat); len(tiers) > 0 {
 			return tiers[0]
 		}
@@ -135,6 +135,8 @@ func staticHarnessAliases(name string) []string {
 		return []string{"claude-opus-4-6", "opus", "sonnet", "haiku", "fable", "fable-1.0"}
 	case "gemini":
 		return []string{"gemini", "gemini-2.5"}
+	case "grok":
+		return []string{"grok", "grok-4"}
 	default:
 		return nil
 	}

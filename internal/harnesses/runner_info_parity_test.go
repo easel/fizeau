@@ -9,6 +9,7 @@ import (
 	claudetuiharness "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
+	grokharness "github.com/easel/fizeau/internal/harnesses/grok"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
 	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
@@ -23,6 +24,7 @@ func TestRunnerInfoMatchesRegistryMetadata(t *testing.T) {
 		{name: "claude", info: (&claudeharness.Runner{Binary: "/test/claude"}).Info()},
 		{name: "claude-tui", info: (&claudetuiharness.Harness{}).Info()},
 		{name: "gemini", info: (&geminiharness.Runner{Binary: "/test/gemini"}).Info()},
+		{name: "grok", info: (&grokharness.Runner{Binary: "/test/grok"}).Info()},
 		{name: "opencode", info: (&opencodeharness.Runner{Binary: "/test/opencode"}).Info()},
 		{name: "pi", info: (&piharness.Runner{Binary: "/test/pi"}).Info()},
 	}

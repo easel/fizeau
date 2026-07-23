@@ -250,6 +250,57 @@ type runState struct {
 
 	interstitials []Interstitial
 	answered      map[string]bool
+
+	// queryTail retains the last few raw output bytes so terminal capability
+	// queries split across chunk boundaries are still detected exactly once.
+	queryTail []byte
+}
+
+// terminalQueryPatterns are terminal capability queries some TUIs emit at
+// startup and then block on until the terminal answers. A real terminal
+// (or tmux) responds; this probe harness must too, or the TUI renders
+// nothing and the probe times out. Grok Build 0.2.x blocks on the DSR
+// cursor-position query before its first frame.
+var terminalQueryPatterns = []struct {
+	query []byte
+	reply func(cursorRow, cursorCol int) []byte
+}{
+	// DSR: cursor position report.
+	{[]byte("\x1b[6n"), func(row, col int) []byte {
+		return []byte(fmt.Sprintf("\x1b[%d;%dR", row, col))
+	}},
+	// DA1: primary device attributes (VT100).
+	{[]byte("\x1b[c"), func(int, int) []byte { return []byte("\x1b[?1;0c") }},
+	{[]byte("\x1b[0c"), func(int, int) []byte { return []byte("\x1b[?1;0c") }},
+	// DA2: secondary device attributes.
+	{[]byte("\x1b[>c"), func(int, int) []byte { return []byte("\x1b[>0;0;0c") }},
+	{[]byte("\x1b[>0c"), func(int, int) []byte { return []byte("\x1b[>0;0;0c") }},
+	// XTVERSION: terminal name/version report (DCS > | text ST).
+	{[]byte("\x1b[>q"), func(int, int) []byte { return []byte("\x1bP>|fizeau-ptyquota\x1b\\") }},
+	{[]byte("\x1b[>0q"), func(int, int) []byte { return []byte("\x1bP>|fizeau-ptyquota\x1b\\") }},
+}
+
+// scanTerminalQueries returns the concatenated replies for every terminal
+// capability query whose final byte lands at or beyond start within window.
+// Bytes before start were scanned on a previous call (retained tail) and are
+// not answered again.
+func scanTerminalQueries(window []byte, start, cursorRow, cursorCol int) []byte {
+	var reply []byte
+	for _, pattern := range terminalQueryPatterns {
+		offset := 0
+		for {
+			idx := bytes.Index(window[offset:], pattern.query)
+			if idx < 0 {
+				break
+			}
+			end := offset + idx + len(pattern.query)
+			if end > start {
+				reply = append(reply, pattern.reply(cursorRow, cursorCol)...)
+			}
+			offset = end
+		}
+	}
+	return reply
 }
 
 // processInterstitials answers any matching, not-yet-answered interstitial
@@ -347,7 +398,19 @@ func (r *runState) recordOutput() {
 		r.frameSeen = true
 		r.frames++
 		r.rawBytes += int64(len(chunk.Bytes))
+		window := append(append([]byte(nil), r.queryTail...), chunk.Bytes...)
+		start := len(r.queryTail)
+		reply := scanTerminalQueries(window, start, frame.Cursor.Row+1, frame.Cursor.Col+1)
+		const tailKeep = 8
+		if len(window) > tailKeep {
+			r.queryTail = append(r.queryTail[:0], window[len(window)-tailKeep:]...)
+		} else {
+			r.queryTail = append(r.queryTail[:0], window...)
+		}
 		r.mu.Unlock()
+		if len(reply) > 0 {
+			_ = r.session.SendBytes(reply)
+		}
 	}
 }
 

@@ -14,7 +14,7 @@ const (
 	defaultPrimaryQuotaRefreshProbeTimeout = 30 * time.Second
 )
 
-var primaryQuotaHarnessNames = [...]string{"claude", "codex"}
+var primaryQuotaHarnessNames = [...]string{"claude", "codex", "grok"}
 
 // PrimaryQuotaRefreshPolicy configures the service-owned refresh path for the
 // primary subscription harnesses. Interval zero disables the explicitly

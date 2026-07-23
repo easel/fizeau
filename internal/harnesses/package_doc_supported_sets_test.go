@@ -15,6 +15,7 @@ import (
 	claudeharness "github.com/easel/fizeau/internal/harnesses/claude"
 	codexharness "github.com/easel/fizeau/internal/harnesses/codex"
 	geminiharness "github.com/easel/fizeau/internal/harnesses/gemini"
+	grokharness "github.com/easel/fizeau/internal/harnesses/grok"
 	opencodeharness "github.com/easel/fizeau/internal/harnesses/opencode"
 	piharness "github.com/easel/fizeau/internal/harnesses/pi"
 )
@@ -30,6 +31,7 @@ func TestHarnessPackageDocsMirrorSupportedSets(t *testing.T) {
 		{name: "claude", runner: &claudeharness.Runner{}},
 		{name: "codex", runner: &codexharness.Runner{}},
 		{name: "gemini", runner: &geminiharness.Runner{}},
+		{name: "grok", runner: &grokharness.Runner{}},
 		{name: "opencode", runner: &opencodeharness.Runner{}},
 		{name: "pi", runner: &piharness.Runner{}},
 	}

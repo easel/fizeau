@@ -30,7 +30,7 @@ func TestDetectHarnesses_ReportsEveryBuiltin(t *testing.T) {
 
 	// Every CLI the docs and onboarding flow promise to detect must have
 	// a row in DetectHarnesses, even when not installed.
-	for _, name := range []string{"claude", "codex", "opencode", "pi"} {
+	for _, name := range []string{"claude", "codex", "grok", "opencode", "pi"} {
 		row, ok := byName[name]
 		assert.True(t, ok, "missing builtin: %s", name)
 		assert.NotEmpty(t, row.Binary, "%s should have a binary name", name)
