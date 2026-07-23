@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.16.0] — 2026-07-23
+
 ### Added
 
 - A `grok` harness for xAI's Grok Build CLI with the same capability set as
