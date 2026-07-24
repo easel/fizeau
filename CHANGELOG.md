@@ -5,6 +5,16 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Added
+
+- The `claude-tui` turn loop now confirms a submitted prompt actually started a
+  turn via a nonce-bound `UserPromptSubmit` hook ack, independent of any
+  rendered-screen heuristic. If the ack doesn't arrive, the driver resends the
+  standalone submit keystroke once; if it still doesn't arrive, the turn fails
+  with a typed, sanitized diagnostic instead of silently wedging to the turn
+  timeout. The ack is negative evidence only — its presence never substitutes
+  for the nonce-bound `Stop` payload, which remains the sole success signal.
+
 ## [v0.16.1] — 2026-07-24
 
 ### Fixed

@@ -251,11 +251,11 @@ func assertClaudeTUIHookSettings(t *testing.T, settings string) {
 	if err := json.Unmarshal(hooksRaw, &hooks); err != nil || hooks == nil {
 		t.Fatalf("--settings hooks is not an object: %s: %v", hooksRaw, err)
 	}
-	if len(hooks) != 3 {
-		t.Fatalf("generated hook events = %v, want exactly PreToolUse, PostToolUse, Stop", hooks)
+	if len(hooks) != 4 {
+		t.Fatalf("generated hook events = %v, want exactly PreToolUse, PostToolUse, Stop, UserPromptSubmit", hooks)
 	}
 	commands := make(map[string]string, len(hooks))
-	for _, event := range []string{"PreToolUse", "PostToolUse", "Stop"} {
+	for _, event := range []string{"PreToolUse", "PostToolUse", "Stop", "UserPromptSubmit"} {
 		raw, exists := hooks[event]
 		if !exists {
 			t.Fatalf("generated settings missing %q hook: %s", event, settings)

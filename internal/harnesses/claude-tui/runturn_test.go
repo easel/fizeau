@@ -130,10 +130,27 @@ func (f *fakePTY) keysSnapshot() []session.Key {
 }
 
 // writeStopPayload writes a Stop-hook payload carrying the nonce + transcript path.
+// writeStopPayload writes the Stop payload AND the UserPromptSubmit ack file
+// (real Claude Code always fires UserPromptSubmit before Stop for a
+// successful turn), so every existing success-path test using this helper
+// automatically satisfies the ack requirement without a per-test edit. path's
+// parent directory is the turn's hookDir, matching how every caller derives
+// path via filepath.Join(hookDir, "stop.json").
 func writeStopPayload(t *testing.T, path, nonce, transcript string) {
 	t.Helper()
+	writePromptAck(t, filepath.Dir(path), nonce)
 	if err := writeStopPayloadFile(path, nonce, transcript); err != nil {
 		t.Fatalf("write stop payload: %v", err)
+	}
+}
+
+// writePromptAck writes the UserPromptSubmit ack file directly (bypassing
+// writeStopPayload) for tests that exercise the ack mechanism itself.
+func writePromptAck(t *testing.T, hookDir, nonce string) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"nonce": nonce})
+	if err := os.WriteFile(claudetui.PromptAckPayloadPathForTest(hookDir), body, 0o644); err != nil {
+		t.Fatalf("write prompt ack payload: %v", err)
 	}
 }
 
@@ -1528,6 +1545,145 @@ func TestRunTurnUnrecognizedStartupScreenFailsLoud(t *testing.T) {
 	}
 	if final.RoutingActual == nil || final.RoutingActual.FailureClass != "protocol" {
 		t.Errorf("routing actual = %+v, want protocol failure class", final.RoutingActual)
+	}
+}
+
+// TestRunTurnPromptAckConfirmsAndSucceeds proves the ack happy path: once the
+// UserPromptSubmit ack file appears (bound to the per-turn nonce), the turn
+// proceeds to a normal Stop-driven success with no retry submit.
+func TestRunTurnPromptAckConfirmsAndSucceeds(t *testing.T) {
+	restore := claudetui.SetPromptSubmitDelayForTest(10 * time.Millisecond)
+	defer restore()
+
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("prompt-ack-success")
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		// Wait for the real standalone submit "\r" (not just the paste).
+		for f.sentContains([]byte("\r")) == 0 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Ack arrives promptly; the turn must NOT retry the submit.
+		writePromptAck(t, hookDir, nonce)
+		time.Sleep(30 * time.Millisecond)
+		if err := writeStopPayloadFile(stopPath, nonce, transcript); err != nil {
+			t.Errorf("write stop payload: %v", err)
+		}
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		200*time.Millisecond, 10*time.Millisecond, 4*time.Second)
+
+	assertExactlyOneFinal(t, events, "success")
+	if n := f.sentContains([]byte("\r")); n != 1 {
+		t.Errorf("submit \"\\r\" sent %d times, want exactly 1 (ack confirmed, no retry)", n)
+	}
+}
+
+// TestRunTurnPromptAckRetriesOnceThenSucceeds proves the retry path: if the
+// ack does not arrive within the first ack window, the driver resends a
+// standalone "\r" exactly once; once the (delayed) ack then arrives, the turn
+// completes normally.
+func TestRunTurnPromptAckRetriesOnceThenSucceeds(t *testing.T) {
+	restore := claudetui.SetPromptSubmitDelayForTest(10 * time.Millisecond)
+	defer restore()
+
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("prompt-ack-retry")
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		// Wait for the RETRY submit (a second "\r"): the first ack window must
+		// have elapsed with no ack file written, proving the retry fired.
+		for f.sentContains([]byte("\r")) < 2 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Ack arrives only after the retry; the turn must still succeed.
+		writePromptAck(t, hookDir, nonce)
+		time.Sleep(20 * time.Millisecond)
+		if err := writeStopPayloadFile(stopPath, nonce, transcript); err != nil {
+			t.Errorf("write stop payload: %v", err)
+		}
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir}
+	// Small readyTimeout (reused as the ack window) so the first ack timeout
+	// fires quickly and the retry is observable within the test's budget.
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		40*time.Millisecond, 10*time.Millisecond, 4*time.Second)
+
+	assertExactlyOneFinal(t, events, "success")
+	if n := f.sentContains([]byte("\r")); n != 2 {
+		t.Errorf("submit \"\\r\" sent %d times, want exactly 2 (original submit + one retry)", n)
+	}
+}
+
+// TestRunTurnPromptAckTimeoutFailsLoud proves the fail-loud path: if the ack
+// never arrives even after the one retry, the driver kills the session and
+// emits a typed, sanitized, protocol-classified diagnostic naming the
+// swallowed-submit condition — never a silent wedge to the turn timeout.
+func TestRunTurnPromptAckTimeoutFailsLoud(t *testing.T) {
+	restore := claudetui.SetPromptSubmitDelayForTest(10 * time.Millisecond)
+	defer restore()
+
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("prompt-ack-timeout")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		// Never write an ack or a Stop payload.
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		40*time.Millisecond, 10*time.Millisecond, 4*time.Second)
+
+	final := requireExactlyOneFinal(t, events, "failed")
+	if !strings.Contains(final.Error, "never acknowledged turn start") {
+		t.Errorf("diagnostic does not identify the swallowed-submit condition: %q", final.Error)
+	}
+	if !strings.Contains(final.Error, "last screen:") {
+		t.Errorf("diagnostic missing bounded screen snapshot: %q", final.Error)
+	}
+	if final.RoutingActual == nil || final.RoutingActual.FailureClass != "protocol" {
+		t.Errorf("routing actual = %+v, want protocol failure class", final.RoutingActual)
+	}
+	if n := f.sentContains([]byte("\r")); n != 2 {
+		t.Errorf("submit \"\\r\" sent %d times, want exactly 2 (original submit + one retry) before failing loud", n)
+	}
+	if !f.wasKilled() {
+		t.Error("session was not killed on ack timeout")
 	}
 }
 

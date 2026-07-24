@@ -515,6 +515,23 @@ func (h *Harness) runTurnOver(
 	poll := time.NewTicker(te.pollInterval)
 	defer poll.Stop()
 
+	// UserPromptSubmit ack: a UI-independent signal that the submitted prompt
+	// actually started a turn, closing the gap the paste/submit sequencing
+	// above documents (Ink can swallow the standalone submit "\r" itself, not
+	// just the paste+Enter glued case). Negative evidence only — its absence
+	// fails the turn; its presence NEVER substitutes for the nonce-bound Stop
+	// payload (Stop remains the sole success authority). Armed only once the
+	// real submit keystroke is sent (the submitTimer.C case below), reusing
+	// readyTimeout as the ack window: the same order-of-magnitude bound as
+	// "time to observe expected progress" elsewhere in this loop.
+	ackPath := promptAckPayloadPath(te.hookDir)
+	ackConfirmed := false
+	ackRetried := false
+	promptAckTimer := time.NewTimer(0)
+	promptAckTimer.Stop()
+	drainTimer(promptAckTimer)
+	defer promptAckTimer.Stop()
+
 	emitFromTailer := func() {
 		*seq = hookTailer.Drain(*seq, func(ev harnesses.Event) {
 			select {
@@ -586,6 +603,26 @@ func (h *Harness) runTurnOver(
 			if err := te.conn.SendBytes([]byte("\r")); err != nil {
 				logger.Warn("failed to submit prompt", "error", err)
 			}
+			// Arm the UserPromptSubmit ack window now that the real submit
+			// keystroke has gone out.
+			promptAckTimer.Reset(te.readyTimeout)
+
+		case <-promptAckTimer.C:
+			if ackConfirmed {
+				break
+			}
+			if !ackRetried {
+				// The Ink swallowed-submit hazard this file documents can still
+				// occur even for a standalone "\r": retry exactly once before
+				// concluding the turn never started.
+				ackRetried = true
+				if err := te.conn.SendBytes([]byte("\r")); err != nil {
+					logger.Warn("failed to resend prompt submit", "error", err)
+				}
+				promptAckTimer.Reset(te.readyTimeout)
+				break
+			}
+			return failStartupLoud(promptAckTimeoutDiagnostic, lastFrame)
 
 		case <-poll.C:
 			// Drain mid-turn tool events.
@@ -600,6 +637,14 @@ func (h *Harness) runTurnOver(
 			// frames, so the per-step deadline is enforced from the poll tick.
 			if !consentStepDeadline.IsZero() && time.Now().After(consentStepDeadline) {
 				return failStartupLoud(consentNoAdvanceDiagnostic, lastFrame)
+			}
+			// UserPromptSubmit ack: negative evidence only (see the arming
+			// comment above). Its absence is what fails the turn via the timer
+			// case; presence here only stops the watchdog.
+			if !ackConfirmed && readPromptAckNonce(ackPath, te.nonce) {
+				ackConfirmed = true
+				promptAckTimer.Stop()
+				drainTimer(promptAckTimer)
 			}
 
 		case chunk, ok := <-te.conn.Output():
@@ -1035,16 +1080,46 @@ func buildHookConfigs(hookDir, stopPayloadPath, nonce string) map[string][]HookC
 			shellSingleQuote(stopPayloadPath), shellSingleQuote(stopTranscriptPathAWK), nonce,
 		)
 	}
+	// UserPromptSubmit: fires once Claude Code accepts the submitted prompt and
+	// starts a turn — a UI-independent signal the turn loop uses to detect a
+	// swallowed submit keystroke (see promptAckTimer in runTurnOver). Unlike
+	// Stop, no field of the hook's own payload is trusted; presence of this
+	// harness-owned nonce is the entire signal, so stdin is discarded rather
+	// than parsed.
+	ackCmd := "exit 1"
+	if isTurnNonce(nonce) {
+		ackCmd = fmt.Sprintf(
+			`cat > /dev/null; umask 077; dest=%s; tmp="${dest}.tmp.$$"; trap 'rm -f "$tmp"' EXIT HUP INT TERM; printf '{"nonce":"%s"}' > "$tmp" && mv -f "$tmp" "$dest"`,
+			shellSingleQuote(promptAckPayloadPath(hookDir)), nonce,
+		)
+	}
 
 	// Matcher "" is Claude Code's documented match-all form for PreToolUse/
-	// PostToolUse/Stop (a NON-empty matcher is treated as a tool-name regex).
-	// The prior "*" happened to match as a zero-width regex, but "" is the
-	// schema-faithful match-all and is what the live 2.1.x engine documents.
+	// PostToolUse/Stop/UserPromptSubmit (a NON-empty matcher is treated as a
+	// tool-name regex). The prior "*" happened to match as a zero-width regex,
+	// but "" is the schema-faithful match-all and is what the live 2.1.x engine
+	// documents.
 	return map[string][]HookCommand{
-		"PreToolUse":  {cmdHook("", preCmd)},
-		"PostToolUse": {cmdHook("", postCmd)},
-		"Stop":        {cmdHook("", stopCmd)},
+		"PreToolUse":       {cmdHook("", preCmd)},
+		"PostToolUse":      {cmdHook("", postCmd)},
+		"Stop":             {cmdHook("", stopCmd)},
+		"UserPromptSubmit": {cmdHook("", ackCmd)},
 	}
+}
+
+// promptAckPayloadPath is the fixed per-turn UserPromptSubmit ack file
+// location, derived from hookDir alone so both the hook command (built here)
+// and the turn loop's reader (runTurnOver, from te.hookDir) agree on the path
+// without threading a new parameter through RunTurnForTest's public signature.
+func promptAckPayloadPath(hookDir string) string {
+	return filepath.Join(hookDir, "prompt-ack-payload.json")
+}
+
+// PromptAckPayloadPathForTest exposes promptAckPayloadPath to the external
+// _test package so deterministic tests can write the ack file at the exact
+// path the turn loop reads, without duplicating the filename literal.
+func PromptAckPayloadPathForTest(hookDir string) string {
+	return promptAckPayloadPath(hookDir)
 }
 
 // stopTranscriptPathAWK validates that the native Stop JSON has exactly one
@@ -1204,6 +1279,29 @@ func readStopHookPayloadNonce(payloadPath, nonce string) (string, bool) {
 		return "", false
 	}
 	return payload.TranscriptPath, true
+}
+
+// readPromptAckNonce reports whether the UserPromptSubmit ack file exists and
+// carries the per-turn nonce. Unlike readStopHookPayloadNonce, no other field
+// is trusted or extracted — presence with a matching nonce is the entire
+// signal (see promptAckPayloadPath and the ack hook command in
+// buildHookConfigs). A missing file or mismatched nonce reports false (not
+// yet acknowledged).
+func readPromptAckNonce(payloadPath, nonce string) bool {
+	if !isTurnNonce(nonce) {
+		return false
+	}
+	data, err := os.ReadFile(payloadPath)
+	if err != nil {
+		return false
+	}
+	var payload struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return false
+	}
+	return payload.Nonce == nonce
 }
 
 // newTurnNonce returns a fresh per-turn Stop nonce.
@@ -1660,6 +1758,14 @@ const (
 	// startupUnrecognizedDiagnostic: the startup grace elapsed without any
 	// recognized screen (consent, known interstitial, or ready prompt).
 	startupUnrecognizedDiagnostic = "claude-tui startup: launched with --permission-mode bypassPermissions but no ready prompt, consent screen, or known interstitial was recognized within the startup window; the Claude Code startup UI may have changed"
+
+	// promptAckTimeoutDiagnostic: the prompt was submitted (bracketed paste +
+	// standalone carriage return) but Claude Code never fired a UserPromptSubmit
+	// hook event within the ack window, even after one retry submit. This is a
+	// UI-independent signal distinct from a rendered-screen classification: the
+	// submit keystroke itself may have been swallowed (the same class of hazard
+	// documented at sendPrompt above), or the input surface changed shape.
+	promptAckTimeoutDiagnostic = "claude-tui submit: prompt was submitted but Claude Code never acknowledged turn start (no UserPromptSubmit hook event) within the ack window, even after a retry submit; the submit keystroke may have been swallowed or the input UI may have changed"
 )
 
 // bypassConsentWarningPhrases identify the Bypass Permissions warning phrase,

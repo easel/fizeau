@@ -137,6 +137,101 @@ func TestReadStopHookPayloadNonceMatch(t *testing.T) {
 	}
 }
 
+// TestReadPromptAckNonceMatch proves the ack-payload reader only reports
+// acknowledged when the file exists and carries the exact matching nonce,
+// mirroring TestReadStopHookPayloadNonceMatch's coverage for the Stop reader.
+func TestReadPromptAckNonceMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/prompt-ack-payload.json"
+	const nonce = "00112233445566778899aabbccddeeff"
+
+	// Missing file -> not acknowledged.
+	if readPromptAckNonce(path, nonce) {
+		t.Error("missing payload reported acknowledged")
+	}
+
+	// Wrong nonce -> not acknowledged.
+	writeFile(t, path, `{"nonce":"OTHER"}`)
+	if readPromptAckNonce(path, nonce) {
+		t.Error("mismatched nonce reported acknowledged")
+	}
+
+	// Matching nonce -> acknowledged.
+	writeFile(t, path, `{"nonce":"`+nonce+`"}`)
+	if !readPromptAckNonce(path, nonce) {
+		t.Error("matching nonce reported not acknowledged")
+	}
+
+	// Malformed JSON -> not acknowledged.
+	writeFile(t, path, `not json`)
+	if readPromptAckNonce(path, nonce) {
+		t.Error("malformed payload reported acknowledged")
+	}
+
+	// An invalid expected nonce can never authorize an ack, even if the
+	// payload carries the same invalid value.
+	writeFile(t, path, `{"nonce":"n1"}`)
+	if readPromptAckNonce(path, "n1") {
+		t.Error("invalid expected nonce reported acknowledged")
+	}
+	if command := buildHookConfigs(dir, dir+"/stop.json", "n1")["UserPromptSubmit"][0].Hooks[0].Command; command != "exit 1" {
+		t.Fatalf("invalid nonce UserPromptSubmit command = %q, want fail-closed exit", command)
+	}
+}
+
+// TestPromptAckHookRunsForRealAndPublishesAtomically executes the ACTUAL
+// UserPromptSubmit hook command (matching TestStopHookPayloadPublishedAtomically's
+// approach for Stop) to prove: adversarial stdin is discarded harmlessly (no
+// field of Claude Code's own hook payload is trusted), the destination
+// directory may contain shell metacharacters without command injection, and
+// publication is atomic (temp file + rename in the same directory).
+func TestPromptAckHookRunsForRealAndPublishesAtomically(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-executed hook command requires the supported POSIX PTY surface")
+	}
+	base := t.TempDir()
+	dir := filepath.Join(base, "hooks ' $(touch injected) `touch injected2`")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const nonce = "00112233445566778899aabbccddeeff"
+	hooks := buildHookConfigs(dir, filepath.Join(dir, "stop.json"), nonce)
+	ackCommand := hooks["UserPromptSubmit"][0].Hooks[0].Command
+
+	if !strings.Contains(ackCommand, "dest="+shellSingleQuote(promptAckPayloadPath(dir))) ||
+		!strings.Contains(ackCommand, `tmp="${dest}.tmp.$$"`) ||
+		!strings.Contains(ackCommand, `mv -f "$tmp"`) {
+		t.Fatalf("UserPromptSubmit command lacks same-directory atomic publication: %s", ackCommand)
+	}
+
+	// Adversarial stdin (Claude Code's real hook payload, which the ack
+	// command must discard rather than parse) must not affect the outcome.
+	adversarial := "{\"session_id\":\"$(touch pwned)\",\"prompt\":\"`touch pwned2`\"}"
+	cmd := exec.Command("sh", "-c", ackCommand)
+	cmd.Dir = base
+	cmd.Stdin = strings.NewReader(adversarial)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run UserPromptSubmit hook command: %v: %s", err, output)
+	}
+
+	for _, injected := range []string{"pwned", "pwned2", "injected", "injected2"} {
+		if _, err := os.Stat(filepath.Join(base, injected)); err == nil {
+			t.Fatalf("adversarial stdin or directory name achieved command injection: %s exists", injected)
+		}
+	}
+
+	if !readPromptAckNonce(promptAckPayloadPath(dir), nonce) {
+		t.Fatal("ack file was not published with the expected nonce after running the real hook command")
+	}
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if strings.Contains(e.Name(), ".tmp.") {
+				t.Errorf("temporary ack file left behind: %s", e.Name())
+			}
+		}
+	}
+}
+
 func TestStopHookPayloadPublishedAtomically(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "hooks ' $(touch injected) `touch injected2`")
