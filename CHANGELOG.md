@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.16.1] — 2026-07-24
+
 ### Fixed
 
 - The `claude-tui` harness handles Claude Code 2.1.218's two-choice Bypass
