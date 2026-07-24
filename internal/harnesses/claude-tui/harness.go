@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -446,6 +447,30 @@ func (h *Harness) runTurnOver(
 	// dismissed this turn so each is answered with Enter at most once.
 	answeredDialogs := map[string]bool{}
 
+	// Startup-phase accounting. A turn launched with bypassPermissions must
+	// reach a recognized screen (consent accepted, interstitial(s) dismissed +
+	// ready prompt, or ready prompt directly) BEFORE the prompt is submitted;
+	// anything else fails loud rather than blind-pasting or collapsing to EOF.
+	var lastFrame terminal.Frame
+	lastRecognizedScreen := "none" // "bypass-consent" | interstitial name | "ready" | "none"
+	readySeen := false
+
+	// Bypass Permissions consent state machine (selection-aware, verified).
+	// consentIdle → navigate highlight onto the accept option → confirm →
+	// verify the screen advanced. Each step is bounded by consentStepDeadline,
+	// enforced from the poll tick so a frozen screen still trips it.
+	const (
+		consentIdle = iota
+		consentNavigating
+		consentConfirming
+		consentDone
+	)
+	consentState := consentIdle
+	var consentStepDeadline time.Time
+	// startupRearmed bounds how many times the startup grace is extended before
+	// the driver fails loud, so drift cannot loop forever.
+	startupRearmed := 0
+
 	hookTailer := NewHookEventTailer(te.hookDir, logger)
 
 	// Send the prompt via bracketed paste after a brief startup grace. We do
@@ -499,8 +524,25 @@ func (h *Harness) runTurnOver(
 		})
 	}
 
-	// Send the prompt once we either see a ready marker or the startup grace
-	// elapses, whichever comes first.
+	// failStartupLoud kills the session and emits exactly one typed, sanitized,
+	// bounded final for a startup/consent drift condition, with a snapshot of
+	// the offending frame so a future CLI-UI change is diagnosable instead of
+	// collapsing into a generic PTY-EOF/timeout.
+	failStartupLoud := func(diagnostic string, frame terminal.Frame) turnOutcome {
+		_ = te.conn.Kill()
+		*seq++
+		emitClaudeFailureFinalEvent(eventChan, *seq, startTime, "failed", diagnostic+startupScreenSnapshot(frame), 1)
+		return turnEvicted
+	}
+
+	// maxStartupRearm bounds how many extra startup windows a still-resolving
+	// screen may take before the driver fails loud, so drift cannot spin.
+	const maxStartupRearm = 1
+
+	// Send the prompt once we see the ready prompt. The startup grace no longer
+	// blind-pastes: if nothing is recognized within the window it fails loud
+	// (a bypassPermissions launch whose default action is "exit" must never
+	// receive a speculative Enter/paste).
 	for {
 		select {
 		case <-ctx.Done():
@@ -516,7 +558,24 @@ func (h *Harness) runTurnOver(
 			return turnEvicted
 
 		case <-startupTimer.C:
-			sendPrompt()
+			// Startup grace elapsed. NEVER blind-paste (D2): a bypassPermissions
+			// launch whose consent default is "exit" would be confirmed by a
+			// speculative Enter. Paste only if the ready prompt was actually seen;
+			// otherwise extend once for a still-resolving recognized screen, then
+			// fail loud so drift is diagnosable.
+			if readySeen {
+				sendPrompt()
+				break
+			}
+			if startupRearmed < maxStartupRearm {
+				startupRearmed++
+				startupTimer.Reset(te.readyTimeout)
+				break
+			}
+			if consentState == consentNavigating || consentState == consentConfirming {
+				return failStartupLoud(consentNoAdvanceDiagnostic, lastFrame)
+			}
+			return failStartupLoud(startupUnrecognizedDiagnostic, lastFrame)
 
 		case <-submitTimer.C:
 			// The paste has settled; submit it with a standalone carriage return.
@@ -536,6 +595,11 @@ func (h *Harness) runTurnOver(
 				emitFromTailer()
 				h.emitTranscriptAndFinal(ctx, te, path, eventChan, seq, startTime, logger)
 				return turnOK
+			}
+			// Consent step watchdog: a frozen consent screen produces no new
+			// frames, so the per-step deadline is enforced from the poll tick.
+			if !consentStepDeadline.IsZero() && time.Now().After(consentStepDeadline) {
+				return failStartupLoud(consentNoAdvanceDiagnostic, lastFrame)
 			}
 
 		case chunk, ok := <-te.conn.Output():
@@ -560,6 +624,14 @@ func (h *Harness) runTurnOver(
 					return turnEvicted
 				}
 				diagnostic, exitCode := ptyEOFDiagnostic(exitStatus, exitKnown)
+				if !promptSent {
+					// Claude exited during startup, before the task was ever sent.
+					// Name the last recognized screen and attach a bounded snapshot
+					// so a startup-UI change is diagnosable instead of collapsing
+					// into a generic "PTY closed before Stop hook".
+					diagnostic = "claude-tui startup: Claude exited before the prompt was submitted (last recognized screen: " +
+						lastRecognizedScreen + "); the startup UI may have changed; " + diagnostic + startupScreenSnapshot(lastFrame)
+				}
 				*seq++
 				// Generic PTY termination has no completion evidence, but it is
 				// still an adapter-owned terminal failure. Route it through the
@@ -576,6 +648,7 @@ func (h *Harness) runTurnOver(
 			probe.Feed(chunk.Bytes)
 			// 2) feed the emulator and render the screen.
 			frame, _ := emu.Feed(chunk.Bytes)
+			lastFrame = frame
 			// 3) detect a mid-turn fatal screen (error/limit/disconnect) and
 			// surface it as a terminal final instead of waiting for the turn
 			// timeout. The session is evicted so a reused slot never inherits a
@@ -586,16 +659,88 @@ func (h *Harness) runTurnOver(
 				emitClaudeFailureFinalEvent(eventChan, *seq, startTime, fs.status, diagnostic, fs.exitCode)
 				return turnEvicted
 			}
-			// 4) dismiss any first-run interstitial (folder-trust, theme/
-			// onboarding, MCP/plugin trust, bypass-permissions warning) with its
-			// default-accept keystroke (Enter), at most once each.
-			if name := detectInterstitial(frame); name != "" && !answeredDialogs[name] {
-				_ = te.conn.SendKey(session.KeyEnter)
-				answeredDialogs[name] = true
+			// 4) Handle the elevated-permission Bypass Permissions consent screen
+			// as a distinct, selection-aware, VERIFIED decision — never a generic
+			// Enter dismissal (its default is "No, exit", so a bare Enter quits
+			// Claude before the task is sent). PRE-SUBMIT ONLY (D1): consent is a
+			// startup screen and cannot legitimately appear after submission, so
+			// gating on !promptSent prevents assistant prose that echoes the
+			// dialog wording from triggering a mid-turn Kill or stray keystrokes.
+			if !promptSent && detectBypassDecisionScreen(frame) {
+				lastRecognizedScreen = "bypass-consent"
+				if !requestAuthorizesBypass(req) {
+					// No explicit authorization: fail before task injection rather
+					// than consent on the operator's behalf.
+					return failStartupLoud(bypassConsentDiagnostic, frame)
+				}
+				accept, ok := bypassAcceptOption(frame)
+				if !ok {
+					// A decision screen with no confidently identifiable accept
+					// option: refuse to guess, fail loud with a snapshot.
+					return failStartupLoud(consentUnrecognizedChoicesDiagnostic, frame)
+				}
+				switch consentState {
+				case consentIdle, consentNavigating:
+					if accept.highlighted {
+						// The accept option is highlighted: confirm it. Enter here is
+						// a deliberate, verified confirmation, not a default dismissal.
+						_ = te.conn.SendKey(session.KeyEnter)
+						consentState = consentConfirming
+					} else {
+						// Step the highlight toward the accept option, one key per
+						// frame; each keypress redraws the menu, driving the next
+						// step. Verifying the highlight before Enter (across frames)
+						// also inserts a natural settle so Ink cannot coalesce the
+						// move and the confirm into one swallowed read.
+						cur := highlightedOptionNumber(frame)
+						if cur == 0 || accept.number > cur {
+							_ = te.conn.SendKey(session.KeyDown)
+						} else {
+							_ = te.conn.SendKey(session.KeyUp)
+						}
+						consentState = consentNavigating
+					}
+					consentStepDeadline = time.Now().Add(te.readyTimeout)
+				case consentConfirming:
+					// Enter sent; waiting for the dialog to clear. The step deadline
+					// (poll tick) fails loud if it never advances.
+				}
+				// Never fall through to interstitial dismissal or prompt delivery
+				// while the consent dialog is still on screen.
+				continue
 			}
-			// Once the prompt UI is ready (and no interstitial is showing), send
-			// the prompt.
+			// Consent accepted and the screen has cleared: record an operator-
+			// visible audit event and stop the step watchdog.
+			if consentState == consentConfirming && !detectBypassDecisionScreen(frame) {
+				consentState = consentDone
+				consentStepDeadline = time.Time{}
+				*seq++
+				eventChan <- harnesses.Event{
+					Type:     harnesses.EventTypeProgress,
+					Sequence: *seq,
+					Time:     time.Now(),
+					Data: mustMarshal(harnesses.FinalWarning{
+						Code:    "bypass_consent_accepted",
+						Message: "accepted Bypass Permissions consent (explicit unrestricted authorization)",
+					}),
+				}
+			}
+			// 5) dismiss any first-run interstitial (folder-trust, theme/
+			// onboarding, MCP/plugin trust) with its default-accept keystroke
+			// (Enter), at most once each. Pre-submit only, for the same reason as
+			// the consent gate above.
+			if !promptSent {
+				if name := detectInterstitial(frame); name != "" && !answeredDialogs[name] {
+					_ = te.conn.SendKey(session.KeyEnter)
+					answeredDialogs[name] = true
+					lastRecognizedScreen = name
+				}
+			}
+			// Once the prompt UI is ready (and no dialog is showing), send the
+			// prompt.
 			if !promptSent && screenReadyForPrompt(frame) {
+				readySeen = true
+				lastRecognizedScreen = "ready"
 				sendPrompt()
 			}
 		}
@@ -1484,12 +1629,161 @@ var interstitials = []interstitialDialog{
 		"trust this plugin",
 		"Use this plugin",
 	}},
-	{name: "bypass-warning", markers: []string{
-		"Bypass Permissions mode",
-		"Bypassing Permissions",
-		"WARNING: Claude Code running in Bypass Permissions",
-		"I accept",
-	}},
+	// NOTE: the Bypass Permissions consent screen is deliberately NOT a generic
+	// interstitial. Claude Code 2.1.218+ renders it as a two-choice decision
+	// ("1. No, exit" / "2. Yes, I accept") whose cursor defaults to "No, exit",
+	// so a generic default-accept Enter would quit Claude before the task is
+	// sent. It is handled selection-aware on the turn path — see
+	// detectBypassConsent and the bypass-consent block in runTurnOver.
+}
+
+// Typed, bounded, sanitized startup diagnostics. Each is DISTINCT from the
+// generic "PTY closed before Stop hook" EOF so a startup-UI change surfaces as
+// a recognizable, greppable failure instead of collapsing into a timeout/EOF.
+// The markers in each string are also matched by ClassifyClaudeRouteFailure's
+// protocol arm ("the peer did not present the expected interface"), so these
+// classify deterministically as protocol, not unknown.
+const (
+	// bypassConsentDiagnostic: consent screen present but the request carried no
+	// explicit unrestricted authorization.
+	bypassConsentDiagnostic = "claude-tui preflight: Claude Code requires interactive consent to run in Bypass Permissions mode, but this request carried no explicit unrestricted authorization; refusing to accept elevated-permission consent on the operator's behalf"
+
+	// consentUnrecognizedChoicesDiagnostic: a bypass decision screen was
+	// detected structurally, but no option matching "accept" could be
+	// confidently identified — refuse to guess.
+	consentUnrecognizedChoicesDiagnostic = "claude-tui consent: a Bypass Permissions decision screen was detected but no option matching 'Yes, I accept' could be confidently identified; refusing to guess — the consent UI may have changed"
+
+	// consentNoAdvanceDiagnostic: the driver selected "Yes, I accept" but the
+	// consent screen did not clear within the step window.
+	consentNoAdvanceDiagnostic = "claude-tui consent: selected 'Yes, I accept' but the Bypass Permissions consent screen did not advance within the step window; the consent UI may have changed"
+
+	// startupUnrecognizedDiagnostic: the startup grace elapsed without any
+	// recognized screen (consent, known interstitial, or ready prompt).
+	startupUnrecognizedDiagnostic = "claude-tui startup: launched with --permission-mode bypassPermissions but no ready prompt, consent screen, or known interstitial was recognized within the startup window; the Claude Code startup UI may have changed"
+)
+
+// bypassConsentWarningPhrases identify the Bypass Permissions warning phrase,
+// matched case-insensitively over whitespace-normalized frame text so casing,
+// wrapping, and cell-spacing artifacts do not defeat detection.
+var bypassConsentWarningPhrases = []string{
+	"bypass permissions",
+	"bypassing permissions",
+}
+
+// numberedOptionPattern matches an Ink menu option line ("1. text"), after the
+// optional highlight cursor glyph has been stripped.
+var numberedOptionPattern = regexp.MustCompile(`^([0-9]+)\.\s+(.+)$`)
+
+// numberedOption is one parsed Ink menu choice.
+type numberedOption struct {
+	number      int
+	highlighted bool // the "❯" cursor glyph preceded this option
+	text        string
+}
+
+// parseNumberedOptions extracts the numbered menu options from a rendered
+// frame, recording which one carries the highlight cursor. It is the structural
+// backbone of both bypass-consent detection and selection.
+func parseNumberedOptions(frame terminal.Frame) []numberedOption {
+	var opts []numberedOption
+	for _, raw := range frame.Text {
+		line := strings.TrimSpace(raw)
+		highlighted := false
+		if strings.HasPrefix(line, "❯") {
+			highlighted = true
+			line = strings.TrimSpace(strings.TrimPrefix(line, "❯"))
+		}
+		m := numberedOptionPattern.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			continue
+		}
+		opts = append(opts, numberedOption{number: n, highlighted: highlighted, text: normalizeTerminalText(m[2])})
+	}
+	return opts
+}
+
+// bypassPhrasePresent reports the bypass-permissions warning phrase anywhere in
+// the frame (case-insensitive, whitespace-normalized).
+func bypassPhrasePresent(frame terminal.Frame) bool {
+	joined := strings.ToLower(normalizeTerminalText(strings.Join(frame.Text, " ")))
+	for _, phrase := range bypassConsentWarningPhrases {
+		if strings.Contains(joined, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// detectBypassDecisionScreen is the LOOSE structural detector used to act on
+// and to fail loud about the consent screen: the bypass phrase plus a
+// numbered-choice affordance (>=2 options). The informational
+// "⏵⏵ bypass permissions on" ready-prompt footer carries no numbered options,
+// so it never matches — see TestBypassFooterIsNotConsentScreen.
+func detectBypassDecisionScreen(frame terminal.Frame) bool {
+	if !bypassPhrasePresent(frame) {
+		return false
+	}
+	return len(parseNumberedOptions(frame)) >= 2
+}
+
+// bypassAcceptOption returns the unique numbered option whose text
+// affirmatively accepts the consent ("accept"). ok is false when zero or more
+// than one option matches, so the driver never guesses which choice to select.
+func bypassAcceptOption(frame terminal.Frame) (numberedOption, bool) {
+	var found numberedOption
+	count := 0
+	for _, opt := range parseNumberedOptions(frame) {
+		if strings.Contains(strings.ToLower(opt.text), "accept") {
+			found = opt
+			count++
+		}
+	}
+	return found, count == 1
+}
+
+// highlightedOptionNumber returns the number of the currently highlighted
+// option, or 0 when none is highlighted.
+func highlightedOptionNumber(frame terminal.Frame) int {
+	for _, opt := range parseNumberedOptions(frame) {
+		if opt.highlighted {
+			return opt.number
+		}
+	}
+	return 0
+}
+
+// requestAuthorizesBypass reports whether the request explicitly opted into
+// unrestricted execution. Only then does the driver select "Yes, I accept" on
+// the operator's behalf; consent is never silently persisted.
+func requestAuthorizesBypass(req harnesses.ExecuteRequest) bool {
+	return strings.EqualFold(strings.TrimSpace(req.Permissions), "unrestricted")
+}
+
+// startupScreenSnapshot renders a bounded, sanitized snapshot of a startup
+// frame for a drift diagnostic. Pre-submit frames contain only startup chrome
+// (never the prompt or assistant output), so the leak surface is minimal; the
+// value is still routed through SanitizeClaudeDiagnostic by the emitter. At
+// most 10 non-empty normalized lines, joined with " | ".
+func startupScreenSnapshot(frame terminal.Frame) string {
+	var lines []string
+	for _, raw := range frame.Text {
+		norm := normalizeTerminalText(raw)
+		if norm == "" {
+			continue
+		}
+		lines = append(lines, norm)
+		if len(lines) >= 10 {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return " (last screen: " + strings.Join(lines, " | ") + ")"
 }
 
 // screenHasFolderTrustDialog reports whether the rendered frame shows the
@@ -1522,10 +1816,11 @@ func frameHasAnyMarker(frame terminal.Frame, markers []string) bool {
 
 // screenReadyForPrompt reports whether the rendered frame shows the Claude
 // input prompt (the "❯"/"> " affordance) so the prompt can be pasted. It
-// returns false while ANY first-run interstitial is on screen so the prompt is
-// never pasted into a blocking dialog.
+// returns false while ANY first-run interstitial OR the Bypass Permissions
+// consent screen is on screen so the prompt is never pasted into a blocking
+// dialog.
 func screenReadyForPrompt(frame terminal.Frame) bool {
-	if detectInterstitial(frame) != "" {
+	if detectInterstitial(frame) != "" || detectBypassDecisionScreen(frame) {
 		return false
 	}
 	joined := strings.Join(frame.Text, "\n")

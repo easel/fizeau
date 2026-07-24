@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -119,6 +120,13 @@ func (f *fakePTY) sawBracketedPaste() bool {
 		}
 	}
 	return false
+}
+
+// keysSnapshot returns a copy of the ordered SendKey keys.
+func (f *fakePTY) keysSnapshot() []session.Key {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]session.Key(nil), f.keys...)
 }
 
 // writeStopPayload writes a Stop-hook payload carrying the nonce + transcript path.
@@ -1146,11 +1154,17 @@ func TestRunTurnSingleOutputConsumerNoStolenChunks(t *testing.T) {
 }
 
 // TestRunTurnDismissesInterstitials proves F4: every first-run blocking dialog
-// (theme/onboarding, MCP-server trust, plugin trust, bypass-permissions
-// warning), rendered with cursor-positioning escapes so it is only legible
-// after vt10x rendering, is dismissed with a single Enter on the turn path —
-// mirroring the folder-trust handler. Each dialog is answered exactly once and
-// the prompt is delivered only AFTER the dialog clears (never pasted into it).
+// (theme/onboarding, MCP-server trust, plugin trust), rendered with cursor-
+// positioning escapes so it is only legible after vt10x rendering, is dismissed
+// with a single Enter on the turn path — mirroring the folder-trust handler.
+// Each dialog is answered exactly once and the prompt is delivered only AFTER
+// the dialog clears (never pasted into it).
+//
+// The Bypass Permissions consent screen is deliberately NOT in this table: it
+// is a two-choice decision, not an Enter-dismissed interstitial, and is covered
+// by TestRunTurnBypassConsentAcceptsWithUnrestricted and
+// TestRunTurnBypassConsentFailsWithoutAuthorization with selection-aware
+// keystroke assertions.
 func TestRunTurnDismissesInterstitials(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1167,10 +1181,6 @@ func TestRunTurnDismissesInterstitials(t *testing.T) {
 		{
 			name:   "plugin-trust",
 			render: []byte("\x1b[3;5HThis project wants to use the following plugins\x1b[5;7HDo you trust this plugin?"),
-		},
-		{
-			name:   "bypass-warning",
-			render: []byte("\x1b[3;5HWARNING: Claude Code running in Bypass Permissions mode\x1b[5;7HI accept the risk. Press Enter to continue."),
 		},
 	}
 
@@ -1220,6 +1230,320 @@ func TestRunTurnDismissesInterstitials(t *testing.T) {
 			assertExactlyOneFinal(t, events, "success")
 		})
 	}
+}
+
+// bypassConsentScreen renders the Claude Code 2.1.218 two-choice Bypass
+// Permissions consent screen (full-screen redraw), with the highlight cursor
+// "❯" on the option numbered highlightNum. A bare Enter on the default
+// (highlight on option 1, "No, exit") quits Claude — the historical bug.
+func bypassConsentScreen(highlightNum int) []byte {
+	opt := func(n int, text string) string {
+		if n == highlightNum {
+			return "❯ " + strconv.Itoa(n) + ". " + text
+		}
+		return "  " + strconv.Itoa(n) + ". " + text
+	}
+	return []byte("\x1b[H\x1b[2J" +
+		"\x1b[3;5HWARNING: Claude Code running in Bypass Permissions mode" +
+		"\x1b[4;5HClaude will not ask for approval before running tools." +
+		"\x1b[6;5H" + opt(1, "No, exit") +
+		"\x1b[7;5H" + opt(2, "Yes, I accept") +
+		"\x1b[9;5HEnter to confirm · Esc to go back")
+}
+
+// TestRunTurnBypassConsentAcceptsWithUnrestricted proves the accept path
+// (acceptance criteria 1 & 2): given an explicitly unrestricted request, the
+// driver moves the highlight off the default "No, exit" onto "Yes, I accept"
+// (Down BEFORE Enter), never pastes the task while the dialog is visible,
+// verifies the screen advanced, emits a bypass_consent_accepted audit event,
+// delivers the task, and emits exactly one successful final.
+func TestRunTurnBypassConsentAcceptsWithUnrestricted(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("bypass-accept")
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pasteWhileDialogVisible := make(chan bool, 1)
+	go func() {
+		// Consent screen with the default highlight on option 1 ("No, exit").
+		f.push(bypassConsentScreen(1))
+		// The driver must step the highlight down before confirming.
+		for f.keyCount(session.KeyDown) == 0 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Redraw with the highlight now on option 2 ("Yes, I accept").
+		f.push(bypassConsentScreen(2))
+		// The driver confirms only once the accept option is highlighted.
+		for f.keyCount(session.KeyEnter) == 0 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		pasteWhileDialogVisible <- f.sawBracketedPaste()
+		// Consent accepted: clear the dialog and present the ready prompt.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir, Permissions: "unrestricted"}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	if paste := <-pasteWhileDialogVisible; paste {
+		t.Error("task was pasted while the bypass consent dialog was still visible")
+	}
+
+	// Selection-aware: Down must precede the first Enter so the confirm lands on
+	// "Yes, I accept", not the default "No, exit".
+	keys := f.keysSnapshot()
+	downIdx, enterIdx := -1, -1
+	for i, k := range keys {
+		if k == session.KeyDown && downIdx == -1 {
+			downIdx = i
+		}
+		if k == session.KeyEnter && enterIdx == -1 {
+			enterIdx = i
+		}
+	}
+	if downIdx == -1 {
+		t.Fatalf("driver did not send Down to select 'Yes, I accept'; keys=%v", keys)
+	}
+	if enterIdx == -1 {
+		t.Fatalf("driver did not confirm the selection with Enter; keys=%v", keys)
+	}
+	if downIdx > enterIdx {
+		t.Fatalf("Enter (idx %d) preceded Down (idx %d): driver confirmed the default 'No, exit'; keys=%v", enterIdx, downIdx, keys)
+	}
+	if !f.sawBracketedPaste() {
+		t.Error("task not delivered after bypass consent accepted")
+	}
+	if !hasProgressWarningCode(events, "bypass_consent_accepted") {
+		t.Error("missing bypass_consent_accepted audit progress event")
+	}
+	assertExactlyOneFinal(t, events, "success")
+	if f.wasKilled() {
+		t.Error("session was evicted despite a successful accepted-consent turn")
+	}
+}
+
+// TestRunTurnBypassConsentFailsWithoutAuthorization proves the fail-closed path
+// (acceptance criterion 3): the same two-choice screen, with a request that did
+// NOT carry explicit unrestricted authorization, produces exactly one typed
+// failed final BEFORE any task injection. The driver must not confirm the
+// default "No, exit", must not paste the task, and the diagnostic identifies
+// bypass consent while staying sanitized and bounded (never a generic "PTY
+// closed before Stop hook").
+func TestRunTurnBypassConsentFailsWithoutAuthorization(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("bypass-fail")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() { f.push(bypassConsentScreen(1)) }()
+
+	// No Permissions field => no explicit unrestricted authorization.
+	req := harnesses.ExecuteRequest{Prompt: "diagnostic-smoke", WorkDir: dir}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	final := requireExactlyOneFinal(t, events, "failed")
+	if final.ExitCode != 1 {
+		t.Errorf("exit code = %d, want 1", final.ExitCode)
+	}
+	if !strings.Contains(final.Error, "Bypass Permissions") {
+		t.Errorf("diagnostic does not identify bypass consent: %q", final.Error)
+	}
+	if strings.Contains(final.Error, "closed before Stop hook") {
+		t.Errorf("diagnostic degraded to generic PTY-EOF message: %q", final.Error)
+	}
+	if !utf8.ValidString(final.Error) || len(final.Error) > anthropic.MaxRouteFailureDiagnosticBytes {
+		t.Errorf("diagnostic invalid or unbounded: %q", final.Error)
+	}
+	if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" {
+		t.Errorf("routing actual = %+v, want claude-tui harness", final.RoutingActual)
+	}
+	if f.sawBracketedPaste() {
+		t.Error("task was pasted despite unauthorized bypass consent")
+	}
+	if f.keyCount(session.KeyEnter) != 0 || f.keyCount(session.KeyDown) != 0 {
+		t.Errorf("driver sent selection keystrokes (down=%d enter=%d); must not touch the dialog without authorization",
+			f.keyCount(session.KeyDown), f.keyCount(session.KeyEnter))
+	}
+	if final.FinalText != "" || final.Usage != nil {
+		t.Errorf("fabricated completion evidence on a preflight failure: %+v", final)
+	}
+}
+
+// TestRunTurnBypassConsentDoesNotTriggerMidTurn proves D1: after the prompt is
+// submitted, a frame whose ASSISTANT PROSE echoes the consent wording (warning
+// phrase + numbered "Yes, I accept" / "No, exit" lines) must NOT be treated as
+// a consent screen — no Kill, no stray keystrokes — because consent handling is
+// gated to the pre-submit startup phase.
+func TestRunTurnBypassConsentDoesNotTriggerMidTurn(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("bypass-midturn")
+	transcript := writeTranscript(t, realTranscript)
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	proseDidNotKill := make(chan bool, 1)
+	go func() {
+		// Ready prompt first so the task is submitted before the prose renders.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;1H❯ "))
+		for !f.sawBracketedPaste() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Assistant explains the bypass consent dialog, reproducing its wording
+		// and numbered options as ordinary prose.
+		f.push([]byte("\x1b[H\x1b[2J" +
+			"\x1b[2;2HThe Bypass Permissions mode screen shows:" +
+			"\x1b[3;4H1. No, exit" +
+			"\x1b[4;4H2. Yes, I accept"))
+		time.Sleep(120 * time.Millisecond)
+		proseDidNotKill <- !f.wasKilled()
+		writeStopPayload(t, stopPath, nonce, transcript)
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "explain the bypass consent dialog", WorkDir: dir, Permissions: "unrestricted"}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	if ok := <-proseDidNotKill; !ok {
+		t.Error("assistant prose echoing the consent dialog killed the session mid-turn")
+	}
+	// The only keystrokes must be the pre-submit ones; no consent navigation was
+	// triggered by the mid-turn prose (Down is never used on the ready path).
+	if f.keyCount(session.KeyDown) != 0 {
+		t.Errorf("mid-turn prose triggered consent navigation: down=%d", f.keyCount(session.KeyDown))
+	}
+	assertExactlyOneFinal(t, events, "success")
+}
+
+// TestRunTurnBypassConsentUnrecognizedChoicesFailsLoud proves the resilience
+// path (Q5): a bypass DECISION screen (warning phrase + numbered options) whose
+// options do not contain a confidently identifiable "accept" choice produces a
+// typed, snapshot-bearing failure rather than a guessed keystroke or a silent
+// fall-through to EOF.
+func TestRunTurnBypassConsentUnrecognizedChoicesFailsLoud(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("bypass-unrecognized")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		// A reworded future consent screen: warning phrase + numbered options,
+		// but neither option says "accept".
+		f.push([]byte("\x1b[H\x1b[2J" +
+			"\x1b[3;5HWARNING: Claude Code running in Bypass Permissions mode" +
+			"\x1b[6;5H❯ 1. Cancel and quit" +
+			"\x1b[7;5H  2. Continue anyway"))
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir, Permissions: "unrestricted"}
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		300*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	final := requireExactlyOneFinal(t, events, "failed")
+	if !strings.Contains(final.Error, "no option matching") {
+		t.Errorf("diagnostic does not identify the unrecognized-choices condition: %q", final.Error)
+	}
+	if !strings.Contains(final.Error, "last screen:") {
+		t.Errorf("diagnostic missing bounded screen snapshot: %q", final.Error)
+	}
+	if f.keyCount(session.KeyEnter) != 0 || f.keyCount(session.KeyDown) != 0 {
+		t.Errorf("driver guessed a keystroke on an unrecognized decision screen: down=%d enter=%d",
+			f.keyCount(session.KeyDown), f.keyCount(session.KeyEnter))
+	}
+	if f.sawBracketedPaste() {
+		t.Error("task pasted despite an unrecognized consent screen")
+	}
+}
+
+// TestRunTurnUnrecognizedStartupScreenFailsLoud proves the startup watchdog
+// (Q1/Q2): if nothing recognized (consent, interstitial, or ready prompt)
+// appears within the startup window, the driver fails loud with a typed,
+// snapshot-bearing diagnostic instead of blind-pasting or wedging to EOF.
+func TestRunTurnUnrecognizedStartupScreenFailsLoud(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	nonce := testTurnNonce("startup-unrecognized")
+
+	f := newFakePTY()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		// An unrecognized startup screen: no ready prompt, no known dialog.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[2;2HSome brand-new onboarding screen we do not recognize"))
+	}()
+
+	req := harnesses.ExecuteRequest{Prompt: "hi", WorkDir: dir, Permissions: "unrestricted"}
+	// readyTimeout small; maxStartupRearm=1 => ~2 windows before failing loud.
+	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
+		120*time.Millisecond, 20*time.Millisecond, 4*time.Second)
+
+	final := requireExactlyOneFinal(t, events, "failed")
+	if !strings.Contains(final.Error, "startup UI may have changed") {
+		t.Errorf("diagnostic does not identify startup drift: %q", final.Error)
+	}
+	if !strings.Contains(final.Error, "last screen:") {
+		t.Errorf("diagnostic missing bounded screen snapshot: %q", final.Error)
+	}
+	if f.sawBracketedPaste() {
+		t.Error("driver blind-pasted into an unrecognized startup screen")
+	}
+	if final.RoutingActual == nil || final.RoutingActual.FailureClass != "protocol" {
+		t.Errorf("routing actual = %+v, want protocol failure class", final.RoutingActual)
+	}
+}
+
+// hasProgressWarningCode reports whether any progress event carries a
+// FinalWarning with the given code.
+func hasProgressWarningCode(events []harnesses.Event, code string) bool {
+	for _, ev := range events {
+		if ev.Type != harnesses.EventTypeProgress {
+			continue
+		}
+		var w harnesses.FinalWarning
+		if err := json.Unmarshal(ev.Data, &w); err == nil && w.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 // TestRunTurnSurfacesMidTurnUsageLimit proves F5: a mid-turn usage-limit screen

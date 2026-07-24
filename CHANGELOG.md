@@ -5,7 +5,28 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
-## [v0.16.0] — 2026-07-23
+### Fixed
+
+- The `claude-tui` harness handles Claude Code 2.1.218's two-choice Bypass
+  Permissions consent screen. The screen defaults its cursor to "No, exit", so
+  the previous single-Enter interstitial handler quit Claude before the task was
+  sent (zero tokens, empty output, no Stop payload, surfaced downstream as "PTY
+  closed before Stop hook"). The driver now selects "Yes, I accept" — only with
+  explicit unrestricted authorization — by verifying the highlight moved before
+  confirming and that the dialog then cleared.
+
+### Changed
+
+- `claude-tui` startup is now fail-loud instead of silently blind-pasting. If a
+  bypassPermissions launch reaches neither the consent screen, a known
+  interstitial, nor the ready prompt within the startup window — or a consent
+  screen's options can't be confidently identified, or the selection doesn't
+  advance — the harness emits a typed, sanitized, bounded diagnostic naming the
+  condition (e.g. "the Claude Code startup UI may have changed") with a snapshot
+  of the last screen, classified as a protocol failure. Consent detection is
+  restricted to the pre-submit startup phase so assistant prose that quotes the
+  dialog can't trigger it mid-turn. PTY EOF before the prompt is submitted now
+  reports the last recognized screen instead of a generic message.
 
 ### Added
 

@@ -68,7 +68,13 @@ func ClassifyClaudeRouteFailure(diagnostic string) (failureClass, sanitizedDiagn
 		"protocol error", "invalid response", "malformed", "failed to parse",
 		"parse error", "unexpected response", "unexpected eof", "bad request",
 		"rate_limit_error", "rate limit exceeded", "service is temporarily unavailable",
-		"overloaded") || httpStatusPattern.MatchString(lower):
+		"overloaded",
+		// Harness startup/consent drift: the peer did not present the expected
+		// interface. These are emitted by the claude-tui startup watchdog and
+		// consent state machine and must classify as protocol, not unknown, so
+		// UI-drift failures are distinct from opaque EOFs.
+		"ui may have changed", "exited before the prompt was submitted") ||
+		httpStatusPattern.MatchString(lower):
 		failureClass = FailureClassProtocol
 	}
 
