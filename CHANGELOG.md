@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.0] — 2026-07-24
+
 ### Added
 
 - The `claude-tui` turn loop now confirms a submitted prompt actually started a
