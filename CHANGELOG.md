@@ -5,6 +5,14 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Fixed
+
+- Unexpected `claude-tui` PTY death before a Stop hook (the headless
+  `PTY closed before Stop hook; process exit code 143` signature) now
+  classifies as `protocol` instead of `unknown`, so routehealth soft-cooldown
+  demotes the route. Typed-only wrapped-harness observation previously dropped
+  these failures, leaving the route preferred after zero-token crashes.
+
 ## [v0.17.0] — 2026-07-24
 
 ### Added

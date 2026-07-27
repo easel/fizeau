@@ -25,6 +25,9 @@ func TestClassifyClaudeRouteFailure(t *testing.T) {
 		{name: "service unavailable is protocol", diagnostic: "HTTP 503 Service Unavailable", want: FailureClassProtocol},
 		{name: "gateway timeout is protocol", diagnostic: "HTTP 504 Gateway Timeout", want: FailureClassProtocol},
 		{name: "response status is protocol", diagnostic: "provider response status code: 500", want: FailureClassProtocol},
+		{name: "pty closed before stop is protocol", diagnostic: "Claude TUI PTY closed before Stop hook; process exit code 143", want: FailureClassProtocol},
+		{name: "startup pre-prompt exit 143 is protocol", diagnostic: "claude-tui startup: Claude exited before the prompt was submitted (last recognized screen: none); the startup UI may have changed; Claude TUI PTY closed before Stop hook; process exit code 143", want: FailureClassProtocol},
+		{name: "pty closed by signal is protocol", diagnostic: "Claude TUI PTY closed before Stop hook; process terminated by signal", want: FailureClassProtocol},
 		{name: "process status is unknown", diagnostic: "process exited with status code 1", want: FailureClassUnknown},
 		{name: "unknown", diagnostic: "claude exited for an unrecognized reason", want: FailureClassUnknown},
 	}

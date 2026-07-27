@@ -20,6 +20,7 @@ import (
 	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	claudetui "github.com/easel/fizeau/internal/harnesses/claude-tui"
 	"github.com/easel/fizeau/internal/pty/session"
+	"github.com/easel/fizeau/internal/routehealth"
 )
 
 // fakePTY is a scripted, in-memory PTY for driving runTurnOver with no live
@@ -497,10 +498,73 @@ func TestRunTurnPTYEOFPreservesSanitizedExitEvidence(t *testing.T) {
 				final.FinalCostSource != harnesses.CostSourceUnknown {
 				t.Fatalf("EOF failure fabricated completion evidence: %+v", final)
 			}
-			if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" || final.RoutingActual.FailureClass != "unknown" {
-				t.Fatalf("generic EOF routing actual = %+v, want claude-tui unknown failure", final.RoutingActual)
+			if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" || final.RoutingActual.FailureClass != "protocol" {
+				t.Fatalf("generic EOF routing actual = %+v, want claude-tui protocol failure", final.RoutingActual)
 			}
 		})
+	}
+}
+
+// TestRunTurnHeadlessPTYEOFExit143ClassifiesProtocol demotes the production
+// headless failure signature ("PTY closed before Stop hook; process exit code
+// 143") as a stable protocol class so routehealth can soft-cooldown the
+// claude-tui route. Exit 143 is SIGTERM (128+15); the process dies before a
+// nonce-bound Stop hook, which is the observed DDx execute-bead crash under a
+// non-interactive parent with no controlling terminal.
+func TestRunTurnHeadlessPTYEOFExit143ClassifiesProtocol(t *testing.T) {
+	dir := t.TempDir()
+	hookDir := filepath.Join(dir, "hooks")
+	if err := os.Mkdir(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stopPath := filepath.Join(hookDir, "stop.json")
+	f := newFakePTY()
+	// Shell-style exit 143 (SIGTERM) as reported by WaitStatus.Exited paths.
+	f.setExitStatus(session.ExitStatus{Code: 143, Exited: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	producerErr := make(chan error, 1)
+	go func() {
+		// Headless startup: no ready prompt, no consent — the PTY dies immediately
+		// after a capability probe, matching the __provider-launch / SIGTERM race.
+		f.push([]byte("\x1b[?1;0c"))
+		f.closeOutput()
+		select {
+		case <-f.waiting:
+			producerErr <- nil
+		case <-ctx.Done():
+			producerErr <- ctx.Err()
+		}
+	}()
+
+	events := claudetui.RunTurnForTestWithStopGrace(
+		ctx, f, harnesses.ExecuteRequest{Prompt: "headless-repro", WorkDir: dir, Permissions: "unrestricted"},
+		hookDir, stopPath, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		50*time.Millisecond, 5*time.Millisecond, 40*time.Millisecond, 2*time.Second,
+	)
+	if err := <-producerErr; err != nil {
+		t.Fatal(err)
+	}
+	final := requireExactlyOneFinal(t, events, "failed")
+	if final.ExitCode != 143 {
+		t.Fatalf("exit code = %d, want 143", final.ExitCode)
+	}
+	if !strings.Contains(final.Error, "PTY closed before Stop hook") || !strings.Contains(final.Error, "exit code 143") {
+		t.Fatalf("diagnostic = %q, want exit-143 PTY-closed signature", final.Error)
+	}
+	if final.RoutingActual == nil || final.RoutingActual.Harness != "claude-tui" {
+		t.Fatalf("routing actual = %+v, want claude-tui", final.RoutingActual)
+	}
+	if final.RoutingActual.FailureClass != "protocol" {
+		t.Fatalf("failure class = %q, want protocol (routehealth demotion evidence)", final.RoutingActual.FailureClass)
+	}
+	// Cross-check: typed-only routehealth admits this final so demotion can land.
+	attempt, ok := routehealth.AttemptFromFinal(final, routehealth.FinalEvidenceTypedOnly)
+	if !ok {
+		t.Fatal("routehealth.AttemptFromFinal rejected protocol PTY-closed evidence")
+	}
+	if attempt.Reason != "protocol" || attempt.Harness != "claude-tui" {
+		t.Fatalf("routehealth attempt = %+v, want harness=claude-tui reason=protocol", attempt)
 	}
 }
 
