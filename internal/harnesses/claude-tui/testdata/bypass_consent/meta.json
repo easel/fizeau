@@ -1,0 +1,25 @@
+{
+  "id": "claude-tui-bypass-consent-2.1.220",
+  "harness": "claude-tui",
+  "claude_version": "2.1.220 (Claude Code)",
+  "captured_at": "2026-07-30T15:48:39Z",
+  "terminal": {
+    "rows": 40,
+    "cols": 120,
+    "term": "xterm-256color"
+  },
+  "permission_mode": "bypassPermissions",
+  "files": {
+    "consent_initial.raw": {
+      "sha256": "5ed02de6c9c4ddf08be271c1477790773fb8854f36cb51be2f69a79223a91ea0",
+      "bytes": 1367,
+      "description": "initial full-screen draw of Bypass Permissions two-choice consent (highlight on 1. No, exit)"
+    },
+    "consent_highlight_accept.raw": {
+      "sha256": "83ff5b3954a835aa7d423c5df858480a774f3051211e6916c355fcb5b9f3d458",
+      "bytes": 45,
+      "description": "Ink delta after Down arrow moves highlight onto 2. Yes, I accept (must be fed after consent_initial.raw into the same emulator)"
+    }
+  },
+  "notes": "Real Claude Code Bypass Permissions consent PTY byte stream. Captured with an onboarded CLAUDE_CONFIG_DIR (hasCompletedOnboarding=true, folder trust accepted) that did NOT set skipDangerousModePermissionPrompt, so the two-choice consent dialog rendered. Replay must feed through vt10x \u2014 naive ANSI strip loses the column-addressed layout."
+}
