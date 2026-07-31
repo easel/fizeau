@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.1] — 2026-07-31
+
 ### Fixed
 
 - Unexpected `claude-tui` PTY death before a Stop hook (the headless
@@ -12,6 +14,12 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
   classifies as `protocol` instead of `unknown`, so routehealth soft-cooldown
   demotes the route. Typed-only wrapped-harness observation previously dropped
   these failures, leaving the route preferred after zero-token crashes.
+
+### Added
+
+- A checked-in real Claude Code 2.1.220 Bypass Permissions consent PTY cassette
+  and offline vt10x replay tests so detector and selection-aware driver behavior
+  cannot drift with Ink column-addressed layout.
 
 ## [v0.17.0] — 2026-07-24
 
