@@ -478,6 +478,85 @@ func ExpandTranscriptPath(path string) (string, error) {
 	return path, nil
 }
 
+// transcriptFinalizationGrace is how long emitTranscriptAndFinal will re-open
+// an append-only Claude Code transcript waiting for a terminal stop_reason.
+// Claude Code 2.1.x publishes the Stop hook as soon as the turn ends, but the
+// final assistant line with stop_reason=end_turn can land a few hundred
+// milliseconds later (observed live: Stop fires with only tool_use on disk,
+// then end_turn is appended before stop_hook_summary). Without this grace the
+// harness fails closed with "no assistant final event" even though the model
+// completed the work.
+//
+// Tests may shrink this var so fail-closed incomplete cases stay fast.
+var transcriptFinalizationGrace = 3 * time.Second
+
+// lastAssistantStopReason scans a Claude Code transcript JSONL file and returns
+// the stop_reason of the last assistant message. missing is true when no
+// assistant line was found (or the file cannot be read yet).
+func lastAssistantStopReason(path string) (stop string, sawAssistant bool, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 4*1024*1024)
+	for scanner.Scan() {
+		tl, parseErr := ParseTranscriptLine(scanner.Text())
+		if parseErr != nil || tl.Type != "assistant" || tl.Message == nil {
+			continue
+		}
+		sawAssistant = true
+		stop = tl.Message.StopReason
+	}
+	if err := scanner.Err(); err != nil {
+		return stop, sawAssistant, err
+	}
+	return stop, sawAssistant, nil
+}
+
+// transcriptHasAuthoritativeStop reports whether path currently ends with an
+// assistant stop_reason that mapStopReason treats as terminal (end_turn,
+// stop_sequence, max_tokens).
+func transcriptHasAuthoritativeStop(path string) bool {
+	stop, saw, err := lastAssistantStopReason(path)
+	if err != nil || !saw {
+		return false
+	}
+	_, ok := mapStopReason(stop)
+	return ok
+}
+
+// waitForAuthoritativeTranscript polls path until it has a terminal assistant
+// stop_reason, the context is cancelled, or grace elapses. It is a flush-race
+// seam only: it never invents success when the transcript stays intermediate.
+func waitForAuthoritativeTranscript(ctx context.Context, path string, grace time.Duration) error {
+	if grace <= 0 {
+		grace = transcriptFinalizationGrace
+	}
+	if transcriptHasAuthoritativeStop(path) {
+		return nil
+	}
+	deadline := time.Now().Add(grace)
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if transcriptHasAuthoritativeStop(path) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("transcript still non-terminal after %s", grace)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Hook-event tailer: mid-turn tool_call / tool_result ProgressEvents.
 //

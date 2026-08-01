@@ -80,7 +80,12 @@ func ClassifyClaudeRouteFailure(diagnostic string) (failureClass, sanitizedDiagn
 		// demotes the route instead of leaving FailureClass=unknown (which
 		// FinalEvidenceTypedOnly deliberately drops — see routehealth.IsFeedbackFailureClass).
 		"pty closed before stop hook", "process exit code 143",
-		"process terminated by signal") ||
+		"process terminated by signal",
+		// Incomplete transcript after Stop: Claude finished hooks but no
+		// authoritative terminal stop_reason was observed (flush race or
+		// schema drift). Must demote as protocol so typed-only routehealth
+		// does not drop the failure as unknown.
+		"no assistant final event", "transcript contained no assistant") ||
 		httpStatusPattern.MatchString(lower):
 		failureClass = FailureClassProtocol
 	}

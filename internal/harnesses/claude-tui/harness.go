@@ -925,6 +925,10 @@ const (
 // emitTranscriptAndFinal reads the request-local transcript and emits exactly
 // one final event. Missing or unreadable transcript evidence fails closed: a
 // Stop hook proves only that Claude stopped, not that the turn succeeded.
+//
+// Claude Code 2.1.x can publish the Stop hook before the final assistant
+// JSONL line (stop_reason=end_turn) is durable on disk. We wait briefly for an
+// authoritative terminal stop_reason before failing closed as incomplete.
 func (h *Harness) emitTranscriptAndFinal(
 	ctx context.Context,
 	te *turnEnv,
@@ -939,6 +943,9 @@ func (h *Harness) emitTranscriptAndFinal(
 	}
 	expanded, err := ExpandTranscriptPath(transcriptPath)
 	if err == nil {
+		// Best-effort flush race: ignore wait timeout and fall through to the
+		// fail-closed incomplete path when the transcript never becomes terminal.
+		_ = waitForAuthoritativeTranscript(ctx, expanded, transcriptFinalizationGrace)
 		tailer := NewTranscriptTailer(expanded, "default", logger)
 		// Continue the harness sequence counter through the transcript events.
 		tailer.seqCounter = *seq
@@ -952,7 +959,7 @@ func (h *Harness) emitTranscriptAndFinal(
 				// Parser-level empty/incomplete transcripts intentionally do
 				// not emit finals; the harness-level stream still must.
 				*seq++
-				emitFinalEvent(eventChan, *seq, startTime, "failed", transcriptIncompleteDiagnostic, 1)
+				emitClaudeFailureFinalEvent(eventChan, *seq, startTime, "failed", transcriptIncompleteDiagnostic, 1)
 			}
 			return
 		}

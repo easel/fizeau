@@ -5,6 +5,15 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Fixed
+
+- `claude-tui` no longer fails a completed turn when Claude Code publishes the
+  Stop hook before the final transcript line (`stop_reason=end_turn`) is
+  durable. The harness waits briefly for an authoritative terminal stop reason
+  instead of failing closed with "no assistant final event" after a successful
+  tool run. Incomplete transcripts still fail closed after the grace window and
+  classify as `protocol` for routehealth demotion.
+
 ## [v0.17.1] — 2026-07-31
 
 ### Fixed

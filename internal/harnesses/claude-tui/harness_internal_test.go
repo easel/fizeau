@@ -15,6 +15,10 @@ import (
 )
 
 func TestEmitTranscriptAndFinalSynthesizesFinalForIncompleteTranscript(t *testing.T) {
+	prev := transcriptFinalizationGrace
+	transcriptFinalizationGrace = 40 * time.Millisecond
+	t.Cleanup(func() { transcriptFinalizationGrace = prev })
+
 	dir := t.TempDir()
 	transcriptPath := filepath.Join(dir, "transcript.jsonl")
 	body := `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"prompt-secret sk-ant-incomplete123 account acct-incomplete"}]}}
@@ -75,6 +79,11 @@ func TestEmitTranscriptAndFinalSynthesizesFinalForIncompleteTranscript(t *testin
 }
 
 func TestEmitTranscriptAndFinalRejectsNonterminalAssistantTranscript(t *testing.T) {
+	// Fail-closed incomplete path still waits the grace window once; keep it short.
+	prev := transcriptFinalizationGrace
+	transcriptFinalizationGrace = 40 * time.Millisecond
+	t.Cleanup(func() { transcriptFinalizationGrace = prev })
+
 	tests := []struct {
 		name       string
 		stopReason string
@@ -128,6 +137,11 @@ func TestEmitTranscriptAndFinalRejectsNonterminalAssistantTranscript(t *testing.
 }
 
 func TestEmitTranscriptAndFinalPreservesContextTerminalStatus(t *testing.T) {
+	// Cancelled/deadline contexts must not sit on the flush grace.
+	prev := transcriptFinalizationGrace
+	transcriptFinalizationGrace = 5 * time.Second
+	t.Cleanup(func() { transcriptFinalizationGrace = prev })
+
 	transcriptPath := filepath.Join(t.TempDir(), "transcript.jsonl")
 	if err := os.WriteFile(transcriptPath, []byte(`{"type":"assistant"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -216,5 +230,88 @@ func TestEmitFinalEventSanitizesDiagnosticWithoutFailureClass(t *testing.T) {
 	}
 	if final.RoutingActual != nil {
 		t.Fatalf("generic timeout gained route-failure evidence: %+v", final.RoutingActual)
+	}
+}
+
+// TestEmitTranscriptAndFinalWaitsForLateEndTurn proves the Claude Code 2.1.x
+// Stop-before-end_turn flush race: the Stop hook can land while the transcript
+// still ends on tool_use, then end_turn is appended milliseconds later. Without
+// the grace wait the harness failed closed despite a completed turn.
+func TestEmitTranscriptAndFinalWaitsForLateEndTurn(t *testing.T) {
+	prev := transcriptFinalizationGrace
+	transcriptFinalizationGrace = 2 * time.Second
+	t.Cleanup(func() { transcriptFinalizationGrace = prev })
+
+	transcriptPath := filepath.Join(t.TempDir(), "transcript.jsonl")
+	toolUse, err := json.Marshal(map[string]any{
+		"type": "assistant",
+		"message": map[string]any{
+			"role": "assistant",
+			"content": []map[string]any{
+				{"type": "tool_use", "id": "toolu_1", "name": "Write", "input": map[string]string{"file_path": "x", "content": "ok"}},
+			},
+			"stop_reason": "tool_use",
+			"usage":       map[string]int{"input_tokens": 1, "output_tokens": 1},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcriptPath, append(toolUse, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	endTurn, err := json.Marshal(map[string]any{
+		"type": "assistant",
+		"message": map[string]any{
+			"role":        "assistant",
+			"content":     []map[string]string{{"type": "text", "text": "done"}},
+			"stop_reason": "end_turn",
+			"usage":       map[string]int{"input_tokens": 2, "output_tokens": 2},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Append end_turn after the reader has entered the grace wait.
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		f, err := os.OpenFile(transcriptPath, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return
+		}
+		_, _ = f.Write(append(endTurn, '\n'))
+		_ = f.Close()
+	}()
+
+	events := make(chan harnesses.Event, 16)
+	seq := int64(0)
+	start := time.Now()
+	(&Harness{}).emitTranscriptAndFinal(context.Background(), &turnEnv{}, transcriptPath, events, &seq, start, nil)
+	close(events)
+
+	var finals []harnesses.FinalData
+	for event := range events {
+		if event.Type != harnesses.EventTypeFinal {
+			continue
+		}
+		var final harnesses.FinalData
+		if err := json.Unmarshal(event.Data, &final); err != nil {
+			t.Fatal(err)
+		}
+		finals = append(finals, final)
+	}
+	if len(finals) != 1 {
+		t.Fatalf("final count = %d, want 1", len(finals))
+	}
+	if finals[0].Status != "success" {
+		t.Fatalf("status = %q err=%q, want success after late end_turn", finals[0].Status, finals[0].Error)
+	}
+	if !strings.Contains(finals[0].FinalText, "done") {
+		t.Fatalf("final text = %q, want done", finals[0].FinalText)
+	}
+	if elapsed := time.Since(start); elapsed > 1500*time.Millisecond {
+		t.Fatalf("waited %s for late end_turn; grace should resolve quickly once the line appears", elapsed)
 	}
 }
