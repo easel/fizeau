@@ -5,6 +5,8 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.2] — 2026-08-01
+
 ### Fixed
 
 - `claude-tui` no longer fails a completed turn when Claude Code publishes the
