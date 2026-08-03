@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/easel/fizeau/internal/safefs"
 )
 
 // Offline auth usability classes for Claude surfaces. These match the
@@ -67,7 +69,7 @@ func probeClaudeAuthUsability(strictMissing bool) AuthUsability {
 		return AuthUsability{}
 	}
 	path := filepath.Join(configRoot, ".credentials.json")
-	data, err := os.ReadFile(path)
+	data, err := safefs.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if !strictMissing {
