@@ -5,6 +5,19 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.3] — 2026-08-03
+
+### Fixed
+
+- Claude OAuth session-expired phrasing (`OAuth session expired and could not
+  be refreshed`, including the bare form without a `Failed to authenticate`
+  prefix) classifies as `credential_invalid` instead of `unknown`, so
+  routehealth and pinned `claude` / `claude-tui` routes demote correctly.
+- Terminal diagnostics for Claude `credential_invalid` failures now append a
+  stable operator remediation line: re-authenticate Claude Code
+  (`claude auth` / `claude login`), then retry. Pinned Claude routes surface
+  that guidance instead of an opaque exit status.
+
 ## [v0.17.2] — 2026-08-01
 
 ### Fixed
