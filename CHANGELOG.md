@@ -18,6 +18,14 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
   (`claude auth` / `claude login`), then retry. Pinned Claude routes surface
   that guidance instead of an opaque exit status.
 
+### Added
+
+- Offline Claude auth usability preflight before `claude` Execute: empty or
+  invalid OAuth material in the credentials file fails fast with a typed
+  credential final event (no subprocess). Successful `HealthCheck` for
+  `claude` / `claude-tui` clears soft demotion when credentials look usable
+  again so post-login recovery does not require a process restart.
+
 ## [v0.17.2] — 2026-08-01
 
 ### Fixed

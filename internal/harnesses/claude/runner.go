@@ -90,6 +90,12 @@ type Runner struct {
 	// NativeMaxIterations bounds the native agentic loop. Zero selects
 	// defaultNativeMaxIterations.
 	NativeMaxIterations int
+
+	// AuthUsabilityProbe is an optional offline auth check run before the
+	// subprocess path starts. Nil uses anthropic.ProbeClaudeAuthUsability.
+	// Tests inject fixed results; a non-empty Class aborts Execute without
+	// launching the binary and emits a typed credential final event.
+	AuthUsabilityProbe anthropic.ClaudeAuthUsabilityProbe
 }
 
 // BindPortableRuntime makes the manifest transport authoritative without
@@ -231,8 +237,66 @@ func (r *Runner) Execute(ctx context.Context, req harnesses.ExecuteRequest) (<-c
 		binary = resolved
 	}
 
+	if usability := r.probeAuthUsability(); usability.Class != "" {
+		go r.emitAuthPreflightFailure(ctx, out, usability)
+		return out, nil
+	}
+
 	go r.run(ctx, binary, req, out)
 	return out, nil
+}
+
+// probeAuthUsability runs the offline Claude auth probe. NativeMode skips it
+// (HTTP path validates credentials on first turn). Empty Class means usable.
+func (r *Runner) probeAuthUsability() anthropic.AuthUsability {
+	if r == nil || r.NativeMode {
+		return anthropic.AuthUsability{}
+	}
+	probe := r.AuthUsabilityProbe
+	if probe == nil {
+		probe = anthropic.ProbeClaudeAuthUsability
+	}
+	return probe()
+}
+
+// emitAuthPreflightFailure emits a single failed final event with typed
+// credential failure class without launching the claude subprocess.
+func (r *Runner) emitAuthPreflightFailure(_ context.Context, out chan<- harnesses.Event, usability anthropic.AuthUsability) {
+	defer close(out)
+	diagnostic := strings.TrimSpace(usability.Diagnostic)
+	if diagnostic == "" {
+		diagnostic = usability.Class
+	}
+	failureClass, classified := anthropic.ClassifyClaudeRouteFailure(diagnostic)
+	if failureClass == anthropic.FailureClassUnknown {
+		// credential_missing is not a ClassifyClaudeRouteFailure class; keep
+		// the probe class for routing while still attaching remediation when
+		// the diagnostic already looks like a credential problem.
+		failureClass = usability.Class
+		classified = diagnostic
+		if failureClass == anthropic.AuthUsabilityInvalid || failureClass == anthropic.FailureClassCredentialInvalid {
+			_, classified = anthropic.ClassifyClaudeRouteFailure(diagnostic + "\n" + anthropic.CredentialRemediationGuidance)
+			failureClass = anthropic.FailureClassCredentialInvalid
+		}
+	}
+	final := harnesses.FinalData{
+		Status:   "failed",
+		ExitCode: 1,
+		Error:    classified,
+		RoutingActual: &harnesses.RoutingActual{
+			Harness:      "claude",
+			FailureClass: failureClass,
+		},
+	}
+	finalRaw, err := json.Marshal(final)
+	if err != nil {
+		finalRaw = []byte(`{"status":"failed","error":"auth preflight failed"}`)
+	}
+	out <- harnesses.Event{
+		Type: "final",
+		Time: time.Now().UTC(),
+		Data: finalRaw,
+	}
 }
 
 // run is the per-Execute goroutine: starts claude, streams events, and

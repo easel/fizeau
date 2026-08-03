@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
+	"github.com/easel/fizeau/internal/routehealth"
 	"github.com/easel/fizeau/internal/serviceimpl"
 )
 
@@ -131,6 +133,26 @@ func (s *service) HealthCheck(ctx context.Context, health HealthTarget) error {
 			// For subscription harnesses, refresh the quota cache when stale.
 			if health.Name == "claude" {
 				s.healthCheckRefreshClaudeQuota(ctx)
+				// Offline auth probe: when credentials look usable after a
+				// prior credential_invalid demotion, record harness success so
+				// soft cooldowns clear without requiring a worker restart
+				// (fizeau-0c5ae39c).
+				if usability := anthropic.ProbeClaudeAuthUsability(); usability.Class == "" {
+					_ = s.routeHealthStore().RecordAttempt(routehealth.Attempt{
+						Harness:   "claude",
+						Status:    "success",
+						Timestamp: time.Now().UTC(),
+					})
+				}
+			}
+			if health.Name == "claude-tui" {
+				if usability := anthropic.ProbeClaudeAuthUsability(); usability.Class == "" {
+					_ = s.routeHealthStore().RecordAttempt(routehealth.Attempt{
+						Harness:   "claude-tui",
+						Status:    "success",
+						Timestamp: time.Now().UTC(),
+					})
+				}
 			}
 			if health.Name == "codex" {
 				if s.refreshScheduler != nil {
