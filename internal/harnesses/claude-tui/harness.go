@@ -1964,7 +1964,7 @@ var fatalScreens = []fatalScreen{
 	},
 	{
 		status:   "failed",
-		markers:  []string{"Please run /login", "Invalid API key", "authentication_error", "OAuth token has expired", "Failed to authenticate", "Could not refresh auth token"},
+		markers:  []string{"Please run /login", "Invalid API key", "authentication_error", "OAuth token has expired", "OAuth session expired", "Failed to authenticate", "Could not refresh auth token", "could not be refreshed"},
 		exitCode: 1,
 	},
 	{

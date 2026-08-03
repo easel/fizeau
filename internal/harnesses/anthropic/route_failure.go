@@ -53,10 +53,11 @@ func ClassifyClaudeRouteFailure(diagnostic string) (failureClass, sanitizedDiagn
 		"billing limit"):
 		failureClass = FailureClassQuotaExhausted
 	case containsAny(lower,
-		"failed to authenticate", "could not refresh auth token", "authentication_error",
-		"invalid api key", "invalid x-api-key", "oauth token has expired",
-		"oauth token expired", "please run /login", "unauthorized", `"status":401`,
-		"401 unauthorized") || httpUnauthorizedPattern.MatchString(lower):
+		"failed to authenticate", "could not refresh auth token", "could not be refreshed",
+		"authentication_error", "invalid api key", "invalid x-api-key",
+		"oauth token has expired", "oauth token expired", "oauth session expired",
+		"session expired and could not be refreshed", "please run /login",
+		"unauthorized", `"status":401`, "401 unauthorized") || httpUnauthorizedPattern.MatchString(lower):
 		failureClass = FailureClassCredentialInvalid
 	case containsAny(lower,
 		"connection error", "network error", "fetch failed", "econnrefused",

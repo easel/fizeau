@@ -13,6 +13,8 @@ func TestClassifyClaudeRouteFailure(t *testing.T) {
 		want       string
 	}{
 		{name: "credential incident", diagnostic: "Failed to authenticate\nCould not refresh auth token", want: FailureClassCredentialInvalid},
+		{name: "oauth session expired bare", diagnostic: "OAuth session expired and could not be refreshed", want: FailureClassCredentialInvalid},
+		{name: "oauth session expired live", diagnostic: "Failed to authenticate: OAuth session expired and could not be refreshed", want: FailureClassCredentialInvalid},
 		{name: "quota", diagnostic: "Claude usage limit reached", want: FailureClassQuotaExhausted},
 		{name: "credit balance quota", diagnostic: "Credit balance is too low; HTTP 401", want: FailureClassQuotaExhausted},
 		{name: "quota beats credential", diagnostic: "quota exhausted after Failed to authenticate", want: FailureClassQuotaExhausted},
