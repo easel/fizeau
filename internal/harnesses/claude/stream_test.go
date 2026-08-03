@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -569,6 +570,7 @@ exit 1
 	assert.Contains(t, final.Error, "exit status 1")
 	assert.Contains(t, final.Error, "Failed to authenticate")
 	assert.Contains(t, final.Error, "Could not refresh auth token")
+	assert.Contains(t, final.Error, anthropic.CredentialRemediationGuidance)
 	require.NotNil(t, final.RoutingActual)
 	assert.Equal(t, "claude", final.RoutingActual.Harness)
 	assert.Equal(t, "credential_invalid", final.RoutingActual.FailureClass)

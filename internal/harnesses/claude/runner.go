@@ -290,7 +290,13 @@ func (r *Runner) run(ctx context.Context, binary string, req harnesses.ExecuteRe
 	if status == "failed" || status == "iteration_limit" {
 		failureEvidence := claudeFailureEvidence(runErr, stderr, quotaMessage)
 		if strings.TrimSpace(failureEvidence) != "" {
-			failureClass, _ := anthropic.ClassifyClaudeRouteFailure(failureEvidence)
+			// ClassifyClaudeRouteFailure returns sanitized diagnostic with
+			// credential remediation; prefer that as Error so operators see
+			// re-auth guidance instead of only "exit status 1".
+			failureClass, classified := anthropic.ClassifyClaudeRouteFailure(failureEvidence)
+			if failureClass == anthropic.FailureClassCredentialInvalid && classified != "" {
+				final.Error = classified
+			}
 			final.RoutingActual = &harnesses.RoutingActual{
 				Harness:      "claude",
 				FailureClass: failureClass,

@@ -1941,8 +1941,12 @@ func TestRunTurnSurfacesAuthenticationFailureWithTypedClass(t *testing.T) {
 	if final.RoutingActual.Harness != "claude-tui" || final.RoutingActual.FailureClass != "credential_invalid" {
 		t.Errorf("routing actual = %+v, want claude-tui credential_invalid", final.RoutingActual)
 	}
-	if final.Error != "API Error: Failed to authenticate\nAPI Error: Could not refresh auth token" {
-		t.Errorf("retained evidence = %q, want only matched fatal lines", final.Error)
+	wantPrefix := "API Error: Failed to authenticate\nAPI Error: Could not refresh auth token"
+	if !strings.HasPrefix(final.Error, wantPrefix) {
+		t.Errorf("retained evidence = %q, want prefix %q", final.Error, wantPrefix)
+	}
+	if !strings.Contains(final.Error, anthropic.CredentialRemediationGuidance) {
+		t.Errorf("retained evidence missing remediation: %q", final.Error)
 	}
 	for _, excluded := range []string{"surrounding frame text", "Explain:", "prompt text"} {
 		if strings.Contains(final.Error, excluded) {
@@ -1995,8 +1999,11 @@ func TestRunTurnAuthenticationFailureImmediatelyBeforePTYEOFFinalizesTypedExactl
 		final.RoutingActual.FailureClass != "credential_invalid" {
 		t.Fatalf("routing actual = %+v, want claude-tui credential_invalid", final.RoutingActual)
 	}
-	if final.Error != incident {
-		t.Fatalf("retained authentication evidence = %q, want exact incident line", final.Error)
+	if !strings.HasPrefix(final.Error, incident) {
+		t.Fatalf("retained authentication evidence = %q, want prefix %q", final.Error, incident)
+	}
+	if !strings.Contains(final.Error, anthropic.CredentialRemediationGuidance) {
+		t.Fatalf("retained authentication evidence missing remediation: %q", final.Error)
 	}
 	if final.FinalText != "" || final.Usage != nil || final.FinalCostUSD != nil ||
 		final.FinalCostSource != harnesses.CostSourceUnknown {
@@ -2056,8 +2063,11 @@ func TestRunTurnClaudeBulletAuthenticationFailureBeforePTYEOFFinalizesTypedExact
 		final.RoutingActual.FailureClass != "credential_invalid" {
 		t.Fatalf("routing actual = %+v, want claude-tui credential_invalid", final.RoutingActual)
 	}
-	if final.Error != sanitizedIncident {
-		t.Fatalf("retained authentication evidence = %q, want sanitized decorated incident line", final.Error)
+	if !strings.HasPrefix(final.Error, sanitizedIncident) {
+		t.Fatalf("retained authentication evidence = %q, want prefix %q", final.Error, sanitizedIncident)
+	}
+	if !strings.Contains(final.Error, anthropic.CredentialRemediationGuidance) {
+		t.Fatalf("retained authentication evidence missing remediation: %q", final.Error)
 	}
 	if final.FinalText != "" || final.Usage != nil || final.FinalCostUSD != nil ||
 		final.FinalCostSource != harnesses.CostSourceUnknown {

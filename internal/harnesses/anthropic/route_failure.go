@@ -91,7 +91,36 @@ func ClassifyClaudeRouteFailure(diagnostic string) (failureClass, sanitizedDiagn
 		failureClass = FailureClassProtocol
 	}
 
-	return failureClass, SanitizeClaudeDiagnostic(diagnostic)
+	return failureClass, withCredentialRemediation(failureClass, SanitizeClaudeDiagnostic(diagnostic))
+}
+
+// CredentialRemediationGuidance is appended to Claude credential_invalid
+// diagnostics so operators get a stable re-auth action instead of an opaque
+// exit status. Keep wording stable — DDx and operator docs match on these
+// substrings.
+const CredentialRemediationGuidance = "re-authenticate Claude Code (claude auth / claude login); then retry"
+
+// withCredentialRemediation appends operator remediation when the failure is
+// credential_invalid and guidance is not already present. The guidance is
+// preferred over an over-long diagnostic so it is not truncated away.
+func withCredentialRemediation(failureClass, diagnostic string) string {
+	diagnostic = strings.TrimSpace(diagnostic)
+	if failureClass != FailureClassCredentialInvalid {
+		return diagnostic
+	}
+	if strings.Contains(strings.ToLower(diagnostic), "re-authenticate claude code") {
+		return boundDiagnostic(diagnostic, MaxRouteFailureDiagnosticBytes)
+	}
+	if diagnostic == "" {
+		return CredentialRemediationGuidance
+	}
+	suffix := "\n" + CredentialRemediationGuidance
+	maxPrefix := MaxRouteFailureDiagnosticBytes - len(suffix)
+	if maxPrefix < 32 {
+		return boundDiagnostic(CredentialRemediationGuidance, MaxRouteFailureDiagnosticBytes)
+	}
+	prefix := boundDiagnostic(diagnostic, maxPrefix)
+	return prefix + suffix
 }
 
 func containsAny(s string, markers ...string) bool {

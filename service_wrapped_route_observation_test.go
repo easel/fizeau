@@ -20,7 +20,7 @@ func TestWrappedHarnessTypedFailureRecordsResolvedRoute(t *testing.T) {
 	requirePOSIXWrappedHarnessTest(t)
 	binDir := t.TempDir()
 	writeWrappedHarnessTestScript(t, binDir, "claude", `#!/bin/sh
-printf '%s\n' 'Failed to authenticate' 'Could not refresh auth token' >&2
+printf '%s\n' 'Failed to authenticate: OAuth session expired and could not be refreshed' >&2
 exit 1
 `)
 	t.Setenv("PATH", binDir)
@@ -41,6 +41,9 @@ exit 1
 	}
 	if final.RoutingActual.FailureClass != "credential_invalid" {
 		t.Fatalf("failure class = %q, want credential_invalid", final.RoutingActual.FailureClass)
+	}
+	if !strings.Contains(final.Error, "re-authenticate Claude Code") {
+		t.Fatalf("final error = %q, want operator re-auth remediation", final.Error)
 	}
 	if final.RoutingActual.ServerInstance != "server-a" {
 		t.Fatalf("server instance = %q, want server-a", final.RoutingActual.ServerInstance)
