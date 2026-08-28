@@ -1,18 +1,18 @@
 {
   "seq": 5,
-  "t_ms": 550,
+  "t_ms": 1350,
   "exit": {
-    "Code": -1,
-    "Signal": "killed",
-    "Exited": false,
-    "Signaled": true,
+    "Code": 125,
+    "Signal": "",
+    "Exited": true,
+    "Signaled": false,
     "Err": null
   },
-  "duration_ms": 592,
+  "duration_ms": 1377,
   "metadata": {
-    "frames": 14,
+    "frames": 8,
     "harness": "claude",
-    "raw_bytes": 5295
+    "raw_bytes": 2378
   },
-  "final_text": "uration\u003euration\u003euration\u003e\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  "final_text": "uration\u003euration\u003eo5Cwithuhighoeuration\u003eClaudeoMaxuration\u003e      uration\u003e                                                                                                                                                    ur\nation\u003e\"how do I log an error?\"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nururaauto\u003emode─onuration\u003e (shtotcycle)─·─←─for─agents─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────●uratconnecting…──\n────────\n\n\n\n\n\n\n\n\n          uration\u003e█████                   uration\u003e▛███▛█\n\n"
 }

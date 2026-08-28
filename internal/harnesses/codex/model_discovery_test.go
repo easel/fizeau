@@ -24,7 +24,7 @@ func TestCodexDefaultModelSnapshotWithContext_UsesCallerContext(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "fake-codex")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
-printf '› '
+printf 'model:     gpt-5.4 medium   /model to change\r\n› '
 IFS= read line
 sleep 30
 `), 0o700))
@@ -60,7 +60,7 @@ printf '%s' "$$" > "$1"
 (sleep 1; printf late > "$3") &
 child=$!
 printf '%s' "$child" > "$2"
-printf '› '
+printf 'model:     gpt-5.4 medium   /model to change\r\n› '
 IFS= read line
 wait "$child"
 `), 0o700))
@@ -162,7 +162,7 @@ func TestReadCodexModelDiscoveryViaPTYRecordsDiscovery(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "fake-codex")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
-printf '› '
+printf 'model:     gpt-5.4 medium   /model to change\r\n› '
 IFS= read line
 printf '/model\r\nSelect Model and Effort\r\n> gpt-5.6-sol\r\n  gpt-5.6-terra\r\n  gpt-5.6-luna\r\nPress enter to confirm or esc to go back\r\n'
 sleep 1
@@ -192,7 +192,7 @@ func TestReadCodexModelDiscoveryViaPTYRejectsEmptyMenu(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "fake-codex")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
-printf '› '
+printf 'model:     gpt-5.4 medium   /model to change\r\n› '
 IFS= read line
 printf '/model\r\nNo models available\r\n'
 sleep 5

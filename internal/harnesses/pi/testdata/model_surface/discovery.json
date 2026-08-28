@@ -16,7 +16,7 @@
     "high",
     "xhigh"
   ],
-  "captured_at": "2026-07-14T04:11:14Z",
+  "captured_at": "2026-08-28T03:12:35Z",
   "freshness_window": "24h0m0s",
   "staleness_behavior": "stale model discovery evidence requires authenticated CLI refresh before capability promotion",
   "metadata": {

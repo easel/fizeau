@@ -59,7 +59,11 @@ func TestModelSurfaceCassetteStructure(t *testing.T) {
 	// Verify final record exists
 	final := reader.Final()
 	require.NotNil(t, final, "final record should exist")
-	require.Contains(t, []int{0, -1}, final.Exit.Code, "recorder may terminate the picker after evidence capture")
+	// The recorder terminates the picker after evidence capture. Older CLIs
+	// died from the signal (code -1, Signaled); Claude Code >= 2.1.250 traps
+	// it and exits 125 on its own. Either is a recorder-driven shutdown, not
+	// a harness failure.
+	require.Contains(t, []int{0, -1, 125}, final.Exit.Code, "recorder may terminate the picker after evidence capture")
 
 	// Verify frames exist
 	frames := reader.Frames()

@@ -16,7 +16,7 @@
     "worktree-path"
   ],
   "hit_counts": {
-    "elapsed-duration": 22
+    "elapsed-duration": 30
   },
   "env_allowlist": [
     "TERM",

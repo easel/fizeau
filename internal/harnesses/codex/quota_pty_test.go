@@ -32,7 +32,7 @@ func TestReadCodexQuotaViaPTY_RecordsStatusOutput(t *testing.T) {
 	require.NoError(t, os.WriteFile(authPath, raw, 0o600))
 	script := filepath.Join(dir, "fake-codex")
 	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
-printf '› '
+printf 'model:     gpt-5.4 medium   /model to change\r\n› '
 IFS= read line
 printf '/status\r\n  gpt-5.4 high · 73%% left · /tmp/work\r\n'
 printf 'Heads up, you have less than 5%% of your weekly limit left.\r\n› '

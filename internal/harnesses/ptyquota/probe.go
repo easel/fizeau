@@ -86,8 +86,19 @@ type Config struct {
 	Workdir       string
 	Env           []string
 
-	Command            string
-	ReadyMarkers       []string
+	Command string
+	// CommandEnterDelay splits a trailing "\r" or "\n" off Command and sends
+	// it as a separate write after this pause. Harnesses that enable the kitty
+	// keyboard protocol (Codex >= 0.148) open a slash-command popup on the
+	// typed text and drop an Enter that arrives in the same PTY write, so the
+	// atomic "/model\r" never opens the picker. Zero keeps the single write.
+	CommandEnterDelay time.Duration
+	ReadyMarkers      []string
+	// ReadyWhen, when set, must also hold on the emulated screen before the
+	// command is sent. Use it to gate on more than a prompt glyph — Codex
+	// draws its "›" prompt while the header still reads "model: loading",
+	// and a slash command typed at that point is silently dropped.
+	ReadyWhen          func(string) bool
 	DoneMarkers        []string
 	DoneAnyMarkers     []string
 	DoneWhen           func(string) bool
@@ -331,7 +342,7 @@ func (r *runState) processInterstitials(screen string) bool {
 func (r *runState) drive(ctx context.Context, cfg Config) (Result, error) {
 	r.interstitials = cfg.Interstitials
 	if len(cfg.ReadyMarkers) > 0 {
-		if err := r.waitForAnyText(ctx, cfg.ReadyMarkers...); err != nil {
+		if err := r.waitForReady(ctx, cfg.ReadyWhen, cfg.ReadyMarkers...); err != nil {
 			return Result{}, err
 		}
 	}
@@ -339,7 +350,7 @@ func (r *runState) drive(ctx context.Context, cfg Config) (Result, error) {
 		r.resetTerminal()
 	}
 	if cfg.Command != "" {
-		if err := r.sendBytes([]byte(cfg.Command)); err != nil {
+		if err := r.sendCommand(ctx, cfg.Command, cfg.CommandEnterDelay); err != nil {
 			return Result{}, err
 		}
 	}
@@ -415,6 +426,12 @@ func (r *runState) recordOutput() {
 }
 
 func (r *runState) waitForAnyText(ctx context.Context, markers ...string) error {
+	return r.waitForReady(ctx, nil, markers...)
+}
+
+// waitForReady blocks until any marker is on screen and, when set, readyWhen
+// also holds for the same screen.
+func (r *runState) waitForReady(ctx context.Context, readyWhen func(string) bool, markers ...string) error {
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -437,7 +454,7 @@ func (r *runState) waitForAnyText(ctx context.Context, markers ...string) error 
 		// false-match a ready marker and the command lands in the dialog.
 		if !r.processInterstitials(screen) {
 			for _, marker := range markers {
-				if ready && strings.Contains(screen, marker) {
+				if ready && strings.Contains(screen, marker) && (readyWhen == nil || readyWhen(screen)) {
 					return nil
 				}
 			}
@@ -554,6 +571,29 @@ func containsAllAndAny(screen string, allMarkers, anyMarkers []string) bool {
 		}
 	}
 	return false
+}
+
+// sendCommand writes command to the PTY. When enterDelay is positive and the
+// command ends with a line terminator, the terminator is sent as a second
+// write after the delay so slash-command popups see the text before Enter.
+func (r *runState) sendCommand(ctx context.Context, command string, enterDelay time.Duration) error {
+	if enterDelay <= 0 || !(strings.HasSuffix(command, "\r") || strings.HasSuffix(command, "\n")) {
+		return r.sendBytes([]byte(command))
+	}
+	body, enter := command[:len(command)-1], command[len(command)-1:]
+	if body != "" {
+		if err := r.sendBytes([]byte(body)); err != nil {
+			return err
+		}
+	}
+	timer := time.NewTimer(enterDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
+	return r.sendBytes([]byte(enter))
 }
 
 func (r *runState) sendBytes(b []byte) error {

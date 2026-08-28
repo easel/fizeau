@@ -13,10 +13,10 @@
     "gemini-3-flash"
   ],
   "reasoning_levels": [],
-  "captured_at": "2026-07-14T04:11:30Z",
+  "captured_at": "2026-08-28T03:28:25Z",
   "freshness_window": "24h",
   "staleness_behavior": "stale model discovery evidence requires authenticated CLI refresh before capability promotion",
   "metadata": {
-    "detail": "gemini-cli 0.46.0 bundled VALID_GEMINI_MODELS surface"
+    "detail": "gemini-cli 0.46.0 bundled VALID_GEMINI_MODELS surface (re-verified against installed bundle 2026-08-28T03:28:25Z)"
   }
 }

@@ -15,6 +15,12 @@ import (
 
 const CodexModelDiscoveryFreshnessWindow = 24 * time.Hour
 
+// codexCommandEnterDelay separates the slash-command text from Enter. Codex
+// (>= 0.148, kitty keyboard protocol) opens a command popup on the typed text
+// and ignores an Enter delivered in the same PTY write; 50ms is enough, so
+// 250ms leaves headroom on a loaded machine.
+const codexCommandEnterDelay = 250 * time.Millisecond
+
 var codexModelPattern = regexp.MustCompile(`\bgpt-[A-Za-z0-9][A-Za-z0-9._-]*\b`)
 
 func ReadCodexModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOption) (harnesses.ModelDiscoverySnapshot, error) {
@@ -39,7 +45,9 @@ func ReadCodexModelDiscoveryViaPTYWithContext(ctx context.Context, timeout time.
 		Workdir:            cfg.workdir,
 		Env:                cfg.env,
 		Command:            "/model\r",
+		CommandEnterDelay:  codexCommandEnterDelay,
 		ReadyMarkers:       []string{"›", "> "},
+		ReadyWhen:          codexPromptReady,
 		DoneWhen:           codexModelDiscoveryComplete,
 		ResetBeforeCommand: true,
 		Timeout:            timeout,
@@ -92,6 +100,24 @@ func testCodexModelDiscovery() harnesses.ModelDiscoverySnapshot {
 		ReasoningLevels: []string{"low", "medium", "high", "xhigh", "max"},
 		FreshnessWindow: CodexModelDiscoveryFreshnessWindow.String(),
 	}
+}
+
+// codexPromptReady reports whether the Codex TUI has finished loading. The
+// "›" prompt is drawn before the header resolves its model, and slash
+// commands sent while the header is absent or still reads "model: loading"
+// are dropped. Ready therefore requires a resolved "model: <name>" header.
+func codexPromptReady(text string) bool {
+	lower := strings.ToLower(stripANSI(strings.ReplaceAll(text, "\r\n", "\n")))
+	for _, line := range strings.Split(lower, "\n") {
+		idx := strings.Index(line, "model:")
+		if idx < 0 || !strings.Contains(line, "/model to change") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line[idx+len("model:"):]), "│"))
+		value = strings.TrimSpace(strings.Split(value, "/model to change")[0])
+		return value != "" && !strings.HasPrefix(value, "loading")
+	}
+	return false
 }
 
 func codexModelDiscoveryComplete(text string) bool {

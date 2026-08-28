@@ -332,3 +332,42 @@ func TestRunReapsProcessGroupOnTimeout(t *testing.T) {
 	_, err = os.FindProcess(os.Getpid())
 	require.NoError(t, err, "current process should still exist (we're running the test)")
 }
+
+func TestRunCommandEnterDelaySendsEnterAsSeparateWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-backed PTY probes require Unix PTY support")
+	}
+	target := filepath.Join(t.TempDir(), "cassette")
+	// The fake harness reads one line and reports how many bytes the first
+	// read returned: an atomic "/model\r" delivers 7 bytes in one read, while
+	// a delayed Enter delivers the 6-byte body first.
+	script := `stty -echo raw 2>/dev/null; printf 'ready> '; ` +
+		`first=$(dd bs=64 count=1 2>/dev/null | wc -c); ` +
+		`printf 'firstread=%s done\n' "$first"; sleep 0.2`
+	_, err := Run(context.Background(), Config{
+		HarnessName:       "fake",
+		Binary:            "sh",
+		Args:              []string{"-c", script},
+		ReadyMarkers:      []string{"ready>"},
+		Command:           "/model\r",
+		CommandEnterDelay: 150 * time.Millisecond,
+		DoneMarkers:       []string{"done"},
+		Timeout:           5 * time.Second,
+		Size:              session.Size{Rows: 8, Cols: 80},
+		CassetteDir:       target,
+		Quota: func(text string) (cassette.QuotaRecord, error) {
+			require.Contains(t, text, "firstread=6")
+			return cassette.QuotaRecord{Source: "pty", Status: string(StatusOK)}, nil
+		},
+	})
+	require.NoError(t, err)
+	reader, err := cassette.Open(target)
+	require.NoError(t, err)
+	var writes []string
+	for _, in := range reader.Inputs() {
+		if len(in.Bytes) > 0 {
+			writes = append(writes, string(in.Bytes))
+		}
+	}
+	require.Equal(t, []string{"/model", "\r"}, writes)
+}
