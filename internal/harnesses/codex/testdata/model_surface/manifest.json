@@ -2,11 +2,11 @@
   "version": 1,
   "id": "codex-quota",
   "content_digest": {
-    "sha256": "cd4f87ce77dfa124fddfbfb418eb52450df1b4e245906cdf79c30d7f4b507f28"
+    "sha256": "95d7c1743464579bbf56a2fe19159b69c1c6177fc25b6ee8ce797047f8e5c60f"
   },
   "harness": {
     "name": "codex",
-    "binary_version": "codex-cli 0.148.0"
+    "binary_version": "codex-cli 0.152.0"
   },
   "command": {
     "argv": [
@@ -42,7 +42,7 @@
   "provenance": {
     "os": "linux",
     "arch": "arm64",
-    "recorded_at": "2026-08-28T03:25:11Z",
+    "recorded_at": "2026-09-04T02:27:40Z",
     "recorder_version": "quota-pty-v1"
   }
 }

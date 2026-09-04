@@ -92,6 +92,12 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 	}
 	var windows []harnesses.QuotaWindow
 	var account *harnesses.AccountInfo
+	// Claude Code >= 2.1.260 renders /usage as a full-screen dialog that
+	// carries no plan line; the plan is only visible on the startup banner
+	// ("Fable 5.1 with high effort · Claude Max") before the dialog covers
+	// it. Capture it from any intermediate DoneWhen tick and fall back to it
+	// when the final screen yields no account.
+	var bannerAccount *harnesses.AccountInfo
 	result, err := ptyquota.Run(ctx, ptyquota.Config{
 		HarnessName:   "claude",
 		Binary:        cfg.binary,
@@ -102,12 +108,20 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 		Command:       "/usage\r",
 		ReadyMarkers:  []string{"❯", "> "},
 		Interstitials: []ptyquota.Interstitial{claudeTrustInterstitial()},
-		DoneWhen:      claudeUsageComplete,
-		Timeout:       timeout,
-		Size:          session.Size{Rows: 50, Cols: 220},
-		CassetteDir:   cfg.cassetteDir,
+		DoneWhen: func(text string) bool {
+			if bannerAccount == nil {
+				bannerAccount = parseClaudePlanAccount(text)
+			}
+			return claudeUsageComplete(text)
+		},
+		Timeout:     timeout,
+		Size:        session.Size{Rows: 50, Cols: 220},
+		CassetteDir: cfg.cassetteDir,
 		Quota: func(text string) (cassette.QuotaRecord, error) {
 			windows, account = parseClaudeUsageOutput(text)
+			if account == nil {
+				account = bannerAccount
+			}
 			if len(windows) == 0 {
 				return cassette.QuotaRecord{}, fmt.Errorf("no quota windows found in claude /usage output")
 			}
@@ -122,6 +136,9 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 	}
 	if len(windows) == 0 {
 		windows, account = parseClaudeUsageOutput(result.Text)
+	}
+	if account == nil {
+		account = bannerAccount
 	}
 	if len(windows) == 0 {
 		return nil, account, result, fmt.Errorf("no quota windows found in claude /usage output")

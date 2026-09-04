@@ -12,6 +12,24 @@ import (
 // ParseClaudeUsageOutput parses text captured from a claude /usage command.
 // Returns quota windows and optional account info (plan type from header).
 // This is a shared parser used by both claude and claude-tui harnesses.
+// ParseClaudePlanAccount scans screen text for a plan mention ("Claude Max",
+// a standalone "Max plan", or a "Login method: Claude Max account" line) and
+// returns account info, or nil when no plan is visible. Claude Code >= 2.1.260
+// renders /usage as a full-screen dialog with no plan line, so callers capture
+// the plan from the startup banner before the dialog covers it.
+func ParseClaudePlanAccount(text string) *harnesses.AccountInfo {
+	text = StripANSI(strings.ReplaceAll(text, "\r\n", "\n"))
+	for _, line := range strings.Split(text, "\n") {
+		if m := claudePlanTypePattern.FindString(line); m != "" {
+			return &harnesses.AccountInfo{PlanType: NormalizeClaudePlanType(m)}
+		}
+		if m := claudeStandalonePlanTypePattern.FindStringSubmatch(line); len(m) > 1 {
+			return &harnesses.AccountInfo{PlanType: NormalizeClaudePlanType(m[1])}
+		}
+	}
+	return nil
+}
+
 func ParseClaudeUsageOutput(text string) ([]harnesses.QuotaWindow, *harnesses.AccountInfo) {
 	text = StripANSI(strings.ReplaceAll(text, "\r\n", "\n"))
 	lines := strings.Split(text, "\n")

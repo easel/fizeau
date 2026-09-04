@@ -17,7 +17,7 @@
     "xhigh",
     "max"
   ],
-  "captured_at": "2026-08-28T03:25:14Z",
+  "captured_at": "2026-09-04T02:27:44Z",
   "freshness_window": "24h0m0s",
   "staleness_behavior": "stale model discovery evidence requires authenticated PTY refresh before capability promotion",
   "metadata": {

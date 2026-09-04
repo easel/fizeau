@@ -1,6 +1,6 @@
 {
   "seq": 5,
-  "t_ms": 1350,
+  "t_ms": 800,
   "exit": {
     "Code": 125,
     "Signal": "",
@@ -8,11 +8,11 @@
     "Signaled": false,
     "Err": null
   },
-  "duration_ms": 1377,
+  "duration_ms": 825,
   "metadata": {
-    "frames": 8,
+    "frames": 9,
     "harness": "claude",
-    "raw_bytes": 2378
+    "raw_bytes": 2775
   },
-  "final_text": "uration\u003euration\u003eo5Cwithuhighoeuration\u003eClaudeoMaxuration\u003e      uration\u003e                                                                                                                                                    ur\nation\u003e\"how do I log an error?\"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nururaauto\u003emode─onuration\u003e (shtotcycle)─·─←─for─agents─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────●uratconnecting…──\n────────\n\n\n\n\n\n\n\n\n          uration\u003e█████                   uration\u003e▛███▛█\n\n"
+  "final_text": "uration\u003euration\u003eo5.1dwithahiguration\u003e6·uClaude\u003eMaxururation\u003e  uration\u003e                               uration\u003e.                                                                                                            ur\nation\u003e\"edit harness.go to...\"\n  Fable 5.1 writes better code and reports progress on long tasks. Switch anytime with\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nururaauto\u003emode─onuration\u003e (shtotcycle)─·─←─for─agents─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────●uratconnecting…──\n────────\n\n\n\n\n\n\n\n\n          uration\u003e█████           uration\u003e▛███▛█\n\n"
 }

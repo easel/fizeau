@@ -1,6 +1,6 @@
 {
   "seq": 6,
-  "t_ms": 2750,
+  "t_ms": 3950,
   "exit": {
     "Code": 125,
     "Signal": "",
@@ -8,11 +8,11 @@
     "Signaled": false,
     "Err": null
   },
-  "duration_ms": 2791,
+  "duration_ms": 3966,
   "metadata": {
-    "frames": 93,
+    "frames": 79,
     "harness": "codex",
-    "raw_bytes": 2531
+    "raw_bytes": 2669
   },
-  "final_text": "uration\u003e uration\u003e Asuration\u003eto do anythuration\u003e                  uration\u003euration\u003e                uration\u003euration\u003euration\u003euration\u003e\nration\u003e\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  gpt-5.6-sol medium\n\n\n\n\n\n\n\n\n\n\n\n                                               uration\u003e~/Projects/fizeau/internal/harnesses/codex\n                            uration\u003e ·\n\n\n\n\n\n\n\n\n\n\n"
+  "final_text": "uuuration\u003eration\u003euration\u003eon\u003eto do anythuration\u003e                  uration\u003euration\u003e                uration\u003euration\u003euration\u003e\nration\u003e\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  gpt-5.6-sol medium\n\n\n\n\n\n\n\n\n\n\n\n                                               uration\u003e~/Projects/fizeau/internal/harnesses/codex\n                            uration\u003e ·\n\n\n\n\n\n\n\n\n\n\n"
 }

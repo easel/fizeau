@@ -137,3 +137,34 @@ sleep 1
 	_, statErr := os.Stat(filepath.Join(cassetteDir, cassette.ManifestFile))
 	require.True(t, errors.Is(statErr, os.ErrNotExist), "account-less usage output should not promote a cassette")
 }
+
+func TestReadClaudeQuotaViaPTYCapturesPlanFromBannerWhenDialogHidesIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-backed PTY probes require Unix PTY support")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	// Claude Code >= 2.1.260: the banner names the plan, then /usage opens a
+	// full-screen dialog (simulated with an ANSI clear) that never mentions it.
+	require.NoError(t, os.WriteFile(script, []byte(`#!/bin/sh
+printf 'Fable 5.1 with high effort \302\267 Claude Max\r\n\342\235\257 '
+IFS= read line
+printf '\033[2J\033[H'
+cat <<'EOF2'
+Current session
+7% used
+Resets 1:59am (America/New_York)
+Current week (all models)
+6% used
+Resets Sep 9, 11:59pm (America/New_York)
+EOF2
+sleep 1
+`), 0o700))
+
+	windows, account, err := readClaudeQuotaViaPTY(10*time.Second, WithQuotaPTYCommand(script))
+	require.NoError(t, err)
+	require.NotNil(t, account, "plan must be captured from the pre-dialog banner")
+	require.Equal(t, "Claude Max", account.PlanType)
+	require.True(t, hasQuotaWindow(windows, "session"))
+	require.True(t, hasQuotaWindow(windows, "weekly-all"))
+}

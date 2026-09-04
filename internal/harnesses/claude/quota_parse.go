@@ -31,24 +31,21 @@ var claudeUsageSections = []claudeUsageSection{
 	{"Extra usage", "extra", 0},
 }
 
+// parseClaudePlanAccount delegates to the shared anthropic plan scanner. See
+// anthropic.ParseClaudePlanAccount for why the plan is captured from the
+// startup banner on Claude Code >= 2.1.260.
+func parseClaudePlanAccount(text string) *harnesses.AccountInfo {
+	return anthropic.ParseClaudePlanAccount(text)
+}
+
 // parseClaudeUsageOutput parses the transport-neutral text derived from a
 // supervised Claude /usage PTY probe.
 func parseClaudeUsageOutput(text string) ([]harnesses.QuotaWindow, *harnesses.AccountInfo) {
 	text = stripANSI(strings.ReplaceAll(text, "\r\n", "\n"))
 	lines := strings.Split(text, "\n")
 
-	var acct *harnesses.AccountInfo
+	acct := parseClaudePlanAccount(text)
 	var windows []harnesses.QuotaWindow
-	for _, line := range lines {
-		if match := claudePlanTypePattern.FindString(line); match != "" {
-			acct = &harnesses.AccountInfo{PlanType: normalizeClaudePlanType(match)}
-			break
-		}
-		if match := claudeStandalonePlanTypePattern.FindStringSubmatch(line); len(match) > 1 {
-			acct = &harnesses.AccountInfo{PlanType: normalizeClaudePlanType(match[1])}
-			break
-		}
-	}
 
 	for index, line := range lines {
 		trimmed := strings.TrimSpace(line)

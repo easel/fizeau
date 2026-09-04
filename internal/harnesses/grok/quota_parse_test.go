@@ -106,3 +106,35 @@ func TestGrokQuotaStateHelper(t *testing.T) {
 		t.Errorf("state(95) = %q, want blocked", got)
 	}
 }
+
+// fixtureGrokDialogUsage is grok 1.0.13 /usage show output (2026-09-03): the
+// CLI renders a full-screen dialog instead of scrollback lines.
+const fixtureGrokDialogUsage = `┌──────────────────────────────── [x] ─┐
+│  Context usage  Usage limit  Session info      │
+│──────────────────────────────────────│
+│  Weekly limit (SuperGrok Heavy)      │
+│                                      │
+│  █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  2%  │
+│  Resets: September 7, 09:48          │
+└──────────────────────────────────────┘
+`
+
+func TestParseGrokUsageOutputDialogLayout(t *testing.T) {
+	windows := parseGrokUsageOutput(fixtureGrokDialogUsage)
+	if len(windows) != 1 {
+		t.Fatalf("got %d windows, want 1", len(windows))
+	}
+	w := windows[0]
+	if w.UsedPercent != 2 {
+		t.Errorf("UsedPercent = %v, want 2", w.UsedPercent)
+	}
+	if w.ResetsAt != "September 7, 09:48" {
+		t.Errorf("ResetsAt = %q, want %q", w.ResetsAt, "September 7, 09:48")
+	}
+	if w.LimitID != "grok-weekly" {
+		t.Errorf("LimitID = %q, want grok-weekly", w.LimitID)
+	}
+	if !grokQuotaOutputComplete(fixtureGrokDialogUsage) {
+		t.Error("dialog layout should satisfy grokQuotaOutputComplete")
+	}
+}

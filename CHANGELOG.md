@@ -5,6 +5,25 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex >= 0.148 TUI probes: the kitty keyboard protocol drops an Enter that
+  arrives in the same PTY write as the slash command, and the prompt renders
+  before the model header resolves. `ptyquota` gains `CommandEnterDelay` and
+  `ReadyWhen`; the `/status` parser understands the labelled `5h limit:` /
+  `Weekly limit:` rows with per-model sections.
+- Claude Code >= 2.1.260 quota probe: `/usage` is now a full-screen dialog
+  with no plan line, which made quota evidence fail validation ("missing
+  account plan") and report the account as unauthenticated. The plan is now
+  captured from the startup banner before the dialog covers it (claude and
+  claude-tui).
+- Grok >= 1.0 quota probe: `/usage show` renders a dialog ("Weekly limit
+  (PLAN)" header, progress-bar percent, `Resets:` line) instead of scrollback
+  text; the parser and completion predicate handle both layouts.
+- Harness model-surface cassettes re-recorded against current CLIs (Claude
+  Code 2.1.260, Codex 0.152, pi 0.51.4, opencode 1.3.17); gemini 0.46.0
+  bundle surface re-verified.
+
 ## [v0.17.3] — 2026-08-03
 
 ### Fixed

@@ -304,6 +304,10 @@ func claudettuiAccountSnapshotFromQuotaSnapshot(snap *anthropic.ClaudeQuotaSnaps
 func captureClaudeTuiQuotaViaPTY(ctx context.Context, timeout time.Duration) ([]harnesses.QuotaWindow, *harnesses.AccountInfo, ptyquota.Result, error) {
 	var windows []harnesses.QuotaWindow
 	var account *harnesses.AccountInfo
+	// Claude Code >= 2.1.260 renders /usage as a full-screen dialog with no
+	// plan line; capture the plan from the startup banner (visible on early
+	// DoneWhen ticks) and fall back to it when the final screen has none.
+	var bannerAccount *harnesses.AccountInfo
 
 	result, err := ptyquota.Run(ctx, ptyquota.Config{
 		HarnessName:  "claude-tui",
@@ -313,11 +317,19 @@ func captureClaudeTuiQuotaViaPTY(ctx context.Context, timeout time.Duration) ([]
 		Env:          nil,
 		Command:      "/usage\r",
 		ReadyMarkers: []string{"❯", "> "},
-		DoneWhen:     claudettuiUsageComplete,
-		Timeout:      timeout,
-		Size:         session.Size{Rows: 50, Cols: 220},
+		DoneWhen: func(text string) bool {
+			if bannerAccount == nil {
+				bannerAccount = anthropic.ParseClaudePlanAccount(text)
+			}
+			return claudettuiUsageComplete(text)
+		},
+		Timeout: timeout,
+		Size:    session.Size{Rows: 50, Cols: 220},
 		Quota: func(text string) (cassette.QuotaRecord, error) {
 			windows, account = parseClaudeTuiUsageOutput(text)
+			if account == nil {
+				account = bannerAccount
+			}
 			if len(windows) == 0 {
 				return cassette.QuotaRecord{}, fmt.Errorf("no quota windows found in claude /usage output")
 			}
@@ -332,6 +344,9 @@ func captureClaudeTuiQuotaViaPTY(ctx context.Context, timeout time.Duration) ([]
 	}
 	if len(windows) == 0 {
 		windows, account = parseClaudeTuiUsageOutput(result.Text)
+	}
+	if account == nil {
+		account = bannerAccount
 	}
 	if len(windows) == 0 {
 		return nil, account, result, fmt.Errorf("no quota windows found in claude /usage output")

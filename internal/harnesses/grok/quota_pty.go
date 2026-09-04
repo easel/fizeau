@@ -144,7 +144,12 @@ func readGrokAccountOrNil() *harnesses.AccountInfo {
 // line is required — the status bar's "Weekly limit left" is present before
 // the command runs, so it must not satisfy the done predicate on its own.
 func grokQuotaOutputComplete(text string) bool {
-	return grokWeeklyUsedPattern.MatchString(stripANSI(text))
+	clean := stripANSI(text)
+	if grokWeeklyUsedPattern.MatchString(clean) {
+		return true
+	}
+	used, _, _ := parseGrokDialogUsage(strings.ReplaceAll(clean, "\r\n", "\n"))
+	return used >= 0
 }
 
 func quotaRecord(windows []harnesses.QuotaWindow) cassette.QuotaRecord {
