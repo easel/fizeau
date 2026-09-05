@@ -5,6 +5,15 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.4] — 2026-09-04
+
+### Changed
+
+- Go toolchain bumped to 1.27.1 (go.mod `go` directive; CI follows via
+  `go-version-file`). Repo formatting is now canonical under Go 1.27 gofmt,
+  and the routing-error examples wrap error values instead of pointers to
+  satisfy Go 1.27 vet's stricter `%w` check.
+
 ### Fixed
 
 - Codex >= 0.148 TUI probes: the kitty keyboard protocol drops an Enter that
