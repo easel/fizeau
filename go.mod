@@ -1,6 +1,6 @@
 module github.com/easel/fizeau
 
-go 1.26.5
+go 1.27.1
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.68.0

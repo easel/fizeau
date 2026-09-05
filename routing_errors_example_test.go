@@ -9,13 +9,13 @@ import (
 )
 
 func ExampleErrHarnessModelIncompatible() {
-	err := fmt.Errorf("ddx preflight: %w", &fizeau.ErrHarnessModelIncompatible{
+	err := fmt.Errorf("ddx preflight: %w", fizeau.ErrHarnessModelIncompatible{
 		Harness:         "gemini",
 		Model:           "minimax/minimax-m2.7",
 		SupportedModels: []string{"gemini-2.5-pro", "gemini-2.5-flash"},
 	})
 
-	var routeErr *fizeau.ErrHarnessModelIncompatible
+	var routeErr fizeau.ErrHarnessModelIncompatible
 	if errors.As(err, &routeErr) {
 		fmt.Printf("ddx failed bead: harness=%s model=%s supported=%s\n",
 			routeErr.Harness,
@@ -30,13 +30,13 @@ func ExampleErrHarnessModelIncompatible() {
 }
 
 func ExampleErrPolicyRequirementUnsatisfied() {
-	err := fmt.Errorf("ddx preflight: %w", &fizeau.ErrPolicyRequirementUnsatisfied{
+	err := fmt.Errorf("ddx preflight: %w", fizeau.ErrPolicyRequirementUnsatisfied{
 		Policy:       "local",
 		Requirement:  "local-only",
 		AttemptedPin: "Harness=claude",
 	})
 
-	var routeErr *fizeau.ErrPolicyRequirementUnsatisfied
+	var routeErr fizeau.ErrPolicyRequirementUnsatisfied
 	if errors.As(err, &routeErr) {
 		fmt.Printf("ddx failed bead: policy=%s conflict=%s requirement=%s\n",
 			routeErr.Policy,

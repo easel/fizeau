@@ -295,12 +295,12 @@ func CatalogCostAndPerf(cat *modelcatalog.Catalog, modelID string) (CostInfo, Pe
 		return CostInfo{}, PerfSignal{}
 	}
 	return CostInfo{
-			InputPerMTok:  catalogEntryInputCost(entry),
-			OutputPerMTok: catalogEntryOutputCost(entry),
-		}, PerfSignal{
-			SpeedTokensPerSec: entry.SpeedTokensPerSec,
-			SWEBenchVerified:  entry.SWEBenchVerified,
-		}
+		InputPerMTok:  catalogEntryInputCost(entry),
+		OutputPerMTok: catalogEntryOutputCost(entry),
+	}, PerfSignal{
+		SpeedTokensPerSec: entry.SpeedTokensPerSec,
+		SWEBenchVerified:  entry.SWEBenchVerified,
+	}
 }
 
 func CatalogPowerEligibility(cat *modelcatalog.Catalog, modelID string) (int, bool, bool) {
