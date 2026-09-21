@@ -5,6 +5,30 @@ Dates use the repo convention (`YYYY-MM-DD`); versions follow semver.
 
 ## [Unreleased]
 
+## [v0.17.5] — 2026-09-21
+
+### Fixed
+
+- Claude Code's folder-trust dialog now highlights "No, exit" by default, so a
+  bare Enter quits the session. `claude` and `claude-tui` record
+  `hasTrustDialogAccepted` for the workspace before launch, and the turn loop
+  confirms "Yes, I trust this folder" only after that row is highlighted.
+  `go test` binaries leave `~/.claude.json` alone unless
+  `FIZEAU_RECORD_CLAUDE_TRUST=1`.
+- `ptyquota` answers the kitty keyboard-protocol query so current TUIs keep
+  accepting legacy cursor keys.
+- The benchmark driver accepts both mikefarah `yq` (`-o=json`) and the
+  Debian/Ubuntu `yq` jq wrapper.
+- OpenCode config tests and the no-discovery Claude route test no longer
+  depend on the developer's live config or discovery cache.
+
+### Changed
+
+- Direct Go modules: `anthropic-sdk-go` v1.74.0, OpenTelemetry SDK v1.46.0,
+  `pgregory.net/rapid` v1.3.0, `golang.org/x/sync` v0.23.0, `golang.org/x/sys`
+  v0.48.0. The website module follows with chromedp v0.16.0, and `website`
+  and `cli` use the Go 1.27.1 toolchain directive.
+
 ## [v0.17.4] — 2026-09-04
 
 ### Changed
