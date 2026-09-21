@@ -3,7 +3,7 @@ module github.com/easel/fizeau
 go 1.27.1
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.68.0
+	github.com/anthropics/anthropic-sdk-go v1.74.0
 	github.com/creack/pty v1.1.24
 	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
 	github.com/openai/openai-go v1.12.0
@@ -13,14 +13,14 @@ require (
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
-	go.opentelemetry.io/otel/sdk v1.43.0
-	go.opentelemetry.io/otel/sdk/metric v1.43.0
+	go.opentelemetry.io/otel/sdk v1.46.0
+	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 	gopkg.in/dnaeon/go-vcr.v4 v4.0.7
 	gopkg.in/yaml.v3 v3.0.1
-	pgregory.net/rapid v1.2.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (

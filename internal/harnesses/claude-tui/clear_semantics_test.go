@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/easel/fizeau/internal/pty/probes"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/pty/session"
+	"github.com/easel/fizeau/internal/pty/terminal"
 )
 
 // TestEmpiricalClearCommand verifies that /clear command exists and responds
@@ -32,6 +33,14 @@ func TestEmpiricalClearCommand(t *testing.T) {
 	defer cancel()
 
 	workdir := t.TempDir()
+	// Restore after the process has exited. Claude rewrites ~/.claude.json on
+	// shutdown, so restoring before Wait loses the race and leaves the temp
+	// workspace trusted in the user's config.
+	t.Cleanup(preserveClaudeConfig(t))
+	t.Setenv("FIZEAU_RECORD_CLAUDE_TRUST", "1")
+	if err := anthropic.EnsureWorkspaceTrusted(workdir); err != nil {
+		t.Fatalf("record workspace trust: %v", err)
+	}
 	env := buildTestEnv()
 
 	// Start a basic session without hooks (just to test /clear)
@@ -46,56 +55,85 @@ func TestEmpiricalClearCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start session: %v", err)
 	}
-	defer s.Close()
+	defer func() {
+		_ = s.Close()
+		_ = s.Wait()
+	}()
 
-	// Wait for startup
-	responder := probes.New(probes.Config{
-		Session:      s,
-		ReadyMarkers: []string{"❯", "> "},
-		Timeout:      10 * time.Second,
-	})
-	defer responder.Stop()
+	emu := terminal.New(terminal.Size{Rows: 50, Cols: 220})
+	clearSubmitted := false
+	var clearSubmittedAt time.Time
+	clearRecovered := false
+	deadline := time.Now().Add(20 * time.Second)
+	var lastScreen string
+	var queryBuf []byte
+	answeredQueries := map[string]bool{}
 
-	deadline := time.Now().Add(10 * time.Second)
-	if err := responder.Ready(deadline); err != nil {
-		t.Logf("startup probe timeout (non-fatal): %v", err)
-	}
-
-	// Test that /clear command exists and works
-	t.Logf("Testing /clear command existence")
-	if err := s.SendBytes([]byte("/clear\r")); err != nil {
-		t.Fatalf("failed to send /clear: %v", err)
-	}
-
-	// Wait for response to /clear (should get back to prompt)
-	clearWorks := false
-	clearTimeout := time.NewTimer(5 * time.Second)
-	defer clearTimeout.Stop()
-
-	for !clearWorks {
+	for !clearRecovered && time.Now().Before(deadline) {
+		var chunk session.OutputChunk
+		var ok bool
+		wake := time.NewTimer(500 * time.Millisecond)
 		select {
-		case chunk, ok := <-s.Output():
+		case chunk, ok = <-s.Output():
+			wake.Stop()
 			if !ok {
-				t.Fatalf("output channel closed, /clear may have crashed the session")
+				t.Fatalf("session closed before /clear recovered\nlast screen:\n%s", lastScreen)
 			}
-			if chunk.ReadError != nil {
-				t.Logf("read error: %v", chunk.ReadError)
-				continue
-			}
-			// Check if we got back to prompt
-			text := string(chunk.Bytes)
-			if strings.Contains(text, "❯") || strings.Contains(text, "> ") || strings.Contains(text, "Cleared context") {
-				clearWorks = true
-				t.Logf("/clear command works; session recovered prompt")
-			}
-		case <-clearTimeout.C:
-			// If we timeout, session may still be alive but /clear didn't respond
-			// Try to send something else to check
-			if err := s.SendBytes([]byte("test\r")); err != nil {
-				t.Fatalf("timeout waiting for /clear response and subsequent test failed")
-			}
-			t.Fatalf("timeout waiting for /clear response")
+		case <-wake.C:
+			continue
+		case <-ctx.Done():
+			wake.Stop()
+			t.Fatalf("context expired before /clear recovered: %v\nlast screen:\n%s", ctx.Err(), lastScreen)
+		case <-time.After(time.Until(deadline)):
+			wake.Stop()
+			t.Fatalf("timeout waiting for /clear\nlast screen:\n%s", lastScreen)
 		}
+		if chunk.ReadError != nil || len(chunk.Bytes) == 0 {
+			continue
+		}
+		queryBuf = append(queryBuf, chunk.Bytes...)
+		if len(queryBuf) > 8192 {
+			queryBuf = queryBuf[len(queryBuf)-2048:]
+		}
+		answerClaudeStartupProbes(s, queryBuf, answeredQueries)
+		frame, err := emu.Feed(chunk.Bytes)
+		if err != nil {
+			t.Fatalf("terminal feed: %v", err)
+		}
+		screen := strings.Join(frame.Text, "\n")
+		lastScreen = screen
+
+		if empiricalTrustDialog(screen) {
+			t.Fatalf("workspace trust dialog still appeared after recording trust\n%s", screen)
+		}
+		if !clearSubmitted && strings.Contains(screen, "❯") {
+			// Kitty keyboard protocol drops an Enter that shares a write with
+			// the slash command, so submit /clear in two writes.
+			if err := s.SendBytes([]byte("/clear")); err != nil {
+				t.Fatalf("type /clear: %v", err)
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case <-time.After(200 * time.Millisecond):
+			}
+			if err := s.SendKey(session.KeyEnter); err != nil {
+				t.Fatalf("submit /clear: %v", err)
+			}
+			clearSubmitted = true
+			clearSubmittedAt = time.Now()
+			t.Log("submitted /clear")
+			continue
+		}
+		// /clear stays in the transcript after it runs. Recovery is a later
+		// frame whose input row is an empty prompt, not the slash command.
+		if clearSubmitted && time.Since(clearSubmittedAt) > 300*time.Millisecond && promptIsIdle(screen) {
+			clearRecovered = true
+			t.Log("/clear returned to the prompt")
+		}
+	}
+	if !clearRecovered {
+		t.Fatalf("timeout waiting for /clear response\nlast screen:\n%s", lastScreen)
 	}
 
 	// Verify the recovered prompt accepts input after /clear. Waiting for an
@@ -107,7 +145,7 @@ func TestEmpiricalClearCommand(t *testing.T) {
 		t.Fatalf("failed to type liveness probe after /clear: %v", err)
 	}
 
-	testTimeout := time.NewTimer(5 * time.Second)
+	testTimeout := time.NewTimer(12 * time.Second)
 	defer testTimeout.Stop()
 
 	sessionAlive := false
@@ -116,15 +154,19 @@ func TestEmpiricalClearCommand(t *testing.T) {
 		select {
 		case chunk, ok := <-s.Output():
 			if !ok {
-				t.Fatalf("session closed after /clear")
+				t.Fatalf("session closed after /clear\nlast screen:\n%s", lastScreen)
 			}
 			if chunk.ReadError != nil {
 				continue
 			}
 			probeOutput.Write(chunk.Bytes)
-			sessionAlive = strings.Contains(probeOutput.String(), livenessMarker)
+			if frame, err := emu.Feed(chunk.Bytes); err == nil {
+				lastScreen = strings.Join(frame.Text, "\n")
+			}
+			sessionAlive = strings.Contains(probeOutput.String(), livenessMarker) ||
+				strings.Contains(lastScreen, livenessMarker)
 		case <-testTimeout.C:
-			t.Fatalf("session did not echo liveness probe after /clear")
+			t.Fatalf("session did not echo liveness probe after /clear\nlast screen:\n%s", lastScreen)
 		}
 	}
 	// Clear the unsubmitted marker before closing the session.
@@ -214,6 +256,68 @@ func buildSettingsJSON(hookPayloads map[string]string) string {
 
 	jsonBytes, _ := json.Marshal(settings)
 	return string(jsonBytes)
+}
+
+func preserveClaudeConfig(t *testing.T) func() {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".claude.json")
+	original, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	existed := err == nil
+	return func() {
+		var restoreErr error
+		if existed {
+			restoreErr = os.WriteFile(path, original, 0o600)
+		} else {
+			restoreErr = os.Remove(path)
+		}
+		if restoreErr != nil {
+			t.Errorf("restore %s: %v", path, restoreErr)
+		}
+	}
+}
+
+func promptIsIdle(screen string) bool {
+	for _, line := range strings.Split(screen, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "❯" || trimmed == ">" {
+			return true
+		}
+	}
+	return false
+}
+
+func empiricalTrustDialog(screen string) bool {
+	return strings.Contains(screen, "Yes, I trust this folder") ||
+		strings.Contains(screen, "trust the files in this folder") ||
+		strings.Contains(screen, "Is this a project you created or one you trust")
+}
+
+func answerClaudeStartupProbes(s *session.Session, raw []byte, answered map[string]bool) {
+	replyOnce := func(name string, present bool, reply []byte) {
+		if !present || answered[name] {
+			return
+		}
+		answered[name] = true
+		_ = s.SendBytes(reply)
+	}
+	replyOnce("da1", bytesContains(raw, "\x1b[c") || bytesContains(raw, "\x1b[?c"), []byte("\x1b[?1;0c"))
+	replyOnce("da2", bytesContains(raw, "\x1b[>c") || bytesContains(raw, "\x1b[>?c"), []byte("\x1b[?62;4;0c"))
+	replyOnce("dsr", bytesContains(raw, "\x1b[6n"), []byte("\x1b[1;1R"))
+	replyOnce("xtversion", bytesContains(raw, "\x1b[>q") || bytesContains(raw, "\x1b[>0q"), []byte("\x1b[>0;370;0c"))
+	// No progressive enhancements: legacy carriage return stays effective.
+	replyOnce("kitty", bytesContains(raw, "\x1b[?u"), []byte("\x1b[?0u"))
+	replyOnce("winsize", bytesContains(raw, "\x1b[18t"), []byte("\x1b[8;50;220t"))
+}
+
+func bytesContains(haystack []byte, needle string) bool {
+	return strings.Contains(string(haystack), needle)
 }
 
 // buildTestEnv constructs the environment allowlist for the test.

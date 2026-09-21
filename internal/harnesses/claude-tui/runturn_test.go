@@ -651,9 +651,11 @@ func TestRunTurnPTYEOFGraceHonorsCancellationAndDeadline(t *testing.T) {
 }
 
 // TestRunTurnFolderTrustAnsweredWithEnter proves the turn loop renders the
-// screen through the vt10x emulator (NOT naive ANSI stripping) and answers the
-// folder-trust dialog with a single Enter (default = "Yes, I trust this
-// folder"). Naive ANSI stripping would not match the cursor-positioned dialog.
+// screen through the vt10x emulator (NOT naive ANSI stripping) and accepts the
+// folder-trust dialog only after the highlight is on "Yes, I trust this
+// folder". Current Claude Code highlights "No, exit" by default, so the loop
+// sends Down, then Enter. Naive ANSI stripping would not match the
+// cursor-positioned dialog.
 func TestRunTurnFolderTrustAnsweredWithEnter(t *testing.T) {
 	dir := t.TempDir()
 	hookDir := filepath.Join(dir, "hooks")
@@ -671,12 +673,13 @@ func TestRunTurnFolderTrustAnsweredWithEnter(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		// Render the folder-trust dialog using cursor-position escapes so the
-		// text is only legible after vt10x rendering. \x1b[H homes the cursor.
-		f.push([]byte("\x1b[H\x1b[2J"))
-		f.push([]byte("\x1b[3;5HIs this a project you created or one you trust?"))
-		f.push([]byte("\x1b[5;7H1. Yes, I trust this folder"))
-		// Wait for the Enter answer, then show the prompt and finish.
+		// Render the current folder-trust dialog in one frame so both choices
+		// are visible before the loop answers. The highlight starts on No.
+		f.push([]byte("\x1b[H\x1b[2J\x1b[3;5HIs this a project you created or one you trust?\x1b[5;2H❯ No, exit\x1b[6;4HYes, I trust this folder"))
+		for f.keyCount(session.KeyDown) == 0 {
+			time.Sleep(5 * time.Millisecond)
+		}
+		f.push([]byte("\x1b[H\x1b[2J\x1b[3;5HIs this a project you created or one you trust?\x1b[5;4HNo, exit\x1b[6;2H❯ Yes, I trust this folder"))
 		for f.keyCount(session.KeyEnter) == 0 {
 			time.Sleep(5 * time.Millisecond)
 		}
@@ -692,6 +695,9 @@ func TestRunTurnFolderTrustAnsweredWithEnter(t *testing.T) {
 	events := claudetui.RunTurnForTest(ctx, f, req, hookDir, stopPath, nonce,
 		200*time.Millisecond, 20*time.Millisecond, 4*time.Second)
 
+	if f.keyCount(session.KeyDown) != 1 {
+		t.Errorf("Down pressed %d times, want 1 to leave No, exit", f.keyCount(session.KeyDown))
+	}
 	if f.keyCount(session.KeyEnter) == 0 {
 		t.Fatal("folder-trust dialog was not answered with Enter")
 	}

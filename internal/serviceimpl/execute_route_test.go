@@ -242,6 +242,16 @@ func TestResolveExecuteRouteNormalizesSubprocessAliases(t *testing.T) {
 
 func TestResolveExecuteRouteAcceptsClaudeFamilyWithoutDiscovery(t *testing.T) {
 	input := executeRouteTestInput(loadRoutingInputsTestCatalog(t))
+	// Production alias resolution reads the process discovery cache. Other
+	// tests warm that cache from a live picker and rewrite fable to the
+	// concrete point release. This case is the no-discovery path: family ids
+	// pass through unchanged, and Claude's executable aliases still fold.
+	input.ResolveModelAlias = func(harness, model string) string {
+		if harness == "claude" {
+			return ClaudeCLIExecutableModel(model)
+		}
+		return model
+	}
 	discoveryCalls := 0
 	input.DiscoverModels = func(string, harnesses.HarnessConfig) []string {
 		discoveryCalls++

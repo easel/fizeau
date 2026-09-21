@@ -89,6 +89,7 @@ func TestAssembleRefreshBackgroundSurvivesCanceledCallerContext(t *testing.T) {
 	capturedAt := time.Date(2026, 5, 12, 15, 0, 0, 0, time.UTC)
 
 	refreshStarted := make(chan struct{})
+	releaseRefresh := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
 			http.NotFound(w, r)
@@ -99,6 +100,9 @@ func TestAssembleRefreshBackgroundSurvivesCanceledCallerContext(t *testing.T) {
 		default:
 			close(refreshStarted)
 		}
+		// Hold the response until the caller assertion has observed the stale
+		// row. An unblocked handler can commit before that read on a fast host.
+		<-releaseRefresh
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"id":"fresh-model"}]}`))
 	}))
@@ -127,6 +131,7 @@ func TestAssembleRefreshBackgroundSurvivesCanceledCallerContext(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, snapshot.Models, 1)
 	require.Equal(t, "stale-model", snapshot.Models[0].ID)
+	close(releaseRefresh)
 
 	select {
 	case <-refreshStarted:

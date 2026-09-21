@@ -208,6 +208,11 @@ func (h *Harness) runTurn(ctx context.Context, req harnesses.ExecuteRequest, eve
 		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to resolve Claude TUI launch: %v", err), 1)
 		return
 	}
+	if err := anthropic.EnsureWorkspaceTrusted(req.WorkDir); err != nil {
+		seq++
+		emitFinalEvent(eventChan, seq, startTime, "error", fmt.Sprintf("failed to record Claude workspace trust: %v", err), 1)
+		return
+	}
 
 	ptySession, err := startPTYSession(
 		ctx, command, args, req.WorkDir, env, session.Size{Rows: 50, Cols: 220},
@@ -467,6 +472,19 @@ func (h *Harness) runTurnOver(
 	)
 	consentState := consentIdle
 	var consentStepDeadline time.Time
+
+	// Folder-trust is also selection-aware. Claude Code currently highlights
+	// "No, exit" by default, so a bare Enter quits instead of trusting the
+	// directory. Move onto "Yes, I trust this folder", then confirm.
+	const (
+		trustIdle = iota
+		trustNavigating
+		trustConfirming
+		trustDone
+	)
+	trustState := trustIdle
+	trustMoves := 0
+	lastTrustScreen := ""
 	// startupRearmed bounds how many times the startup grace is extended before
 	// the driver fails loud, so drift cannot loop forever.
 	startupRearmed := 0
@@ -770,10 +788,39 @@ func (h *Harness) runTurnOver(
 					}),
 				}
 			}
-			// 5) dismiss any first-run interstitial (folder-trust, theme/
-			// onboarding, MCP/plugin trust) with its default-accept keystroke
-			// (Enter), at most once each. Pre-submit only, for the same reason as
-			// the consent gate above.
+			// 5) Folder trust is a two-choice menu whose default is "No, exit".
+			// Confirm only the accept row. Pre-submit only.
+			if !promptSent && trustState != trustDone && screenHasFolderTrustDialog(frame) {
+				lastRecognizedScreen = "folder-trust"
+				screenKey := strings.Join(frame.Text, "\n")
+				switch trustState {
+				case trustIdle, trustNavigating:
+					if screenKey == lastTrustScreen && trustState == trustNavigating {
+						break
+					}
+					lastTrustScreen = screenKey
+					if folderTrustAcceptHighlighted(frame) {
+						_ = te.conn.SendKey(session.KeyEnter)
+						trustState = trustConfirming
+					} else {
+						trustMoves++
+						if trustMoves > 4 {
+							return failStartupLoud("claude-tui folder-trust: could not highlight \"Yes, I trust this folder\" before the step limit; the trust dialog may have changed", frame)
+						}
+						_ = te.conn.SendKey(session.KeyDown)
+						trustState = trustNavigating
+					}
+				case trustConfirming:
+				}
+				continue
+			}
+			if trustState == trustConfirming && !screenHasFolderTrustDialog(frame) {
+				trustState = trustDone
+			}
+			// 6) dismiss remaining first-run interstitials (theme onboarding,
+			// MCP/plugin trust) with their default-accept keystroke (Enter), at
+			// most once each. Pre-submit only, for the same reason as the
+			// consent gate above.
 			if !promptSent {
 				if name := detectInterstitial(frame); name != "" && !answeredDialogs[name] {
 					_ = te.conn.SendKey(session.KeyEnter)
@@ -1677,6 +1724,12 @@ func (p *startupProbe) Feed(b []byte) {
 	if bytes.Contains(s, []byte("\x1b[>q")) {
 		_ = p.conn.SendBytes([]byte("\x1b[>0;370;0c"))
 	}
+	// Kitty keyboard protocol query. Report no progressive enhancements so
+	// Claude keeps accepting legacy cursor keys. A missing reply makes current
+	// Claude Code ignore arrow keys on the folder-trust menu.
+	if bytes.Contains(s, []byte("\x1b[?u")) {
+		_ = p.conn.SendBytes([]byte("\x1b[?0u"))
+	}
 	if bytes.Contains(s, []byte("\x1b[18t")) {
 		size := p.conn.Size()
 		_ = p.conn.SendBytes([]byte(fmt.Sprintf("\x1b[8;%d;%dt", size.Rows, size.Cols)))
@@ -1708,6 +1761,8 @@ var folderTrustMarkers = []string{
 //
 // Each dialog is answered AT MOST ONCE per turn (tracked by name) so we do not
 // re-press Enter on a screen that lingers a few frames after acceptance.
+// Folder trust is not in this list: its default row is "No, exit", so the
+// turn loop selects "Yes, I trust this folder" before confirming.
 type interstitialDialog struct {
 	name    string
 	markers []string
@@ -1717,7 +1772,6 @@ type interstitialDialog struct {
 // path, mirroring the folder-trust handler. Markers are matched against the
 // vt10x-rendered frame text (NOT raw bytes).
 var interstitials = []interstitialDialog{
-	{name: "folder-trust", markers: folderTrustMarkers},
 	{name: "theme-onboarding", markers: []string{
 		"Choose the text style that looks best",
 		"Choose the option that looks best",
@@ -1900,10 +1954,32 @@ func startupScreenSnapshot(frame terminal.Frame) string {
 }
 
 // screenHasFolderTrustDialog reports whether the rendered frame shows the
-// folder-trust dialog (answered with Enter = default "Yes, I trust...").
-// Retained for the targeted folder-trust regression test.
+// folder-trust dialog. The turn loop selects "Yes, I trust this folder"
+// before confirming, because the highlighted default is "No, exit".
 func screenHasFolderTrustDialog(frame terminal.Frame) bool {
 	return frameHasAnyMarker(frame, folderTrustMarkers)
+}
+
+// folderTrustAcceptHighlighted reports whether the highlighted menu row is the
+// affirmative trust choice. A highlighted "No, exit" is not acceptance.
+func folderTrustAcceptHighlighted(frame terminal.Frame) bool {
+	for _, raw := range frame.Text {
+		line := strings.TrimSpace(raw)
+		body := ""
+		switch {
+		case strings.HasPrefix(line, "❯"):
+			body = strings.TrimSpace(strings.TrimPrefix(line, "❯"))
+		case strings.HasPrefix(line, ">"):
+			body = strings.TrimSpace(strings.TrimPrefix(line, ">"))
+		default:
+			continue
+		}
+		lower := strings.ToLower(body)
+		if strings.Contains(lower, "trust") && !strings.Contains(lower, "exit") {
+			return true
+		}
+	}
+	return false
 }
 
 // detectInterstitial returns the name of the first blocking dialog visible on

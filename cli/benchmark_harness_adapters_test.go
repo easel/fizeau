@@ -388,8 +388,8 @@ func TestBenchmarkTaskSpecComposition(t *testing.T) {
 	if !strings.Contains(spec.CellDir, filepath.Join("cells", "demo-dataset", "demo-task")) {
 		t.Fatalf("cell_dir = %q, want it to be under demo-dataset/demo-task", spec.CellDir)
 	}
-	if spec.HarborPlugin != "scripts.benchmark.harbor_agent:FizeauAgent" {
-		t.Fatalf("harbor_plugin = %q, want %q", spec.HarborPlugin, "scripts.benchmark.harbor_agent:FizeauAgent")
+	if spec.HarborPlugin != "harbor_agent:FizeauAgent" {
+		t.Fatalf("harbor_plugin = %q, want %q", spec.HarborPlugin, "harbor_agent:FizeauAgent")
 	}
 	if spec.Image != "fizeau-harbor-runner:latest" {
 		t.Fatalf("image = %q, want %q", spec.Image, "fizeau-harbor-runner:latest")

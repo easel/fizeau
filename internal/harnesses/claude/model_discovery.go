@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/easel/fizeau/internal/pty/session"
@@ -24,21 +25,78 @@ var (
 	claudeValidEffortPattern       = regexp.MustCompile(`(?im)^.*unknown --effort value.*valid values:\s*([^\r\n.]+)`)
 )
 
-// claudeTrustInterstitial answers Claude Code's "Do you trust the files in
-// this folder?" onboarding dialog, which appears whenever the CLI is launched
-// in a not-yet-trusted directory — including every fresh execute-bead worktree.
-// The dialog pre-selects "Yes, I trust this folder", so Enter accepts it; the
-// driver then proceeds to the normal ready prompt. Without this, PTY model
-// discovery (and quota probes) stall on the dialog and time out with zero
-// models, making the harness unroutable.
+// claudeTrustInterstitial answers Claude Code's folder-trust dialog, which
+// appears whenever the CLI is launched in a not-yet-trusted directory —
+// including every fresh execute-bead worktree. Current Claude Code highlights
+// "No, exit" by default, so a bare Enter quits. The driver steps the highlight
+// onto "Yes, I trust this folder" and only then confirms. Without this, PTY
+// model discovery and quota probes exit or time out with zero models.
 func claudeTrustInterstitial() ptyquota.Interstitial {
+	steps := 0
+	confirming := false
+	lastScreen := ""
 	return ptyquota.Interstitial{
 		Name: "claude-folder-trust",
 		Match: func(screen string) bool {
-			return strings.Contains(screen, "trust the files in this folder") ||
-				strings.Contains(screen, "trust this folder")
+			return claudeTrustDialogVisible(screen)
 		},
-		Send: []byte("\r"),
+		Respond: func(screen string) ([]byte, bool) {
+			if confirming {
+				// Enter is already in flight. Keep blocking ready-detection
+				// until the dialog leaves the screen.
+				return nil, false
+			}
+			// The dialog is repainted many times with the same highlight.
+			// Send one key per distinct screen so the cursor cannot walk past
+			// Yes before Claude applies the previous key.
+			if screen == lastScreen {
+				return nil, false
+			}
+			lastScreen = screen
+			steps++
+			if steps > 6 {
+				// Stay blocking. Marking the dialog done while "No, exit" is
+				// still highlighted lets a later Enter quit Claude.
+				return nil, false
+			}
+			if claudeTrustAcceptHighlighted(screen) {
+				confirming = true
+				return []byte("\r"), false
+			}
+			return []byte("\x1b[B"), false
+		},
+	}
+}
+
+func claudeTrustDialogVisible(screen string) bool {
+	return strings.Contains(screen, "trust the files in this folder") ||
+		strings.Contains(screen, "Yes, I trust this folder") ||
+		strings.Contains(screen, "Is this a project you created or one you trust")
+}
+
+func claudeTrustAcceptHighlighted(screen string) bool {
+	for _, line := range strings.Split(screen, "\n") {
+		trimmed := strings.TrimSpace(line)
+		body, highlighted := highlightedChoice(trimmed)
+		if !highlighted {
+			continue
+		}
+		lower := strings.ToLower(body)
+		if strings.Contains(lower, "trust") && !strings.Contains(lower, "exit") {
+			return true
+		}
+	}
+	return false
+}
+
+func highlightedChoice(line string) (body string, highlighted bool) {
+	switch {
+	case strings.HasPrefix(line, "❯"):
+		return strings.TrimSpace(strings.TrimPrefix(line, "❯")), true
+	case strings.HasPrefix(line, ">"):
+		return strings.TrimSpace(strings.TrimPrefix(line, ">")), true
+	default:
+		return "", false
 	}
 }
 
@@ -48,6 +106,9 @@ func ReadClaudeModelDiscoveryViaPTY(timeout time.Duration, opts ...QuotaPTYOptio
 		if opt != nil {
 			opt(&cfg)
 		}
+	}
+	if err := anthropic.EnsureWorkspaceTrusted(cfg.workdir); err != nil {
+		return harnesses.ModelDiscoverySnapshot{}, fmt.Errorf("record claude workspace trust: %w", err)
 	}
 	reasoningCtx, cancelReasoning := context.WithTimeout(context.Background(), 5*time.Second)
 	reasoningLevels, _ := readClaudeReasoningFromHelp(reasoningCtx, cfg.binary)

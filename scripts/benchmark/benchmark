@@ -63,6 +63,18 @@ require_tool() {
   command -v "$1" >/dev/null 2>&1 || die "required tool not found: $1"
 }
 
+# yaml_to_json prints a YAML file as JSON.
+# mikefarah yq needs -o=json. kislyuk yq (the Debian/Ubuntu jq wrapper) already
+# emits JSON and forwards -o to jq, which rejects it.
+yaml_to_json() {
+  local file="$1"
+  if yq --version 2>&1 | grep -q mikefarah; then
+    yq -o=json '.' "${file}"
+  else
+    yq '.' "${file}"
+  fi
+}
+
 # in_flight_state_dir returns the host-specific state directory.
 in_flight_state_dir() {
   local hostname
@@ -134,6 +146,7 @@ export_cell_worker_functions() {
     budget_is_halted \
     write_budget_halted_cell \
     write_interrupted_cell_report \
+    yaml_to_json \
     run_one_cell \
     run_cell_with_per_cell_retry \
     budget_or_run_cell
@@ -395,7 +408,7 @@ resolve_bench_set_file() {
 # bench_set_json emits the bench-set as JSON.
 bench_set_json() {
   local file="$1"
-  yq -o=json '.' "${file}"
+  yaml_to_json "${file}"
 }
 
 # resolve_tasks emits one task id per line for a bench-set.
@@ -447,7 +460,7 @@ resolve_tasks() {
     while IFS= read -r task; do
       emit_task "${task}"
     done < <(
-      yq -o=json '.' "${resolved}" \
+      yaml_to_json "${resolved}" \
         | jq -r '
             .tasks[]?
             | (if type == "object" then (.id // empty) else . end)
@@ -533,7 +546,7 @@ resolve_bench_set_task_executor() {
 concurrency_groups_json() {
   local file="${SCRIPT_DIR}/concurrency-groups.yaml"
   [[ -f "${file}" ]] || die "validate: concurrency-groups.yaml missing (${file})"
-  yq -o=json '.' "${file}"
+  yaml_to_json "${file}"
 }
 
 # build_task_allowlist_file writes a newline-separated allowlist of canonical
@@ -551,7 +564,7 @@ build_task_allowlist_file() {
 
   : >"${out}"
   for f in "${subset_files[@]}"; do
-    yq -o=json '.' "${f}" \
+    yaml_to_json "${f}" \
       | jq -r '.tasks[]? | (if type == "object" then (.id // empty) else . end)' \
       >>"${out}"
   done
@@ -574,7 +587,7 @@ validate_profile_catalog() {
 
   for f in "${files[@]}"; do
     name="$(basename "${f%.*}")"
-    json="$(yq -o=json '.' "${f}")"
+    json="$(yaml_to_json "${f}")"
     profile_id="$(jq -r '.id // ""' <<<"${json}")"
     [[ -n "${profile_id}" ]] || die "validate: profile ${name} is missing .id"
     [[ "${profile_id}" == "${name}" ]] || die "validate: profile ${name} id mismatch (${profile_id})"
@@ -1227,7 +1240,7 @@ write_budget_halted_cell() {
   : >"${cell_dir}/fiz.err"
 
   local profile_json bp total
-  profile_json="$(yq -o=json '.' "${profile_file}")"
+  profile_json="$(yaml_to_json "${profile_file}")"
   bp="$(budget_path "${out}")"
   total="$(jq -r '.total_cost_usd // 0' "${bp}" 2>/dev/null || printf '0')"
 
@@ -1359,7 +1372,7 @@ EOF
     >"${cell_dir}/cell-state.json"
 
   local profile_json
-  profile_json="$(yq -o=json '.' "${profile_file}")"
+  profile_json="$(yaml_to_json "${profile_file}")"
 
   local adapter_path="${HARNESS_ADAPTERS_DIR}/${harness_adapter}"
   [[ -x "${adapter_path}" ]] || die "harness-adapter missing/not executable: ${adapter_path}"
@@ -1699,7 +1712,7 @@ run_sweep() {
     [[ -n "${profile_id}" ]] || continue
     profile_file="$(resolve_profile_file "${profile_id}")"
     local profile_json_full harness
-    profile_json_full="$(yq -o=json '.' "${profile_file}")"
+    profile_json_full="$(yaml_to_json "${profile_file}")"
     harness="$(jq -r '.harness // "none"' <<<"${profile_json_full}")"
     adapter="$(resolve_adapter_for_harness "${harness}")"
     concurrency_group="$(jq -r '.concurrency_group // "default"' <<<"${profile_json_full}")"

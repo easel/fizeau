@@ -86,6 +86,11 @@ func TestLoadConfig_Global(t *testing.T) {
 }
 
 func TestLoadConfig_NotFound(t *testing.T) {
+	// LoadConfig falls back to ~/.config/opencode, and LoadGlobalConfig reads
+	// that file directly. Isolate HOME so a developer machine with a real
+	// OpenCode config does not satisfy the missing-file assertions.
+	t.Setenv("HOME", t.TempDir())
+
 	_, err := LoadConfig("/nonexistent")
 	assert.Error(t, err)
 

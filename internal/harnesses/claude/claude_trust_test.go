@@ -9,13 +9,26 @@ import (
 func TestClaudeTrustInterstitial_MatchesTrustDialogNotModelPicker(t *testing.T) {
 	it := claudeTrustInterstitial()
 	require.NotEmpty(t, it.Name)
-	require.Equal(t, []byte("\r"), it.Send, "Enter accepts the pre-selected 'Yes, I trust this folder'")
+	require.NotNil(t, it.Respond)
 
-	trustDialog := "Do you trust the files in this folder?\n" +
+	legacy := "Do you trust the files in this folder?\n" +
 		"  No, exit\n" +
 		"> Yes, I trust this folder ✔\n" +
 		"Enter to confirm · Esc to cancel"
-	require.True(t, it.Match(trustDialog), "must detect the folder-trust dialog")
+	require.True(t, it.Match(legacy), "must detect the folder-trust dialog")
+	send, done := it.Respond(legacy)
+	require.Equal(t, []byte("\r"), send, "Enter confirms when Yes is already highlighted")
+	require.False(t, done, "ready detection waits until the dialog leaves the screen")
+
+	currentDialog := claudeTrustInterstitial()
+	current := "Quick safety check: Is this a project you created or one you trust?\n" +
+		"❯ No, exit\n" +
+		"  Yes, I trust this folder\n" +
+		"Enter to confirm · Esc to cancel"
+	require.True(t, currentDialog.Match(current), "must detect the current default-No dialog")
+	send, done = currentDialog.Respond(current)
+	require.Equal(t, []byte("\x1b[B"), send, "Down moves off the default No, exit row")
+	require.False(t, done)
 
 	modelPicker := "Select model\n" +
 		"1. Default (recommended) Opus 4.8 with 1M context\n" +

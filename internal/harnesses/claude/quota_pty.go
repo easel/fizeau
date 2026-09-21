@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/easel/fizeau/internal/harnesses"
+	"github.com/easel/fizeau/internal/harnesses/anthropic"
 	"github.com/easel/fizeau/internal/harnesses/ptyquota"
 	"github.com/easel/fizeau/internal/pty/cassette"
 	"github.com/easel/fizeau/internal/pty/session"
@@ -89,6 +90,9 @@ func captureClaudeQuotaViaPTY(ctx context.Context, timeout time.Duration, opts .
 		if opt != nil {
 			opt(&cfg)
 		}
+	}
+	if err := anthropic.EnsureWorkspaceTrusted(cfg.workdir); err != nil {
+		return nil, nil, ptyquota.Result{}, fmt.Errorf("record claude workspace trust: %w", err)
 	}
 	var windows []harnesses.QuotaWindow
 	var account *harnesses.AccountInfo

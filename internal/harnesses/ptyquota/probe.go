@@ -127,8 +127,13 @@ type Interstitial struct {
 	// Match reports whether the current screen is showing this prompt.
 	Match func(screen string) bool
 	// Send is the byte sequence written to the PTY to dismiss the prompt
-	// (e.g. "\r" to accept the highlighted default).
+	// (e.g. "\r" to accept the highlighted default). Ignored when Respond is set.
 	Send []byte
+	// Respond, when set, chooses the next key from the current screen and may
+	// run across several frames. done reports that this interstitial is finished.
+	// A false done keeps the probe from treating the screen as ready, so a
+	// multi-step answer (move the highlight, then confirm) cannot be cut short.
+	Respond func(screen string) (send []byte, done bool)
 }
 
 type Result struct {
@@ -289,6 +294,9 @@ var terminalQueryPatterns = []struct {
 	// XTVERSION: terminal name/version report (DCS > | text ST).
 	{[]byte("\x1b[>q"), func(int, int) []byte { return []byte("\x1bP>|fizeau-ptyquota\x1b\\") }},
 	{[]byte("\x1b[>0q"), func(int, int) []byte { return []byte("\x1bP>|fizeau-ptyquota\x1b\\") }},
+	// Kitty keyboard protocol query. No progressive enhancements: legacy
+	// cursor keys and carriage return stay effective.
+	{[]byte("\x1b[?u"), func(int, int) []byte { return []byte("\x1b[?0u") }},
 }
 
 // scanTerminalQueries returns the concatenated replies for every terminal
@@ -328,12 +336,24 @@ func (r *runState) processInterstitials(screen string) bool {
 			continue
 		}
 		if it.Match(screen) {
-			if r.answered == nil {
-				r.answered = make(map[string]bool)
+			send := it.Send
+			done := true
+			if it.Respond != nil {
+				send, done = it.Respond(screen)
 			}
-			r.answered[it.Name] = true
-			_ = r.sendBytes(it.Send)
-			acted = true
+			if done {
+				if r.answered == nil {
+					r.answered = make(map[string]bool)
+				}
+				r.answered[it.Name] = true
+			}
+			if len(send) > 0 {
+				_ = r.sendBytes(send)
+				acted = true
+			}
+			if !done {
+				acted = true
+			}
 		}
 	}
 	return acted
