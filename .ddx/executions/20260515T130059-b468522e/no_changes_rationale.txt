@@ -1,1 +1,0 @@
-verification_command: sh -lc "go test . -run 'TestListHarnesses_QuotaAndAccountStatus|TestQuotaWindowMaxUsedPercentUsesMostConstrainedWindow|TestSnapshotAutoroutingFromFixtures' -count=1 && go test ./agentcli -run 'TestRouteStatusOutputIncludesPowerPolicy' -count=1 && go test ./internal/quota/... -count=1 && go test ./... -count=1 && lefthook run pre-commit"

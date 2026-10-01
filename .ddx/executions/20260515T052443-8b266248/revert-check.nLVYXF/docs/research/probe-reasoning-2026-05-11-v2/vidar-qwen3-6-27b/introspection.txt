@@ -1,3 +1,0 @@
-GET http://vidar:1235/v1/models
-
-curl: (7) Failed to connect to vidar port 1235 after 10 ms: Could not connect to server

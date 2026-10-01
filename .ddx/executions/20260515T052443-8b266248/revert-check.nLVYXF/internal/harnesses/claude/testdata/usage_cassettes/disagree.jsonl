@@ -1,4 +1,0 @@
-{"type":"system","subtype":"init","session_id":"claude-usage-disagree","model":"claude-sonnet-4-6"}
-{"type":"assistant","message":{"content":[{"type":"text","text":"usage disagree"}],"usage":{"input_tokens":21,"output_tokens":9}}}
-{"type":"result","subtype":"success","result":"usage disagree","usage":{"input_tokens":21,"output_tokens":9},"session_id":"claude-usage-disagree"}
-{"type":"ddx.usage_source","source":"transcript","fresh":false,"usage":{"input_tokens":20,"output_tokens":9,"total_tokens":29},"captured_at":"2026-04-21T00:00:00Z"}

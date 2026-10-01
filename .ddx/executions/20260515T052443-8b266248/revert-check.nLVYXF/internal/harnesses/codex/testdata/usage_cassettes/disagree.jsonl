@@ -1,3 +1,0 @@
-{"type":"output","item":{"type":"agent_message","text":"usage disagree"}}
-{"type":"turn.completed","usage":{"input_tokens":30,"output_tokens":6,"total_tokens":36}}
-{"type":"ddx.usage_source","source":"status_output","fresh":false,"usage":{"input_tokens":29,"output_tokens":6,"total_tokens":35},"captured_at":"2026-04-21T00:00:00Z"}

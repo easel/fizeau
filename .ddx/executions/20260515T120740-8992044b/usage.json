@@ -1,8 +1,0 @@
-{
-  "attempt_id": "20260515T120740-8992044b",
-  "harness": "codex",
-  "model": "gpt-5.4",
-  "tokens": 11576306,
-  "input_tokens": 11540257,
-  "output_tokens": 36049
-}

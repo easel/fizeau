@@ -1,3 +1,0 @@
-{"ts":"2026-05-10T04:43:56.016155111Z","type":"session.start","model":"qwen/qwen3.6-27b","latency_ms":null,"tokens":null,"cost_usd":null}
-{"ts":"2026-05-10T04:43:57.694064824Z","type":"llm.response","model":"qwen/qwen3.6-27b-20260422","latency_ms":1671,"tokens":{"input":2249,"output":53,"total":2302},"cost_usd":0.00088928}
-{"ts":"2026-05-10T04:44:03.272439886Z","type":"llm.response","model":"qwen/qwen3.6-27b-20260422","latency_ms":5577,"tokens":{"input":2376,"output":85,"total":2461},"cost_usd":0.00103232}

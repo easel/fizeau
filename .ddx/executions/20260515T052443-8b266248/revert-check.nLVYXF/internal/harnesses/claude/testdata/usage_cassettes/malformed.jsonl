@@ -1,3 +1,0 @@
-{"type":"system","subtype":"init","session_id":"claude-usage-malformed","model":"claude-sonnet-4-6"}
-{"type":"assistant","message":{"content":[{"type":"text","text":"usage malformed"}]}}
-{"type":"result","subtype":"success","result":"usage malformed","usage":{"input_tokens":"changed-shape","output_tokens":2},"session_id":"claude-usage-malformed"}

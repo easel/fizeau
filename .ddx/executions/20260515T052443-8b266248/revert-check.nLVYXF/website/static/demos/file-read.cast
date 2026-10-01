@@ -1,3 +1,0 @@
-{"version": 2, "width": 80, "height": 24, "timestamp": 1767225600, "env": {"SHELL": "/bin/zsh", "TERM": "screen-256color"}, "title": "Fizeau: file-read", "idle_time_limit": 2.0}
-[0.0, "o", "$ fiz -p 'Read main.go and explain what this program does'\r\n\r\n"]
-[0.005, "o", "This Go program starts an HTTP server on port 8080. It responds with \"Hello from Fizeau!\" to any request made to the root path (`/`).\r\n[success] tokens: 4625 in / 138 out\r\n"]

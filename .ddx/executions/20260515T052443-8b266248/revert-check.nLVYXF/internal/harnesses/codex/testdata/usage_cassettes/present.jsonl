@@ -1,2 +1,0 @@
-{"type":"output","item":{"type":"agent_message","text":"usage present"}}
-{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":5,"output_tokens":4,"reasoning_output_tokens":2}}

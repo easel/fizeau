@@ -1,5 +1,0 @@
-{"version": 2, "width": 80, "height": 24, "timestamp": 1767225600, "env": {"SHELL": "/bin/zsh", "TERM": "screen-256color"}, "title": "Fizeau: cost-cap-halt [time-compressed]", "idle_time_limit": 2.0}
-[0.0, "o", "\u001b[2m# time-compressed playback: 1 slow op(s) fast-forwarded (10s real \u2192 2s shown)\u001b[0m\r\n"]
-[0.4, "o", "$ fiz -p 'fiz --cost-cap-usd 0.005 -p 'add a doc comment to each .go file in this directory (one at a time)''\r\n\r\n"]
-[0.405, "o", "\u001b[2m\u23e9  Fast-forward: LLM response (10.0s) (10.0s \u2192 2.0s)\u001b[0m\r\n"]
-[2.405, "o", "Let me read each file to understand its purpose, then add the doc comments one by one.\r\n[budget_halted] tokens: 4665 in / 613 out\r\n"]

@@ -1,6 +1,0 @@
-{
-  "applied_at": "2026-05-10T03:21:08Z",
-  "schema": "bead-lifecycle",
-  "source": "ddx bead migrate --lifecycle",
-  "version": 1
-}

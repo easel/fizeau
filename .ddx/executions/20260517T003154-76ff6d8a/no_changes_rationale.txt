@@ -1,7 +1,0 @@
-status: open
-orchestrator_action: decompose
-reason: bead exceeds Step 0 size — 9 ACs spanning unrelated subsystems (routing engine filter-reason vocabulary, env/config credential gating, async HTTP credit probe with TTL cache, integration tests via Execute, and provider config documentation) with an estimated 500-800 lines across 6+ files. Decomposed into three deps-chained children:
-  - fizeau-458f10b0 — routing engine plumbing: four new FilterReason constants and a ProviderEligibilityOverrides map consulted by buildHarnessCandidates, with explicit-pin bypass.
-  - fizeau-73a00a6b — credential check: depends on fizeau-458f10b0; gates openrouter when api_key is empty or a literal '${...}' placeholder (failed env expansion). No network.
-  - fizeau-d6bed010 — credit probe: depends on the prior two; calls GET /api/v1/credits with per-provider TTL cache and async refresh, producing credit_exhausted / credential_invalid / provider_unreachable filter reasons. Docs the default $0.50 threshold.
-Dep edges: fizeau-73a00a6b → fizeau-458f10b0; fizeau-d6bed010 → fizeau-458f10b0 and → fizeau-73a00a6b. Parent fizeau-0bc93861 depends on all three children and stays open until they close.

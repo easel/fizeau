@@ -1,7 +1,0 @@
-Window: 2026-04-10 .. 2026-05-10
-PROVIDER         MODEL                    SESSIONS      INPUT     OUTPUT      TOTAL           COST    UNKNOWN CACHE-HIT% SUCCESS%    COST/OK     IN tok/s    OUT tok/s
-openrouter       anthropic/claude-sonnet-4.6        2      73048       2501      75549        $0.2567          0       0.0%   100.0%    $0.1283       1889.4         64.7
-openrouter       openai/gpt-5.3-mini             3          0          0          0        unknown          3          -     0.0%          -          0.0          0.0
-openrouter       qwen/qwen3.6-27b                1       4625        138       4763        $0.0019          0       0.0%   100.0%    $0.0019        637.4         19.0
-vllm             qwen3.6-27b-autoround           1       5204         17       5221        unknown          1       0.0%   100.0%          -        448.5          1.5
-TOTAL                                            7      82877       2656      85533        unknown          4       0.0%    57.1%          -       1435.4         46.0

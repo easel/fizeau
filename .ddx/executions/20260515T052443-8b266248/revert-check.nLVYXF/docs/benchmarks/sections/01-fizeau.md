@@ -1,5 +1,0 @@
-Fizeau is an agent runtime with a built-in agent loop (the `fiz` harness): it manages the prompt, tool-call protocol, file/edit/bash tooling, planning, compaction, retries, sampling, reasoning, quotas, and session log. It is not an LLM serving runtime — it does not host weights. Upstream model traffic goes to whatever provider the lane points at (OpenAI, Anthropic, OpenRouter, vLLM, oMLX, RapidMLX, native local).
-
-Fizeau can also run *as a wrapper* around a different agent CLI (Claude Code, Codex, Pi, OpenCode) — the `fiz-harness-*` lanes in the catalog use this mode, where fiz handles configuration, environment, tool-call accounting, and session logging while delegating the reasoning loop to the wrapped agent. This isolates "is the agent loop hurting?" from "is the model hurting?" — same model, different harness, different lane.
-
-For benchmark purposes, each lane in the catalog holds either axis constant and varies the other. A delta between two lanes that share a model but differ in harness is harness loss; a delta between two lanes that share a harness but differ in provider is provider/runtime loss.

@@ -1,3 +1,0 @@
-{"type":"system","subtype":"init","session_id":"claude-usage-present","model":"claude-sonnet-4-6"}
-{"type":"assistant","message":{"content":[{"type":"text","text":"usage present"}],"usage":{"input_tokens":10,"output_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":4}}}
-{"type":"result","subtype":"success","result":"usage present","usage":{"input_tokens":10,"output_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":4},"session_id":"claude-usage-present"}

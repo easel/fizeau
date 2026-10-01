@@ -1,5 +1,0 @@
-skill conflict warning from stdout
-{"type":"init","timestamp":"2026-04-21T18:21:50.360Z","session_id":"test","model":"gemini-2.5-flash"}
-{"type":"message","role":"user","content":"Reply exactly: OK"}
-{"type":"message","role":"assistant","content":"OK","delta":true}
-{"type":"result","status":"success","stats":{"total_tokens":8491,"input_tokens":8468,"output_tokens":1,"cached":7,"models":{"gemini-2.5-flash":{"total_tokens":8491,"input_tokens":8468,"output_tokens":1,"cached":7}}}}

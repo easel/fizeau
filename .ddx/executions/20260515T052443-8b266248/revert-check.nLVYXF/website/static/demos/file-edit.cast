@@ -1,3 +1,0 @@
-{"version": 2, "width": 80, "height": 24, "timestamp": 1767225600, "env": {"SHELL": "/bin/zsh", "TERM": "screen-256color"}, "title": "Fizeau: file-edit", "idle_time_limit": 2.0}
-[0.0, "o", "$ fiz -p 'Read config.yaml, change the server port from 8080 to 9090, then verify'\r\n\r\n"]
-[0.005, "o", "The server port has been changed from 8080 to 9090 and verified in the file.\r\n[success] tokens: 9562 in / 245 out\r\n"]

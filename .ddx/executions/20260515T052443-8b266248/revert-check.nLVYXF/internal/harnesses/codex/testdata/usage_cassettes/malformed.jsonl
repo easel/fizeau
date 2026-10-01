@@ -1,2 +1,0 @@
-{"type":"output","item":{"type":"agent_message","text":"usage malformed"}}
-{"type":"turn.completed","usage":{"input_tokens":"changed-shape","output_tokens":4}}

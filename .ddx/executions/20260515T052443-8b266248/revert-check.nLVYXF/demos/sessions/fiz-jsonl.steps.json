@@ -1,8 +1,0 @@
-[
-  {"prompt": "ls .fizeau/sessions/ | tail -1",
-   "output_file": "/Users/erik/Projects/fizeau/demos/sessions/fiz-jsonl.lsout.stdout",
-   "post_pause": 1.0},
-  {"prompt": "jq -c '{ts, type, model: .data.model, tokens: (.data.usage // .data.tokens), cost_usd: .data.cost_usd, latency_ms: .data.latency_ms}' .fizeau/sessions/svc-*.jsonl | head -3",
-   "output_file": "/Users/erik/Projects/fizeau/demos/sessions/fiz-jsonl.framed.stdout",
-   "post_pause": 3.0}
-]

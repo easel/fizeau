@@ -1,9 +1,0 @@
-version: "1"
-captured: "2026-05-12"
-dataset: terminal-bench/terminal-bench-2-1
-dataset_repo: https://github.com/laude-institute/terminal-bench-2-1
-dataset_commit: "harbor-registry"
-selection_rule: "single short timing-baseline task for reasoning telemetry verification"
-
-tasks:
-  - id: fix-git

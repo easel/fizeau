@@ -1,8 +1,0 @@
-[
-  {"prompt": "fiz version",
-   "output_file": "/Users/erik/Projects/fizeau/demos/sessions/fiz-update.version-before.stdout",
-   "post_pause": 1.5},
-  {"prompt": "fiz update --check-only; echo \"exit=$?\"",
-   "output_file": "/Users/erik/Projects/fizeau/demos/sessions/fiz-update.check.stdout",
-   "post_pause": 2.5}
-]

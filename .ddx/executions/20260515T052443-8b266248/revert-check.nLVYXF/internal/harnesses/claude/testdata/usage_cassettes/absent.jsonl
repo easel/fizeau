@@ -1,3 +1,0 @@
-{"type":"system","subtype":"init","session_id":"claude-usage-absent","model":"claude-sonnet-4-6"}
-{"type":"assistant","message":{"content":[{"type":"text","text":"usage absent"}]}}
-{"type":"result","subtype":"success","result":"usage absent","session_id":"claude-usage-absent"}

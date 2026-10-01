@@ -1,7 +1,0 @@
-[
-  ["$ curl -fsSL https://easel.github.io/fizeau/install.sh | bash\n", 0.4],
-  ["  ✓ downloaded fiz v0.14 → /usr/local/bin/fiz\n\n", 0.5],
-  ["$ wget -q https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf -O ~/.fizeau/models/tiny.gguf\n", 0.4],
-  ["$ llama-server --model ~/.fizeau/models/tiny.gguf --port 8080 &\n", 0.3],
-  ["  [llama-server] loading weights ...\n", 0.2]
-]
