@@ -1,26 +1,40 @@
 name: CI
 
+# PR tier: one ubuntu job (build, vet, lint, fmt, import-boundary, fast tests,
+# no race/gosec/govulncheck). Windows lifecycle, macOS install test, race tests,
+# security scans, website smoke, adapter pytest and the zig launcher check live
+# in heavy.yml: release (gates publishing), weekly, dispatch, or a PR labelled
+# `ci:full`.
+#
+# Merge gate for heavy-suite code: `evidence-gate`. Run scripts/verify-full.sh
+# locally and commit .ci/evidence/full-suite.json, or label the PR `ci:full`.
+# Changes under internal/processlifecycle always need `ci:full` (Windows job
+# cannot run locally).
+#
+# Branch protection: "test" is kept. Removed checks: portable-namespace-launcher,
+# lifecycle-windows, website-smoke, adapter-pytest, install-sh-test (ubuntu-latest,
+# macos-latest). New: evidence-gate. Docs-only PRs skip this workflow.
+
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   pull_request:
     branches: [master, main]
+    types: [opened, synchronize, reopened, labeled]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'demos/**'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  portable-namespace-launcher:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
-        with:
-          version: 0.16.0
-
-      - name: Verify portable namespace launcher artifacts
-        run: make portable-namespace-launcher-check
-
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
 
@@ -38,96 +52,64 @@ jobs:
           make install-quality-tools
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Build
-        run: make build-ci
-
-      - name: Vet
-        run: make vet
-
-      - name: CONTRACT-004 import boundary
-        run: make contract004-import-lint
-
-      - name: Lint
-        run: make lint-go
-
-      - name: Security scan
-        run: make gosec
-
-      - name: Vulnerability scan
-        run: make govulncheck
-
-      - name: Format check
-        run: make fmt-check
-
-      - name: Rename noise check
-        run: make rename-noise-check
+      - name: Static checks
+        run: |
+          make build-ci
+          make vet
+          make contract004-import-lint
+          make lint-go
+          make fmt-check
+          make rename-noise-check
 
       - name: Test
         run: make test-no-race
 
-      - name: Test (race)
-        run: make test-race
-        if: runner.os == 'Linux'
+  full:
+    name: Heavy suite (ci:full)
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full')
+    uses: ./.github/workflows/heavy.yml
 
-  lifecycle-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
-      - name: Windows Job Object lifecycle
-        run: go test ./internal/processlifecycle -run '^(TestWindowsJobKillOnOwnerHandleClose|TestWindowsJobReapsGrandchild|TestWindowsCleanupWaitsForZeroActiveProcesses)$' -count=1 -timeout=2m
-
-      - name: Windows lifecycle package
-        run: go test ./internal/processlifecycle -count=1 -timeout=2m
-
-  website-smoke:
+  # Cheap gate (seconds): proves the heavy suite was run for this exact tree.
+  # Passes if (a) .ci/evidence/full-suite.json matches the PR head content hash
+  # (produced by scripts/verify-full.sh), OR (b) PR has label `ci:full` and the
+  # heavy job passed, OR (c) the diff touches no path the heavy suite covers.
+  evidence-gate:
+    name: evidence-gate
+    if: always() && github.event_name == 'pull_request'
+    needs: [full]
     runs-on: ubuntu-latest
-    env:
-      HUGO_VERSION: "0.160.0"
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
-
-      - name: Install Hugo
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Check evidence
+        env:
+          FULL_RESULT: ${{ needs.full.result }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAVY_RE: '\.go$|^(go\.(mod|sum)|Makefile|scripts/|tests/|install|website/|bench/|eval/|cmd/|internal/)'
         run: |
-          wget -q https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb
-          sudo dpkg -i hugo_extended_${HUGO_VERSION}_linux-amd64.deb
-
-      - name: Install Playwright Chromium
-        run: npx --yes playwright install --with-deps chromium
-
-      - name: Benchmark workbench smoke
-        run: make benchmark-workbench-smoke
-
-  adapter-pytest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.x"
-
-      - name: Install pytest
-        run: python -m pip install --upgrade pytest
-
-      - name: Adapter pytest
-        run: make adapter-pytest
-
-  install-sh-test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install shell test dependencies
-        run: bash tests/install_sh_acceptance.sh
+          set -euo pipefail
+          changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          if ! grep -Eq "$HEAVY_RE" <<<"$changed"; then
+            echo "No heavy-suite paths changed; gate passes."; exit 0
+          fi
+          if grep -Eq '^internal/processlifecycle/' <<<"$changed" && [[ "$FULL_RESULT" != "success" ]]; then
+            echo "::error::internal/processlifecycle changes need the Windows lifecycle job: add the 'ci:full' label."; exit 1
+          fi
+          if [[ "$FULL_RESULT" == "success" ]]; then
+            echo "ci:full label set and heavy suite passed; gate passes."; exit 0
+          fi
+          f=.ci/evidence/full-suite.json
+          if [[ -f "$f" ]]; then
+            want=$(jq -r .content_hash "$f")
+            have=$(bash scripts/verify-full.sh --hash-only)
+            if [[ "$want" == "$have" ]]; then
+              echo "Evidence matches ($(jq -r '.suite + " @ " + .timestamp' "$f")); gate passes."; exit 0
+            fi
+            echo "::error::Evidence is stale (recorded $want, tree is $have). Re-run scripts/verify-full.sh and commit."
+          else
+            echo "::error::No $f. Run scripts/verify-full.sh and commit the evidence, or add the 'ci:full' label."
+          fi
+          exit 1
