@@ -14,13 +14,26 @@ permissions:
 
 jobs:
   # Heavy suite (race tests, gosec, govulncheck, Windows lifecycle, macOS install
-  # test, website smoke, adapter pytest) must pass before building/publishing.
+  # test, website smoke, adapter pytest) must pass before publishing.
   heavy:
     name: Heavy suite
     uses: ./.github/workflows/heavy.yml
 
+  portable-namespace-launcher:
+    # The portable launcher is an experimental diagnostic, not a release gate.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.16.0
+
+      - name: Verify portable namespace launcher artifacts
+        run: make portable-namespace-launcher-check
+
   release:
-    needs: heavy
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -63,7 +76,8 @@ jobs:
           path: ${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
 
   publish:
-    needs: release
+    # The heavy suite gates publishing; the build job itself has no `needs`.
+    needs: [release, heavy]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
